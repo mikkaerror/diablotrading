@@ -13,6 +13,10 @@ LABEL = "io.diablotrading.inferno-dawn-brief"
 WATCHDOG_LABEL = "io.diablotrading.inferno-watchdog"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCHDOG_LABEL}.plist"
+LEGACY_LABEL = "com.mikkasida.inferno-dawn-brief"
+LEGACY_WATCHDOG_LABEL = "com.mikkasida.inferno-watchdog"
+LEGACY_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_LABEL}.plist"
+LEGACY_WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_WATCHDOG_LABEL}.plist"
 LOG_DIR = ROOT / "logs"
 RUNNER = ROOT / "run_inferno_dawn_cycle.sh"
 PIPELINE_ENTRYPOINT = ROOT / "inferno_dawn_pipeline.py"
@@ -20,6 +24,8 @@ WATCHDOG_ENTRYPOINT = ROOT / "inferno_watchdog.py"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_dawn_cycle_service.sh"
 WATCHDOG_WRAPPER = SERVICE_BIN_DIR / "inferno_watchdog_service.sh"
+SAFETY_INTERVAL_SECONDS = 600
+WATCHDOG_INTERVAL_SECONDS = 900
 
 def default_backtest_root() -> Path:
     if os.environ.get("BACKTEST_ROOT"):
@@ -54,7 +60,8 @@ def plist_payload(hour: int, minute: int) -> dict:
         "Label": LABEL,
         "ProgramArguments": ["/bin/zsh", str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
-        "RunAtLoad": False,
+        "RunAtLoad": True,
+        "StartInterval": SAFETY_INTERVAL_SECONDS,
         "StartCalendarInterval": [
             {"Weekday": weekday, "Hour": hour, "Minute": minute}
             for weekday in (0, 1, 2, 3, 4, 5)
@@ -76,7 +83,8 @@ def watchdog_plist_payload(hour: int, minute: int) -> dict:
         "Label": WATCHDOG_LABEL,
         "ProgramArguments": ["/bin/zsh", str(WATCHDOG_WRAPPER)],
         "WorkingDirectory": str(ROOT),
-        "RunAtLoad": False,
+        "RunAtLoad": True,
+        "StartInterval": WATCHDOG_INTERVAL_SECONDS,
         "StartCalendarInterval": [
             {"Weekday": weekday, "Hour": hour, "Minute": minute}
             for weekday in (0, 1, 2, 3, 4, 5)
@@ -100,7 +108,7 @@ def ensure_service_wrapper() -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                f'exec "{runner_python}" "{PIPELINE_ENTRYPOINT}" "$@"',
+                f'exec "{runner_python}" "{PIPELINE_ENTRYPOINT}" --automation "$@"',
                 "",
             ]
         ),
@@ -131,8 +139,13 @@ def install(hour: int, minute: int) -> int:
         plistlib.dump(watchdog_plist_payload(hour, minute + 20 if minute <= 39 else 59), handle, sort_keys=False)
 
     domain = user_domain()
-    run_launchctl("bootout", domain, str(PLIST_PATH), check=False)
-    run_launchctl("bootout", domain, str(WATCHDOG_PLIST_PATH), check=False)
+    for plist_path in (PLIST_PATH, WATCHDOG_PLIST_PATH, LEGACY_PLIST_PATH, LEGACY_WATCHDOG_PLIST_PATH):
+        run_launchctl("bootout", domain, str(plist_path), check=False)
+    for label in (LEGACY_LABEL, LEGACY_WATCHDOG_LABEL):
+        run_launchctl("disable", f"{domain}/{label}", check=False)
+    for legacy_path in (LEGACY_PLIST_PATH, LEGACY_WATCHDOG_PLIST_PATH):
+        if legacy_path.exists():
+            legacy_path.unlink()
     run_launchctl("bootstrap", domain, str(PLIST_PATH))
     run_launchctl("bootstrap", domain, str(WATCHDOG_PLIST_PATH))
     run_launchctl("enable", f"{domain}/{LABEL}")
@@ -141,21 +154,21 @@ def install(hour: int, minute: int) -> int:
     print(f"Installed {LABEL}")
     print(f"LaunchAgent: {PLIST_PATH}")
     print(f"Schedule: Sunday through Friday at {hour:02d}:{minute:02d}")
+    print(f"Safety interval: every {SAFETY_INTERVAL_SECONDS // 60} minutes during automation window")
     print(f"Runner: {SERVICE_WRAPPER}")
     print(f"Installed {WATCHDOG_LABEL}")
     print(f"Watchdog LaunchAgent: {WATCHDOG_PLIST_PATH}")
+    print(f"Watchdog safety interval: every {WATCHDOG_INTERVAL_SECONDS // 60} minutes")
     print(f"Watchdog Runner: {WATCHDOG_WRAPPER}")
     return 0
 
 
 def uninstall() -> int:
     domain = user_domain()
-    run_launchctl("bootout", domain, str(PLIST_PATH), check=False)
-    run_launchctl("bootout", domain, str(WATCHDOG_PLIST_PATH), check=False)
-    if PLIST_PATH.exists():
-        PLIST_PATH.unlink()
-    if WATCHDOG_PLIST_PATH.exists():
-        WATCHDOG_PLIST_PATH.unlink()
+    for plist_path in (PLIST_PATH, WATCHDOG_PLIST_PATH, LEGACY_PLIST_PATH, LEGACY_WATCHDOG_PLIST_PATH):
+        run_launchctl("bootout", domain, str(plist_path), check=False)
+        if plist_path.exists():
+            plist_path.unlink()
     print(f"Removed {LABEL}")
     print(f"Removed {WATCHDOG_LABEL}")
     return 0

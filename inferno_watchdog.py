@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -9,10 +11,35 @@ from server import LOG_FILE, OPS_STATUS_FILE, ROOT, WATCHDOG_STATUS_FILE, load_j
 
 STDOUT_LOG = ROOT / "logs" / "inferno_dawn.stdout.log"
 STDERR_LOG = ROOT / "logs" / "inferno_dawn.stderr.log"
+AUTOMATION_WINDOW_START = "05:55"
+AUTOMATION_WINDOW_END = "09:30"
+AUTOMATION_ALLOWED_WEEKDAYS = {6, 0, 1, 2, 3, 4}  # Sunday through Friday
 
 
 def local_today() -> str:
     return datetime.now().astimezone().date().isoformat()
+
+
+def local_now() -> datetime:
+    return datetime.now().astimezone()
+
+
+def parse_clock_minutes(value: str) -> int:
+    hour_text, minute_text = value.strip().split(":", 1)
+    hour = int(hour_text)
+    minute = int(minute_text)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"invalid clock value: {value}")
+    return hour * 60 + minute
+
+
+def in_time_window(now: datetime, start: str, end: str) -> bool:
+    current_minutes = now.hour * 60 + now.minute
+    start_minutes = parse_clock_minutes(start)
+    end_minutes = parse_clock_minutes(end)
+    if start_minutes <= end_minutes:
+        return start_minutes <= current_minutes <= end_minutes
+    return current_minutes >= start_minutes or current_minutes <= end_minutes
 
 
 def build_failure_reasons(ops_status: dict | None) -> list[str]:
@@ -34,6 +61,46 @@ def build_failure_reasons(ops_status: dict | None) -> list[str]:
         reasons.append(f"failed jobs: {', '.join(failed_jobs)}")
 
     return reasons
+
+
+def should_attempt_rescue(reasons: list[str]) -> bool:
+    if not reasons:
+        return False
+    now = local_now()
+    if now.weekday() not in AUTOMATION_ALLOWED_WEEKDAYS:
+        return False
+    if not in_time_window(now, AUTOMATION_WINDOW_START, AUTOMATION_WINDOW_END):
+        return False
+    return any(
+        reason.startswith("no dawn-cycle run is recorded")
+        or reason == "morning brief email did not send"
+        for reason in reasons
+    )
+
+
+def attempt_rescue_run() -> dict[str, object]:
+    command = [
+        sys.executable,
+        str(ROOT / "inferno_dawn_pipeline.py"),
+        "--automation",
+        "--window-start",
+        AUTOMATION_WINDOW_START,
+        "--window-end",
+        AUTOMATION_WINDOW_END,
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return {
+        "attemptedAt": local_now().isoformat(),
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
 
 
 def tail_lines(path: Path, count: int = 8) -> list[str]:
@@ -113,6 +180,12 @@ def send_watchdog_alert(reasons: list[str], ops_status: dict | None) -> bool:
 def main() -> int:
     ops_status = load_json_file(OPS_STATUS_FILE)
     reasons = build_failure_reasons(ops_status)
+    rescue_result = None
+
+    if should_attempt_rescue(reasons):
+        rescue_result = attempt_rescue_run()
+        ops_status = load_json_file(OPS_STATUS_FILE)
+        reasons = build_failure_reasons(ops_status)
 
     prior_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
     alert_date = prior_status.get("lastAlertDate")
@@ -131,6 +204,8 @@ def main() -> int:
         "lastAlertDate": alert_date,
         "alertSentThisRun": alert_sent,
         "opsGeneratedAt": ops_status.get("generatedAt") if ops_status else None,
+        "rescueAttempted": bool(rescue_result),
+        "rescueResult": rescue_result,
     }
     WATCHDOG_STATUS_FILE.write_text(json.dumps(status_payload, indent=2), encoding="utf-8")
 

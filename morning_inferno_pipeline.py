@@ -27,6 +27,7 @@ from server import (
     TICKETS_TEXT_FILE,
     ensure_dirs,
     html_from_payload,
+    load_json_file,
     send_email,
     smtp_configured,
 )
@@ -55,6 +56,9 @@ CONVICTION_CONFIG = {
     "require_trigger": True,
     "banned_setups": {"Avoid"},
 }
+AUTOMATION_WINDOW_START = "05:55"
+AUTOMATION_WINDOW_END = "09:00"
+AUTOMATION_ALLOWED_WEEKDAYS = {6, 0, 1, 2, 3, 4}  # Sunday through Friday
 
 
 def load_env_file(path: Path) -> None:
@@ -67,6 +71,49 @@ def load_env_file(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ[key] = value
+
+
+def local_now() -> datetime:
+    return datetime.now().astimezone()
+
+
+def parse_clock_minutes(value: str) -> int:
+    hour_text, minute_text = value.strip().split(":", 1)
+    hour = int(hour_text)
+    minute = int(minute_text)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"invalid clock value: {value}")
+    return hour * 60 + minute
+
+
+def in_time_window(now: datetime, start: str, end: str) -> bool:
+    current_minutes = now.hour * 60 + now.minute
+    start_minutes = parse_clock_minutes(start)
+    end_minutes = parse_clock_minutes(end)
+    if start_minutes <= end_minutes:
+        return start_minutes <= current_minutes <= end_minutes
+    return current_minutes >= start_minutes or current_minutes <= end_minutes
+
+
+def already_sent_today() -> bool:
+    ops_status = load_json_file(OPS_STATUS_FILE) or {}
+    generated_at = str(ops_status.get("generatedAt", ""))
+    today = local_now().date().isoformat()
+    return generated_at.startswith(today) and ops_status.get("ok") and ops_status.get("emailSent")
+
+
+def automation_skip_reason(window_start: str, window_end: str) -> str | None:
+    now = local_now()
+    if now.weekday() not in AUTOMATION_ALLOWED_WEEKDAYS:
+        return "Skipping automated dawn cycle: Saturday automation is disabled."
+    if not in_time_window(now, window_start, window_end):
+        return (
+            "Skipping automated dawn cycle: "
+            f"{now.strftime('%H:%M')} is outside the {window_start}-{window_end} mountain-time window."
+        )
+    if already_sent_today():
+        return "Skipping automated dawn cycle: today's market snapshot already sent successfully."
+    return None
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -592,6 +639,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sheet-name", default=DEFAULT_SHEET_NAME, help="Google Sheet name")
     parser.add_argument("--skip-updates", action="store_true", help="Do not run the BC/P/Q/R PyCharm jobs")
     parser.add_argument("--skip-email", action="store_true", help="Build the snapshot but do not send email")
+    parser.add_argument(
+        "--automation",
+        action="store_true",
+        help="Run only during the configured automation window and skip duplicate sends for the same day.",
+    )
+    parser.add_argument("--window-start", default=AUTOMATION_WINDOW_START, help="Local HH:MM start for automation mode")
+    parser.add_argument("--window-end", default=AUTOMATION_WINDOW_END, help="Local HH:MM end for automation mode")
     return parser.parse_args()
 
 
@@ -600,6 +654,16 @@ def main() -> int:
     args = parse_args()
     backtest_root = Path(args.backtest_root).expanduser().resolve()
     python_bin = Path(args.python_bin).expanduser().resolve() if args.python_bin else backtest_root / "venv" / "bin" / "python"
+
+    if args.automation:
+        try:
+            skip_reason = automation_skip_reason(args.window_start, args.window_end)
+        except ValueError as exc:
+            print(f"Automation window is invalid: {exc}", file=sys.stderr)
+            return 1
+        if skip_reason:
+            print(skip_reason)
+            return 0
 
     if not backtest_root.exists():
         print(f"Backtest root not found: {backtest_root}", file=sys.stderr)
