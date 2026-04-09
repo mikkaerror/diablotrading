@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vault-Tec Earnings Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Orbitron:wght@500;700;900&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script async defer src="https://accounts.google.com/gsi/client"></script>
+  </head>
+  <body>
+    <div class="screen-shell">
+      <div class="screen-overlay"></div>
+      <div class="scanline"></div>
+
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Cathedral Of Market Pain</p>
+          <h1>Inferno Earnings Throne</h1>
+          <div class="topbar-crest">
+            <div class="sigil-mark" aria-hidden="true"></div>
+            <p class="crest-copy">Only the names that survive fear, noise, and false prophecy earn a place at the altar.</p>
+          </div>
+          <div class="topbar-nav">
+            <span class="nav-chip active">Sanctum</span>
+            <span class="nav-chip">Demons</span>
+            <span class="nav-chip">Ascension</span>
+          </div>
+        </div>
+        <div class="status-block">
+          <div>
+            <span class="status-label">Mode</span>
+            <strong>Hellgate Sweep</strong>
+          </div>
+          <div>
+            <span class="status-label">Last Sync</span>
+            <strong id="sync-time">Local Cache</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="signal-ribbon panel">
+        <div class="panel-heading split">
+          <div>
+            <p class="eyebrow">Infernal Feed</p>
+            <h2>Live Encounter Queue</h2>
+          </div>
+          <p class="ribbon-copy">Fast-glance market heat, possession level, and who might claw out of the abyss.</p>
+        </div>
+        <div id="signal-ribbon" class="signal-ribbon-grid"></div>
+      </section>
+
+      <main class="dashboard-grid">
+        <section class="panel overview-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Sanctum Overview</p>
+            <h2>Throne Status</h2>
+          </div>
+          <div class="overview-shell">
+            <div class="overview-stats" id="overview-stats"></div>
+            <div class="play-map-card">
+              <div class="panel-heading compact">
+                <p class="eyebrow">Conviction Circle</p>
+                <h3>Potential Plays</h3>
+              </div>
+              <p id="overview-summary" class="overview-summary"></p>
+              <div id="play-map" class="play-map"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel filter-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Ritual Controls</p>
+            <h2>Signal Filters</h2>
+          </div>
+
+          <div class="sheet-connector">
+            <label>
+              <span>Google Sheet Link</span>
+              <input
+                id="sheet-url-input"
+                type="url"
+                placeholder="Paste your Google Sheets URL"
+              />
+            </label>
+            <label>
+              <span>Google OAuth Client ID</span>
+              <input
+                id="google-client-id-input"
+                type="text"
+                placeholder="Paste your Google Web Client ID"
+              />
+            </label>
+            <div class="connector-actions">
+              <button id="sheet-auth-sync-button" type="button">Authorize Google + Sync</button>
+              <button id="sheet-public-sync-button" type="button">Try Public Sync</button>
+              <button id="sheet-revoke-button" type="button">Disconnect Google</button>
+              <p id="sheet-status" class="connector-status">
+                Waiting for Google authorization setup
+              </p>
+            </div>
+          </div>
+
+          <div class="filter-grid">
+            <label>
+              <span>Ticker Search</span>
+              <input id="search-input" type="search" placeholder="AAPL, NVDA..." />
+            </label>
+
+            <label>
+              <span>Setup Bias</span>
+              <select id="setup-filter"></select>
+            </label>
+
+            <label>
+              <span>Urgency</span>
+              <select id="urgency-filter"></select>
+            </label>
+
+            <label>
+              <span>Trigger State</span>
+              <select id="trigger-filter">
+                <option value="all">All</option>
+                <option value="true">Triggered</option>
+                <option value="false">Waiting</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Min Confidence</span>
+              <input id="confidence-filter" type="range" min="0" max="3" step="1" value="0" />
+              <strong id="confidence-value">0 / 3</strong>
+            </label>
+
+            <label>
+              <span>Import CSV</span>
+              <input id="csv-input" type="file" accept=".csv" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel ops-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Machine Chorus</p>
+            <h2>Automation Watch</h2>
+          </div>
+          <div id="ops-grid" class="ops-grid"></div>
+          <div id="ops-feed" class="ops-feed"></div>
+        </section>
+
+        <section class="panel roster-panel">
+          <div class="panel-heading split">
+            <div>
+              <p class="eyebrow">Target Roster</p>
+              <h2>Damned Earnings Board</h2>
+            </div>
+            <div class="legend">
+              <span><i class="dot ready"></i> Ascending</span>
+              <span><i class="dot caution"></i> Watching</span>
+              <span><i class="dot risk"></i> Doomed</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Class</th>
+                  <th>Setup</th>
+                  <th>Days</th>
+                  <th>Trigger</th>
+                  <th>Confidence</th>
+                  <th>IV Rank</th>
+                  <th>ATR%</th>
+                  <th>Priority</th>
+                  <th>Move</th>
+                  <th>Readiness</th>
+                </tr>
+              </thead>
+              <tbody id="roster-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Chosen Vessel</p>
+            <h2 id="detail-title">Select a Ticker</h2>
+          </div>
+
+          <div id="detail-content" class="detail-content"></div>
+        </section>
+
+        <section class="panel shortlist-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Ascension Ladder</p>
+            <h2>Top Opportunities</h2>
+          </div>
+          <div id="shortlist" class="shortlist"></div>
+        </section>
+
+        <section class="panel notes-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Conviction Engine</p>
+            <h2>Trade Gate Sanctum</h2>
+          </div>
+          <div id="engine-rules" class="engine-rules"></div>
+          <div class="panel-heading compact">
+            <p class="eyebrow">Eligible Names</p>
+            <h3>Who Gets To Fight</h3>
+          </div>
+          <div id="engine-candidates" class="engine-candidates"></div>
+        </section>
+
+        <section class="panel brief-panel">
+          <div class="panel-heading split">
+            <div>
+              <p class="eyebrow">Morning Brief</p>
+              <h2>Daily Recommendations</h2>
+            </div>
+            <div class="brief-actions">
+              <button id="forge-snapshot-button" type="button">Forge Snapshot</button>
+              <button id="send-brief-button" type="button">Send SMTP Brief</button>
+              <button id="test-smtp-button" type="button">Test SMTP</button>
+              <button id="copy-brief-button" type="button">Copy Brief</button>
+              <button id="email-brief-button" type="button">Open Email Draft</button>
+              <button id="copy-tickets-button" type="button">Copy Paper Tickets</button>
+            </div>
+          </div>
+          <p id="brief-status" class="brief-status">Brief generation standing by.</p>
+          <div id="brief-preview" class="brief-preview"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
