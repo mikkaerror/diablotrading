@@ -23,6 +23,18 @@ The repo is now split into four clean layers:
   - `docs/README.md`
   - `docs/RUNBOOK.md`
   - `docs/OPERATING_MODEL.md`
+  - `docs/PLAYBOOK_EARNINGS.md`
+  - `docs/PLAYBOOK_LONG_TERM.md`
+  - `docs/CHECKLISTS.md`
+
+## Decision lanes
+
+The desk runs in two distinct lanes now:
+
+- earnings conviction
+  - event-driven names you may actually trade into the catalyst window
+- long-term accumulation
+  - conviction names you would happily own at a discount when the heat comes out of them
 
 ## Quick start
 
@@ -43,6 +55,8 @@ Run the full live refresh + brief cycle:
 ```bash
 ./run_inferno_dawn_cycle.sh
 ```
+
+Use the wrapper above instead of calling `python3 morning_inferno_pipeline.py` directly. The wrapper intentionally uses the Backtest virtual environment so Google Sheets and market-data dependencies resolve the same way they do in automation.
 
 ## Publish to GitHub
 
@@ -107,6 +121,7 @@ If you want the hosted site to use private Google Sheets sync too, add your GitH
 - Lets you click into a single ticker instead of scanning across many spreadsheet columns.
 - Can pull directly from a private Google Sheet with browser-only Google OAuth.
 - Accepts a CSV export from your tracker so you can swap the sample data for your real sheet.
+- Separates short-term earnings setups from long-term accumulation ideas.
 
 ## How to use
 
@@ -170,6 +185,12 @@ Defaults:
 - Backtest Python: `~/PycharmProjects/Backtest3.0/venv/bin/python`
 
 The pipeline reads SMTP settings from the local `.env.smtp` file, so you do not need to open the dashboard first.
+
+PyCharm does not need to be open for the report to run. The automation calls the Backtest scripts directly from disk through the Backtest virtual environment. What matters is:
+
+- the Backtest project still exists on disk
+- the `venv` still exists
+- the Mac is on, plugged in, and logged in when the morning run fires
 
 If your Backtest project lives somewhere else, set:
 
@@ -258,6 +279,15 @@ That gives you a clean local doublecheck:
 - the watchdog confirms the run is healthy
 - the approval desk shows the current pending shortlist
 - the doctor gives you one-line desk health across email, launch agents, wake schedule, and latest run freshness
+
+## Playbooks
+
+- [docs/PLAYBOOK_EARNINGS.md](/Users/mikkasida/Documents/New%20project/docs/PLAYBOOK_EARNINGS.md)
+  - how to make earnings plays with conviction and without overthinking
+- [docs/PLAYBOOK_LONG_TERM.md](/Users/mikkasida/Documents/New%20project/docs/PLAYBOOK_LONG_TERM.md)
+  - how to accumulate long-term conviction names when the price cools off
+- [docs/CHECKLISTS.md](/Users/mikkasida/Documents/New%20project/docs/CHECKLISTS.md)
+  - fast daily and pre-trade checklists so the desk stays mechanical
 - housekeeping shows what stale artifacts can be pruned before the repo gets messy
 
 ## Operating model

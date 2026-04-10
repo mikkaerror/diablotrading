@@ -20,6 +20,7 @@ LOGS_DIR = ROOT / "logs"
 SNAPSHOT_PATTERNS = ("snapshot-*.json",)
 BRIEF_PATTERNS = ("morning-brief-*.txt", "morning-brief-*.html")
 TICKET_PATTERNS = ("paper-tickets-*.txt",)
+LONG_TERM_PATTERNS = ("long-term-buys-*.txt",)
 LOG_FILES = ("inferno_dawn.stdout.log", "inferno_dawn.stderr.log", "inferno_watchdog.stdout.log", "inferno_watchdog.stderr.log")
 
 
@@ -57,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-snapshots", type=int, default=DEFAULT_KEEP_SNAPSHOTS, help="Number of historical data snapshots to keep.")
     parser.add_argument("--keep-briefs", type=int, default=DEFAULT_KEEP_BRIEFS, help="Number of historical morning brief pairs to keep.")
     parser.add_argument("--keep-tickets", type=int, default=DEFAULT_KEEP_TICKETS, help="Number of historical paper ticket files to keep.")
+    parser.add_argument("--keep-long-term", type=int, default=DEFAULT_KEEP_BRIEFS, help="Number of historical long-term buy files to keep.")
     parser.add_argument("--keep-log-lines", type=int, default=DEFAULT_KEEP_LOG_LINES, help="Maximum lines to keep in each inferno log file.")
     return parser.parse_args()
 
@@ -79,6 +81,11 @@ def main() -> int:
     removed_tickets = prune_files(ticket_files, args.keep_tickets, args.dry_run)
     report_lines.append(f"Ticket artifacts kept: {min(len(ticket_files), args.keep_tickets)} / {len(ticket_files)}")
     report_lines.extend([f"- remove ticket artifact: {path.name}" for path in removed_tickets])
+
+    long_term_files = iter_matching_files(REPORTS_DIR, LONG_TERM_PATTERNS)
+    removed_long_term = prune_files(long_term_files, args.keep_long_term, args.dry_run)
+    report_lines.append(f"Long-term artifacts kept: {min(len(long_term_files), args.keep_long_term)} / {len(long_term_files)}")
+    report_lines.extend([f"- remove long-term artifact: {path.name}" for path in removed_long_term])
 
     report_lines.append("Log trimming:")
     for log_name in LOG_FILES:

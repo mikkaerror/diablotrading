@@ -380,6 +380,7 @@ const state = {
   sourceLabel: "Sample cache",
   latestBrief: "",
   latestTickets: "",
+  latestLongTerm: "",
   backend: {
     available: false,
     smtpConfigured: false,
@@ -425,6 +426,8 @@ const playMap = document.getElementById("play-map");
 const overviewSummary = document.getElementById("overview-summary");
 const engineRules = document.getElementById("engine-rules");
 const engineCandidates = document.getElementById("engine-candidates");
+const longTermSummary = document.getElementById("longterm-summary");
+const longTermCandidatesEl = document.getElementById("longterm-candidates");
 const briefPreview = document.getElementById("brief-preview");
 const briefStatus = document.getElementById("brief-status");
 const opsGrid = document.getElementById("ops-grid");
@@ -613,6 +616,22 @@ function dominantScore(row) {
   return entries.sort((a, b) => b[1] - a[1])[0] || ["Value", 0];
 }
 
+function valuationBonus(pe) {
+  if (!Number.isFinite(pe) || pe <= 0) {
+    return 0;
+  }
+  if (pe <= 20) {
+    return 0.55;
+  }
+  if (pe <= 35) {
+    return 0.35;
+  }
+  if (pe <= 50) {
+    return 0.12;
+  }
+  return -0.18;
+}
+
 function buildActionBias(row, priority) {
   if (
     row.signalTrigger &&
@@ -649,6 +668,53 @@ function buildActionBias(row, priority) {
   };
 }
 
+function buildAccumulationBias(score) {
+  if (score >= 4.4) {
+    return {
+      label: "Accumulate",
+      tone: "hot",
+      note: "Conviction is high and the name is calm enough to buy without chasing it.",
+    };
+  }
+
+  if (score >= 3.2) {
+    return {
+      label: "Nibble",
+      tone: "wild",
+      note: "The name is worth building slowly, but the discount is not screaming yet.",
+    };
+  }
+
+  return {
+    label: "Wait For Weakness",
+    tone: "cold",
+    note: "You may want the company, but the price still does not deserve urgency.",
+  };
+}
+
+function buildAccumulationReasons(row) {
+  const reasons = [];
+  if (row.valueScore >= 1) {
+    reasons.push("value stack is still doing real work");
+  }
+  if (row.squeezeScore >= 1) {
+    reasons.push("the name is compressed instead of euphoric");
+  }
+  if (row.momentumScore <= 0.35) {
+    reasons.push("the move is not already extended");
+  }
+  if (row.readiness <= 68) {
+    reasons.push("it is not in full chase mode");
+  }
+  if (row.eps > 0) {
+    reasons.push("the business is still printing earnings");
+  }
+  if (Number.isFinite(row.pe) && row.pe > 0 && row.pe <= 35) {
+    reasons.push("valuation still lives in a sane range");
+  }
+  return reasons.length ? reasons.slice(0, 3) : ["conviction is intact, but price heat is still restrained"];
+}
+
 function enrichRow(row) {
   const timingScore =
     row.daysUntilEarnings <= 7
@@ -679,14 +745,32 @@ function enrichRow(row) {
     8,
     99,
   );
-  const priority = round(
-    Number.isFinite(row.priority)
-      ? row.priority
-      : row.valueScore + row.momentumScore + row.squeezeScore + row.readyScore,
-    2,
-  );
+  const priorityValue = Number.isFinite(row.priority)
+    ? row.priority
+    : row.valueScore + row.momentumScore + row.squeezeScore + row.readyScore;
+  const priority = round(priorityValue, 2);
   const [scoreLeader, scoreLeaderValue] = dominantScore(row);
   const actionBias = buildActionBias(row, priority);
+  const readinessValue = Math.round(readiness);
+  const longTermScoreValue = clamp(
+    row.valueScore * 1.9 +
+      row.squeezeScore * 1.1 +
+      clamp(1.6 - row.momentumScore, 0, 1.6) +
+      clamp((78 - readinessValue) / 30, 0, 1.2) +
+      (row.daysUntilEarnings >= 10 ? 0.45 : row.daysUntilEarnings >= 5 ? 0.1 : -0.25) +
+      (row.eps > 0 ? 0.35 : -0.2) +
+      valuationBonus(row.pe) +
+      (row.signalTrigger ? -0.18 : 0.15) +
+      (row.setupRec === "Avoid" ? -0.35 : 0),
+    0,
+    9.99,
+  );
+  const longTermScore = round(longTermScoreValue, 2);
+  const accumulationBias = buildAccumulationBias(longTermScoreValue);
+  const discountReasons = buildAccumulationReasons({
+    ...row,
+    readiness: readinessValue,
+  });
 
   return {
     ...row,
@@ -694,7 +778,10 @@ function enrichRow(row) {
     scoreLeader,
     scoreLeaderValue: round(scoreLeaderValue, 2),
     actionBias,
-    readiness: Math.round(readiness),
+    longTermScore,
+    accumulationBias,
+    discountReasons,
+    readiness: readinessValue,
     status: readinessLabel(readiness),
   };
 }
@@ -1073,8 +1160,98 @@ function renderConvictionEngine(rows) {
     .join("");
 }
 
+function getLongTermCandidates(rows) {
+  return rows
+    .filter((row) => Number(row.longTermScore) >= 2.8)
+    .filter((row) => row.valueScore >= 0.75)
+    .filter((row) => row.eps > 0 || Number(row.priority) >= 3.6)
+    .sort(
+      (a, b) =>
+        Number(b.longTermScore) - Number(a.longTermScore) ||
+        b.valueScore - a.valueScore ||
+        a.readiness - b.readiness ||
+        a.daysUntilEarnings - b.daysUntilEarnings,
+    )
+    .slice(0, 5);
+}
+
+function buildLongTermBrief(rows) {
+  const candidates = getLongTermCandidates(rows);
+  const lines = ["Long-Term Accumulation Lane", ""];
+
+  if (!candidates.length) {
+    lines.push("No names are cheap enough in the current stack to justify a conviction buy today.");
+    return {
+      text: lines.join("\n"),
+      candidates,
+    };
+  }
+
+  candidates.forEach((row, index) => {
+    lines.push(
+      `${index + 1}. ${row.ticker} | ${row.accumulationBias.label} | score ${row.longTermScore} | ${row.discountReasons.join("; ")}`,
+    );
+  });
+  lines.push("");
+  lines.push("Rule:");
+  lines.push("Only add here if you would still want to own the name if the market did nothing for the next six to twelve months.");
+
+  return {
+    text: lines.join("\n"),
+    candidates,
+  };
+}
+
+function renderAccumulationDesk(rows) {
+  const candidates = getLongTermCandidates(rows);
+  if (!candidates.length) {
+    longTermSummary.textContent = "No long-term names are calm enough and cheap enough to deserve accumulation right now.";
+    longTermCandidatesEl.innerHTML = `
+      <div class="candidate-card accumulation-card">
+        <p><strong>No accumulation buys earned conviction yet.</strong></p>
+        <p class="muted">That is a feature, not a bug. This lane exists to stop you from buying quality names at bad prices.</p>
+      </div>
+    `;
+    return;
+  }
+
+  longTermSummary.textContent = `${candidates[0].ticker} is the cleanest discount candidate right now at a ${candidates[0].longTermScore} accumulation score. This lane rewards value, compression, and names that are not already in full chase mode.`;
+  longTermCandidatesEl.innerHTML = candidates
+    .map((row, index) => `
+      <button class="candidate-card accumulation-card" data-ticker="${row.ticker}" type="button">
+        <div class="candidate-head">
+          <div>
+            <p><strong>#${index + 1} ${row.ticker}</strong></p>
+            <p class="candidate-meta">Long-term score ${row.longTermScore} | Value ${round(row.valueScore, 2)} | Heat ${round(row.momentumScore, 2)}</p>
+            <p class="candidate-meta">${row.daysUntilEarnings}d to earnings | ${row.signalTrigger ? "trigger live" : "calm tape"} | priority ${row.priority}</p>
+          </div>
+          <span class="move-chip ${row.accumulationBias.tone}">${row.accumulationBias.label}</span>
+        </div>
+        <div class="candidate-tags">
+          <span class="pill">${row.setupRec}</span>
+          <span class="pill">${row.eps > 0 ? "Positive EPS" : "Speculative EPS"}</span>
+          <span class="pill">${Number.isFinite(row.pe) && row.pe > 0 ? `PE ${round(row.pe, 1)}` : "PE N/A"}</span>
+        </div>
+        ${renderScoreSigils(row)}
+        <p class="candidate-note">${row.accumulationBias.note}</p>
+        <div class="reason-list">
+          ${row.discountReasons.map((reason) => `<span class="reason-pill">${reason}</span>`).join("")}
+        </div>
+      </button>
+    `)
+    .join("");
+
+  longTermCandidatesEl.querySelectorAll("button[data-ticker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTicker = button.dataset.ticker;
+      render();
+    });
+  });
+}
+
 function buildMorningBrief(rows) {
   const eligible = getEligibleCandidates(rows);
+  const longTerm = buildLongTermBrief(rows);
   const headline = eligible[0]
     ? `${eligible[0].ticker} leads the board at ${eligible[0].readiness}% readiness.`
     : "No full-conviction names passed every gate today.";
@@ -1103,11 +1280,15 @@ function buildMorningBrief(rows) {
   recommended.slice(0, 3).forEach((row) => {
     lines.push(`- ${row.ticker}: ${buildNarrative(row)}`);
   });
+  lines.push("");
+  lines.push(...longTerm.text.split("\n"));
 
   return {
     text: lines.join("\n"),
     eligible,
     recommended,
+    longTermCandidates: longTerm.candidates,
+    longTermText: longTerm.text,
   };
 }
 
@@ -1146,6 +1327,7 @@ function renderMorningBrief(rows) {
   `;
   state.latestBrief = brief.text;
   state.latestTickets = buildPaperTickets(rows);
+  state.latestLongTerm = brief.longTermText;
 }
 
 async function copyTextWithStatus(text, successMessage) {
@@ -1174,12 +1356,16 @@ async function apiRequest(path, options = {}) {
 }
 
 function buildSnapshotPayload(rows) {
+  const longTerm = buildLongTermBrief(rows);
   return {
     generatedAt: new Date().toISOString(),
     sourceLabel: state.sourceLabel,
     brief: state.latestBrief,
     tickets: state.latestTickets,
+    longTermBrief: longTerm.text,
     eligibleTickers: getEligibleCandidates(rows).map((row) => row.ticker),
+    longTermTickers: longTerm.candidates.map((row) => row.ticker),
+    longTermRows: longTerm.candidates,
     rows,
   };
 }
@@ -1401,6 +1587,14 @@ function renderDetail(rows) {
         <span>Move Bias</span>
         <strong class="${row.actionBias.tone === "hot" ? "status-ready" : row.actionBias.tone === "wild" ? "status-caution" : "status-risk"}">${row.actionBias.label}</strong>
       </div>
+      <div class="metric-card">
+        <span>Long-Term Score</span>
+        <strong>${row.longTermScore}</strong>
+      </div>
+      <div class="metric-card">
+        <span>Accumulation Bias</span>
+        <strong class="${row.accumulationBias.tone === "hot" ? "status-ready" : row.accumulationBias.tone === "wild" ? "status-caution" : "status-risk"}">${row.accumulationBias.label}</strong>
+      </div>
     </div>
 
     <div class="score-breakout">
@@ -1583,6 +1777,7 @@ function render() {
   renderOpsWatch();
   renderSignalRibbon(rows);
   renderConvictionEngine(rows);
+  renderAccumulationDesk(rows);
   renderMorningBrief(rows);
   renderRoster(rows);
   renderDetail(rows);

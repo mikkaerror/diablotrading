@@ -36,6 +36,8 @@ What it verifies:
 ./run_inferno_dawn_cycle.sh
 ```
 
+Do not use bare system Python for this step unless that interpreter already has the Backtest dependencies installed. The wrapper is the safe operator path because it runs through the Backtest virtual environment.
+
 ### Rebuild without rerunning BC/P/Q/R
 
 ```bash
@@ -81,6 +83,7 @@ python3 inferno_housekeeping.py
 - [reports/morning_brief_latest.txt](/Users/mikkasida/Documents/New%20project/reports/morning_brief_latest.txt)
 - [reports/morning_brief_latest.html](/Users/mikkasida/Documents/New%20project/reports/morning_brief_latest.html)
 - [reports/paper_tickets_latest.txt](/Users/mikkasida/Documents/New%20project/reports/paper_tickets_latest.txt)
+- [reports/long_term_buys_latest.txt](/Users/mikkasida/Documents/New%20project/reports/long_term_buys_latest.txt)
 
 ### Logs
 
@@ -133,6 +136,23 @@ If needed, send a fresh brief manually:
 ```bash
 ./run_inferno_dawn_cycle.sh
 ```
+
+## PyCharm Clarifier
+
+You do not need PyCharm open for the desk to run.
+
+The automation uses:
+
+- the Backtest project files on disk
+- the Backtest virtual environment Python
+- the script filenames listed in the runner
+
+What you do need:
+
+- the project path still exists
+- the `venv` still exists
+- the Mac is awake or able to wake
+- the Mac user session is logged in
 
 ## If The Sheet Or Scores Look Broken
 

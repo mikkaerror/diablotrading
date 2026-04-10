@@ -20,6 +20,7 @@ from inferno_config import (
     AUTOMATION_WINDOW_END,
     AUTOMATION_WINDOW_START,
     DEFAULT_SHEET_NAME,
+    LONG_TERM_QUEUE_LIMIT,
     REVIEW_QUEUE_LIMIT,
     ROOT,
     SCORE_FORMULA_COLUMNS,
@@ -33,6 +34,7 @@ from server import (
     APPROVAL_QUEUE_FILE,
     BRIEF_TEXT_FILE,
     HTML_BRIEF_FILE,
+    LONG_TERM_TEXT_FILE,
     LOG_FILE,
     OPS_STATUS_FILE,
     PAPER_JOURNAL_FILE,
@@ -159,6 +161,76 @@ def normalize_trigger(value: Any) -> bool:
     return text == "1" or "true" in lowered or "yes" in lowered or "✅" in text
 
 
+def valuation_bonus(pe: float | None) -> float:
+    if pe is None or pe <= 0:
+        return 0.0
+    if pe <= 20:
+        return 0.55
+    if pe <= 35:
+        return 0.35
+    if pe <= 50:
+        return 0.12
+    return -0.18
+
+
+def calculate_long_term_score(row: dict[str, Any]) -> float:
+    cooled_off = clamp(1.6 - row["momentumScore"], 0.0, 1.6)
+    non_chase = clamp((78 - row["readiness"]) / 30, 0.0, 1.2)
+    timing = 0.45 if row["daysUntilEarnings"] >= 10 else 0.1 if row["daysUntilEarnings"] >= 5 else -0.25
+    profitability = 0.35 if row["eps"] > 0 else -0.2
+    trigger_bonus = 0.15 if not row["signalTrigger"] else -0.18
+    setup_penalty = -0.35 if row["setupRec"] == "Avoid" else 0.0
+    score = (
+        row["valueScore"] * 1.9
+        + row["squeezeScore"] * 1.1
+        + cooled_off
+        + non_chase
+        + timing
+        + profitability
+        + valuation_bonus(row.get("pe"))
+        + trigger_bonus
+        + setup_penalty
+    )
+    return round(clamp(score, 0.0, 9.99), 2)
+
+
+def build_accumulation_bias(score: float) -> dict[str, str]:
+    if score >= 4.4:
+        return {
+            "label": "Accumulate",
+            "note": "Conviction is high and the name is calm enough to buy without chasing it.",
+        }
+    if score >= 3.2:
+        return {
+            "label": "Nibble",
+            "note": "The setup is worth building slowly, but the discount is not screaming yet.",
+        }
+    return {
+        "label": "Wait For Weakness",
+        "note": "You may want the name, but the price does not deserve urgency right now.",
+    }
+
+
+def accumulation_reasons(row: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    if row["valueScore"] >= 1.0:
+        reasons.append("value stack is still doing real work")
+    if row["squeezeScore"] >= 1.0:
+        reasons.append("the name is compressed instead of euphoric")
+    if row["momentumScore"] <= 0.35:
+        reasons.append("the move is not already extended")
+    if row["readiness"] <= 68:
+        reasons.append("it is not in full chase mode")
+    if row["eps"] > 0:
+        reasons.append("the business is still printing earnings")
+    pe = row.get("pe")
+    if pe is not None and pe > 0 and pe <= 35:
+        reasons.append("valuation still lives in a sane range")
+    if not reasons:
+        reasons.append("conviction is intact, but price heat is still restrained")
+    return reasons[:3]
+
+
 def enrich_row(row: dict[str, Any]) -> dict[str, Any]:
     timing_score = 16 if row["daysUntilEarnings"] <= 7 else 20 if row["daysUntilEarnings"] <= 21 else 17 if row["daysUntilEarnings"] <= 35 else 9
     trigger_score = 14 if row["signalTrigger"] else 0
@@ -184,8 +256,16 @@ def enrich_row(row: dict[str, Any]) -> dict[str, Any]:
         99,
     )
 
+    priority_raw = row.get("priority")
+    if priority_raw is None or not isinstance(priority_raw, (int, float)):
+        priority_raw = row["valueScore"] + row["momentumScore"] + row["squeezeScore"] + row["readyScore"]
+
+    row["priority"] = round(float(priority_raw), 2)
     row["readiness"] = int(round(readiness))
     row["status"] = readiness_label(readiness)
+    row["longTermScore"] = calculate_long_term_score(row)
+    row["accumulationBias"] = build_accumulation_bias(row["longTermScore"])
+    row["discountReasons"] = accumulation_reasons(row)
     return row
 
 
@@ -218,6 +298,25 @@ def select_review_candidates(rows: list[dict[str, Any]], limit: int = REVIEW_QUE
     return get_eligible_candidates(rows)[:limit]
 
 
+def get_long_term_candidates(rows: list[dict[str, Any]], limit: int = LONG_TERM_QUEUE_LIMIT) -> list[dict[str, Any]]:
+    candidates = [
+        row
+        for row in rows
+        if row["longTermScore"] >= 2.8
+        and row["valueScore"] >= 0.75
+        and (row["eps"] > 0 or row["priority"] >= 3.6)
+    ]
+    candidates.sort(
+        key=lambda row: (
+            -row["longTermScore"],
+            -row["valueScore"],
+            row["readiness"],
+            row["daysUntilEarnings"],
+        )
+    )
+    return candidates[:limit]
+
+
 def build_narrative(row: dict[str, Any]) -> str:
     if row["daysUntilEarnings"] <= 10:
         timing = "The catalyst window is almost here, so precision matters more than panic and greed."
@@ -241,6 +340,7 @@ def build_narrative(row: dict[str, Any]) -> str:
 
 def build_morning_brief(rows: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     eligible = get_eligible_candidates(rows)
+    long_term = get_long_term_candidates(rows)
     headline = (
         f"{eligible[0]['ticker']} leads the board at {eligible[0]['readiness']}% readiness."
         if eligible
@@ -271,7 +371,48 @@ def build_morning_brief(rows: list[dict[str, Any]]) -> tuple[str, list[dict[str,
     for row in recommended[:3]:
         lines.append(f"- {row['ticker']}: {build_narrative(row)}")
 
+    lines.extend(["", "Long-Term Accumulation Lane:"])
+    if long_term:
+        for index, row in enumerate(long_term, start=1):
+            reasons = "; ".join(row["discountReasons"][:2])
+            lines.append(
+                f"{index}. {row['ticker']} | {row['accumulationBias']['label']} | score {row['longTermScore']} | {reasons}"
+            )
+    else:
+        lines.append("No names are cheap enough in the current stack to justify a conviction buy today.")
+
+    lines.extend(
+        [
+            "",
+            "Long-term rule:",
+            "- Only add here if you would still want to own the name six to twelve months from now.",
+        ]
+    )
+
     return "\n".join(lines), eligible, recommended
+
+
+def build_long_term_brief(rows: list[dict[str, Any]]) -> str:
+    candidates = get_long_term_candidates(rows)
+    lines = ["Long-Term Accumulation Lane", ""]
+    if not candidates:
+        lines.append("No names are cheap enough in the current stack to justify a conviction buy today.")
+        return "\n".join(lines)
+
+    for index, row in enumerate(candidates, start=1):
+        reasons = "; ".join(row["discountReasons"])
+        lines.append(
+            f"{index}. {row['ticker']} | {row['accumulationBias']['label']} | score {row['longTermScore']} | {reasons}"
+        )
+
+    lines.extend(
+        [
+            "",
+            "Rule:",
+            "Only add here if you would still want to own the name if the market did nothing for the next six to twelve months.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def build_paper_tickets(rows: list[dict[str, Any]]) -> str:
@@ -440,6 +581,7 @@ def read_sheet_rows(backtest_root: Path, sheet_name: str) -> list[dict[str, Any]
                 "momentumScore": number_or_none(read(cells, "Momentum Score")) or 0.0,
                 "squeezeScore": number_or_none(read(cells, "Squeeze Score")) or 0.0,
                 "readyScore": number_or_none(read(cells, "Ready Score")) or 0.0,
+                "priority": number_or_none(read(cells, "Priority")),
             }
         )
         rows.append(row)
@@ -477,11 +619,13 @@ def write_payload(payload: dict[str, Any]) -> None:
     snapshot_text = json.dumps(payload, indent=2)
     brief_text = payload["brief"]
     tickets_text = payload["tickets"]
+    long_term_text = payload["longTermBrief"]
     html_text = html_from_payload(payload)
 
     SNAPSHOT_FILE.write_text(snapshot_text, encoding="utf-8")
     BRIEF_TEXT_FILE.write_text(brief_text, encoding="utf-8")
     TICKETS_TEXT_FILE.write_text(tickets_text, encoding="utf-8")
+    LONG_TERM_TEXT_FILE.write_text(long_term_text, encoding="utf-8")
     HTML_BRIEF_FILE.write_text(html_text, encoding="utf-8")
 
 
@@ -501,6 +645,7 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
                 "eligibleCount": len(payload["eligibleTickers"]),
                 "topTickers": payload["eligibleTickers"][:5],
                 "reviewQueueTickers": review_tickers,
+                "longTermTickers": payload["longTermTickers"],
                 "paperTradeCount": journal_count,
                 "approvalQueueCount": journal_count,
                 "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
@@ -595,6 +740,7 @@ def summarize(results: list[dict[str, Any]], payload: dict[str, Any], email_sent
         f"Rows scored: {len(payload['rows'])}",
         f"Eligible names: {len(payload['eligibleTickers'])}",
         f"Top names: {', '.join(payload['eligibleTickers'][:5]) if payload['eligibleTickers'] else 'none'}",
+        f"Long-term names: {', '.join(payload['longTermTickers'][:5]) if payload['longTermTickers'] else 'none'}",
         f"Email sent: {'yes' if email_sent else 'no'}",
     ]
     if results:
@@ -681,15 +827,20 @@ def main() -> int:
 
         rows = read_sheet_rows(backtest_root, args.sheet_name)
         brief_text, eligible, _recommended = build_morning_brief(rows)
+        long_term_text = build_long_term_brief(rows)
         tickets_text = build_paper_tickets(rows)
         review_candidates = select_review_candidates(rows)
+        long_term_candidates = get_long_term_candidates(rows)
         payload = {
             "generatedAt": datetime.now().astimezone().isoformat(),
             "sourceLabel": "Inferno Runner",
             "brief": brief_text,
             "tickets": tickets_text,
+            "longTermBrief": long_term_text,
             "eligibleTickers": [row["ticker"] for row in eligible],
             "reviewQueueTickers": [row["ticker"] for row in review_candidates],
+            "longTermTickers": [row["ticker"] for row in long_term_candidates],
+            "longTermRows": long_term_candidates,
             "rows": rows,
         }
         write_payload(payload)
@@ -708,6 +859,7 @@ def main() -> int:
                 "generatedAt": payload["generatedAt"],
                 "emailSent": email_sent,
                 "eligibleTickers": payload["eligibleTickers"],
+                "longTermTickers": payload["longTermTickers"],
                 "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
             }
         )

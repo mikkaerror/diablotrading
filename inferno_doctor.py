@@ -6,8 +6,19 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from inferno_config import LABEL, ROOT, WATCHDOG_LABEL, local_today, WAKE_HOUR, WAKE_MINUTE
-from server import OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
+from inferno_config import (
+    LABEL,
+    ROOT,
+    UPDATER_LABEL,
+    UPDATER_SCRIPTS,
+    WATCHDOG_LABEL,
+    backtest_python,
+    default_backtest_root,
+    local_today,
+    WAKE_HOUR,
+    WAKE_MINUTE,
+)
+from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
 
 
 SMTP_ENV_FILE = ROOT / ".env.smtp"
@@ -46,6 +57,28 @@ def summarize_status(name: str, ok: bool, detail: str) -> str:
     return f"[{marker}] {name}: {detail}"
 
 
+def latest_emailed_run_for_day(day: str) -> dict | None:
+    if not LOG_FILE.exists():
+        return None
+
+    latest: dict | None = None
+    for raw_line in LOG_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        generated_at = str(payload.get("generatedAt", ""))
+        if not generated_at.startswith(day):
+            continue
+        if not payload.get("ok") or not payload.get("emailSent"):
+            continue
+        latest = payload
+    return latest
+
+
 def main() -> int:
     load_env_file(SMTP_ENV_FILE)
 
@@ -56,6 +89,25 @@ def main() -> int:
     smtp_ok = smtp_configured()
     lines.append(summarize_status("SMTP", smtp_ok, "configured" if smtp_ok else "not configured"))
     if not smtp_ok:
+        warnings += 1
+
+    bt_root = default_backtest_root()
+    bt_root_ok = bt_root.exists()
+    lines.append(summarize_status("Backtest root", bt_root_ok, str(bt_root) if bt_root_ok else f"missing: {bt_root}"))
+    if not bt_root_ok:
+        warnings += 1
+
+    bt_python = backtest_python()
+    bt_python_ok = bt_python.exists()
+    lines.append(summarize_status("Backtest Python", bt_python_ok, str(bt_python) if bt_python_ok else f"missing: {bt_python}"))
+    if not bt_python_ok:
+        warnings += 1
+
+    missing_scripts = [script for script in UPDATER_SCRIPTS if not (bt_root / script).exists()]
+    scripts_ok = not missing_scripts
+    script_detail = UPDATER_LABEL if scripts_ok else f"missing: {', '.join(missing_scripts)}"
+    lines.append(summarize_status("Updater scripts", scripts_ok, script_detail))
+    if not scripts_ok:
         warnings += 1
 
     dawn_loaded = launch_agent_loaded(LABEL)
@@ -83,21 +135,23 @@ def main() -> int:
         warnings += 1
 
     ops_status = load_json_file(OPS_STATUS_FILE) or {}
-    ops_today = str(ops_status.get("generatedAt", "")).startswith(today)
-    ops_email = bool(ops_status.get("emailSent"))
-    ops_ok = ops_today and ops_email and bool(ops_status.get("ok"))
+    emailed_status = latest_emailed_run_for_day(today)
+    ops_reference = emailed_status or ops_status
+    ops_today = str(ops_reference.get("generatedAt", "")).startswith(today)
+    ops_email = bool(ops_reference.get("emailSent"))
+    ops_ok = ops_today and ops_email and bool(ops_reference.get("ok"))
     ops_detail = "fresh run and email recorded today" if ops_ok else json.dumps(
         {
-            "generatedAt": ops_status.get("generatedAt"),
-            "ok": ops_status.get("ok"),
-            "emailSent": ops_status.get("emailSent"),
+            "generatedAt": ops_reference.get("generatedAt"),
+            "ok": ops_reference.get("ok"),
+            "emailSent": ops_reference.get("emailSent"),
         }
     )
     lines.append(summarize_status("Morning run", ops_ok, ops_detail))
     if not ops_ok:
         warnings += 1
     else:
-        lines.append(f"Top tickers: {', '.join(ops_status.get('topTickers', [])[:5]) or 'none'}")
+        lines.append(f"Top tickers: {', '.join(ops_reference.get('topTickers', [])[:5]) or 'none'}")
 
     watchdog_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
     watchdog_today = str(watchdog_status.get("checkedAt", "")).startswith(today)

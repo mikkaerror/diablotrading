@@ -18,6 +18,7 @@ DATA_DIR = ROOT / "data"
 SNAPSHOT_FILE = DATA_DIR / "latest_snapshot.json"
 BRIEF_TEXT_FILE = REPORTS_DIR / "morning_brief_latest.txt"
 TICKETS_TEXT_FILE = REPORTS_DIR / "paper_tickets_latest.txt"
+LONG_TERM_TEXT_FILE = REPORTS_DIR / "long_term_buys_latest.txt"
 HTML_BRIEF_FILE = REPORTS_DIR / "morning_brief_latest.html"
 LOG_FILE = REPORTS_DIR / "brief_log.jsonl"
 OPS_STATUS_FILE = DATA_DIR / "inferno_ops_status.json"
@@ -62,6 +63,7 @@ def load_json_file(path: Path) -> dict[str, Any] | None:
 
 def html_from_payload(payload: dict[str, Any]) -> str:
     rows = payload.get("rows", [])[:5]
+    long_term_rows = payload.get("longTermRows", [])[:5]
     row_markup = "".join(
         f"""
         <tr>
@@ -74,7 +76,38 @@ def html_from_payload(payload: dict[str, Any]) -> str:
         """
         for row in rows
     )
+    long_term_markup = "".join(
+        f"""
+        <tr>
+          <td>{row.get("ticker", "")}</td>
+          <td>{row.get("accumulationBias", {}).get("label", "")}</td>
+          <td>{row.get("longTermScore", "")}</td>
+          <td>{row.get("valueScore", "")}</td>
+          <td>{row.get("momentumScore", "")}</td>
+        </tr>
+        """
+        for row in long_term_rows
+    )
     brief = payload.get("brief", "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    long_term_brief = payload.get("longTermBrief", "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    long_term_section = ""
+    if long_term_rows or long_term_brief:
+        long_term_section = f"""
+    <h2 style="color:#f0c36d;">Long-Term Accumulation</h2>
+    <pre style="white-space:pre-wrap;background:#1c1611;padding:16px;border:1px solid #8b6530;">{long_term_brief}</pre>
+    <table style="border-collapse:collapse;width:100%;">
+      <thead>
+        <tr>
+          <th align="left">Ticker</th>
+          <th align="left">Bias</th>
+          <th align="left">Score</th>
+          <th align="left">Value</th>
+          <th align="left">Heat</th>
+        </tr>
+      </thead>
+      <tbody>{long_term_markup}</tbody>
+    </table>
+"""
     return f"""<!DOCTYPE html>
 <html lang="en">
   <body style="background:#120707;color:#f6e5d1;font-family:Georgia,serif;padding:24px;">
@@ -94,6 +127,7 @@ def html_from_payload(payload: dict[str, Any]) -> str:
       </thead>
       <tbody>{row_markup}</tbody>
     </table>
+    {long_term_section}
   </body>
 </html>"""
 
@@ -208,15 +242,18 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
         brief_name = f"morning-brief-{timestamp}.txt"
         tickets_name = f"paper-tickets-{timestamp}.txt"
         html_name = f"morning-brief-{timestamp}.html"
+        long_term_name = f"long-term-buys-{timestamp}.txt"
 
         snapshot_path = DATA_DIR / snapshot_name
         brief_path = REPORTS_DIR / brief_name
         tickets_path = REPORTS_DIR / tickets_name
         html_path = REPORTS_DIR / html_name
+        long_term_path = REPORTS_DIR / long_term_name
 
         snapshot_text = json.dumps(payload, indent=2)
         brief_text = payload.get("brief", "")
         tickets_text = payload.get("tickets", "")
+        long_term_text = payload.get("longTermBrief", "")
         html_text = html_from_payload(payload)
 
         snapshot_path.write_text(snapshot_text, encoding="utf-8")
@@ -225,6 +262,8 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
         BRIEF_TEXT_FILE.write_text(brief_text, encoding="utf-8")
         tickets_path.write_text(tickets_text, encoding="utf-8")
         TICKETS_TEXT_FILE.write_text(tickets_text, encoding="utf-8")
+        long_term_path.write_text(long_term_text, encoding="utf-8")
+        LONG_TERM_TEXT_FILE.write_text(long_term_text, encoding="utf-8")
         html_path.write_text(html_text, encoding="utf-8")
         HTML_BRIEF_FILE.write_text(html_text, encoding="utf-8")
 
@@ -262,6 +301,7 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                 "snapshotPath": str(snapshot_path.relative_to(ROOT)),
                 "briefPath": str(brief_path.relative_to(ROOT)),
                 "ticketsPath": str(tickets_path.relative_to(ROOT)),
+                "longTermPath": str(long_term_path.relative_to(ROOT)),
                 "generatedAt": generated_at,
             }
         )

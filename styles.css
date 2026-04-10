@@ -436,16 +436,22 @@ button.ribbon-card:hover {
 }
 
 .overview-panel,
-.roster-panel {
+.roster-panel,
+.shortlist-panel,
+.accumulation-panel,
+.brief-panel {
   grid-column: 1 / 2;
 }
 
 .filter-panel,
-.detail-panel {
+.detail-panel,
+.ops-panel,
+.notes-panel {
   grid-column: 2 / 3;
 }
 
 .shortlist-panel,
+.accumulation-panel,
 .notes-panel,
 .brief-panel {
   min-height: 280px;
@@ -1241,6 +1247,13 @@ tbody tr.temp-wild {
   gap: 12px;
 }
 
+.accumulation-summary {
+  color: var(--muted);
+  font-size: 1.2rem;
+  margin-bottom: 14px;
+  max-width: 70ch;
+}
+
 .short-card {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -1280,6 +1293,10 @@ button.short-card:hover {
   display: grid;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.accumulation-candidates {
+  margin-bottom: 0;
 }
 
 .engine-rules {
@@ -1332,6 +1349,17 @@ button.short-card:hover {
   min-width: 0;
 }
 
+button.candidate-card {
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.candidate-card:hover {
+  border-color: rgba(255, 141, 87, 0.34);
+  transform: translateY(-1px);
+}
+
 .candidate-head {
   display: flex;
   justify-content: space-between;
@@ -1358,6 +1386,25 @@ button.short-card:hover {
 
 .candidate-note {
   color: var(--muted);
+}
+
+.reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reason-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid rgba(199, 160, 106, 0.22);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--muted);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .score-sigils {
@@ -1537,10 +1584,13 @@ button.short-card:hover {
 
   .overview-panel,
   .filter-panel,
+  .ops-panel,
   .roster-panel,
   .detail-panel,
   .shortlist-panel,
-  .notes-panel {
+  .accumulation-panel,
+  .notes-panel,
+  .brief-panel {
     grid-column: auto;
   }
 
