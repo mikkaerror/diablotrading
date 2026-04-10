@@ -1396,6 +1396,69 @@ button.candidate-card:hover {
   gap: 8px;
 }
 
+.execution-actions,
+.candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.execution-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.approval-button,
+#approval-reset-button {
+  border: 1px solid rgba(199, 160, 106, 0.28);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.approval-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+  transform: none;
+}
+
+.approval-button.approve {
+  border-color: rgba(255, 141, 87, 0.4);
+  color: var(--accent);
+}
+
+.approval-button.reject {
+  border-color: rgba(181, 66, 52, 0.4);
+  color: #ff8f80;
+}
+
+.approval-button.pending,
+#approval-reset-button {
+  border-color: rgba(210, 173, 112, 0.35);
+  color: var(--muted);
+}
+
+.approval-button.ticket-copy-button {
+  border-color: rgba(112, 177, 210, 0.35);
+  color: #b6dffd;
+}
+
+.approval-button:hover,
+#approval-reset-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 176, 116, 0.45);
+}
+
+.approval-button:disabled:hover {
+  border-color: rgba(199, 160, 106, 0.28);
+}
+
 .reason-pill {
   display: inline-flex;
   align-items: center;

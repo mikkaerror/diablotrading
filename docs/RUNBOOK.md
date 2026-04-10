@@ -10,6 +10,8 @@ This is the "what do I do when something feels off?" guide for the desk.
 python3 server.py
 ```
 
+If you change backend files like `server.py`, `inferno_execution_clerk.py`, or the morning runner, stop and restart this command so the dashboard is not serving stale process logic.
+
 Then open:
 
 - `http://localhost:8000`
@@ -68,6 +70,18 @@ python3 inferno_approval_queue.py status
 python3 inferno_execution_clerk.py
 ```
 
+### Approve or reject a live name
+
+```bash
+python3 inferno_approval_queue.py approve TICKER
+python3 inferno_approval_queue.py reject TICKER
+python3 inferno_approval_queue.py reset
+```
+
+The dashboard now exposes these same approval actions directly inside the `Order Intent Desk`, which is the preferred operator flow.
+
+Once a name becomes `approval-ready`, use the desk's `Copy Ticket` action to grab the broker-review blueprint before routing anything inside thinkorswim.
+
 ### Prune old artifacts
 
 ```bash
@@ -82,6 +96,7 @@ python3 inferno_housekeeping.py
 - [data/inferno_ops_status.json](/Users/mikkasida/Documents/New%20project/data/inferno_ops_status.json)
 - [data/inferno_watchdog_status.json](/Users/mikkasida/Documents/New%20project/data/inferno_watchdog_status.json)
 - [data/inferno_approval_queue.json](/Users/mikkasida/Documents/New%20project/data/inferno_approval_queue.json)
+- [data/inferno_execution_queue.json](/Users/mikkasida/Documents/New%20project/data/inferno_execution_queue.json)
 - [data/latest_snapshot.json](/Users/mikkasida/Documents/New%20project/data/latest_snapshot.json)
 
 ### Human-readable outputs
@@ -90,6 +105,7 @@ python3 inferno_housekeeping.py
 - [reports/morning_brief_latest.html](/Users/mikkasida/Documents/New%20project/reports/morning_brief_latest.html)
 - [reports/paper_tickets_latest.txt](/Users/mikkasida/Documents/New%20project/reports/paper_tickets_latest.txt)
 - [reports/long_term_buys_latest.txt](/Users/mikkasida/Documents/New%20project/reports/long_term_buys_latest.txt)
+- [reports/execution_desk_latest.txt](/Users/mikkasida/Documents/New%20project/reports/execution_desk_latest.txt)
 
 ### Logs
 

@@ -270,6 +270,61 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
             )
             return
 
+        if self.path == "/api/approval":
+            ensure_dirs()
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length)
+
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except json.JSONDecodeError:
+                self.send_error(HTTPStatus.BAD_REQUEST, "Invalid JSON body")
+                return
+
+            action = str(payload.get("action", "set")).strip().lower()
+            queue = load_json_file(APPROVAL_QUEUE_FILE) or {"generatedAt": None, "count": 0, "items": []}
+
+            if action == "reset":
+                for item in queue.get("items", []):
+                    item["approvalStatus"] = "pending"
+                    item.pop("decisionAt", None)
+            else:
+                ticker = str(payload.get("ticker", "")).strip().upper()
+                status = str(payload.get("status", "")).strip().lower()
+                if not ticker or status not in {"approved", "rejected", "pending"}:
+                    self.send_error(HTTPStatus.BAD_REQUEST, "Ticker and valid status are required")
+                    return
+
+                updated = False
+                for item in queue.get("items", []):
+                    if item.get("ticker") == ticker:
+                        item["approvalStatus"] = status
+                        if status == "pending":
+                            item.pop("decisionAt", None)
+                        else:
+                            item["decisionAt"] = datetime.now().astimezone().isoformat()
+                        updated = True
+                if not updated:
+                    self.send_error(HTTPStatus.NOT_FOUND, "Ticker was not found in the approval queue")
+                    return
+
+            queue["updatedAt"] = datetime.now().astimezone().isoformat()
+            APPROVAL_QUEUE_FILE.write_text(json.dumps(queue, indent=2), encoding="utf-8")
+
+            from inferno_execution_clerk import build_execution_queue, save_execution_queue
+
+            execution_queue = build_execution_queue(approval_queue=queue)
+            save_execution_queue(execution_queue)
+
+            self._write_json(
+                {
+                    "ok": True,
+                    "approvalQueue": queue,
+                    "executionQueue": execution_queue,
+                }
+            )
+            return
+
         if self.path != "/api/briefing":
             self.send_error(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
             return

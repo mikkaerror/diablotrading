@@ -54,9 +54,16 @@ That is intentional.
 
 The name is on the queue, but nobody has approved it yet.
 
+That approval can now happen in either place:
+
+- the dashboard `Order Intent Desk`
+- the local CLI through `inferno_approval_queue.py`
+
 ### Approval-Ready
 
 The setup is allowed, the trigger is live, the risk budget is available, and the human reviewer has approved it.
+
+At that point the desk can generate a copyable broker ticket blueprint for supervised order entry.
 
 ### Blocked
 
@@ -68,6 +75,7 @@ Common block reasons:
 - human approval still required
 - setup not approved for broker automation lane
 - daily risk budget would be exceeded
+- daily active intent cap reached
 
 ## Why Thinkorswim Is The Surface, Not The Brain
 
@@ -137,4 +145,19 @@ To rebuild the staged execution queue from the latest snapshot:
 
 ```bash
 python3 inferno_execution_clerk.py build
+```
+
+The dashboard `Order Intent Desk` now shows:
+
+- approval and rejection controls
+- staged risk counts
+- next-step guidance per name
+- a `Copy Ticket` action that produces a broker-review blueprint for thinkorswim
+
+To approve or reject from the CLI:
+
+```bash
+python3 inferno_approval_queue.py approve TICKER
+python3 inferno_approval_queue.py reject TICKER
+python3 inferno_approval_queue.py reset
 ```

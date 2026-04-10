@@ -373,6 +373,7 @@ const DEFAULT_SHEET_URL = "";
 const SHEET_STORAGE_KEY = "pipboy-earnings-sheet-url";
 const GOOGLE_CLIENT_ID_STORAGE_KEY = "pipboy-google-client-id";
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const BACKEND_REFRESH_INTERVAL_MS = 60_000;
 
 const state = {
   rows: sampleData.map(enrichRow),
@@ -976,6 +977,9 @@ function renderOpsWatch() {
     messages.push(
       `Execution desk: ${executionQueue.activeReadyCount} ready, ${round(executionQueue.stagedRiskUnits || 0, 2)} / ${round(executionQueue.dailyRiskBudget || 0, 2)} risk units staged.`,
     );
+    if (executionQueue.readyTickers?.length) {
+      messages.push(`Broker review queue: ${executionQueue.readyTickers.join(", ")}`);
+    }
   }
   if (ops?.repair?.repaired) {
     messages.push("Column R needed self-healing after the external R job.");
@@ -1276,8 +1280,30 @@ function renderExecutionDesk() {
     return;
   }
 
-  executionSummary.textContent = `${queue.activeReadyCount} intents are currently broker-ready inside a ${queue.dailyRiskBudget} risk-unit day. This desk stages tickets for ${queue.brokerSurface} while keeping the future API lane pointed at ${queue.futureApiTarget}.`;
-  executionCandidates.innerHTML = queue.items
+  executionSummary.textContent = `${queue.activeReadyCount} intents are broker-ready inside a ${queue.dailyRiskBudget} risk-unit day. ${queue.pendingCount || 0} still need human approval, ${queue.rejectedCount || 0} are buried, and the staged risk stack is ${round(queue.stagedRiskUnits || 0, 2)} units. Last clerk update: ${formatBackendDate(queue.updatedAt || queue.generatedAt)}.`;
+  executionCandidates.innerHTML = `
+    <div class="execution-actions">
+      <button id="approval-reset-button" type="button">Reset Approval Desk</button>
+    </div>
+    <div class="execution-stats">
+      <div class="metric-card">
+        <span>Ready</span>
+        <strong class="status-ready">${queue.activeReadyCount}</strong>
+      </div>
+      <div class="metric-card">
+        <span>Pending</span>
+        <strong class="status-caution">${queue.pendingCount || 0}</strong>
+      </div>
+      <div class="metric-card">
+        <span>Rejected</span>
+        <strong class="status-risk">${queue.rejectedCount || 0}</strong>
+      </div>
+      <div class="metric-card">
+        <span>Risk Staged</span>
+        <strong>${round(queue.stagedRiskUnits || 0, 2)} / ${round(queue.dailyRiskBudget || 0, 2)}</strong>
+      </div>
+    </div>
+    ${queue.items
     .map((item) => {
       const tone =
         item.intentStatus === "approval-ready"
@@ -1301,11 +1327,60 @@ function renderExecutionDesk() {
             <span class="pill">${item.primaryRoute}</span>
             <span class="pill">${item.secondaryRoute}</span>
           </div>
+          <p class="candidate-note"><strong>Next step:</strong> ${item.nextStep}</p>
+          <div class="candidate-actions">
+            <button class="approval-button approve" data-approval-ticker="${item.ticker}" data-approval-status="approved" type="button" ${item.approvalStatus === "approved" ? "disabled" : ""}>Approve</button>
+            <button class="approval-button reject" data-approval-ticker="${item.ticker}" data-approval-status="rejected" type="button" ${item.approvalStatus === "rejected" ? "disabled" : ""}>Reject</button>
+            <button class="approval-button pending" data-approval-ticker="${item.ticker}" data-approval-status="pending" type="button" ${item.approvalStatus === "pending" ? "disabled" : ""}>Reset</button>
+            <button class="approval-button ticket-copy-button" data-ticket-index="${item.rank - 1}" type="button">Copy Ticket</button>
+          </div>
           <p class="candidate-note">${blockText}</p>
         </div>
       `;
     })
-    .join("");
+    .join("")}
+  `;
+
+  const resetButton = document.getElementById("approval-reset-button");
+  if (resetButton) {
+    resetButton.addEventListener("click", async () => {
+      executionSummary.textContent = "Resetting approval desk...";
+      try {
+        await resetApprovalQueue();
+        await refreshBackendStatus();
+        render();
+      } catch {
+        executionSummary.textContent = "Could not reset the approval desk.";
+      }
+    });
+  }
+
+  executionCandidates.querySelectorAll("[data-approval-ticker]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const ticker = button.dataset.approvalTicker;
+      const status = button.dataset.approvalStatus;
+      executionSummary.textContent = `Updating ${ticker} to ${status}...`;
+      try {
+        await updateApprovalStatus(ticker, status);
+        await refreshBackendStatus();
+        render();
+      } catch {
+        executionSummary.textContent = `Could not update ${ticker}.`;
+      }
+    });
+  });
+
+  executionCandidates.querySelectorAll("[data-ticket-index]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const index = Number(button.dataset.ticketIndex);
+      const item = queue.items[index];
+      if (!item?.ticketText) {
+        executionSummary.textContent = "Ticket blueprint was unavailable for that name.";
+        return;
+      }
+      await copyExecutionTicket(item);
+    });
+  });
 }
 
 function buildMorningBrief(rows) {
@@ -1398,6 +1473,15 @@ async function copyTextWithStatus(text, successMessage) {
   }
 }
 
+async function copyExecutionTicket(item) {
+  try {
+    await navigator.clipboard.writeText(item.ticketText);
+    executionSummary.textContent = `${item.ticker} ticket blueprint copied for broker review.`;
+  } catch {
+    executionSummary.textContent = `Clipboard access failed while copying ${item.ticker}.`;
+  }
+}
+
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
     headers: {
@@ -1412,6 +1496,30 @@ async function apiRequest(path, options = {}) {
   }
 
   return response.json();
+}
+
+async function updateApprovalStatus(ticker, status) {
+  const result = await apiRequest("/api/approval", {
+    method: "POST",
+    body: JSON.stringify({
+      ticker,
+      status,
+      action: "set",
+    }),
+  });
+  state.backend.approvalQueue = result.approvalQueue || null;
+  state.backend.executionQueue = result.executionQueue || null;
+}
+
+async function resetApprovalQueue() {
+  const result = await apiRequest("/api/approval", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "reset",
+    }),
+  });
+  state.backend.approvalQueue = result.approvalQueue || null;
+  state.backend.executionQueue = result.executionQueue || null;
 }
 
 function buildSnapshotPayload(rows) {
@@ -1452,6 +1560,16 @@ async function refreshBackendStatus() {
     state.backend.approvalQueue = null;
     state.backend.executionQueue = null;
   }
+}
+
+function startBackendHeartbeat() {
+  window.setInterval(async () => {
+    if (document.visibilityState === "hidden") {
+      return;
+    }
+    await refreshBackendStatus();
+    render();
+  }, BACKEND_REFRESH_INTERVAL_MS);
 }
 
 async function forgeSnapshot(sendEmail = false) {
@@ -2335,3 +2453,4 @@ setSheetStatus("Using sample cache until Google authorization succeeds.", "muted
 refreshBackendStatus().finally(() => {
   render();
 });
+startBackendHeartbeat();
