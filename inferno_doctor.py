@@ -6,11 +6,10 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from server import OPS_STATUS_FILE, ROOT, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
+from inferno_config import LABEL, ROOT, WATCHDOG_LABEL, local_today, WAKE_HOUR, WAKE_MINUTE
+from server import OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
 
 
-LABEL = "io.diablotrading.inferno-dawn-brief"
-WATCHDOG_LABEL = "io.diablotrading.inferno-watchdog"
 SMTP_ENV_FILE = ROOT / ".env.smtp"
 
 
@@ -24,11 +23,6 @@ def load_env_file(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ[key] = value
-
-
-def local_today() -> str:
-    return datetime.now().astimezone().date().isoformat()
-
 
 def run_command(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, text=True, capture_output=True, check=False)
@@ -75,8 +69,10 @@ def main() -> int:
         warnings += 1
 
     sched_text = pmset_sched_text()
-    wake_ok = "wakepoweron at 5:58AM" in sched_text
-    lines.append(summarize_status("Wake schedule", wake_ok, "5:58 AM wake is scheduled" if wake_ok else "5:58 AM wake not found"))
+    wake_label = f"{WAKE_HOUR:02d}:{WAKE_MINUTE:02d}"
+    wake_phrase = f"wakepoweron at {WAKE_HOUR if WAKE_HOUR % 12 else 12}:{WAKE_MINUTE:02d}AM"
+    wake_ok = wake_phrase in sched_text
+    lines.append(summarize_status("Wake schedule", wake_ok, f"{wake_label} wake is scheduled" if wake_ok else f"{wake_label} wake not found"))
     if not wake_ok:
         warnings += 1
 
@@ -100,6 +96,8 @@ def main() -> int:
     lines.append(summarize_status("Morning run", ops_ok, ops_detail))
     if not ops_ok:
         warnings += 1
+    else:
+        lines.append(f"Top tickers: {', '.join(ops_status.get('topTickers', [])[:5]) or 'none'}")
 
     watchdog_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
     watchdog_today = str(watchdog_status.get("checkedAt", "")).startswith(today)

@@ -4,39 +4,31 @@ import argparse
 import os
 import plistlib
 import subprocess
-import sys
 from pathlib import Path
 
+from inferno_config import (
+    LABEL,
+    LEGACY_LABEL,
+    LEGACY_WATCHDOG_LABEL,
+    ROOT,
+    SAFETY_INTERVAL_SECONDS,
+    SERVICE_HOUR,
+    SERVICE_MINUTE,
+    WATCHDOG_INTERVAL_SECONDS,
+    WATCHDOG_LABEL,
+    backtest_python,
+)
 
-ROOT = Path(__file__).resolve().parent
-LABEL = "io.diablotrading.inferno-dawn-brief"
-WATCHDOG_LABEL = "io.diablotrading.inferno-watchdog"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCHDOG_LABEL}.plist"
-LEGACY_LABEL = "com.mikkasida.inferno-dawn-brief"
-LEGACY_WATCHDOG_LABEL = "com.mikkasida.inferno-watchdog"
 LEGACY_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_LABEL}.plist"
 LEGACY_WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_WATCHDOG_LABEL}.plist"
 LOG_DIR = ROOT / "logs"
-RUNNER = ROOT / "run_inferno_dawn_cycle.sh"
 PIPELINE_ENTRYPOINT = ROOT / "inferno_dawn_pipeline.py"
 WATCHDOG_ENTRYPOINT = ROOT / "inferno_watchdog.py"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_dawn_cycle_service.sh"
 WATCHDOG_WRAPPER = SERVICE_BIN_DIR / "inferno_watchdog_service.sh"
-SAFETY_INTERVAL_SECONDS = 600
-WATCHDOG_INTERVAL_SECONDS = 900
-
-def default_backtest_root() -> Path:
-    if os.environ.get("BACKTEST_ROOT"):
-        return Path(os.environ["BACKTEST_ROOT"]).expanduser()
-    return Path.home() / "PycharmProjects" / "Backtest3.0"
-
-
-def backtest_python() -> Path:
-    if os.environ.get("BACKTEST_PYTHON"):
-        return Path(os.environ["BACKTEST_PYTHON"]).expanduser()
-    return default_backtest_root() / "venv" / "bin" / "python"
 
 
 def run_launchctl(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -208,8 +200,8 @@ def status() -> int:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Install or inspect the Sunday-through-Friday 6 AM inferno dawn brief service.")
     parser.add_argument("command", nargs="?", default="install", choices=["install", "uninstall", "status"])
-    parser.add_argument("--hour", type=int, default=6, help="24-hour local time for the Sunday-through-Friday launchd schedule")
-    parser.add_argument("--minute", type=int, default=0, help="Minute of the hour for the weekday launchd schedule")
+    parser.add_argument("--hour", type=int, default=SERVICE_HOUR, help="24-hour local time for the Sunday-through-Friday launchd schedule")
+    parser.add_argument("--minute", type=int, default=SERVICE_MINUTE, help="Minute of the hour for the weekday launchd schedule")
     return parser.parse_args()
 
 

@@ -15,6 +15,20 @@ import pandas as pd
 import yfinance as yf
 from oauth2client.service_account import ServiceAccountCredentials
 
+from inferno_config import (
+    AUTOMATION_ALLOWED_WEEKDAYS,
+    AUTOMATION_WINDOW_END,
+    AUTOMATION_WINDOW_START,
+    DEFAULT_SHEET_NAME,
+    REVIEW_QUEUE_LIMIT,
+    ROOT,
+    SCORE_FORMULA_COLUMNS,
+    UPDATER_LABEL,
+    UPDATER_SCRIPTS,
+    default_backtest_root,
+    in_time_window,
+    local_now,
+)
 from server import (
     APPROVAL_QUEUE_FILE,
     BRIEF_TEXT_FILE,
@@ -22,7 +36,6 @@ from server import (
     LOG_FILE,
     OPS_STATUS_FILE,
     PAPER_JOURNAL_FILE,
-    ROOT,
     SNAPSHOT_FILE,
     TICKETS_TEXT_FILE,
     ensure_dirs,
@@ -32,23 +45,8 @@ from server import (
     smtp_configured,
 )
 
-def default_backtest_root() -> Path:
-    if os.environ.get("BACKTEST_ROOT"):
-        return Path(os.environ["BACKTEST_ROOT"]).expanduser()
-    return Path.home() / "PycharmProjects" / "Backtest3.0"
-
 
 DEFAULT_BACKTEST_ROOT = default_backtest_root()
-DEFAULT_SHEET_NAME = "Earnings Tracker"
-UPDATER_SCRIPTS = [
-    "BC-ATRPercentandIVRANK.py",
-    "P-IV RANK CHANGE.py",
-    "Q-ATRPcntZScore.py",
-    "R-20DayATR.py",
-]
-UPDATER_LABEL = "BC/P/Q/R PyCharm jobs"
-REVIEW_QUEUE_LIMIT = 5
-SCORE_FORMULA_COLUMNS = ("U", "V", "W", "X", "Y")
 CONVICTION_CONFIG = {
     "min_readiness": 72,
     "min_confidence": 2,
@@ -56,9 +54,6 @@ CONVICTION_CONFIG = {
     "require_trigger": True,
     "banned_setups": {"Avoid"},
 }
-AUTOMATION_WINDOW_START = "05:55"
-AUTOMATION_WINDOW_END = "09:00"
-AUTOMATION_ALLOWED_WEEKDAYS = {6, 0, 1, 2, 3, 4}  # Sunday through Friday
 
 
 def load_env_file(path: Path) -> None:
@@ -71,28 +66,6 @@ def load_env_file(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ[key] = value
-
-
-def local_now() -> datetime:
-    return datetime.now().astimezone()
-
-
-def parse_clock_minutes(value: str) -> int:
-    hour_text, minute_text = value.strip().split(":", 1)
-    hour = int(hour_text)
-    minute = int(minute_text)
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise ValueError(f"invalid clock value: {value}")
-    return hour * 60 + minute
-
-
-def in_time_window(now: datetime, start: str, end: str) -> bool:
-    current_minutes = now.hour * 60 + now.minute
-    start_minutes = parse_clock_minutes(start)
-    end_minutes = parse_clock_minutes(end)
-    if start_minutes <= end_minutes:
-        return start_minutes <= current_minutes <= end_minutes
-    return current_minutes >= start_minutes or current_minutes <= end_minutes
 
 
 def already_sent_today() -> bool:

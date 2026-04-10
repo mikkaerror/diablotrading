@@ -2,6 +2,48 @@
 
 A standalone infernal trading desk that turns an earnings tracker into a ranked board, morning brief engine, and monitored automation stack.
 
+## Project map
+
+The repo is now split into four clean layers:
+
+- UI
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+- automation
+  - `morning_inferno_pipeline.py`
+  - `inferno_watchdog.py`
+  - `inferno_approval_queue.py`
+  - `inferno_doctor.py`
+  - `inferno_housekeeping.py`
+  - `install_inferno_dawn_service.py`
+- shared config
+  - `inferno_config.py`
+- docs
+  - `docs/README.md`
+  - `docs/RUNBOOK.md`
+  - `docs/OPERATING_MODEL.md`
+
+## Quick start
+
+Health check:
+
+```bash
+python3 inferno_doctor.py
+```
+
+Start the local dashboard:
+
+```bash
+python3 server.py
+```
+
+Run the full live refresh + brief cycle:
+
+```bash
+./run_inferno_dawn_cycle.sh
+```
+
 ## Publish to GitHub
 
 This project is set up to live in a standalone GitHub repo and publish the dashboard UI through GitHub Pages.
@@ -65,12 +107,6 @@ If you want the hosted site to use private Google Sheets sync too, add your GitH
 - Lets you click into a single ticker instead of scanning across many spreadsheet columns.
 - Can pull directly from a private Google Sheet with browser-only Google OAuth.
 - Accepts a CSV export from your tracker so you can swap the sample data for your real sheet.
-
-## Files
-
-- `index.html` - dashboard shell
-- `styles.css` - infernal UI styling
-- `app.js` - sample data, scoring logic, filtering, CSV import, and Google Sheets sync
 
 ## How to use
 
@@ -171,9 +207,13 @@ The service writes logs to:
 - `logs/inferno_dawn.stdout.log`
 - `logs/inferno_dawn.stderr.log`
 
+The schedule, labels, time windows, and retention defaults now live in:
+
+- `inferno_config.py`
+
 ## Operations stack
 
-The standalone automation now has three roles:
+The standalone automation now has five roles:
 
 - `Inferno Runner`
   - runs the BC/P/Q/R PyCharm jobs
@@ -188,6 +228,10 @@ The standalone automation now has three roles:
 - `Approval Desk`
   - stores the top cleared review queue for paper trades and manual approvals
   - keeps the queue aligned with the same names used in the brief and tickets
+- `Inferno Doctor`
+  - gives one command to validate SMTP, wake schedule, launch agents, and run freshness
+- `Inferno Housekeeping`
+  - prunes old snapshots, report artifacts, and oversized logs
 
 Health files:
 
@@ -205,6 +249,7 @@ Quick verification commands:
 python3 inferno_watchdog.py
 python3 inferno_approval_queue.py status
 python3 inferno_doctor.py
+python3 inferno_housekeeping.py --dry-run
 ```
 
 That gives you a clean local doublecheck:
@@ -213,11 +258,14 @@ That gives you a clean local doublecheck:
 - the watchdog confirms the run is healthy
 - the approval desk shows the current pending shortlist
 - the doctor gives you one-line desk health across email, launch agents, wake schedule, and latest run freshness
+- housekeeping shows what stale artifacts can be pruned before the repo gets messy
 
 ## Operating model
 
 If you want the higher-level process flow, role ownership, and roadmap for turning this into a true small trading agency, read:
 
+- [docs/README.md](/Users/mikkasida/Documents/New%20project/docs/README.md)
+- [docs/RUNBOOK.md](/Users/mikkasida/Documents/New%20project/docs/RUNBOOK.md)
 - [docs/OPERATING_MODEL.md](/Users/mikkasida/Documents/New%20project/docs/OPERATING_MODEL.md)
 
 ### Approval desk

@@ -4,43 +4,22 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
-from server import LOG_FILE, OPS_STATUS_FILE, ROOT, WATCHDOG_STATUS_FILE, load_json_file, send_email, smtp_configured
+from inferno_config import (
+    AUTOMATION_ALLOWED_WEEKDAYS,
+    AUTOMATION_WINDOW_START,
+    WATCHDOG_WINDOW_END,
+    ROOT,
+    in_time_window,
+    local_now,
+    local_today,
+)
+from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, send_email, smtp_configured
 
 
 STDOUT_LOG = ROOT / "logs" / "inferno_dawn.stdout.log"
 STDERR_LOG = ROOT / "logs" / "inferno_dawn.stderr.log"
-AUTOMATION_WINDOW_START = "05:55"
-AUTOMATION_WINDOW_END = "09:30"
-AUTOMATION_ALLOWED_WEEKDAYS = {6, 0, 1, 2, 3, 4}  # Sunday through Friday
-
-
-def local_today() -> str:
-    return datetime.now().astimezone().date().isoformat()
-
-
-def local_now() -> datetime:
-    return datetime.now().astimezone()
-
-
-def parse_clock_minutes(value: str) -> int:
-    hour_text, minute_text = value.strip().split(":", 1)
-    hour = int(hour_text)
-    minute = int(minute_text)
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise ValueError(f"invalid clock value: {value}")
-    return hour * 60 + minute
-
-
-def in_time_window(now: datetime, start: str, end: str) -> bool:
-    current_minutes = now.hour * 60 + now.minute
-    start_minutes = parse_clock_minutes(start)
-    end_minutes = parse_clock_minutes(end)
-    if start_minutes <= end_minutes:
-        return start_minutes <= current_minutes <= end_minutes
-    return current_minutes >= start_minutes or current_minutes <= end_minutes
 
 
 def automation_skip_reason(window_start: str, window_end: str) -> str | None:
@@ -82,7 +61,7 @@ def should_attempt_rescue(reasons: list[str]) -> bool:
     now = local_now()
     if now.weekday() not in AUTOMATION_ALLOWED_WEEKDAYS:
         return False
-    if not in_time_window(now, AUTOMATION_WINDOW_START, AUTOMATION_WINDOW_END):
+    if not in_time_window(now, AUTOMATION_WINDOW_START, WATCHDOG_WINDOW_END):
         return False
     return any(
         reason.startswith("no dawn-cycle run is recorded")
@@ -100,7 +79,7 @@ def attempt_rescue_run() -> dict[str, object]:
         "--window-start",
         AUTOMATION_WINDOW_START,
         "--window-end",
-        AUTOMATION_WINDOW_END,
+        WATCHDOG_WINDOW_END,
     ]
     completed = subprocess.run(
         command,
@@ -204,7 +183,7 @@ def parse_args() -> argparse.Namespace:
         help="Exit silently when automation mode decides the check should be skipped.",
     )
     parser.add_argument("--window-start", default=AUTOMATION_WINDOW_START, help="Local HH:MM start for automation mode")
-    parser.add_argument("--window-end", default=AUTOMATION_WINDOW_END, help="Local HH:MM end for automation mode")
+    parser.add_argument("--window-end", default=WATCHDOG_WINDOW_END, help="Local HH:MM end for automation mode")
     return parser.parse_args()
 
 
