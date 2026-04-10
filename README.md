@@ -26,6 +26,8 @@ The repo is now split into four clean layers:
   - `docs/PLAYBOOK_EARNINGS.md`
   - `docs/PLAYBOOK_LONG_TERM.md`
   - `docs/CHECKLISTS.md`
+  - `docs/EXECUTION_MODEL.md`
+  - `docs/THINKORSWIM_AUTOMATION.md`
 
 ## Decision lanes
 
@@ -288,6 +290,10 @@ That gives you a clean local doublecheck:
   - how to accumulate long-term conviction names when the price cools off
 - [docs/CHECKLISTS.md](/Users/mikkasida/Documents/New%20project/docs/CHECKLISTS.md)
   - fast daily and pre-trade checklists so the desk stays mechanical
+- [docs/EXECUTION_MODEL.md](/Users/mikkasida/Documents/New%20project/docs/EXECUTION_MODEL.md)
+  - how the approval desk turns names into broker-safe execution intents
+- [docs/THINKORSWIM_AUTOMATION.md](/Users/mikkasida/Documents/New%20project/docs/THINKORSWIM_AUTOMATION.md)
+  - the safest path from signal engine to thinkorswim-assisted execution
 - housekeeping shows what stale artifacts can be pruned before the repo gets messy
 
 ## Operating model

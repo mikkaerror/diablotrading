@@ -388,6 +388,7 @@ const state = {
     opsStatus: null,
     watchdogStatus: null,
     approvalQueue: null,
+    executionQueue: null,
   },
   auth: {
     accessToken: null,
@@ -428,6 +429,8 @@ const engineRules = document.getElementById("engine-rules");
 const engineCandidates = document.getElementById("engine-candidates");
 const longTermSummary = document.getElementById("longterm-summary");
 const longTermCandidatesEl = document.getElementById("longterm-candidates");
+const executionSummary = document.getElementById("execution-summary");
+const executionCandidates = document.getElementById("execution-candidates");
 const briefPreview = document.getElementById("brief-preview");
 const briefStatus = document.getElementById("brief-status");
 const opsGrid = document.getElementById("ops-grid");
@@ -906,6 +909,7 @@ function renderOverview(rows) {
 function renderOpsWatch() {
   const ops = state.backend.opsStatus;
   const watchdog = state.backend.watchdogStatus;
+  const executionQueue = state.backend.executionQueue;
   const dawnOk = ops?.ok;
   const watchdogOk = watchdog?.ok;
   const cards = [
@@ -935,6 +939,11 @@ function renderOpsWatch() {
       tone: (state.backend.approvalQueue?.count ?? 0) > 0 ? "status-caution" : "status-ready",
     },
     {
+      label: "Execution Ready",
+      value: executionQueue?.activeReadyCount ?? 0,
+      tone: (executionQueue?.activeReadyCount ?? 0) > 0 ? "status-ready" : "status-caution",
+    },
+    {
       label: "Paper Journal",
       value: ops?.paperTradeCount ?? 0,
       tone: (ops?.paperTradeCount ?? 0) > 0 ? "status-caution" : "status-ready",
@@ -961,6 +970,11 @@ function renderOpsWatch() {
       `Approval desk waiting on: ${state.backend.approvalQueue.items
         .map((item) => `${item.ticker} (${item.approvalStatus})`)
         .join(", ")}`,
+    );
+  }
+  if (executionQueue?.items?.length) {
+    messages.push(
+      `Execution desk: ${executionQueue.activeReadyCount} ready, ${round(executionQueue.stagedRiskUnits || 0, 2)} / ${round(executionQueue.dailyRiskBudget || 0, 2)} risk units staged.`,
     );
   }
   if (ops?.repair?.repaired) {
@@ -1249,6 +1263,51 @@ function renderAccumulationDesk(rows) {
   });
 }
 
+function renderExecutionDesk() {
+  const queue = state.backend.executionQueue;
+  if (!queue?.items?.length) {
+    executionSummary.textContent = "No execution intents are staged yet. The clerk is waiting on a fresh approval queue.";
+    executionCandidates.innerHTML = `
+      <div class="candidate-card">
+        <p><strong>No order intents are armed.</strong></p>
+        <p class="muted">The desk is still behaving safely. Nothing should touch a broker surface until approval, trigger, and risk budget all line up.</p>
+      </div>
+    `;
+    return;
+  }
+
+  executionSummary.textContent = `${queue.activeReadyCount} intents are currently broker-ready inside a ${queue.dailyRiskBudget} risk-unit day. This desk stages tickets for ${queue.brokerSurface} while keeping the future API lane pointed at ${queue.futureApiTarget}.`;
+  executionCandidates.innerHTML = queue.items
+    .map((item) => {
+      const tone =
+        item.intentStatus === "approval-ready"
+          ? "hot"
+          : item.approvalStatus === "approved"
+            ? "wild"
+            : "cold";
+      const blockText = item.intentBlocks?.length ? item.intentBlocks.join("; ") : "all checks clear";
+      return `
+        <div class="candidate-card">
+          <div class="candidate-head">
+            <div>
+              <p><strong>#${item.rank} ${item.ticker}</strong></p>
+              <p class="candidate-meta">${item.setupRec} | ${item.routeFamily} | tier ${item.convictionTier}</p>
+              <p class="candidate-meta">Risk ${item.riskUnits} | ${item.daysUntilEarnings}d | ${item.signalTrigger ? "trigger live" : "trigger wait"}</p>
+            </div>
+            <span class="move-chip ${tone}">${item.intentStatus}</span>
+          </div>
+          <div class="candidate-tags">
+            <span class="pill">${item.approvalStatus}</span>
+            <span class="pill">${item.primaryRoute}</span>
+            <span class="pill">${item.secondaryRoute}</span>
+          </div>
+          <p class="candidate-note">${blockText}</p>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function buildMorningBrief(rows) {
   const eligible = getEligibleCandidates(rows);
   const longTerm = buildLongTermBrief(rows);
@@ -1366,6 +1425,7 @@ function buildSnapshotPayload(rows) {
     eligibleTickers: getEligibleCandidates(rows).map((row) => row.ticker),
     longTermTickers: longTerm.candidates.map((row) => row.ticker),
     longTermRows: longTerm.candidates,
+    executionQueue: state.backend.executionQueue,
     rows,
   };
 }
@@ -1382,6 +1442,7 @@ async function refreshBackendStatus() {
     state.backend.opsStatus = status.opsStatus || null;
     state.backend.watchdogStatus = status.watchdogStatus || null;
     state.backend.approvalQueue = status.approvalQueue || null;
+    state.backend.executionQueue = status.executionQueue || null;
   } catch {
     state.backend.available = false;
     state.backend.smtpConfigured = false;
@@ -1389,6 +1450,7 @@ async function refreshBackendStatus() {
     state.backend.opsStatus = null;
     state.backend.watchdogStatus = null;
     state.backend.approvalQueue = null;
+    state.backend.executionQueue = null;
   }
 }
 
@@ -1778,6 +1840,7 @@ function render() {
   renderSignalRibbon(rows);
   renderConvictionEngine(rows);
   renderAccumulationDesk(rows);
+  renderExecutionDesk();
   renderMorningBrief(rows);
   renderRoster(rows);
   renderDetail(rows);

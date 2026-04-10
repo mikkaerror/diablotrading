@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import json
 import os
 import subprocess
@@ -30,9 +32,11 @@ from inferno_config import (
     in_time_window,
     local_now,
 )
+from inferno_execution_clerk import build_execution_queue, save_execution_queue
 from server import (
     APPROVAL_QUEUE_FILE,
     BRIEF_TEXT_FILE,
+    DATA_DIR,
     HTML_BRIEF_FILE,
     LONG_TERM_TEXT_FILE,
     LOG_FILE,
@@ -49,6 +53,7 @@ from server import (
 
 
 DEFAULT_BACKTEST_ROOT = default_backtest_root()
+LOCK_FILE = DATA_DIR / "inferno_dawn.lock"
 CONVICTION_CONFIG = {
     "min_readiness": 72,
     "min_confidence": 2,
@@ -56,6 +61,10 @@ CONVICTION_CONFIG = {
     "require_trigger": True,
     "banned_setups": {"Avoid"},
 }
+
+
+class PipelineLockActive(RuntimeError):
+    pass
 
 
 def load_env_file(path: Path) -> None:
@@ -68,6 +77,28 @@ def load_env_file(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ[key] = value
+
+
+@contextmanager
+def acquire_run_lock() -> Any:
+    ensure_dirs()
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_handle = LOCK_FILE.open("w", encoding="utf-8")
+    try:
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise PipelineLockActive("another inferno pipeline run is already active") from exc
+        lock_handle.write(json.dumps({"pid": os.getpid(), "startedAt": datetime.now().astimezone().isoformat()}))
+        lock_handle.flush()
+        yield
+    finally:
+        try:
+            lock_handle.seek(0)
+            lock_handle.truncate(0)
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_handle.close()
 
 
 def already_sent_today() -> bool:
@@ -634,6 +665,7 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
     formula_result = next((result for result in updater_results if result["script"] == "U:Y score sync"), None)
     review_tickers = payload["reviewQueueTickers"]
     journal_count = len(review_tickers)
+    execution_queue = payload.get("executionQueue", {})
     OPS_STATUS_FILE.write_text(
         json.dumps(
             {
@@ -648,6 +680,8 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
                 "longTermTickers": payload["longTermTickers"],
                 "paperTradeCount": journal_count,
                 "approvalQueueCount": journal_count,
+                "executionReadyCount": execution_queue.get("activeReadyCount", 0),
+                "executionRiskUnits": execution_queue.get("stagedRiskUnits", 0),
                 "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
                 "repair": json.loads(repair_result["stdout"]) if repair_result and repair_result.get("stdout") else None,
                 "formulaSync": json.loads(formula_result["stdout"]) if formula_result and formula_result.get("stdout") else None,
@@ -696,7 +730,7 @@ def append_paper_trade_journal(entries: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(entry) + "\n")
 
 
-def write_approval_queue(payload: dict[str, Any]) -> None:
+def build_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
     rows_by_ticker = {row["ticker"]: row for row in payload["rows"]}
     queue_items = []
     for ticker in payload["reviewQueueTickers"]:
@@ -716,17 +750,17 @@ def write_approval_queue(payload: dict[str, Any]) -> None:
                 "generatedAt": payload["generatedAt"],
             }
         )
-    APPROVAL_QUEUE_FILE.write_text(
-        json.dumps(
-            {
-                "generatedAt": payload["generatedAt"],
-                "count": len(queue_items),
-                "items": queue_items,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    return {
+        "generatedAt": payload["generatedAt"],
+        "count": len(queue_items),
+        "items": queue_items,
+    }
+
+
+def write_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
+    queue = build_approval_queue(payload)
+    APPROVAL_QUEUE_FILE.write_text(json.dumps(queue, indent=2), encoding="utf-8")
+    return queue
 
 
 def append_log(entry: dict[str, Any]) -> None:
@@ -741,6 +775,7 @@ def summarize(results: list[dict[str, Any]], payload: dict[str, Any], email_sent
         f"Eligible names: {len(payload['eligibleTickers'])}",
         f"Top names: {', '.join(payload['eligibleTickers'][:5]) if payload['eligibleTickers'] else 'none'}",
         f"Long-term names: {', '.join(payload['longTermTickers'][:5]) if payload['longTermTickers'] else 'none'}",
+        f"Execution ready: {payload['executionQueue']['activeReadyCount']} intents / {payload['executionQueue']['dailyRiskBudget']} risk units",
         f"Email sent: {'yes' if email_sent else 'no'}",
     ]
     if results:
@@ -802,69 +837,82 @@ def main() -> int:
     updater_results: list[dict[str, Any]] = []
 
     try:
-        if not args.skip_updates:
-            updater_results = run_updaters(backtest_root, python_bin)
-            repair_summary = repair_r20_atr_if_needed(backtest_root, args.sheet_name)
+        with acquire_run_lock():
+            if not args.skip_updates:
+                updater_results = run_updaters(backtest_root, python_bin)
+                repair_summary = repair_r20_atr_if_needed(backtest_root, args.sheet_name)
+                updater_results.append(
+                    {
+                        "script": "R-20DayATR self-heal",
+                        "ok": True,
+                        "stdout": json.dumps(repair_summary),
+                        "stderr": "",
+                        "returncode": 0,
+                    }
+                )
+            formula_sync_summary = sync_score_formulas(backtest_root, args.sheet_name)
             updater_results.append(
                 {
-                    "script": "R-20DayATR self-heal",
+                    "script": "U:Y score sync",
                     "ok": True,
-                    "stdout": json.dumps(repair_summary),
+                    "stdout": json.dumps(formula_sync_summary),
                     "stderr": "",
                     "returncode": 0,
                 }
             )
-        formula_sync_summary = sync_score_formulas(backtest_root, args.sheet_name)
-        updater_results.append(
-            {
-                "script": "U:Y score sync",
-                "ok": True,
-                "stdout": json.dumps(formula_sync_summary),
-                "stderr": "",
-                "returncode": 0,
+
+            rows = read_sheet_rows(backtest_root, args.sheet_name)
+            brief_text, eligible, _recommended = build_morning_brief(rows)
+            long_term_text = build_long_term_brief(rows)
+            tickets_text = build_paper_tickets(rows)
+            review_candidates = select_review_candidates(rows)
+            long_term_candidates = get_long_term_candidates(rows)
+            payload = {
+                "generatedAt": datetime.now().astimezone().isoformat(),
+                "sourceLabel": "Inferno Runner",
+                "brief": brief_text,
+                "tickets": tickets_text,
+                "longTermBrief": long_term_text,
+                "eligibleTickers": [row["ticker"] for row in eligible],
+                "reviewQueueTickers": [row["ticker"] for row in review_candidates],
+                "longTermTickers": [row["ticker"] for row in long_term_candidates],
+                "longTermRows": long_term_candidates,
+                "rows": rows,
             }
-        )
+            approval_queue = write_approval_queue(payload)
+            execution_queue = build_execution_queue(payload, approval_queue)
+            save_execution_queue(execution_queue)
+            payload["executionQueue"] = execution_queue
+            write_payload(payload)
 
-        rows = read_sheet_rows(backtest_root, args.sheet_name)
-        brief_text, eligible, _recommended = build_morning_brief(rows)
-        long_term_text = build_long_term_brief(rows)
-        tickets_text = build_paper_tickets(rows)
-        review_candidates = select_review_candidates(rows)
-        long_term_candidates = get_long_term_candidates(rows)
-        payload = {
-            "generatedAt": datetime.now().astimezone().isoformat(),
-            "sourceLabel": "Inferno Runner",
-            "brief": brief_text,
-            "tickets": tickets_text,
-            "longTermBrief": long_term_text,
-            "eligibleTickers": [row["ticker"] for row in eligible],
-            "reviewQueueTickers": [row["ticker"] for row in review_candidates],
-            "longTermTickers": [row["ticker"] for row in long_term_candidates],
-            "longTermRows": long_term_candidates,
-            "rows": rows,
-        }
-        write_payload(payload)
+            email_sent = False
+            if not args.skip_email and smtp_configured():
+                email_sent = send_email(payload)
 
-        email_sent = False
-        if not args.skip_email and smtp_configured():
-            email_sent = send_email(payload)
+            write_ops_status(payload, updater_results, email_sent)
+            append_paper_trade_journal(build_paper_trade_entries(payload))
 
-        write_ops_status(payload, updater_results, email_sent)
-        append_paper_trade_journal(build_paper_trade_entries(payload))
-        write_approval_queue(payload)
-
-        append_log(
-            {
-                "job": "morning_inferno_pipeline",
-                "generatedAt": payload["generatedAt"],
-                "emailSent": email_sent,
-                "eligibleTickers": payload["eligibleTickers"],
-                "longTermTickers": payload["longTermTickers"],
-                "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
-            }
-        )
-        print(summarize(updater_results, payload, email_sent))
-        return 0
+            append_log(
+                {
+                    "job": "morning_inferno_pipeline",
+                    "generatedAt": payload["generatedAt"],
+                    "ok": True,
+                    "emailSent": email_sent,
+                    "eligibleTickers": payload["eligibleTickers"],
+                    "longTermTickers": payload["longTermTickers"],
+                    "executionReadyCount": execution_queue["activeReadyCount"],
+                    "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
+                }
+            )
+            print(summarize(updater_results, payload, email_sent))
+            return 0
+    except PipelineLockActive as exc:
+        if args.automation:
+            if not args.quiet_skip:
+                print(str(exc))
+            return 0
+        print(f"Morning inferno pipeline skipped: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:  # noqa: BLE001
         append_log(
             {

@@ -25,11 +25,25 @@ OPS_STATUS_FILE = DATA_DIR / "inferno_ops_status.json"
 WATCHDOG_STATUS_FILE = DATA_DIR / "inferno_watchdog_status.json"
 PAPER_JOURNAL_FILE = REPORTS_DIR / "paper_trade_journal.jsonl"
 APPROVAL_QUEUE_FILE = DATA_DIR / "inferno_approval_queue.json"
+EXECUTION_QUEUE_FILE = DATA_DIR / "inferno_execution_queue.json"
+SMTP_ENV_FILE = ROOT / ".env.smtp"
 
 
 def ensure_dirs() -> None:
     REPORTS_DIR.mkdir(exist_ok=True)
     DATA_DIR.mkdir(exist_ok=True)
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ[key] = value
 
 
 def smtp_settings() -> dict[str, Any]:
@@ -64,6 +78,8 @@ def load_json_file(path: Path) -> dict[str, Any] | None:
 def html_from_payload(payload: dict[str, Any]) -> str:
     rows = payload.get("rows", [])[:5]
     long_term_rows = payload.get("longTermRows", [])[:5]
+    execution_queue = payload.get("executionQueue", {})
+    execution_rows = execution_queue.get("items", [])[:5]
     row_markup = "".join(
         f"""
         <tr>
@@ -108,6 +124,36 @@ def html_from_payload(payload: dict[str, Any]) -> str:
       <tbody>{long_term_markup}</tbody>
     </table>
 """
+    execution_markup = "".join(
+        f"""
+        <tr>
+          <td>{row.get("ticker", "")}</td>
+          <td>{row.get("intentStatus", "")}</td>
+          <td>{row.get("riskUnits", "")}</td>
+          <td>{row.get("approvalStatus", "")}</td>
+          <td>{row.get("primaryRoute", "")}</td>
+        </tr>
+        """
+        for row in execution_rows
+    )
+    execution_section = ""
+    if execution_rows:
+        execution_section = f"""
+    <h2 style="color:#ff8d57;">Execution Desk</h2>
+    <p style="color:#b49a86;">Mode: {execution_queue.get("mode", "")} | Risk staged: {execution_queue.get("stagedRiskUnits", 0)} / {execution_queue.get("dailyRiskBudget", 0)} units</p>
+    <table style="border-collapse:collapse;width:100%;">
+      <thead>
+        <tr>
+          <th align="left">Ticker</th>
+          <th align="left">Intent</th>
+          <th align="left">Risk</th>
+          <th align="left">Approval</th>
+          <th align="left">Route</th>
+        </tr>
+      </thead>
+      <tbody>{execution_markup}</tbody>
+    </table>
+"""
     return f"""<!DOCTYPE html>
 <html lang="en">
   <body style="background:#120707;color:#f6e5d1;font-family:Georgia,serif;padding:24px;">
@@ -128,6 +174,7 @@ def html_from_payload(payload: dict[str, Any]) -> str:
       <tbody>{row_markup}</tbody>
     </table>
     {long_term_section}
+    {execution_section}
   </body>
 </html>"""
 
@@ -175,6 +222,7 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                 "opsStatus": load_json_file(OPS_STATUS_FILE),
                 "watchdogStatus": load_json_file(WATCHDOG_STATUS_FILE),
                 "approvalQueue": load_json_file(APPROVAL_QUEUE_FILE),
+                "executionQueue": load_json_file(EXECUTION_QUEUE_FILE),
             }
             self._write_json(payload)
             return
@@ -254,6 +302,7 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
         brief_text = payload.get("brief", "")
         tickets_text = payload.get("tickets", "")
         long_term_text = payload.get("longTermBrief", "")
+        execution_queue = payload.get("executionQueue")
         html_text = html_from_payload(payload)
 
         snapshot_path.write_text(snapshot_text, encoding="utf-8")
@@ -264,6 +313,8 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
         TICKETS_TEXT_FILE.write_text(tickets_text, encoding="utf-8")
         long_term_path.write_text(long_term_text, encoding="utf-8")
         LONG_TERM_TEXT_FILE.write_text(long_term_text, encoding="utf-8")
+        if execution_queue:
+            EXECUTION_QUEUE_FILE.write_text(json.dumps(execution_queue, indent=2), encoding="utf-8")
         html_path.write_text(html_text, encoding="utf-8")
         HTML_BRIEF_FILE.write_text(html_text, encoding="utf-8")
 
@@ -321,6 +372,7 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
 
 def run() -> None:
     ensure_dirs()
+    load_env_file(SMTP_ENV_FILE)
     port = int(os.getenv("PORT", "8000"))
     server = ThreadingHTTPServer(("127.0.0.1", port), CommandServerHandler)
     print(f"Command server live at http://127.0.0.1:{port}")

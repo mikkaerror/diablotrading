@@ -60,6 +60,18 @@ Main file:
 
 - [inferno_approval_queue.py](/Users/mikkasida/Documents/New%20project/inferno_approval_queue.py)
 
+### Execution Clerk
+
+Responsible for:
+
+- converting approved names into broker-safe execution intents
+- enforcing risk-unit caps before anything reaches a broker surface
+- keeping the desk in approval-only mode until the strategy earns more authority
+
+Main file:
+
+- [inferno_execution_clerk.py](/Users/mikkasida/Documents/New%20project/inferno_execution_clerk.py)
+
 ### Dashboard
 
 Responsible for:
@@ -170,6 +182,7 @@ That is the right way to think about "agents" here: each role owns one narrow re
 
 - paper-trade adapter first
 - broker approval queue second
+- execution intents staged for thinkorswim
 - live automation only after evidence
 
 The rule is simple:

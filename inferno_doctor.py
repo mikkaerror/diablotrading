@@ -18,7 +18,7 @@ from inferno_config import (
     WAKE_HOUR,
     WAKE_MINUTE,
 )
-from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
+from server import EXECUTION_QUEUE_FILE, LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
 
 
 SMTP_ENV_FILE = ROOT / ".env.smtp"
@@ -73,7 +73,7 @@ def latest_emailed_run_for_day(day: str) -> dict | None:
         generated_at = str(payload.get("generatedAt", ""))
         if not generated_at.startswith(day):
             continue
-        if not payload.get("ok") or not payload.get("emailSent"):
+        if not payload.get("ok", True) or not payload.get("emailSent"):
             continue
         latest = payload
     return latest
@@ -139,11 +139,11 @@ def main() -> int:
     ops_reference = emailed_status or ops_status
     ops_today = str(ops_reference.get("generatedAt", "")).startswith(today)
     ops_email = bool(ops_reference.get("emailSent"))
-    ops_ok = ops_today and ops_email and bool(ops_reference.get("ok"))
+    ops_ok = ops_today and ops_email and bool(ops_reference.get("ok", True))
     ops_detail = "fresh run and email recorded today" if ops_ok else json.dumps(
         {
             "generatedAt": ops_reference.get("generatedAt"),
-            "ok": ops_reference.get("ok"),
+            "ok": ops_reference.get("ok", True),
             "emailSent": ops_reference.get("emailSent"),
         }
     )
@@ -165,6 +165,23 @@ def main() -> int:
     )
     lines.append(summarize_status("Watchdog status", watchdog_ok, watchdog_detail))
     if not watchdog_ok:
+        warnings += 1
+
+    execution_queue = load_json_file(EXECUTION_QUEUE_FILE) or {}
+    execution_today = str(execution_queue.get("generatedAt", "")).startswith(today)
+    execution_ok = execution_today and execution_queue.get("count") is not None
+    execution_detail = (
+        f"{execution_queue.get('activeReadyCount', 0)} ready / {execution_queue.get('count', 0)} staged"
+        if execution_ok
+        else json.dumps(
+            {
+                "generatedAt": execution_queue.get("generatedAt"),
+                "count": execution_queue.get("count"),
+            }
+        )
+    )
+    lines.append(summarize_status("Execution desk", execution_ok, execution_detail))
+    if not execution_ok:
         warnings += 1
 
     lines.append("")

@@ -446,12 +446,14 @@ button.ribbon-card:hover {
 .filter-panel,
 .detail-panel,
 .ops-panel,
-.notes-panel {
+.notes-panel,
+.execution-panel {
   grid-column: 2 / 3;
 }
 
 .shortlist-panel,
 .accumulation-panel,
+.execution-panel,
 .notes-panel,
 .brief-panel {
   min-height: 280px;
@@ -1589,6 +1591,7 @@ button.candidate-card:hover {
   .detail-panel,
   .shortlist-panel,
   .accumulation-panel,
+  .execution-panel,
   .notes-panel,
   .brief-panel {
     grid-column: auto;

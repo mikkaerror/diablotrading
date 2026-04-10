@@ -62,6 +62,12 @@ python3 inferno_watchdog.py
 python3 inferno_approval_queue.py status
 ```
 
+### Check the execution desk
+
+```bash
+python3 inferno_execution_clerk.py
+```
+
 ### Prune old artifacts
 
 ```bash
