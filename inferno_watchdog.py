@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -40,6 +41,18 @@ def in_time_window(now: datetime, start: str, end: str) -> bool:
     if start_minutes <= end_minutes:
         return start_minutes <= current_minutes <= end_minutes
     return current_minutes >= start_minutes or current_minutes <= end_minutes
+
+
+def automation_skip_reason(window_start: str, window_end: str) -> str | None:
+    now = local_now()
+    if now.weekday() not in AUTOMATION_ALLOWED_WEEKDAYS:
+        return "Skipping automated watchdog: Saturday automation is disabled."
+    if not in_time_window(now, window_start, window_end):
+        return (
+            "Skipping automated watchdog: "
+            f"{now.strftime('%H:%M')} is outside the {window_start}-{window_end} mountain-time window."
+        )
+    return None
 
 
 def build_failure_reasons(ops_status: dict | None) -> list[str]:
@@ -83,6 +96,7 @@ def attempt_rescue_run() -> dict[str, object]:
         sys.executable,
         str(ROOT / "inferno_dawn_pipeline.py"),
         "--automation",
+        "--quiet-skip",
         "--window-start",
         AUTOMATION_WINDOW_START,
         "--window-end",
@@ -177,7 +191,36 @@ def send_watchdog_alert(reasons: list[str], ops_status: dict | None) -> bool:
     return send_email(payload, subject="Inferno Watchdog Alert")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate the dawn cycle, attempt a rescue run, and alert if the desk is stale.")
+    parser.add_argument(
+        "--automation",
+        action="store_true",
+        help="Run only during the configured automation window.",
+    )
+    parser.add_argument(
+        "--quiet-skip",
+        action="store_true",
+        help="Exit silently when automation mode decides the check should be skipped.",
+    )
+    parser.add_argument("--window-start", default=AUTOMATION_WINDOW_START, help="Local HH:MM start for automation mode")
+    parser.add_argument("--window-end", default=AUTOMATION_WINDOW_END, help="Local HH:MM end for automation mode")
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
+    if args.automation:
+        try:
+            skip_reason = automation_skip_reason(args.window_start, args.window_end)
+        except ValueError as exc:
+            print(f"Automation window is invalid: {exc}", file=sys.stderr)
+            return 1
+        if skip_reason:
+            if not args.quiet_skip:
+                print(skip_reason)
+            return 0
+
     ops_status = load_json_file(OPS_STATUS_FILE)
     reasons = build_failure_reasons(ops_status)
     rescue_result = None

@@ -644,6 +644,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run only during the configured automation window and skip duplicate sends for the same day.",
     )
+    parser.add_argument(
+        "--quiet-skip",
+        action="store_true",
+        help="Exit silently when automation mode decides the run should be skipped.",
+    )
     parser.add_argument("--window-start", default=AUTOMATION_WINDOW_START, help="Local HH:MM start for automation mode")
     parser.add_argument("--window-end", default=AUTOMATION_WINDOW_END, help="Local HH:MM end for automation mode")
     return parser.parse_args()
@@ -662,7 +667,8 @@ def main() -> int:
             print(f"Automation window is invalid: {exc}", file=sys.stderr)
             return 1
         if skip_reason:
-            print(skip_reason)
+            if not args.quiet_skip:
+                print(skip_reason)
             return 0
 
     if not backtest_root.exists():

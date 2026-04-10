@@ -204,6 +204,7 @@ Quick verification commands:
 ./run_inferno_dawn_cycle.sh --skip-updates
 python3 inferno_watchdog.py
 python3 inferno_approval_queue.py status
+python3 inferno_doctor.py
 ```
 
 That gives you a clean local doublecheck:
@@ -211,6 +212,13 @@ That gives you a clean local doublecheck:
 - the runner produces a fresh brief and status file
 - the watchdog confirms the run is healthy
 - the approval desk shows the current pending shortlist
+- the doctor gives you one-line desk health across email, launch agents, wake schedule, and latest run freshness
+
+## Operating model
+
+If you want the higher-level process flow, role ownership, and roadmap for turning this into a true small trading agency, read:
+
+- [docs/OPERATING_MODEL.md](/Users/mikkasida/Documents/New%20project/docs/OPERATING_MODEL.md)
 
 ### Approval desk
 

@@ -108,7 +108,7 @@ def ensure_service_wrapper() -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                f'exec "{runner_python}" "{PIPELINE_ENTRYPOINT}" --automation "$@"',
+                f'exec "{runner_python}" "{PIPELINE_ENTRYPOINT}" --automation --quiet-skip "$@"',
                 "",
             ]
         ),
@@ -121,7 +121,7 @@ def ensure_service_wrapper() -> None:
                 "#!/bin/zsh",
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
-                f'exec "{runner_python}" "{WATCHDOG_ENTRYPOINT}" "$@"',
+                f'exec "{runner_python}" "{WATCHDOG_ENTRYPOINT}" --automation --quiet-skip "$@"',
                 "",
             ]
         ),
