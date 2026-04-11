@@ -436,6 +436,10 @@ const questBoard = document.getElementById("quest-board");
 const townActors = document.getElementById("town-actors");
 const executionSummary = document.getElementById("execution-summary");
 const executionCandidates = document.getElementById("execution-candidates");
+const townSummary = document.getElementById("town-summary");
+const townMap = document.getElementById("town-map");
+const townDialogue = document.getElementById("town-dialogue");
+const lootVault = document.getElementById("loot-vault");
 const briefPreview = document.getElementById("brief-preview");
 const briefStatus = document.getElementById("brief-status");
 const opsGrid = document.getElementById("ops-grid");
@@ -1277,6 +1281,302 @@ function renderCampaignBoard(rows) {
     .join("");
 
   questBoard.querySelectorAll("button[data-ticker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTicker = button.dataset.ticker;
+      render();
+    });
+  });
+}
+
+function getScoutCandidates(rows) {
+  const eligibleTickers = new Set(getEligibleCandidates(rows).map((row) => row.ticker));
+  const longTermTickers = new Set(getLongTermCandidates(rows).map((row) => row.ticker));
+  return rows
+    .filter((row) => !eligibleTickers.has(row.ticker) && !longTermTickers.has(row.ticker))
+    .filter((row) => row.readiness >= 56 || row.confidence >= 2 || row.signalTrigger)
+    .slice(0, 3);
+}
+
+function buildTownDistricts(rows) {
+  const campaign = buildCampaignState(rows);
+  const queue = state.backend.executionQueue || {};
+  const merchant = campaign.topMerchant;
+  const scouts = getScoutCandidates(rows);
+  const ops = state.backend.opsStatus;
+  const watchdog = state.backend.watchdogStatus;
+
+  return [
+    {
+      key: "gate",
+      name: "Hellgate",
+      face: "Raid Queue",
+      tone: campaign.readyCount > 0 ? "hot" : campaign.pendingCount > 0 ? "wild" : "cold",
+      status:
+        campaign.readyCount > 0
+          ? `${campaign.readyCount} raid${campaign.readyCount === 1 ? "" : "s"} armed`
+          : campaign.pendingCount > 0
+            ? `${campaign.pendingCount} writs awaiting judgment`
+            : "Gate stands quiet",
+      x: 66,
+      y: 208,
+    },
+    {
+      key: "hall",
+      name: "War Hall",
+      face: "Conviction Board",
+      tone: campaign.openQuests >= 5 ? "hot" : campaign.openQuests >= 3 ? "wild" : "cold",
+      status: `${campaign.openQuests} active quests`,
+      x: 238,
+      y: 108,
+    },
+    {
+      key: "market",
+      name: "Ash Market",
+      face: "Long-Term Lane",
+      tone: merchant ? merchant.accumulationBias.tone : "cold",
+      status: merchant ? `${merchant.ticker} leads the bargain stalls` : "No real bargains today",
+      x: 438,
+      y: 208,
+    },
+    {
+      key: "forge",
+      name: "Broker Forge",
+      face: "Execution Desk",
+      tone: (queue.activeReadyCount || 0) > 0 ? "hot" : (queue.pendingCount || 0) > 0 ? "wild" : "cold",
+      status:
+        (queue.activeReadyCount || 0) > 0
+          ? `${queue.activeReadyCount} ticket${queue.activeReadyCount === 1 ? "" : "s"} can be reviewed`
+          : `${queue.pendingCount || 0} still blocked by approval`,
+      x: 604,
+      y: 122,
+    },
+    {
+      key: "archive",
+      name: "Bone Archive",
+      face: "Ops Record",
+      tone: ops?.ok && watchdog?.ok ? "hot" : "cold",
+      status: ops?.generatedAt ? `Last chronicle ${formatBackendDate(ops.generatedAt)}` : "No chronicle yet",
+      x: 694,
+      y: 278,
+    },
+    {
+      key: "watchtower",
+      name: "Watchtower",
+      face: "Scouts and patrols",
+      tone: scouts.length ? "wild" : "cold",
+      status: scouts.length ? `${scouts[0].ticker} is under watch` : "No scouts are circling",
+      x: 494,
+      y: 62,
+    },
+  ];
+}
+
+function renderTownMap(rows) {
+  const districts = buildTownDistricts(rows);
+  const roads = [
+    { x1: 120, y1: 248, x2: 272, y2: 156 },
+    { x1: 272, y1: 156, x2: 470, y2: 248 },
+    { x1: 470, y1: 248, x2: 634, y2: 170 },
+    { x1: 634, y1: 170, x2: 714, y2: 314 },
+    { x1: 516, y1: 96, x2: 634, y2: 170 },
+  ];
+
+  townMap.innerHTML = `
+    <svg viewBox="0 0 820 360" role="img" aria-label="Inferno town map">
+      <defs>
+        <linearGradient id="roadGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="rgba(199, 160, 106, 0.08)" />
+          <stop offset="100%" stop-color="rgba(255, 106, 61, 0.18)" />
+        </linearGradient>
+      </defs>
+      <rect class="town-ground" x="14" y="22" width="792" height="320" rx="18"></rect>
+      <path class="town-river" d="M 26 300 C 150 256, 236 338, 356 296 S 560 226, 794 284"></path>
+      ${roads
+        .map(
+          (road) => `
+            <path class="town-road" d="M ${road.x1} ${road.y1} C ${(road.x1 + road.x2) / 2} ${road.y1 - 14}, ${(road.x1 + road.x2) / 2} ${road.y2 + 16}, ${road.x2} ${road.y2}"></path>
+          `,
+        )
+        .join("")}
+      ${districts
+        .map((district) => {
+          const roofPoints = `${district.x - 32},${district.y} ${district.x},${district.y - 28} ${district.x + 32},${district.y}`;
+          return `
+            <g class="town-district ${district.tone}">
+              <circle class="district-aura ${district.tone}" cx="${district.x}" cy="${district.y + 6}" r="42"></circle>
+              <rect class="district-wall ${district.tone}" x="${district.x - 28}" y="${district.y}" width="56" height="38" rx="8"></rect>
+              <polygon class="district-roof ${district.tone}" points="${roofPoints}"></polygon>
+              <rect class="district-door" x="${district.x - 7}" y="${district.y + 16}" width="14" height="22" rx="4"></rect>
+              <text class="district-label" x="${district.x}" y="${district.y + 56}" text-anchor="middle">${district.name}</text>
+              <text class="district-sub-label" x="${district.x}" y="${district.y + 70}" text-anchor="middle">${district.face}</text>
+            </g>
+          `;
+        })
+        .join("")}
+    </svg>
+  `;
+}
+
+function buildTownDialogue(rows) {
+  const queue = state.backend.executionQueue || {};
+  const eligible = getEligibleCandidates(rows);
+  const longTerm = getLongTermCandidates(rows);
+  const scouts = getScoutCandidates(rows);
+  const merchant = longTerm[0];
+  const raidLead = eligible[0];
+  const approvalQueue = state.backend.approvalQueue?.items || [];
+  const pendingCount = approvalQueue.filter((item) => item.approvalStatus === "pending").length;
+
+  return [
+    {
+      name: "Gatekeeper Sereth",
+      tone: pendingCount ? "wild" : "cold",
+      ticker: raidLead?.ticker || "",
+      line: pendingCount
+        ? `${pendingCount} names still stand outside the gate. ${raidLead ? `${raidLead.ticker} is first in line.` : "No champion has stepped forward yet."}`
+        : "The gate is clear. No approvals are rotting in the queue tonight.",
+    },
+    {
+      name: "Quartermaster Varo",
+      tone: (queue.activeReadyCount || 0) > 0 ? "hot" : "wild",
+      ticker: queue.readyTickers?.[0] || raidLead?.ticker || "",
+      line:
+        (queue.activeReadyCount || 0) > 0
+          ? `${queue.readyTickers[0]} is armed for broker review. ${round(queue.stagedRiskUnits || 0, 2)} risk units are already spoken for.`
+          : `${round((queue.dailyRiskBudget || 0) - (queue.stagedRiskUnits || 0), 2)} risk units remain. Spend them only on names you would defend in daylight.`,
+    },
+    {
+      name: "Merchant Nyra",
+      tone: merchant ? merchant.accumulationBias.tone : "cold",
+      ticker: merchant?.ticker || "",
+      line: merchant
+        ? `${merchant.ticker} is the cleanest bargain in the market. ${merchant.discountReasons[0] || "The price has cooled without killing conviction."}`
+        : "The stalls are full of overpriced junk. Keep your gold in your pocket.",
+    },
+    {
+      name: "Archivist Malek",
+      tone: state.backend.opsStatus?.ok && state.backend.watchdogStatus?.ok ? "hot" : "cold",
+      ticker: "",
+      line:
+        state.backend.opsStatus?.generatedAt
+          ? `The last chronicle was written ${formatBackendDate(state.backend.opsStatus.generatedAt)}. The machine remembers what the flesh forgets.`
+          : "No chronicle has been sealed yet. The archive waits for the first run.",
+    },
+    {
+      name: "Scout Ilya",
+      tone: scouts.length ? "wild" : "cold",
+      ticker: scouts[0]?.ticker || "",
+      line: scouts.length
+        ? `${scouts[0].ticker} is moving in the outskirts. Not ready for a raid, but too alive to ignore.`
+        : "The hills are quiet. No side quests deserve the party's time right now.",
+    },
+  ];
+}
+
+function buildLootDrops(rows) {
+  const queue = state.backend.executionQueue || {};
+  const raid = getEligibleCandidates(rows)[0];
+  const merchant = getLongTermCandidates(rows)[0];
+  const scout = getScoutCandidates(rows)[0];
+  const ready = (queue.items || []).find((item) => item.intentStatus === "approval-ready");
+  const opsHealthy = state.backend.opsStatus?.ok && state.backend.watchdogStatus?.ok;
+
+  return [
+    {
+      type: "Raid Writ",
+      rarity: raid ? "Legendary" : "Dormant",
+      tone: raid ? "hot" : "cold",
+      ticker: raid?.ticker || "",
+      name: raid ? `${raid.ticker} Bloodseal` : "Unclaimed Bloodseal",
+      note: raid ? `Primary route ${raid.rec1}. ${raid.actionBias.note}` : "No full-conviction raid trophy has dropped yet.",
+    },
+    {
+      type: "Merchant Relic",
+      rarity: merchant ? "Rare" : "Dormant",
+      tone: merchant ? merchant.accumulationBias.tone : "cold",
+      ticker: merchant?.ticker || "",
+      name: merchant ? `${merchant.ticker} Ash Coin` : "Empty Coin Purse",
+      note: merchant ? merchant.discountReasons.join(" | ") : "No long-term bargain deserves a purchase ritual today.",
+    },
+    {
+      type: "Scout Totem",
+      rarity: scout ? "Uncommon" : "Dormant",
+      tone: scout ? "wild" : "cold",
+      ticker: scout?.ticker || "",
+      name: scout ? `${scout.ticker} Watch Totem` : "Extinguished Totem",
+      note: scout ? `${scout.daysUntilEarnings}d to earnings | ${scout.confidence} / 3 confidence` : "No worthy scout signal is circling the town.",
+    },
+    {
+      type: "Forge Sigil",
+      rarity: ready ? "Legendary" : "Common",
+      tone: ready ? "hot" : "wild",
+      ticker: ready?.ticker || "",
+      name: ready ? `${ready.ticker} Broker Sigil` : "Dormant Forge Sigil",
+      note: ready ? ready.nextStep : "The forge is lit, but no ticket is fully armed for review.",
+    },
+    {
+      type: "Machine Charm",
+      rarity: opsHealthy ? "Rare" : "Cracked",
+      tone: opsHealthy ? "hot" : "cold",
+      ticker: "",
+      name: opsHealthy ? "Watchdog Lantern" : "Cracked Relay Charm",
+      note: opsHealthy ? "Automation patrols are alive and the dawn relay is holding." : "Something in the machine chorus needs attention.",
+    },
+  ];
+}
+
+function renderTownBoard(rows) {
+  const campaign = buildCampaignState(rows);
+  const dialogues = buildTownDialogue(rows);
+  const loot = buildLootDrops(rows);
+
+  townSummary.textContent = `${campaign.rank.label}. The town feels ${campaign.rank.tone === "hot" ? "battle-ready" : campaign.rank.tone === "wild" ? "restless" : "quiet"} tonight. ${campaign.readyCount} raids are near the gate, ${campaign.pendingCount} still need writs, and the market ${campaign.topMerchant ? `is whispering about ${campaign.topMerchant.ticker}` : "is not offering a true bargain yet"}.`;
+  renderTownMap(rows);
+
+  townDialogue.innerHTML = dialogues
+    .map(
+      (actor) => `
+        <button class="actor-card" ${actor.ticker ? `data-ticker="${actor.ticker}"` : ""} type="button">
+          <div class="actor-head">
+            <span class="actor-glyph">${actor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
+            <div>
+              <p class="quest-type">${actor.name}</p>
+              <p><strong>${actor.line}</strong></p>
+            </div>
+            <span class="move-chip ${actor.tone}">${actor.tone === "hot" ? "Burning" : actor.tone === "wild" ? "Restless" : "Quiet"}</span>
+          </div>
+        </button>
+      `,
+    )
+    .join("");
+
+  lootVault.innerHTML = loot
+    .map(
+      (item) => `
+        <button class="quest-card loot-card" ${item.ticker ? `data-ticker="${item.ticker}"` : ""} type="button">
+          <div class="quest-head">
+            <span class="quest-rank">${item.rarity.slice(0, 2).toUpperCase()}</span>
+            <div>
+              <p class="quest-type">${item.type}</p>
+              <p><strong>${item.name}</strong></p>
+              <p class="quest-meta">${item.rarity}</p>
+            </div>
+            <span class="move-chip ${item.tone}">${item.tone === "hot" ? "Lit" : item.tone === "wild" ? "Live" : "Dormant"}</span>
+          </div>
+          <p class="candidate-note">${item.note}</p>
+        </button>
+      `,
+    )
+    .join("");
+
+  townDialogue.querySelectorAll("[data-ticker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTicker = button.dataset.ticker;
+      render();
+    });
+  });
+
+  lootVault.querySelectorAll("[data-ticker]").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedTicker = button.dataset.ticker;
       render();
@@ -2245,6 +2545,7 @@ function render() {
   renderOverview(rows);
   renderOpsWatch();
   renderCampaignBoard(rows);
+  renderTownBoard(rows);
   renderSignalRibbon(rows);
   renderConvictionEngine(rows);
   renderAccumulationDesk(rows);

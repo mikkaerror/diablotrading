@@ -25,6 +25,14 @@ The current dashboard now maps the desk into four town roles:
 
 This is useful because each role maps to a real trading job.
 
+The dashboard now has a first live `Inferno Town` layer:
+
+- a village map
+- tavern voices
+- loot and relics
+
+Those should always be derived from live desk state.
+
 ## The Quest Model
 
 Every name should eventually appear as one of three quest types:
@@ -41,6 +49,20 @@ The quest board should answer:
 - what deserves attention right now
 - what still needs proof
 - what is a patient accumulation instead of a fast trade
+
+## Inventory and Loot
+
+Inventory should not be random.
+
+It should be generated from the desk:
+
+- raid writs from the top earnings quests
+- merchant relics from long-term discount candidates
+- forge sigils from approval-ready execution intents
+- machine charms from healthy automation
+- cracked relics when parts of the desk are stale or broken
+
+This makes the game layer feel alive while still teaching what matters.
 
 ## Campaign Score
 
@@ -92,6 +114,8 @@ Bad things to punish:
 - armed raids move to the gate
 - merchant quests populate the vault
 - resolved trades move into the archive hall
+- loot accumulates in the inventory chest
+- NPC dialogue reflects the live state of the desk
 
 ### Phase 5: Paper execution campaign
 

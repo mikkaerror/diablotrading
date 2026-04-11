@@ -43,6 +43,7 @@ And now one presentation layer:
 
 - campaign simulation
   - a quest-board and town-role overlay that turns the live desk into a Diablo-style operating loop without hiding the real trade logic
+  - includes a living `Inferno Town` with village districts, tavern voices, and loot artifacts driven by the real desk state
 
 ## Quick start
 
