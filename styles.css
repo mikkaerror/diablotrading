@@ -619,6 +619,19 @@ button.quest-card:hover {
   display: block;
 }
 
+.town-sky {
+  fill: url(#townSky);
+}
+
+.town-moon {
+  fill: rgba(255, 233, 182, 0.84);
+  filter: drop-shadow(0 0 16px rgba(255, 232, 182, 0.32));
+}
+
+.town-star {
+  fill: rgba(255, 244, 214, 0.86);
+}
+
 .town-ground {
   fill: rgba(33, 14, 13, 0.88);
   stroke: rgba(199, 160, 106, 0.16);
@@ -638,6 +651,27 @@ button.quest-card:hover {
   stroke-width: 8;
   stroke-linecap: round;
   opacity: 0.9;
+}
+
+.town-garden rect {
+  fill: rgba(80, 51, 25, 0.72);
+  stroke: rgba(199, 160, 106, 0.18);
+}
+
+.town-garden path {
+  stroke: rgba(118, 182, 104, 0.45);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.town-district {
+  cursor: pointer;
+}
+
+.town-district:hover .district-aura,
+.town-district.selected .district-aura {
+  stroke: rgba(255, 223, 190, 0.42);
+  stroke-width: 1.5;
 }
 
 .district-aura.hot {
@@ -687,6 +721,22 @@ button.quest-card:hover {
   fill: rgba(14, 5, 5, 0.86);
 }
 
+.district-lantern {
+  animation: lanternFlicker 2.8s ease-in-out infinite;
+}
+
+.district-lantern.hot {
+  fill: rgba(255, 183, 110, 0.88);
+}
+
+.district-lantern.wild {
+  fill: rgba(226, 193, 120, 0.82);
+}
+
+.district-lantern.cold {
+  fill: rgba(148, 210, 232, 0.72);
+}
+
 .district-label,
 .district-sub-label {
   font-family: "Orbitron", sans-serif;
@@ -713,6 +763,69 @@ button.quest-card:hover {
 .loot-card {
   text-align: left;
   color: var(--text);
+}
+
+.district-focus {
+  display: grid;
+}
+
+.district-focus-card {
+  background:
+    linear-gradient(180deg, rgba(45, 18, 15, 0.9), rgba(11, 5, 5, 0.9)),
+    radial-gradient(circle at top left, rgba(255, 176, 116, 0.08), transparent 40%);
+}
+
+.district-jump-button {
+  margin-top: 12px;
+}
+
+.villager-sprite circle {
+  fill: rgba(255, 215, 196, 0.92);
+  stroke: rgba(20, 8, 8, 0.74);
+  stroke-width: 2;
+}
+
+.villager-sprite.hot circle {
+  fill: rgba(255, 120, 83, 0.96);
+}
+
+.villager-sprite.wild circle {
+  fill: rgba(232, 199, 118, 0.92);
+}
+
+.villager-sprite.cold circle {
+  fill: rgba(140, 211, 231, 0.92);
+}
+
+.villager-sprite text {
+  fill: rgba(255, 239, 220, 0.9);
+  font-family: "Orbitron", sans-serif;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.hidden-path {
+  display: none;
+}
+
+.town-mood-label {
+  fill: rgba(255, 229, 194, 0.82);
+  font-family: "Cinzel", serif;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+}
+
+@keyframes lanternFlicker {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
 }
 
 .stat-card strong {

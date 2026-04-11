@@ -378,6 +378,7 @@ const BACKEND_REFRESH_INTERVAL_MS = 60_000;
 const state = {
   rows: sampleData.map(enrichRow),
   selectedTicker: null,
+  selectedDistrict: "hall",
   sourceLabel: "Sample cache",
   latestBrief: "",
   latestTickets: "",
@@ -438,6 +439,7 @@ const executionSummary = document.getElementById("execution-summary");
 const executionCandidates = document.getElementById("execution-candidates");
 const townSummary = document.getElementById("town-summary");
 const townMap = document.getElementById("town-map");
+const districtFocus = document.getElementById("district-focus");
 const townDialogue = document.getElementById("town-dialogue");
 const lootVault = document.getElementById("loot-vault");
 const briefPreview = document.getElementById("brief-preview");
@@ -1302,6 +1304,7 @@ function buildTownDistricts(rows) {
   const queue = state.backend.executionQueue || {};
   const merchant = campaign.topMerchant;
   const scouts = getScoutCandidates(rows);
+  const raidLead = campaign.topRaid;
   const ops = state.backend.opsStatus;
   const watchdog = state.backend.watchdogStatus;
 
@@ -1317,6 +1320,11 @@ function buildTownDistricts(rows) {
           : campaign.pendingCount > 0
             ? `${campaign.pendingCount} writs awaiting judgment`
             : "Gate stands quiet",
+      resident: "Gatekeeper Sereth",
+      focusTicker: raidLead?.ticker || "",
+      note: raidLead
+        ? `${raidLead.ticker} is the champion closest to the wall. Approvals turn waiting names into marching orders here.`
+        : "When conviction rises, this is where short-term raid quests gather before they earn a writ.",
       x: 66,
       y: 208,
     },
@@ -1326,6 +1334,9 @@ function buildTownDistricts(rows) {
       face: "Conviction Board",
       tone: campaign.openQuests >= 5 ? "hot" : campaign.openQuests >= 3 ? "wild" : "cold",
       status: `${campaign.openQuests} active quests`,
+      resident: "The War Council",
+      focusTicker: raidLead?.ticker || merchant?.ticker || "",
+      note: "This is the strategy room. It decides whether the town is raiding, scouting, or hoarding patience.",
       x: 238,
       y: 108,
     },
@@ -1335,6 +1346,11 @@ function buildTownDistricts(rows) {
       face: "Long-Term Lane",
       tone: merchant ? merchant.accumulationBias.tone : "cold",
       status: merchant ? `${merchant.ticker} leads the bargain stalls` : "No real bargains today",
+      resident: "Merchant Nyra",
+      focusTicker: merchant?.ticker || "",
+      note: merchant
+        ? `${merchant.ticker} is today's best discount story. This stall is for conviction buys, not adrenaline buys.`
+        : "The market waits for real discounts instead of inventing cheapness where none exists.",
       x: 438,
       y: 208,
     },
@@ -1347,6 +1363,12 @@ function buildTownDistricts(rows) {
         (queue.activeReadyCount || 0) > 0
           ? `${queue.activeReadyCount} ticket${queue.activeReadyCount === 1 ? "" : "s"} can be reviewed`
           : `${queue.pendingCount || 0} still blocked by approval`,
+      resident: "Quartermaster Varo",
+      focusTicker: queue.readyTickers?.[0] || raidLead?.ticker || "",
+      note:
+        (queue.activeReadyCount || 0) > 0
+          ? "This forge is hot. Ready names can be turned into broker-review tickets here."
+          : "The forge stays cautious until a name clears approval, trigger, and risk budget.",
       x: 604,
       y: 122,
     },
@@ -1356,6 +1378,12 @@ function buildTownDistricts(rows) {
       face: "Ops Record",
       tone: ops?.ok && watchdog?.ok ? "hot" : "cold",
       status: ops?.generatedAt ? `Last chronicle ${formatBackendDate(ops.generatedAt)}` : "No chronicle yet",
+      resident: "Archivist Malek",
+      focusTicker: "",
+      note:
+        ops?.ok && watchdog?.ok
+          ? "The records are clean and the machine chorus is behaving."
+          : "This hall remembers every broken relay and missing dawn cycle.",
       x: 694,
       y: 278,
     },
@@ -1365,14 +1393,111 @@ function buildTownDistricts(rows) {
       face: "Scouts and patrols",
       tone: scouts.length ? "wild" : "cold",
       status: scouts.length ? `${scouts[0].ticker} is under watch` : "No scouts are circling",
+      resident: "Scout Ilya",
+      focusTicker: scouts[0]?.ticker || "",
+      note: scouts.length
+        ? `${scouts[0].ticker} is the cleanest unfinished story in the hills.`
+        : "The watchtower is quiet when nothing deserves partial attention.",
       x: 494,
       y: 62,
     },
   ];
 }
 
-function renderTownMap(rows) {
-  const districts = buildTownDistricts(rows);
+function buildTownMood(rows) {
+  const campaign = buildCampaignState(rows);
+  if (campaign.readyCount > 0) {
+    return {
+      title: "Raid Night",
+      note: "The forge is lit, the gate is awake, and the town is arguing over which names deserve blood and risk.",
+    };
+  }
+  if (campaign.topMerchant) {
+    return {
+      title: "Night Market",
+      note: `${campaign.topMerchant.ticker} has the merchants whispering. The village feels patient, watchful, and a little greedy in the best way.`,
+    };
+  }
+  return {
+    title: "Ashen Curfew",
+    note: "No one is rushing. The town is alive, but it is choosing patience over chaos tonight.",
+  };
+}
+
+function renderDistrictFocus(rows, districts) {
+  const district = districts.find((item) => item.key === state.selectedDistrict) || districts[1] || districts[0];
+  const mood = buildTownMood(rows);
+  districtFocus.innerHTML = `
+    <div class="actor-card district-focus-card">
+      <div class="actor-head">
+        <span class="actor-glyph">${district.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
+        <div>
+          <p class="quest-type">${district.name}</p>
+          <p><strong>${district.status}</strong></p>
+          <p class="actor-meta">${district.face} | ${district.resident}</p>
+        </div>
+        <span class="move-chip ${district.tone}">${mood.title}</span>
+      </div>
+      <p class="actor-note">${district.note}</p>
+      <p class="actor-note"><strong>Town mood:</strong> ${mood.note}</p>
+      ${
+        district.focusTicker
+          ? `<button class="approval-button ticket-copy-button district-jump-button" data-ticker="${district.focusTicker}" type="button">Inspect ${district.focusTicker}</button>`
+          : ""
+      }
+    </div>
+  `;
+
+  districtFocus.querySelectorAll("[data-ticker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTicker = button.dataset.ticker;
+      render();
+    });
+  });
+}
+
+function renderTownMap(rows, districts) {
+  const mood = buildTownMood(rows);
+  const eligible = getEligibleCandidates(rows);
+  const longTerm = getLongTermCandidates(rows);
+  const scouts = getScoutCandidates(rows);
+  const sprites = [
+    {
+      key: "raid",
+      tone: eligible[0] ? "hot" : "wild",
+      label: eligible[0]?.ticker || "RAID",
+      start: 0,
+      dur: "14s",
+      path: "M 120 248 C 196 208, 224 176, 272 156 C 348 124, 416 180, 470 248",
+    },
+    {
+      key: "merchant",
+      tone: longTerm[0] ? longTerm[0].accumulationBias.tone : "wild",
+      label: longTerm[0]?.ticker || "MERC",
+      start: "2s",
+      dur: "18s",
+      path: "M 272 156 C 356 130, 408 166, 470 248 C 544 256, 590 212, 634 170",
+    },
+    {
+      key: "scout",
+      tone: scouts[0] ? "wild" : "cold",
+      label: scouts[0]?.ticker || "SCOUT",
+      start: "4s",
+      dur: "12s",
+      path: "M 516 96 C 560 112, 602 136, 634 170 C 666 206, 694 248, 714 314",
+    },
+  ];
+  const stars = [
+    [86, 58, 1.8],
+    [126, 42, 1.3],
+    [196, 72, 1.5],
+    [284, 48, 1.6],
+    [356, 76, 1.2],
+    [448, 42, 1.7],
+    [532, 64, 1.4],
+    [664, 52, 1.3],
+    [744, 74, 1.9],
+  ];
   const roads = [
     { x1: 120, y1: 248, x2: 272, y2: 156 },
     { x1: 272, y1: 156, x2: 470, y2: 248 },
@@ -1384,12 +1509,32 @@ function renderTownMap(rows) {
   townMap.innerHTML = `
     <svg viewBox="0 0 820 360" role="img" aria-label="Inferno town map">
       <defs>
+        <linearGradient id="townSky" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#24133b" />
+          <stop offset="48%" stop-color="#3b1f2e" />
+          <stop offset="100%" stop-color="#1e0d0e" />
+        </linearGradient>
         <linearGradient id="roadGlow" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="rgba(199, 160, 106, 0.08)" />
           <stop offset="100%" stop-color="rgba(255, 106, 61, 0.18)" />
         </linearGradient>
       </defs>
+      <rect class="town-sky" x="14" y="22" width="792" height="112" rx="18"></rect>
+      <circle class="town-moon" cx="706" cy="80" r="22"></circle>
+      ${stars
+        .map(
+          ([x, y, r]) => `
+            <circle class="town-star" cx="${x}" cy="${y}" r="${r}">
+              <animate attributeName="opacity" values="0.4;0.95;0.5" dur="${6 + r}s" repeatCount="indefinite"></animate>
+            </circle>
+          `,
+        )
+        .join("")}
       <rect class="town-ground" x="14" y="22" width="792" height="320" rx="18"></rect>
+      <g class="town-garden">
+        <rect x="334" y="254" width="92" height="38" rx="10"></rect>
+        <path d="M 346 286 L 350 264 M 364 286 L 368 262 M 382 286 L 386 260 M 400 286 L 404 264" />
+      </g>
       <path class="town-river" d="M 26 300 C 150 256, 236 338, 356 296 S 560 226, 794 284"></path>
       ${roads
         .map(
@@ -1402,19 +1547,49 @@ function renderTownMap(rows) {
         .map((district) => {
           const roofPoints = `${district.x - 32},${district.y} ${district.x},${district.y - 28} ${district.x + 32},${district.y}`;
           return `
-            <g class="town-district ${district.tone}">
+            <g class="town-district ${district.tone} ${state.selectedDistrict === district.key ? "selected" : ""}" data-district="${district.key}" role="button" tabindex="0" aria-label="${district.name}">
               <circle class="district-aura ${district.tone}" cx="${district.x}" cy="${district.y + 6}" r="42"></circle>
               <rect class="district-wall ${district.tone}" x="${district.x - 28}" y="${district.y}" width="56" height="38" rx="8"></rect>
               <polygon class="district-roof ${district.tone}" points="${roofPoints}"></polygon>
               <rect class="district-door" x="${district.x - 7}" y="${district.y + 16}" width="14" height="22" rx="4"></rect>
+              <circle class="district-lantern ${district.tone}" cx="${district.x + 22}" cy="${district.y + 14}" r="4"></circle>
               <text class="district-label" x="${district.x}" y="${district.y + 56}" text-anchor="middle">${district.name}</text>
               <text class="district-sub-label" x="${district.x}" y="${district.y + 70}" text-anchor="middle">${district.face}</text>
             </g>
           `;
         })
         .join("")}
+      ${sprites
+        .map(
+          (sprite) => `
+            <g class="villager-sprite ${sprite.tone}">
+              <circle r="7"></circle>
+              <text y="-13" text-anchor="middle">${sprite.label}</text>
+              <animateMotion dur="${sprite.dur}" begin="${sprite.start}" repeatCount="indefinite" rotate="auto">
+                <mpath href="#${sprite.key}-path"></mpath>
+              </animateMotion>
+            </g>
+            <path id="${sprite.key}-path" class="hidden-path" d="${sprite.path}"></path>
+          `,
+        )
+        .join("")}
+      <text class="town-mood-label" x="48" y="56">${mood.title}</text>
     </svg>
   `;
+
+  townMap.querySelectorAll("[data-district]").forEach((districtNode) => {
+    const selectDistrict = () => {
+      state.selectedDistrict = districtNode.dataset.district;
+      render();
+    };
+    districtNode.addEventListener("click", selectDistrict);
+    districtNode.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectDistrict();
+      }
+    });
+  });
 }
 
 function buildTownDialogue(rows) {
@@ -1430,6 +1605,7 @@ function buildTownDialogue(rows) {
   return [
     {
       name: "Gatekeeper Sereth",
+      districtKey: "gate",
       tone: pendingCount ? "wild" : "cold",
       ticker: raidLead?.ticker || "",
       line: pendingCount
@@ -1438,6 +1614,7 @@ function buildTownDialogue(rows) {
     },
     {
       name: "Quartermaster Varo",
+      districtKey: "forge",
       tone: (queue.activeReadyCount || 0) > 0 ? "hot" : "wild",
       ticker: queue.readyTickers?.[0] || raidLead?.ticker || "",
       line:
@@ -1447,6 +1624,7 @@ function buildTownDialogue(rows) {
     },
     {
       name: "Merchant Nyra",
+      districtKey: "market",
       tone: merchant ? merchant.accumulationBias.tone : "cold",
       ticker: merchant?.ticker || "",
       line: merchant
@@ -1455,6 +1633,7 @@ function buildTownDialogue(rows) {
     },
     {
       name: "Archivist Malek",
+      districtKey: "archive",
       tone: state.backend.opsStatus?.ok && state.backend.watchdogStatus?.ok ? "hot" : "cold",
       ticker: "",
       line:
@@ -1464,6 +1643,7 @@ function buildTownDialogue(rows) {
     },
     {
       name: "Scout Ilya",
+      districtKey: "watchtower",
       tone: scouts.length ? "wild" : "cold",
       ticker: scouts[0]?.ticker || "",
       line: scouts.length
@@ -1527,16 +1707,19 @@ function buildLootDrops(rows) {
 
 function renderTownBoard(rows) {
   const campaign = buildCampaignState(rows);
+  const districts = buildTownDistricts(rows);
   const dialogues = buildTownDialogue(rows);
   const loot = buildLootDrops(rows);
+  const mood = buildTownMood(rows);
 
-  townSummary.textContent = `${campaign.rank.label}. The town feels ${campaign.rank.tone === "hot" ? "battle-ready" : campaign.rank.tone === "wild" ? "restless" : "quiet"} tonight. ${campaign.readyCount} raids are near the gate, ${campaign.pendingCount} still need writs, and the market ${campaign.topMerchant ? `is whispering about ${campaign.topMerchant.ticker}` : "is not offering a true bargain yet"}.`;
-  renderTownMap(rows);
+  townSummary.textContent = `${campaign.rank.label}. ${mood.title} has settled over the village. ${campaign.readyCount} raids are near the gate, ${campaign.pendingCount} still need writs, and the market ${campaign.topMerchant ? `is whispering about ${campaign.topMerchant.ticker}` : "is not offering a true bargain yet"}.`;
+  renderTownMap(rows, districts);
+  renderDistrictFocus(rows, districts);
 
   townDialogue.innerHTML = dialogues
     .map(
       (actor) => `
-        <button class="actor-card" ${actor.ticker ? `data-ticker="${actor.ticker}"` : ""} type="button">
+        <button class="actor-card" ${actor.ticker ? `data-ticker="${actor.ticker}"` : ""} data-district="${actor.districtKey}" type="button">
           <div class="actor-head">
             <span class="actor-glyph">${actor.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
             <div>
@@ -1569,9 +1752,14 @@ function renderTownBoard(rows) {
     )
     .join("");
 
-  townDialogue.querySelectorAll("[data-ticker]").forEach((button) => {
+  townDialogue.querySelectorAll(".actor-card").forEach((button) => {
     button.addEventListener("click", () => {
-      state.selectedTicker = button.dataset.ticker;
+      if (button.dataset.ticker) {
+        state.selectedTicker = button.dataset.ticker;
+      }
+      if (button.dataset.district) {
+        state.selectedDistrict = button.dataset.district;
+      }
       render();
     });
   });

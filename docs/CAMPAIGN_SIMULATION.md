@@ -28,8 +28,10 @@ This is useful because each role maps to a real trading job.
 The dashboard now has a first live `Inferno Town` layer:
 
 - a village map
+- clickable districts and focus cards
 - tavern voices
 - loot and relics
+- moving villagers and ambient night-market motion
 
 Those should always be derived from live desk state.
 
