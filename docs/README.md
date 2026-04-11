@@ -14,3 +14,5 @@
   - how the desk moves from shortlist to broker-safe execution intents
 - [THINKORSWIM_AUTOMATION.md](/Users/mikkasida/Documents/New%20project/docs/THINKORSWIM_AUTOMATION.md)
   - the safest path from dashboard signals to thinkorswim-assisted automation
+- [CAMPAIGN_SIMULATION.md](/Users/mikkasida/Documents/New%20project/docs/CAMPAIGN_SIMULATION.md)
+  - how the desk turns into an RPG-style quest board without losing trading discipline

@@ -430,6 +430,10 @@ const engineRules = document.getElementById("engine-rules");
 const engineCandidates = document.getElementById("engine-candidates");
 const longTermSummary = document.getElementById("longterm-summary");
 const longTermCandidatesEl = document.getElementById("longterm-candidates");
+const campaignSummary = document.getElementById("campaign-summary");
+const campaignStats = document.getElementById("campaign-stats");
+const questBoard = document.getElementById("quest-board");
+const townActors = document.getElementById("town-actors");
 const executionSummary = document.getElementById("execution-summary");
 const executionCandidates = document.getElementById("execution-candidates");
 const briefPreview = document.getElementById("brief-preview");
@@ -993,6 +997,291 @@ function renderOpsWatch() {
   }
 
   opsFeed.innerHTML = messages.map((message) => `<div class="brief-card">${message}</div>`).join("");
+}
+
+function buildCampaignRank(score, readyCount, openQuests) {
+  if (readyCount > 0 && score >= 82) {
+    return {
+      label: "Act IV: Siege Window",
+      tone: "hot",
+      note: "Broker-ready raids exist. This is a review-and-route posture, not a dreaming posture.",
+    };
+  }
+  if (openQuests >= 4 && score >= 70) {
+    return {
+      label: "Act III: War Council",
+      tone: "wild",
+      note: "The board is crowded with real quests. Prioritization matters more than more ideas.",
+    };
+  }
+  if (score >= 55) {
+    return {
+      label: "Act II: Ember Patrol",
+      tone: "wild",
+      note: "The town has movement, but most names still need proof, patience, or a cleaner lane.",
+    };
+  }
+  return {
+    label: "Act I: Quiet Vigil",
+    tone: "cold",
+    note: "The machine is healthy, but conviction is still in scouting mode. Better that than forcing a fight.",
+  };
+}
+
+function buildCampaignState(rows) {
+  const eligible = getEligibleCandidates(rows);
+  const longTerm = getLongTermCandidates(rows);
+  const queue = state.backend.executionQueue || {};
+  const ops = state.backend.opsStatus;
+  const watchdog = state.backend.watchdogStatus;
+  const pendingCount =
+    queue.pendingCount ??
+    (state.backend.approvalQueue?.items?.filter((item) => item.approvalStatus === "pending").length || 0);
+  const rejectedCount =
+    queue.rejectedCount ??
+    (state.backend.approvalQueue?.items?.filter((item) => item.approvalStatus === "rejected").length || 0);
+  const readyCount = queue.activeReadyCount || 0;
+  const openQuests = eligible.length + longTerm.length;
+
+  let score = 28;
+  if (ops?.ok) {
+    score += 18;
+  } else if (ops) {
+    score -= 12;
+  }
+  if (watchdog?.ok) {
+    score += 12;
+  } else if (watchdog) {
+    score -= 8;
+  }
+  if (state.backend.smtpConfigured) {
+    score += 5;
+  }
+  score += Math.min(eligible.length * 4, 18);
+  score += Math.min(readyCount * 10, 20);
+  score += Math.min(longTerm.length * 3, 12);
+  score -= Math.min(rejectedCount * 2, 8);
+  score = clamp(Math.round(score), 0, 100);
+
+  return {
+    score,
+    rank: buildCampaignRank(score, readyCount, openQuests),
+    readyCount,
+    pendingCount,
+    rejectedCount,
+    openQuests,
+    warChest: round((queue.dailyRiskBudget || 0) - (queue.stagedRiskUnits || 0), 2),
+    riskBudget: round(queue.dailyRiskBudget || 0, 2),
+    topRaid: eligible[0] || rows[0] || null,
+    topMerchant: longTerm[0] || null,
+    lastUpdate: formatBackendDate(queue.updatedAt || queue.generatedAt || ops?.generatedAt || state.backend.lastSnapshotAt),
+  };
+}
+
+function buildQuestForRow(row, type, rank, executionItem) {
+  if (type === "raid") {
+    const status =
+      executionItem?.intentStatus === "approval-ready"
+        ? { label: "At Gate", tone: "hot" }
+        : executionItem?.approvalStatus === "rejected"
+          ? { label: "Buried", tone: "cold" }
+          : row.signalTrigger
+            ? { label: "Await Writ", tone: "wild" }
+            : { label: "Need Trigger", tone: "cold" };
+    return {
+      ticker: row.ticker,
+      type: "Raid Quest",
+      glyph: `R${rank}`,
+      status,
+      meta: `${row.setupRec} | ${row.daysUntilEarnings}d | ${row.readiness}% readiness`,
+      reward: `Priority ${row.priority} | ${row.rec1}`,
+      note: executionItem?.nextStep || row.actionBias.note,
+    };
+  }
+
+  if (type === "merchant") {
+    return {
+      ticker: row.ticker,
+      type: "Merchant Quest",
+      glyph: `M${rank}`,
+      status: { label: "Discount Watch", tone: row.accumulationBias.tone },
+      meta: `Long-term ${row.longTermScore} | Value ${round(row.valueScore, 2)} | Heat ${round(row.momentumScore, 2)}`,
+      reward: row.discountReasons.join(" | "),
+      note: row.accumulationBias.note,
+    };
+  }
+
+  return {
+    ticker: row.ticker,
+    type: "Scout Quest",
+    glyph: `S${rank}`,
+    status: row.signalTrigger ? { label: "Track Closely", tone: "wild" } : { label: "Scout Only", tone: "cold" },
+    meta: `${row.setupRec} | ${row.daysUntilEarnings}d | confidence ${row.confidence} / 3`,
+    reward: `IV ${round(row.ivRank, 1)} | ATR ${round(row.atrPercent, 1)}`,
+    note: row.actionBias.note,
+  };
+}
+
+function buildCampaignQuests(rows) {
+  const executionByTicker = Object.fromEntries((state.backend.executionQueue?.items || []).map((item) => [item.ticker, item]));
+  const quests = [];
+  const seen = new Set();
+
+  getEligibleCandidates(rows)
+    .slice(0, 3)
+    .forEach((row, index) => {
+      seen.add(row.ticker);
+      quests.push(buildQuestForRow(row, "raid", index + 1, executionByTicker[row.ticker]));
+    });
+
+  getLongTermCandidates(rows)
+    .filter((row) => !seen.has(row.ticker))
+    .slice(0, 2)
+    .forEach((row, index) => {
+      seen.add(row.ticker);
+      quests.push(buildQuestForRow(row, "merchant", index + 1, executionByTicker[row.ticker]));
+    });
+
+  rows
+    .filter((row) => !seen.has(row.ticker))
+    .filter((row) => row.readiness >= 62 || row.confidence >= 2)
+    .slice(0, 2)
+    .forEach((row, index) => {
+      quests.push(buildQuestForRow(row, "scout", index + 1, executionByTicker[row.ticker]));
+    });
+
+  return quests.slice(0, 6);
+}
+
+function buildTownActors(rows) {
+  const queue = state.backend.executionQueue || {};
+  const ops = state.backend.opsStatus;
+  const watchdog = state.backend.watchdogStatus;
+  const longTerm = getLongTermCandidates(rows);
+  const topLongTerm = longTerm[0];
+  const pendingCount =
+    queue.pendingCount ??
+    (state.backend.approvalQueue?.items?.filter((item) => item.approvalStatus === "pending").length || 0);
+
+  return [
+    {
+      glyph: "GK",
+      name: "Gatekeeper",
+      status: pendingCount ? `${pendingCount} writs awaiting approval` : "No names crowding the gate",
+      note: pendingCount
+        ? "Approve only the names you would actually route in the real world."
+        : "The gate is clear. No forced decisions are needed right now.",
+      tone: pendingCount ? "wild" : "cold",
+    },
+    {
+      glyph: "QM",
+      name: "Quartermaster",
+      status: `${round((queue.dailyRiskBudget || 0) - (queue.stagedRiskUnits || 0), 2)} / ${round(queue.dailyRiskBudget || 0, 2)} risk units free`,
+      note:
+        (queue.activeReadyCount || 0) > 0
+          ? `${queue.activeReadyCount} raids are armed for broker review. The rest stay sheathed.`
+          : "Nothing is over-armed right now. The treasury still has room, but the desk is behaving.",
+      tone: (queue.activeReadyCount || 0) > 0 ? "hot" : "wild",
+    },
+    {
+      glyph: "MT",
+      name: "Merchant",
+      status: topLongTerm ? `${topLongTerm.ticker} leads the discount lane` : "No quality bargains on the table",
+      note: topLongTerm
+        ? `${topLongTerm.discountReasons.join(", ")}. Buy the business, not the adrenaline.`
+        : "The vault stays patient when names are expensive or overheated.",
+      tone: topLongTerm ? topLongTerm.accumulationBias.tone : "cold",
+    },
+    {
+      glyph: "AR",
+      name: "Archivist",
+      status: ops?.ok && watchdog?.ok ? "Briefs, logs, and patrols intact" : "Records need operator review",
+      note:
+        ops?.generatedAt || state.backend.lastSnapshotAt
+          ? `Last machine heartbeat: ${formatBackendDate(ops?.generatedAt || state.backend.lastSnapshotAt)}.`
+          : "No fresh records were found yet.",
+      tone: ops?.ok && watchdog?.ok ? "hot" : "cold",
+    },
+  ];
+}
+
+function renderCampaignBoard(rows) {
+  const stateView = buildCampaignState(rows);
+  const quests = buildCampaignQuests(rows);
+  const actors = buildTownActors(rows);
+  const raidLead = stateView.topRaid ? `${stateView.topRaid.ticker} is the current raid leader.` : "No raid leader is active.";
+  const merchantLead = stateView.topMerchant
+    ? `${stateView.topMerchant.ticker} is the cleanest discount merchant target.`
+    : "No merchant target has earned a discount posture yet.";
+
+  campaignSummary.textContent = `${stateView.rank.label}. Campaign score ${stateView.score}/100. ${stateView.openQuests} open quests are on the board, ${stateView.readyCount} raids are broker-ready, and the town still has ${stateView.warChest} risk units free. ${raidLead} ${merchantLead} ${stateView.rank.note}`;
+  campaignStats.innerHTML = [
+    { label: "Campaign Score", value: `${stateView.score}/100` },
+    { label: "Open Quests", value: stateView.openQuests },
+    { label: "Raids Armed", value: stateView.readyCount },
+    { label: "War Chest", value: `${stateView.warChest} RU` },
+  ]
+    .map(
+      (item) => `
+        <div class="metric-card">
+          <span>${item.label}</span>
+          <strong>${item.value}</strong>
+        </div>
+      `,
+    )
+    .join("");
+
+  questBoard.innerHTML = quests.length
+    ? quests
+        .map(
+          (quest) => `
+            <button class="quest-card" data-ticker="${quest.ticker}" type="button">
+              <div class="quest-head">
+                <span class="quest-rank">${quest.glyph}</span>
+                <div>
+                  <p class="quest-type">${quest.type}</p>
+                  <p><strong>${quest.ticker}</strong></p>
+                  <p class="quest-meta">${quest.meta}</p>
+                </div>
+                <span class="move-chip ${quest.status.tone}">${quest.status.label}</span>
+              </div>
+              <p class="quest-reward">${quest.reward}</p>
+              <p class="candidate-note">${quest.note}</p>
+            </button>
+          `,
+        )
+        .join("")
+    : `
+      <div class="quest-card">
+        <p><strong>No open quests under the current filter stack.</strong></p>
+        <p class="candidate-note">The town is quiet for a reason. Ease the filters or wait for the tape to offer a real fight.</p>
+      </div>
+    `;
+
+  townActors.innerHTML = actors
+    .map(
+      (actor) => `
+        <div class="actor-card">
+          <div class="actor-head">
+            <span class="actor-glyph">${actor.glyph}</span>
+            <div>
+              <p class="quest-type">${actor.name}</p>
+              <p><strong>${actor.status}</strong></p>
+            </div>
+            <span class="move-chip ${actor.tone}">${actor.tone === "hot" ? "Armed" : actor.tone === "wild" ? "Watching" : "Quiet"}</span>
+          </div>
+          <p class="actor-note">${actor.note}</p>
+        </div>
+      `,
+    )
+    .join("");
+
+  questBoard.querySelectorAll("button[data-ticker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTicker = button.dataset.ticker;
+      render();
+    });
+  });
 }
 
 function renderPlayMap(rows) {
@@ -1955,6 +2244,7 @@ function render() {
   updateSyncLabel(state.sourceLabel);
   renderOverview(rows);
   renderOpsWatch();
+  renderCampaignBoard(rows);
   renderSignalRibbon(rows);
   renderConvictionEngine(rows);
   renderAccumulationDesk(rows);

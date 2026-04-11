@@ -28,6 +28,7 @@ The repo is now split into four clean layers:
   - `docs/CHECKLISTS.md`
   - `docs/EXECUTION_MODEL.md`
   - `docs/THINKORSWIM_AUTOMATION.md`
+  - `docs/CAMPAIGN_SIMULATION.md`
 
 ## Decision lanes
 
@@ -37,6 +38,11 @@ The desk runs in two distinct lanes now:
   - event-driven names you may actually trade into the catalyst window
 - long-term accumulation
   - conviction names you would happily own at a discount when the heat comes out of them
+
+And now one presentation layer:
+
+- campaign simulation
+  - a quest-board and town-role overlay that turns the live desk into a Diablo-style operating loop without hiding the real trade logic
 
 ## Quick start
 
