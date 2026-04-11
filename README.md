@@ -121,7 +121,15 @@ https://<your-github-username>.github.io/<your-repo-name>/
 
 ### Google OAuth note for Pages
 
-If you want the hosted site to use private Google Sheets sync too, add your GitHub Pages URL as an authorized JavaScript origin in Google Cloud alongside `http://localhost:8000`.
+If you want the hosted site to use private Google Sheets sync too, add your GitHub Pages origin as an authorized JavaScript origin in Google Cloud alongside `http://localhost:8000`.
+
+For this repo, that means:
+
+- Authorized JavaScript origin: `https://mikkaerror.github.io`
+
+If Google still throws `redirect_uri_mismatch` from the hosted site, also add the full hosted page URL to the same Web client:
+
+- Authorized redirect URI: `https://mikkaerror.github.io/diablotrading/`
 
 ## What it does
 

@@ -1023,6 +1023,57 @@ button.quest-card:hover {
   font-size: 1.2rem;
 }
 
+.connector-guide {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(198, 87, 55, 0.18);
+  display: grid;
+  gap: 10px;
+}
+
+.connector-guide-title {
+  color: var(--muted);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.connector-guide-copy {
+  color: rgba(222, 197, 175, 0.86);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.connector-guide-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.connector-guide-actions button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid rgba(198, 87, 55, 0.24);
+  background: rgba(201, 78, 46, 0.08);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.72rem;
+}
+
+.connector-guide-actions button:hover {
+  background: rgba(255, 141, 87, 0.14);
+  color: var(--text);
+}
+
+.connector-guide-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 label span {
   display: block;
   margin-bottom: 6px;

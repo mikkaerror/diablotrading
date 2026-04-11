@@ -424,6 +424,9 @@ const sheetAuthSyncButton = document.getElementById("sheet-auth-sync-button");
 const sheetPublicSyncButton = document.getElementById("sheet-public-sync-button");
 const sheetRevokeButton = document.getElementById("sheet-revoke-button");
 const sheetStatus = document.getElementById("sheet-status");
+const sheetOauthHint = document.getElementById("sheet-oauth-hint");
+const copyOauthOriginButton = document.getElementById("copy-oauth-origin-button");
+const copyOauthPageButton = document.getElementById("copy-oauth-page-button");
 const signalRibbon = document.getElementById("signal-ribbon");
 const playMap = document.getElementById("play-map");
 const overviewSummary = document.getElementById("overview-summary");
@@ -516,6 +519,108 @@ function formatDate(value) {
 function setSheetStatus(message, tone = "muted") {
   sheetStatus.textContent = message;
   sheetStatus.className = `connector-status ${tone}`;
+}
+
+function getDashboardOrigin() {
+  if (window.location.protocol === "file:") {
+    return "";
+  }
+
+  return window.location.origin;
+}
+
+function getDashboardPageUrl() {
+  if (window.location.protocol === "file:") {
+    return "";
+  }
+
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function isHostedDashboard() {
+  return Boolean(window.location.hostname?.endsWith("github.io"));
+}
+
+function renderOAuthGuide() {
+  if (!sheetOauthHint) {
+    return;
+  }
+
+  const origin = getDashboardOrigin();
+  const pageUrl = getDashboardPageUrl();
+
+  if (!origin) {
+    sheetOauthHint.textContent =
+      "Google OAuth only works from a real origin like http://localhost:8000 or your GitHub Pages URL.";
+  } else if (isHostedDashboard()) {
+    sheetOauthHint.textContent =
+      `Hosted sync uses ${origin} as the required Google OAuth origin. If Google still says redirect_uri_mismatch, also allow ${pageUrl} in the same Web client and retry.`;
+  } else {
+    sheetOauthHint.textContent = `Local sync uses ${origin} as the required Google OAuth origin.`;
+  }
+
+  copyOauthOriginButton.disabled = !origin;
+  copyOauthPageButton.disabled = !pageUrl;
+}
+
+function buildGoogleAuthFailureMessage(message) {
+  const rawMessage = String(message || "Unknown Google auth error");
+  const normalized = rawMessage.toLowerCase();
+  const origin = getDashboardOrigin();
+  const pageUrl = getDashboardPageUrl();
+
+  if (
+    normalized.includes("popup_closed") ||
+    normalized.includes("access_denied") ||
+    normalized.includes("user_cancel")
+  ) {
+    return {
+      tone: "status-caution",
+      text: "Google authorization was canceled before the sheet finished syncing.",
+    };
+  }
+
+  if (
+    normalized.includes("redirect_uri_mismatch") ||
+    normalized.includes("origin_mismatch") ||
+    normalized.includes("timed out") ||
+    normalized.includes("popup_failed_to_open")
+  ) {
+    if (isHostedDashboard()) {
+      return {
+        tone: "status-risk",
+        text:
+          `Hosted Google auth is not configured for this site yet. Add ${origin} to Authorized JavaScript origins for this OAuth Web client. ` +
+          `If Google still reports redirect_uri_mismatch, also add ${pageUrl} to Authorized redirect URIs, then retry.`,
+      };
+    }
+
+    if (origin) {
+      return {
+        tone: "status-risk",
+        text: `Google auth is not configured for ${origin}. Add that origin to your Google OAuth Web client and retry.`,
+      };
+    }
+  }
+
+  return {
+    tone: "status-risk",
+    text: `Private sheet sync failed. ${rawMessage}`,
+  };
+}
+
+async function copyConnectorText(text, successMessage) {
+  if (!text) {
+    setSheetStatus("There was nothing to copy for this OAuth helper.", "status-caution");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    setSheetStatus(successMessage, "status-caution");
+  } catch {
+    setSheetStatus("Clipboard access failed. Copy the OAuth helper values manually.", "status-risk");
+  }
 }
 
 function describeTemperature(row) {
@@ -2984,24 +3089,61 @@ async function ensureGoogleToken(clientId) {
   }
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(new Error("Google authorization timed out before a token returned"));
+    }, 20000);
+
+    function rejectOnce(error) {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      window.clearTimeout(timeoutId);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+
+    function resolveOnce(token) {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      window.clearTimeout(timeoutId);
+      resolve(token);
+    }
+
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: GOOGLE_SHEETS_SCOPE,
       callback: (response) => {
         if (response?.error) {
-          reject(new Error(response.error));
+          rejectOnce(new Error(response.error));
           return;
         }
 
         state.auth.accessToken = response.access_token;
         state.auth.tokenExpiresAt = Date.now() + Number(response.expires_in || 0) * 1000;
-        resolve(response.access_token);
+        resolveOnce(response.access_token);
+      },
+      error_callback: (error) => {
+        rejectOnce(new Error(error?.type || error?.message || "google_auth_failed"));
       },
     });
 
-    tokenClient.requestAccessToken({
-      prompt: "consent",
-    });
+    try {
+      tokenClient.requestAccessToken({
+        prompt: "consent",
+      });
+    } catch (error) {
+      rejectOnce(error);
+    }
   });
 }
 
@@ -3089,18 +3231,8 @@ async function syncGoogleSheetPrivate() {
     render();
     forgeSnapshot(false);
   } catch (error) {
-    const message = String(error.message || error);
-    const authClosed =
-      message.includes("popup_closed") ||
-      message.includes("access_denied") ||
-      message.includes("user_cancel");
-
-    setSheetStatus(
-      authClosed
-        ? "Google authorization was canceled before the sheet finished syncing."
-        : `Private sheet sync failed. ${message}`,
-      "status-risk",
-    );
+    const authMessage = buildGoogleAuthFailureMessage(error.message || error);
+    setSheetStatus(authMessage.text, authMessage.tone);
   } finally {
     sheetAuthSyncButton.disabled = false;
   }
@@ -3184,6 +3316,20 @@ sheetRevokeButton.addEventListener("click", () => {
   revokeGoogleAccess();
 });
 
+copyOauthOriginButton.addEventListener("click", () => {
+  copyConnectorText(
+    getDashboardOrigin(),
+    `OAuth origin copied: ${getDashboardOrigin()}`,
+  );
+});
+
+copyOauthPageButton.addEventListener("click", () => {
+  copyConnectorText(
+    getDashboardPageUrl(),
+    `Page URL copied: ${getDashboardPageUrl()}`,
+  );
+});
+
 forgeSnapshotButton.addEventListener("click", () => {
   forgeSnapshot(false);
 });
@@ -3228,6 +3374,7 @@ populateFilters();
 sheetUrlInput.value = localStorage.getItem(SHEET_STORAGE_KEY) || DEFAULT_SHEET_URL;
 googleClientIdInput.value = localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY) || "";
 state.selectedTicker = getFilteredRows()[0]?.ticker ?? null;
+renderOAuthGuide();
 setSheetStatus("Using sample cache until Google authorization succeeds.", "muted");
 refreshBackendStatus().finally(() => {
   render();
