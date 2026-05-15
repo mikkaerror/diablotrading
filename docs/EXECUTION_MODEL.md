@@ -1,163 +1,94 @@
-# Inferno Execution Model
+# Execution Model
 
-This desk should not jump from "interesting signal" to "live auto trade."
+The desk does not jump from signal to live trade. It moves through controlled
+authority stages, and every stage leaves an artifact.
 
-It should move through five controlled stages:
+## Current Authority
 
-1. signal
-2. shortlist
-3. approval
-4. execution intent
-5. broker action
+```text
+authorityLevel: paper-evidence-only
+brokerSubmitAllowed: false
+liveTradingAllowed: false
+```
 
-## Current Truth
+The locally configured approved live account is approved for read-only
+oversight only. Real-money orders require explicit user confirmation and are
+not automated.
 
-Right now the system is strongest at:
+## Execution Doctrine
 
-- refreshing the sheet
-- ranking names
-- sending the morning brief
-- staging an approval queue
-- building execution intents
+1. Signal is not permission.
+2. Approval is not execution.
+3. Paper evidence is the promotion gate.
+4. Broker surfaces are outputs, not brains.
+5. Authority is computed from evidence, never granted by mood.
 
-Right now it is **not** live auto-trading.
+## Flow
 
-That is intentional.
+```text
+Tracker signal
+  -> shortlist
+  -> approval queue
+  -> execution intent
+  -> strike plan
+  -> paper ledger
+  -> outcome review
+  -> authority manifest
+  -> broker preview
+```
+
+The flow stops at the first failed gate. A failed gate is useful information,
+not an error to route around.
 
 ## Roles
 
-### Strategist
+- Strategist: ranks names and separates earnings plays from long-term ideas.
+- Approval Desk: turns candidates into explicit yes/no decisions.
+- Execution Clerk: converts approved names into broker-neutral intents.
+- Risk Policy: blocks stale, oversized, illiquid, or duplicated exposure.
+- Paper Loop: stages, tracks, exits, and scores rehearsals.
+- Broker Surface: displays or previews orders only after upstream gates pass.
 
-- ranks names
-- separates earnings plays from long-term accumulation
-- explains why a name deserves attention
+## States
 
-### Approval Desk
-
-- turns the best names into a short queue
-- forces a human yes/no decision before anything becomes executable
-
-### Execution Clerk
-
-- converts approved names into broker-safe order intents
-- applies risk-unit budgets
-- blocks names that are not yet approved, not yet triggered, or outside allowed setup rules
-
-### Broker Surface
-
-- today: thinkorswim as the execution surface
-- future: official broker API lane after the desk proves its edge
-
-## Execution States
-
-### Pending
-
-The name is on the queue, but nobody has approved it yet.
-
-That approval can now happen in either place:
-
-- the dashboard `Order Intent Desk`
-- the local CLI through `inferno_approval_queue.py`
-
-### Approval-Ready
-
-The setup is allowed, the trigger is live, the risk budget is available, and the human reviewer has approved it.
-
-At that point the desk can generate a copyable broker ticket blueprint for supervised order entry.
-
-### Blocked
-
-The name failed one or more safety checks.
-
-Common block reasons:
-
-- trigger is not live
-- human approval still required
-- setup not approved for broker automation lane
-- daily risk budget would be exceeded
-- daily active intent cap reached
-
-## Why Thinkorswim Is The Surface, Not The Brain
-
-Thinkorswim is best treated as the place where orders get staged and supervised.
-
-The inferno desk should stay responsible for:
-
-- thesis
-- ranking
-- sizing limits
-- approval state
-- audit trail
-
-Thinkorswim should stay responsible for:
-
-- order entry
-- order conditions
-- bracket/conditional execution
-- manual supervision until the system earns more authority
-
-## Promotion Path
-
-### Phase 1
-
-- dashboard and email only
-
-### Phase 2
-
-- paper tickets
-- approval queue
-- execution intents
-
-### Phase 3
-
-- assisted broker workflow
-- approved names only
-- still human-submitted
-
-### Phase 4
-
-- paper execution adapter
-- compare expected move versus realized move
-- measure whether the desk actually deserves automation
-
-### Phase 5
-
-- broker API integration
-- still behind hard risk caps and kill switches
+- `pending`: candidate exists, approval still required.
+- `approval-ready`: approval, trigger, setup, and budget all pass.
+- `paper-staged`: valid ticket is ready for paper rehearsal.
+- `paper-blocked`: thesis may exist, but risk, quote quality, size, or setup fails.
+- `review`: live position or paper result needs operator attention.
+- `promotable`: evidence clears sample, expectancy, drawdown, and risk gates.
 
 ## Hard Rules
 
-- no auto-submit until paper execution has a real track record
-- no order intent without a trigger or explicit manual override
-- no more than the configured daily risk budget
-- no broker automation that bypasses the approval queue
-- no single script should both rank names and place real trades without audit logs
+- No auto-submit until the paper evidence loop has a real track record.
+- No order intent without approval or an explicit logged manual override.
+- No broker automation that bypasses risk policy.
+- No script should both rank names and submit real orders.
+- No authority change outside the authority controller.
 
-## Operator Command
-
-To inspect the current execution desk:
+## Operator Commands
 
 ```bash
 python3 inferno_execution_clerk.py
-```
-
-To rebuild the staged execution queue from the latest snapshot:
-
-```bash
 python3 inferno_execution_clerk.py build
+python3 inferno_approval_queue.py status
+./run_inferno_approval_inbox.sh
+./run_inferno_strike_cycle.sh
+./run_inferno_paper_evidence_loop.sh
+./run_inferno_broker_preview.sh
+python3 inferno_doctor.py
 ```
 
-The dashboard `Order Intent Desk` now shows:
+## Promotion Standard
 
-- approval and rejection controls
-- staged risk counts
-- next-step guidance per name
-- a `Copy Ticket` action that produces a broker-review blueprint for thinkorswim
+A strategy can earn more authority only after it has:
 
-To approve or reject from the CLI:
+- enough scored paper outcomes
+- positive expectancy after realistic friction
+- acceptable drawdown
+- clean quote and liquidity behavior
+- no unresolved doctor warnings
+- broker preview payloads that pass validation
+- tested kill switches and hard risk caps
 
-```bash
-python3 inferno_approval_queue.py approve TICKER
-python3 inferno_approval_queue.py reject TICKER
-python3 inferno_approval_queue.py reset
-```
+Until then, the desk remains paper-evidence-only.

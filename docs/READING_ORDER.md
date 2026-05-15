@@ -1,0 +1,84 @@
+# Reading Order
+
+How to walk into this project for the first time.
+
+## The five-doc anchor (10 minutes)
+
+Read these in order. After them, you can write or operate without breaking
+the safety rails:
+
+1. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
+2. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
+3. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
+4. [**MODULE_INDEX.md**](MODULE_INDEX.md) — which module owns what behaviour.
+5. [**ENGINEERING_CONVENTIONS.md**](ENGINEERING_CONVENTIONS.md) — patterns every new module follows.
+
+## The mission
+
+6. [**MISSION.md**](MISSION.md) — the operator's North Star. Honest expectations, four-phase journey, entry + exit framework, monthly milestones. Reread monthly.
+
+## The day-to-day
+
+7. [**TRADING_DAY_CHECKLIST.md**](TRADING_DAY_CHECKLIST.md) — the seven-step flow from morning brief to filled order, with exit rules baked in.
+8. [**DAILY_BRIEFING_SETUP.md**](DAILY_BRIEFING_SETUP.md) — get the operator briefing in your inbox at 6:10 AM.
+
+## Touch the math
+
+9. [**MATH.md**](MATH.md) — every probability and statistical primitive the desk uses, with formulas, edge cases, and worked examples. Required reading before changing any math module.
+
+## Operate the desk (add ~50 minutes)
+
+7. [**RUNBOOK.md**](RUNBOOK.md) — every CLI command, the day-to-day reference.
+8. [**OPERATING_MODEL.md**](OPERATING_MODEL.md) — how decisions flow from evidence to action.
+9. [**CHECKLISTS.md**](CHECKLISTS.md) — daily, weekly, pre-trade.
+10. [**RISK_POLICY.md**](RISK_POLICY.md) — hard caps no automation may exceed.
+
+## Touch execution
+
+11. [**EXECUTION_MODEL.md**](EXECUTION_MODEL.md) — order flow from approval to broker preview.
+12. [**PAPER_TEST_LOOP.md**](PAPER_TEST_LOOP.md) — paper-evidence promotion gate.
+13. [**BROKER_AUTOMATION_REQUIREMENTS.md**](BROKER_AUTOMATION_REQUIREMENTS.md) — what must be true before live submit.
+14. [**AUTOTRADING_ROADMAP.md**](AUTOTRADING_ROADMAP.md) — long-term path to broker-assisted execution.
+
+## Touch thinkorswim
+
+15. [**THINKORSWIM_AUTOMATION.md**](THINKORSWIM_AUTOMATION.md) — AppleScript / accessibility automation.
+16. [**THINKORSWIM_SANDBOX.md**](THINKORSWIM_SANDBOX.md) — paperMoney mode and sandbox isolation.
+
+## Touch cloud automation
+
+17. [**CLOUD_AUTOMATION.md**](CLOUD_AUTOMATION.md) — Cloud Run scheduler topology.
+
+## Research and playbooks
+
+18. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
+19. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
+20. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
+21. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
+
+## Models running a session
+
+Run the onboard digest first:
+
+```bash
+python3 inferno_central_command.py onboard
+```
+
+That tells you what to read and what the desk's current verdict is. If
+that disagrees with this doc, the onboard digest wins.
+
+## Authoritative ordering
+
+Where docs conflict (rare):
+
+1. `MODEL_COLLABORATION_BRIEF.md` — absolute authority.
+2. `RISK_POLICY.md` — caps and forbidden actions.
+3. `RUNBOOK.md` — operational truth.
+4. `MODULE_INDEX.md` — the directory (not policy).
+5. `MODEL_THEORY.md` — operating theory.
+6. Everything else — context.
+
+## Archive
+
+Historical plans live in [`archive/`](archive/). Useful for archeology;
+not operational.

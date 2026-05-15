@@ -30,6 +30,35 @@ If any answer is no, slow down.
 4. Is the lane saying `Accumulate` or at least `Nibble`?
 5. Am I adding because it is better priced, not because I feel FOMO?
 
+## Capital Deployment Checklist
+
+1. Run `./run_inferno_capital_launch_check.sh --deployable-cash 1000`.
+2. If the verdict is `blocked`, do not deploy fresh capital.
+3. If the verdict is `manual-ready-with-warnings`, explicitly accept or clear every warning first.
+4. Confirm the account suffix still matches local approved config.
+5. Confirm auto live trading is still `False`.
+6. Keep every order inside the printed allocator guardrails.
+7. Can the trade survive being wrong without damaging the week?
+8. Did you explicitly approve the final order before submit?
+
+## Twice-Daily Action Pulse Checklist
+
+1. Did the `Open Watch` email arrive before the 7:30 AM Mountain open?
+2. Did the `Pre-Close Watch` email arrive before the 2:00 PM Mountain close?
+3. If either pulse says `blocked`, do not deploy fresh capital.
+4. If either pulse lists human decisions, resolve those before sizing anything new.
+5. If the pulse says `manual-ready-with-warnings`, explicitly accept the warnings before acting.
+6. Keep final trade entry manual and account-scoped to the approved suffix.
+
+## Delivery And Capture Checklist
+
+1. Did the morning brief arrive?
+2. Did approval dispatch and approval inbox both report `ok=True`?
+3. Did TOS export verifier confirm the already-open read-only window?
+4. Did Downloads watch run after export?
+5. Did fill ingest report zero unexpected unmatched rows?
+6. Did the command center refresh after capture?
+
 ## End-Of-Day Checklist
 
 1. Which names looked real before the open?

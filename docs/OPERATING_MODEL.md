@@ -34,7 +34,7 @@ Responsible for:
 
 Main file:
 
-- [morning_inferno_pipeline.py](/Users/mikkasida/Documents/New%20project/morning_inferno_pipeline.py)
+- [morning_inferno_pipeline.py](morning_inferno_pipeline.py)
 
 ### Inferno Watchdog
 
@@ -47,7 +47,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_watchdog.py](/Users/mikkasida/Documents/New%20project/inferno_watchdog.py)
+- [inferno_watchdog.py](inferno_watchdog.py)
 
 ### Approval Desk
 
@@ -58,7 +58,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_approval_queue.py](/Users/mikkasida/Documents/New%20project/inferno_approval_queue.py)
+- [inferno_approval_queue.py](inferno_approval_queue.py)
 
 ### Execution Clerk
 
@@ -70,7 +70,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_execution_clerk.py](/Users/mikkasida/Documents/New%20project/inferno_execution_clerk.py)
+- [inferno_execution_clerk.py](inferno_execution_clerk.py)
 
 ### Dashboard
 
@@ -82,9 +82,9 @@ Responsible for:
 
 Main files:
 
-- [index.html](/Users/mikkasida/Documents/New%20project/index.html)
-- [app.js](/Users/mikkasida/Documents/New%20project/app.js)
-- [styles.css](/Users/mikkasida/Documents/New%20project/styles.css)
+- [index.html](index.html)
+- [app.js](app.js)
+- [styles.css](styles.css)
 
 ## Process Flow
 
