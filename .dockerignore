@@ -1,0 +1,13 @@
+.git
+__pycache__
+*.pyc
+.env
+.env.*
+data
+reports
+logs
+frontend
+*.bak*
+dawn_cycle.log
+gcred.json
+cloud-secrets

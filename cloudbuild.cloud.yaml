@@ -1,0 +1,19 @@
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/diablotrading/diablotrading-dawn:latest
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - Dockerfile.cloud
+      - --tag
+      - ${_IMAGE}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE}
+
+images:
+  - ${_IMAGE}

@@ -4,11 +4,14 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from inferno_io import atomic_write_json
 from inferno_config import (
     AUTOMATION_ALLOWED_WEEKDAYS,
     AUTOMATION_WINDOW_START,
+    SERVICE_HOUR,
     WATCHDOG_WINDOW_END,
     ROOT,
     in_time_window,
@@ -20,6 +23,15 @@ from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_fi
 
 STDOUT_LOG = ROOT / "logs" / "inferno_dawn.stdout.log"
 STDERR_LOG = ROOT / "logs" / "inferno_dawn.stderr.log"
+DESKTOP_AUTOMATION_FILE = ROOT / "data" / "inferno_desktop_automation.json"
+
+
+def cycle_reference_day() -> str:
+    """Return the service-cycle day the watchdog should expect."""
+    now = local_now()
+    if now.hour < SERVICE_HOUR:
+        return (now.date() - timedelta(days=1)).isoformat()
+    return local_today()
 
 
 def automation_skip_reason(window_start: str, window_end: str) -> str | None:
@@ -40,8 +52,9 @@ def build_failure_reasons(ops_status: dict | None) -> list[str]:
 
     reasons: list[str] = []
     generated_at = str(ops_status.get("generatedAt", ""))
-    if not generated_at.startswith(local_today()):
-        reasons.append(f"no dawn-cycle run is recorded for {local_today()}")
+    reference_day = cycle_reference_day()
+    if not generated_at.startswith(reference_day):
+        reasons.append(f"no dawn-cycle run is recorded for {reference_day}")
 
     if not ops_status.get("ok", False):
         reasons.append(ops_status.get("error", "dawn cycle marked failed"))
@@ -122,6 +135,14 @@ def build_diagnostics(ops_status: dict | None) -> list[str]:
     else:
         lines.append("- No ops status file is available yet.")
 
+    desktop_status = load_json_file(DESKTOP_AUTOMATION_FILE) or {}
+    if desktop_status:
+        lines.append(
+            "- Desktop automation: "
+            f"{desktop_status.get('verdict', 'unknown')} | "
+            f"{desktop_status.get('message', 'no message')}"
+        )
+
     stderr_tail = tail_lines(STDERR_LOG)
     stdout_tail = tail_lines(STDOUT_LOG)
     brief_tail = tail_lines(LOG_FILE)
@@ -142,9 +163,9 @@ def build_diagnostics(ops_status: dict | None) -> list[str]:
     return lines
 
 
-def send_watchdog_alert(reasons: list[str], ops_status: dict | None) -> bool:
+def send_watchdog_alert(reasons: list[str], ops_status: dict | None) -> tuple[bool, str | None]:
     if not smtp_configured():
-        return False
+        return False, "SMTP is not configured."
 
     lines = [
         "Inferno Watchdog Alert",
@@ -167,7 +188,47 @@ def send_watchdog_alert(reasons: list[str], ops_status: dict | None) -> bool:
         "sourceLabel": "Inferno Watchdog",
         "rows": [],
     }
-    return send_email(payload, subject="Inferno Watchdog Alert")
+    try:
+        return send_email(payload, subject="Inferno Watchdog Alert"), None
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
+def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], int]:
+    """Run one watchdog evaluation and persist the latest status artifact."""
+    ops_status = load_json_file(OPS_STATUS_FILE)
+    reasons = build_failure_reasons(ops_status)
+    rescue_result = None
+
+    if should_attempt_rescue(reasons):
+        rescue_result = attempt_rescue_run()
+        ops_status = load_json_file(OPS_STATUS_FILE)
+        reasons = build_failure_reasons(ops_status)
+
+    prior_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
+    alert_date = prior_status.get("lastAlertDate")
+    alert_sent = False
+    alert_error = None
+
+    ok = not reasons
+    if reasons and send_alerts and smtp_configured() and alert_date != local_today():
+        alert_sent, alert_error = send_watchdog_alert(reasons, ops_status)
+        if alert_sent:
+            alert_date = local_today()
+
+    status_payload = {
+        "checkedAt": datetime.now().astimezone().isoformat(),
+        "ok": ok,
+        "reasons": reasons,
+        "lastAlertDate": alert_date,
+        "alertSentThisRun": alert_sent,
+        "alertError": alert_error,
+        "opsGeneratedAt": ops_status.get("generatedAt") if ops_status else None,
+        "rescueAttempted": bool(rescue_result),
+        "rescueResult": rescue_result,
+    }
+    atomic_write_json(WATCHDOG_STATUS_FILE, status_payload)
+    return status_payload, 0 if ok else 1
 
 
 def parse_args() -> argparse.Namespace:
@@ -181,6 +242,11 @@ def parse_args() -> argparse.Namespace:
         "--quiet-skip",
         action="store_true",
         help="Exit silently when automation mode decides the check should be skipped.",
+    )
+    parser.add_argument(
+        "--no-alert",
+        action="store_true",
+        help="Update watchdog status without sending an alert email.",
     )
     parser.add_argument("--window-start", default=AUTOMATION_WINDOW_START, help="Local HH:MM start for automation mode")
     parser.add_argument("--window-end", default=WATCHDOG_WINDOW_END, help="Local HH:MM end for automation mode")
@@ -200,45 +266,16 @@ def main() -> int:
                 print(skip_reason)
             return 0
 
-    ops_status = load_json_file(OPS_STATUS_FILE)
-    reasons = build_failure_reasons(ops_status)
-    rescue_result = None
+    status_payload, exit_code = run_watchdog_check(send_alerts=not args.no_alert)
 
-    if should_attempt_rescue(reasons):
-        rescue_result = attempt_rescue_run()
-        ops_status = load_json_file(OPS_STATUS_FILE)
-        reasons = build_failure_reasons(ops_status)
-
-    prior_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
-    alert_date = prior_status.get("lastAlertDate")
-    alert_sent = False
-
-    ok = not reasons
-    if reasons and smtp_configured() and alert_date != local_today():
-        alert_sent = send_watchdog_alert(reasons, ops_status)
-        if alert_sent:
-            alert_date = local_today()
-
-    status_payload = {
-        "checkedAt": datetime.now().astimezone().isoformat(),
-        "ok": ok,
-        "reasons": reasons,
-        "lastAlertDate": alert_date,
-        "alertSentThisRun": alert_sent,
-        "opsGeneratedAt": ops_status.get("generatedAt") if ops_status else None,
-        "rescueAttempted": bool(rescue_result),
-        "rescueResult": rescue_result,
-    }
-    WATCHDOG_STATUS_FILE.write_text(json.dumps(status_payload, indent=2), encoding="utf-8")
-
-    if ok:
+    if exit_code == 0:
         print("Inferno watchdog check passed.")
         return 0
 
     print("Inferno watchdog detected issues:")
-    for reason in reasons:
+    for reason in status_payload.get("reasons", []):
         print(f"- {reason}")
-    return 1
+    return exit_code
 
 
 if __name__ == "__main__":

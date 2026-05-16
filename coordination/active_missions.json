@@ -1,0 +1,47 @@
+[
+  {
+    "id": "mission-9b615675",
+    "createdAt": "2026-05-10T15:10:09.054079-06:00",
+    "updatedAt": "2026-05-14T10:41:40.943936-06:00",
+    "title": "Capital deployment readiness for 2026-05-15",
+    "body": "Codex owns tomorrow's readiness brief, allocator guardrails, checklist, tests, and command-center hygiene. No live submit. Explicit user confirmation only.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "capital",
+      "readiness",
+      "risk"
+    ]
+  },
+  {
+    "id": "mission-5fb99c1b",
+    "createdAt": "2026-05-10T15:10:09.071822-06:00",
+    "updatedAt": "2026-05-14T10:41:41.018929-06:00",
+    "title": "Stabilize native TOS export path",
+    "body": "Claude owns thinkorswim native export stabilization and broker UI evidence collection. Do not change capital authority or place trades.",
+    "owner": "claude",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "tos",
+      "export",
+      "automation"
+    ]
+  },
+  {
+    "id": "mission-f765f5f1",
+    "createdAt": "2026-05-10T15:10:09.158120-06:00",
+    "updatedAt": "2026-05-10T15:10:09.158120-06:00",
+    "title": "Advance paper promotion evidence",
+    "body": "Tighten approval, fill, and exit loops until the desk produces enough scored paper outcomes to move strategy-lab evidence beyond insufficient-data without weakening authority gates.",
+    "owner": "shared",
+    "status": "pending",
+    "priority": "high",
+    "tags": [
+      "paper",
+      "backtest",
+      "risk"
+    ]
+  }
+]

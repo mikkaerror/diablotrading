@@ -2,26 +2,64 @@ from __future__ import annotations
 
 import json
 import os
+import smtplib
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from inferno_config import (
+    DESKTOP_AUTOMATION_LABEL,
+    DOWNLOADS_WATCH_LABEL,
     LABEL,
     ROOT,
+    TOS_EXPORT_AUTOMATION_ENABLED,
     UPDATER_LABEL,
     UPDATER_SCRIPTS,
     WATCHDOG_LABEL,
     backtest_python,
     default_backtest_root,
+    local_now,
     local_today,
+    SERVICE_HOUR,
     WAKE_HOUR,
     WAKE_MINUTE,
 )
-from server import EXECUTION_QUEUE_FILE, LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured
+from server import EXECUTION_QUEUE_FILE, LOG_FILE, OPS_STATUS_FILE, SNAPSHOT_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured, smtp_settings
 
 
 SMTP_ENV_FILE = ROOT / ".env.smtp"
+STRIKE_PLAN_FILE = ROOT / "data" / "inferno_strike_plan.json"
+PAPER_EXECUTION_LEDGER_FILE = ROOT / "data" / "inferno_paper_execution_ledger.json"
+SHADOW_EVIDENCE_FILE = ROOT / "data" / "inferno_shadow_evidence.json"
+PERFORMANCE_ANALYTICS_FILE = ROOT / "data" / "inferno_performance_analytics.json"
+STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
+EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
+EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
+AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
+DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
+DOWNLOADS_WATCH_FILE = ROOT / "data" / "inferno_downloads_watch.json"
+TOS_EXPORT_BRIDGE_FILE = ROOT / "data" / "inferno_tos_export_bridge.json"
+TOS_EXPORT_VERIFIER_FILE = ROOT / "data" / "inferno_tos_export_verifier.json"
+TOS_SESSION_PROBE_FILE = ROOT / "data" / "inferno_tos_session_probe.json"
+TOS_SANDBOX_FILE = ROOT / "data" / "inferno_tos_sandbox_session.json"
+TOS_FILL_INGEST_FILE = ROOT / "data" / "inferno_tos_fill_ingest.json"
+DESKTOP_AUTOMATION_FILE = ROOT / "data" / "inferno_desktop_automation.json"
+CLOUD_CONTROL_PLANE_FILE = ROOT / "data" / "inferno_cloud_control_plane.json"
+CLOUD_STATE_FILE = ROOT / "data" / "inferno_cloud_state.json"
+CLOUD_EXECUTION_AUDIT_FILE = ROOT / "data" / "inferno_cloud_execution_audit.json"
+MARKET_CONTEXT_AUDIT_FILE = ROOT / "data" / "inferno_market_context_audit.json"
+TICKER_UNIVERSE_AUDIT_FILE = ROOT / "data" / "inferno_ticker_universe_audit.json"
+DATA_READINESS_AUDIT_FILE = ROOT / "data" / "inferno_data_readiness_audit.json"
+PAPER_TEST_DIRECTOR_FILE = ROOT / "data" / "inferno_paper_test_director.json"
+PAPER_EVIDENCE_LOOP_FILE = ROOT / "data" / "inferno_paper_evidence_loop.json"
+PAPER_EXIT_AUDIT_FILE = ROOT / "data" / "inferno_paper_exit_audit.json"
+LIVE_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_live_account_sync.json"
+LIVE_POSITION_REVIEW_FILE = ROOT / "data" / "inferno_live_position_review.json"
+MODEL_COMMAND_CENTER_FILE = ROOT / "data" / "inferno_model_command_center.json"
+SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
+RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
+ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
+ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
 
 
 def load_env_file(path: Path) -> None:
@@ -57,6 +95,25 @@ def summarize_status(name: str, ok: bool, detail: str) -> str:
     return f"[{marker}] {name}: {detail}"
 
 
+def smtp_login_ok() -> tuple[bool, str]:
+    settings = smtp_settings()
+    if not settings["username"]:
+        return True, "no authenticated SMTP user configured"
+    try:
+        if settings["use_ssl"]:
+            with smtplib.SMTP_SSL(settings["host"], settings["port"], timeout=20) as server:
+                server.login(settings["username"], settings["password"])
+        else:
+            with smtplib.SMTP(settings["host"], settings["port"], timeout=20) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(settings["username"], settings["password"])
+        return True, "SMTP credentials accepted"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"SMTP login failed: {exc}"
+
+
 def latest_emailed_run_for_day(day: str) -> dict | None:
     if not LOG_FILE.exists():
         return None
@@ -79,10 +136,273 @@ def latest_emailed_run_for_day(day: str) -> dict | None:
     return latest
 
 
+def cycle_reference_day(now: datetime | None = None, *, service_hour: int = SERVICE_HOUR) -> str:
+    """Return the trading-cycle day used for morning artifact freshness.
+
+    Before the morning service window completes, yesterday's artifacts are still
+    the active operating baseline. This prevents the doctor from panicking just
+    because the calendar flipped at midnight.
+    """
+    current = now or local_now()
+    if current.hour < service_hour:
+        return (current.date() - timedelta(days=1)).isoformat()
+    return current.date().isoformat()
+
+
+def cycle_days(now: datetime | None = None, *, service_hour: int = SERVICE_HOUR) -> tuple[str, ...]:
+    """Return ISO day labels that belong to the current operating cycle."""
+    current = now or local_now()
+    today = current.date().isoformat()
+    if current.hour < service_hour:
+        return ((current.date() - timedelta(days=1)).isoformat(), today)
+    return (today,)
+
+
+def in_current_service_cycle(
+    timestamp: str,
+    *,
+    now: datetime | None = None,
+    service_hour: int = SERVICE_HOUR,
+    max_age_hours: int = 36,
+    future_grace_seconds: int = 300,
+) -> bool:
+    """Return True when a timestamp belongs to the active operating cycle."""
+    stamp = str(timestamp or "").strip()
+    if not stamp:
+        return False
+    current = now or local_now()
+    if any(stamp.startswith(day) for day in cycle_days(current, service_hour=service_hour)):
+        try:
+            generated = datetime.fromisoformat(stamp)
+        except ValueError:
+            return True
+        age_seconds = (current - generated).total_seconds()
+        return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
+    return False
+
+
+def latest_emailed_run_for_cycle(
+    days: tuple[str, ...],
+    *,
+    now: datetime | None = None,
+    service_hour: int = SERVICE_HOUR,
+) -> dict | None:
+    """Return the latest successful emailed run from the active service cycle."""
+    if not LOG_FILE.exists():
+        return None
+
+    current = now or local_now()
+    latest_payload: dict | None = None
+    latest_generated: datetime | None = None
+    for raw_line in LOG_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        generated_at = str(payload.get("generatedAt", ""))
+        if not any(generated_at.startswith(day) for day in days):
+            continue
+        if not in_current_service_cycle(
+            generated_at,
+            now=current,
+            service_hour=service_hour,
+        ):
+            continue
+        if not payload.get("ok", True) or not payload.get("emailSent"):
+            continue
+        try:
+            generated = datetime.fromisoformat(generated_at)
+        except ValueError:
+            generated = None
+        if latest_generated is None or (generated and generated > latest_generated):
+            latest_payload = payload
+            latest_generated = generated
+    return latest_payload
+
+
+def recent_or_today(timestamp: str, *, max_age_hours: int = 36, future_grace_seconds: int = 300) -> bool:
+    """Return True when a timestamp is from today or still fresh enough to trust.
+
+    Some control-plane reports are operator-readiness artifacts, not daily market
+    outputs. Treating them as expired at midnight creates false warnings even
+    when the underlying system is healthy.
+    """
+    stamp = str(timestamp or "").strip()
+    if not stamp:
+        return False
+    if stamp.startswith(local_today()):
+        return True
+    try:
+        generated = datetime.fromisoformat(stamp)
+    except ValueError:
+        return False
+    age_seconds = (local_now() - generated).total_seconds()
+    return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
+
+
+def block_reason_top_bucket_status(performance: dict) -> tuple[bool, str]:
+    """Return (ok, detail) for the top block-reason bucket line.
+
+    Always reports ``ok=True`` because this is informational. A heavy bucket
+    (for example, ``approval-missing``) is a *signal* — not a desk failure —
+    and should not bump the warnings count of the doctor run.
+    """
+    categories = performance.get("blockReasonCategories") or {}
+    if not categories:
+        return True, "no block reasons logged"
+    top_label, top_payload = next(iter(categories.items()))
+    return True, f"{top_label} x{int(top_payload.get('count') or 0)}"
+
+
+def concentration_governor_status(strike_plan: dict) -> tuple[bool, str]:
+    """Return (ok, detail) for the setup-concentration governor line.
+
+    Always informational. The governor only demotes; demotions are evidence
+    that the cap is working as designed, not an alarm.
+    """
+    if not strike_plan:
+        return True, "no strike plan yet"
+    governor = strike_plan.get("concentrationGovernor") or {}
+    demoted = int(strike_plan.get("concentrationDemotedCount") or 0)
+    primary = int(strike_plan.get("primaryCount") or 0)
+    limit = governor.get("limit")
+    if limit is None:
+        return True, f"primary {primary} | demoted {demoted}"
+    return True, f"limit {limit} | primary {primary} | demoted {demoted}"
+
+
+def live_position_review_status(review: dict) -> tuple[bool, str]:
+    """Evaluate the live-position review artifact without overreacting.
+
+    A `review` verdict is still a healthy operating state for this lane. It
+    means the read-only book review succeeded and surfaced at least one holding
+    that deserves a human look before layering more exposure.
+    """
+    if not review:
+        return False, "missing"
+
+    generated = str(review.get("generatedAt", ""))
+    verdict = str(review.get("verdict") or "")
+    counts = review.get("counts") or {}
+    fresh = recent_or_today(generated)
+    ok = fresh and bool(review.get("ok")) and verdict in {"healthy", "review"}
+    detail = (
+        f"{verdict} | supported={counts.get('supported', 0)} | "
+        f"review={counts.get('review', 0)} | "
+        f"fragile={counts.get('fragile', 0)}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": review.get("generatedAt"),
+                "verdict": verdict,
+            }
+        )
+    )
+    return ok, detail
+
+
+def model_command_center_status(payload: dict) -> tuple[bool, str]:
+    """Evaluate the shared model command center as core desk infrastructure.
+
+    The command center is healthy when it is fresh, marked ready, and still
+    carries the expected collaboration scaffolding like mission and note counts.
+    """
+    if not payload:
+        return False, "missing"
+
+    generated = str(payload.get("generatedAt", ""))
+    status = str(payload.get("status") or "ready")
+    headline_metrics = payload.get("headlineMetrics") or {}
+    mission_count = len(payload.get("activeMissions") or []) if "activeMissions" in payload else int(payload.get("missionCount") or 0)
+    note_count = len(payload.get("recentNotes") or []) if "recentNotes" in payload else int(payload.get("noteCount") or 0)
+    fresh = recent_or_today(generated)
+    ok = fresh and status in {"ready", "healthy"}
+    detail = (
+        f"{status} | missions={mission_count} | notes={note_count} | live-fragile={headline_metrics.get('liveFragile', 0)}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "status": status,
+            }
+        )
+    )
+    return ok, detail
+
+
+def secret_hygiene_status(report: dict) -> tuple[bool, str]:
+    """Evaluate repo secret hygiene without letting stale artifacts hide risk."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    verdict = str(report.get("verdict") or "")
+    fresh = recent_or_today(generated, max_age_hours=72)
+    ok = fresh and verdict == "healthy"
+    detail = (
+        f"{verdict} | tracked={report.get('trackedSensitiveCount', 0)} | "
+        f"missing-ignore={len(report.get('missingGitignorePatterns') or [])}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
+def research_cycle_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the consolidated research/backtest lane as one desk artifact."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    verdict = str(report.get("verdict") or "")
+    shadow = report.get("shadow") or {}
+    strategy = report.get("strategyLab") or {}
+    fresh = recent_or_today(generated, max_age_hours=72)
+    ok = fresh and verdict == "research-refreshed"
+    detail = (
+        f"{verdict} | shadow tracked={shadow.get('trackedCount', 0)} | "
+        f"closed={shadow.get('closedCount', 0)} | "
+        f"strategy={strategy.get('verdict') or '-'} ({strategy.get('scoredCount', 0)} scored)"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
+def action_pulse_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the twice-daily action pulse as delivery infrastructure."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    verdict = str(report.get("verdict") or "")
+    phase = str(report.get("phaseLabel") or report.get("phase") or "unknown")
+    delivery = report.get("delivery") or {}
+    fresh = recent_or_today(generated, max_age_hours=36)
+    sent_or_not_requested = str(delivery.get("status") or "not-requested") in {
+        "sent",
+        "already-sent",
+        "not-requested",
+    }
+    ok = fresh and sent_or_not_requested
+    detail = (
+        f"{phase} | verdict={verdict} | delivery={delivery.get('status') or 'not-requested'}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
 def main() -> int:
     load_env_file(SMTP_ENV_FILE)
 
+    now = local_now()
     today = local_today()
+    cycle_day = cycle_reference_day(now)
+    active_cycle_days = cycle_days(now)
     lines: list[str] = ["Inferno Doctor", f"Checked at: {datetime.now().astimezone().isoformat()}", ""]
     warnings = 0
 
@@ -90,6 +410,11 @@ def main() -> int:
     lines.append(summarize_status("SMTP", smtp_ok, "configured" if smtp_ok else "not configured"))
     if not smtp_ok:
         warnings += 1
+    else:
+        smtp_auth_ok, smtp_auth_detail = smtp_login_ok()
+        lines.append(summarize_status("SMTP login", smtp_auth_ok, smtp_auth_detail))
+        if not smtp_auth_ok:
+            warnings += 1
 
     bt_root = default_backtest_root()
     bt_root_ok = bt_root.exists()
@@ -120,6 +445,37 @@ def main() -> int:
     if not watchdog_loaded:
         warnings += 1
 
+    downloads_watch_loaded = launch_agent_loaded(DOWNLOADS_WATCH_LABEL)
+    desktop_automation_loaded = launch_agent_loaded(DESKTOP_AUTOMATION_LABEL)
+    local_automation_loaded = downloads_watch_loaded or desktop_automation_loaded
+    local_automation_detail_parts = []
+    if downloads_watch_loaded:
+        local_automation_detail_parts.append("downloads-watch")
+    if desktop_automation_loaded:
+        local_automation_detail_parts.append("desktop-coordinator")
+    lines.append(
+        summarize_status(
+            "Local automation agent",
+            local_automation_loaded,
+            "loaded: " + ", ".join(local_automation_detail_parts)
+            if local_automation_loaded
+            else "not loaded",
+        )
+    )
+    if not local_automation_loaded:
+        warnings += 1
+
+    action_pulse_loaded = launch_agent_loaded(ACTION_PULSE_LABEL)
+    lines.append(
+        summarize_status(
+            "Action pulse agent",
+            action_pulse_loaded,
+            "loaded for 07:05 and 13:30" if action_pulse_loaded else "not loaded",
+        )
+    )
+    if not action_pulse_loaded:
+        warnings += 1
+
     sched_text = pmset_sched_text()
     wake_label = f"{WAKE_HOUR:02d}:{WAKE_MINUTE:02d}"
     wake_phrase = f"wakepoweron at {WAKE_HOUR if WAKE_HOUR % 12 else 12}:{WAKE_MINUTE:02d}AM"
@@ -135,12 +491,12 @@ def main() -> int:
         warnings += 1
 
     ops_status = load_json_file(OPS_STATUS_FILE) or {}
-    emailed_status = latest_emailed_run_for_day(today)
+    emailed_status = latest_emailed_run_for_cycle(active_cycle_days, now=now)
     ops_reference = emailed_status or ops_status
-    ops_today = str(ops_reference.get("generatedAt", "")).startswith(today)
+    ops_today = in_current_service_cycle(str(ops_reference.get("generatedAt", "")), now=now)
     ops_email = bool(ops_reference.get("emailSent"))
     ops_ok = ops_today and ops_email and bool(ops_reference.get("ok", True))
-    ops_detail = "fresh run and email recorded today" if ops_ok else json.dumps(
+    ops_detail = f"fresh run and email recorded for cycle {cycle_day}" if ops_ok else json.dumps(
         {
             "generatedAt": ops_reference.get("generatedAt"),
             "ok": ops_reference.get("ok", True),
@@ -151,10 +507,91 @@ def main() -> int:
     if not ops_ok:
         warnings += 1
     else:
-        lines.append(f"Top tickers: {', '.join(ops_reference.get('topTickers', [])[:5]) or 'none'}")
+        top_tickers = ops_reference.get("topTickers") or ops_reference.get("eligibleTickers", [])
+        lines.append(f"Top tickers: {', '.join(top_tickers[:5]) or 'none'}")
+
+    snapshot = load_json_file(SNAPSHOT_FILE) or {}
+    snapshot_rows = snapshot.get("rows", [])
+    negative_earnings_rows = [
+        row for row in snapshot_rows
+        if isinstance(row, dict) and int(row.get("daysUntilEarnings") or 0) < 0
+    ]
+    earnings_dates_ok = bool(snapshot_rows) and not negative_earnings_rows
+    earnings_dates_detail = (
+        f"{len(snapshot_rows)} snapshot rows checked; no negative earnings windows"
+        if earnings_dates_ok
+        else f"negative rows: {', '.join(row.get('ticker', 'UNKNOWN') for row in negative_earnings_rows[:8]) or 'snapshot missing'}"
+    )
+    lines.append(summarize_status("Earnings windows", earnings_dates_ok, earnings_dates_detail))
+    if not earnings_dates_ok:
+        warnings += 1
+
+    market_context_audit = load_json_file(MARKET_CONTEXT_AUDIT_FILE) or {}
+    market_context_today = in_current_service_cycle(str(market_context_audit.get("generatedAt", "")), now=now)
+    populated_rows = int(market_context_audit.get("populatedRows") or 0)
+    total_rows = int(market_context_audit.get("totalRows") or 0)
+    market_context_ok = market_context_today and total_rows > 0 and populated_rows == total_rows
+    market_context_detail = (
+        f"{populated_rows}/{total_rows} rows confirmed | avg RVOL {market_context_audit.get('averageRvol')}"
+        if market_context_ok
+        else json.dumps(
+            {
+                "generatedAt": market_context_audit.get("generatedAt"),
+                "populatedRows": populated_rows,
+                "totalRows": total_rows,
+                "missingTickers": (market_context_audit.get("missingTickers") or [])[:5],
+            }
+        )
+    )
+    lines.append(summarize_status("Market context audit", market_context_ok, market_context_detail))
+    if not market_context_ok:
+        warnings += 1
+
+    ticker_universe_audit = load_json_file(TICKER_UNIVERSE_AUDIT_FILE) or {}
+    ticker_universe_today = in_current_service_cycle(str(ticker_universe_audit.get("generatedAt", "")), now=now)
+    ticker_universe_verdict = str(ticker_universe_audit.get("verdict") or "")
+    ticker_universe_counts = ticker_universe_audit.get("counts") or {}
+    ticker_universe_ok = ticker_universe_today and ticker_universe_verdict in {"healthy", "healthy-with-advisories"}
+    ticker_universe_detail = (
+        f"{ticker_universe_verdict} | critical={ticker_universe_counts.get('criticalIssueCount', 0)} | "
+        f"advisory={ticker_universe_counts.get('advisoryIssueCount', 0)} | "
+        f"hydration={len(ticker_universe_audit.get('hydrationNeededTickers') or [])}"
+        if ticker_universe_today
+        else json.dumps(
+            {
+                "generatedAt": ticker_universe_audit.get("generatedAt"),
+                "verdict": ticker_universe_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Ticker universe audit", ticker_universe_ok, ticker_universe_detail))
+    if ticker_universe_audit and not ticker_universe_ok:
+        warnings += 1
+
+    data_readiness = load_json_file(DATA_READINESS_AUDIT_FILE) or {}
+    data_readiness_today = in_current_service_cycle(str(data_readiness.get("generatedAt", "")), now=now)
+    data_readiness_summary = data_readiness.get("summary") or {}
+    data_readiness_verdict = str(data_readiness.get("verdict") or "")
+    data_readiness_ok = data_readiness_today and data_readiness_verdict == "ready-for-next-week-prep" and bool(
+        data_readiness.get("dailyPrepReady")
+    )
+    data_readiness_detail = (
+        f"{data_readiness_verdict} | daily-safe {data_readiness_summary.get('dailySafeHealthy', 0)}/{data_readiness_summary.get('dailySafeTotal', 0)} | manual broker confirmation still required"
+        if data_readiness_ok
+        else json.dumps(
+            {
+                "generatedAt": data_readiness.get("generatedAt"),
+                "verdict": data_readiness_verdict,
+                "dailyPrepReady": data_readiness.get("dailyPrepReady"),
+            }
+        )
+    )
+    lines.append(summarize_status("Data readiness audit", data_readiness_ok, data_readiness_detail))
+    if not data_readiness_ok:
+        warnings += 1
 
     watchdog_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
-    watchdog_today = str(watchdog_status.get("checkedAt", "")).startswith(today)
+    watchdog_today = in_current_service_cycle(str(watchdog_status.get("checkedAt", "")), now=now)
     watchdog_ok = watchdog_today and bool(watchdog_status.get("ok"))
     watchdog_detail = "watchdog checked in cleanly today" if watchdog_ok else json.dumps(
         {
@@ -168,7 +605,7 @@ def main() -> int:
         warnings += 1
 
     execution_queue = load_json_file(EXECUTION_QUEUE_FILE) or {}
-    execution_today = str(execution_queue.get("generatedAt", "")).startswith(today)
+    execution_today = in_current_service_cycle(str(execution_queue.get("generatedAt", "")), now=now)
     execution_ok = execution_today and execution_queue.get("count") is not None
     execution_detail = (
         f"{execution_queue.get('activeReadyCount', 0)} ready / {execution_queue.get('count', 0)} staged"
@@ -182,6 +619,478 @@ def main() -> int:
     )
     lines.append(summarize_status("Execution desk", execution_ok, execution_detail))
     if not execution_ok:
+        warnings += 1
+
+    cloud_execution = load_json_file(CLOUD_EXECUTION_AUDIT_FILE) or {}
+    cloud_execution_today = in_current_service_cycle(str(cloud_execution.get("generatedAt", "")), now=now)
+    cloud_execution_verdict = str(cloud_execution.get("verdict") or "")
+    strike_cloud_proof = False
+    for job in cloud_execution.get("jobs") or []:
+        if job.get("key") == "strikes":
+            execution = job.get("execution") or {}
+            strike_cloud_proof = (
+                cloud_execution_today
+                and cloud_execution_verdict == "healthy"
+                and bool(execution.get("completed"))
+                and bool(job.get("successLogFound"))
+            )
+            break
+
+    strike_window_started = now.weekday() != 5 and (now.hour, now.minute) >= (7, 45)
+    strike_plan = load_json_file(STRIKE_PLAN_FILE) or {}
+    paper_ledger = load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {}
+    if strike_window_started:
+        strike_plan_today = in_current_service_cycle(str(strike_plan.get("generatedAt", "")), now=now)
+        paper_ledger_today = in_current_service_cycle(str(paper_ledger.get("updatedAt", "")), now=now)
+        strike_ok = (strike_plan_today and paper_ledger_today) or strike_cloud_proof
+        strike_detail = (
+            f"{paper_ledger.get('count', 0)} paper tickets recorded"
+            if strike_ok
+            else json.dumps(
+                {
+                    "strikePlanGeneratedAt": strike_plan.get("generatedAt"),
+                    "paperLedgerUpdatedAt": paper_ledger.get("updatedAt"),
+                }
+            )
+        )
+        lines.append(summarize_status("Strike ledger", strike_ok, strike_detail))
+        if not strike_ok:
+            warnings += 1
+        # Informational: setup-concentration governor visibility. Demotions
+        # mean the cap fired as designed, not a problem.
+        gov_ok, gov_detail = concentration_governor_status(strike_plan)
+        lines.append(summarize_status("Setup concentration governor", gov_ok, gov_detail))
+    else:
+        lines.append(summarize_status("Strike ledger", True, "post-open strike window has not started yet"))
+
+    performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
+    performance_today = in_current_service_cycle(str(performance.get("generatedAt", "")), now=now)
+    performance_ok = performance_today and performance.get("count") is not None
+    performance_detail = (
+        f"{performance.get('count', 0)} tickets analyzed; verdict {(performance.get('deskVerdict') or {}).get('level')}"
+        if performance_ok
+        else json.dumps(
+            {
+                "generatedAt": performance.get("generatedAt"),
+                "count": performance.get("count"),
+            }
+        )
+    )
+    lines.append(summarize_status("Performance analytics", performance_ok, performance_detail))
+    if not performance_ok:
+        warnings += 1
+
+    # Informational: surface the dominant block-reason bucket so the funnel
+    # killer is visible at a glance. Never bumps warnings.
+    block_bucket_ok, block_bucket_detail = block_reason_top_bucket_status(performance)
+    lines.append(summarize_status("Top block-reason bucket", block_bucket_ok, block_bucket_detail))
+
+    strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
+    strategy_lab_today = in_current_service_cycle(str(strategy_lab.get("generatedAt", "")), now=now)
+    strategy_lab_ok = strategy_lab_today and (strategy_lab.get("deskVerdict") or {}).get("level") is not None
+    strategy_lab_detail = (
+        f"{(strategy_lab.get('deskVerdict') or {}).get('level')} | "
+        f"{(strategy_lab.get('overall') or {}).get('scoredCount', 0)} scored"
+        if strategy_lab_ok
+        else json.dumps(
+            {
+                "generatedAt": strategy_lab.get("generatedAt"),
+                "deskVerdict": (strategy_lab.get("deskVerdict") or {}).get("level"),
+            }
+        )
+    )
+    lines.append(summarize_status("Strategy lab", strategy_lab_ok, strategy_lab_detail))
+    if not strategy_lab_ok:
+        warnings += 1
+
+    shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
+    if strike_window_started:
+        shadow_today = in_current_service_cycle(str(shadow.get("updatedAt", "")), now=now)
+        shadow_ok = shadow_today and shadow.get("count") is not None
+        overall = shadow.get("overall") or {}
+        shadow_detail = (
+            f"{overall.get('trackedCount', shadow.get('count', 0))} tracked | "
+            f"{overall.get('closedCount', 0)} closed | research-only"
+            if shadow_ok
+            else json.dumps(
+                {
+                    "updatedAt": shadow.get("updatedAt"),
+                    "count": shadow.get("count"),
+                }
+            )
+        )
+        lines.append(summarize_status("Shadow evidence", shadow_ok, shadow_detail))
+        if not shadow_ok:
+            warnings += 1
+    else:
+        lines.append(summarize_status("Shadow evidence", True, "post-open strike window has not started yet"))
+
+    exposure = load_json_file(EXPOSURE_ANALYTICS_FILE) or {}
+    exposure_today = in_current_service_cycle(str(exposure.get("generatedAt", "")), now=now)
+    exposure_ok = exposure_today and exposure.get("tickerCount") is not None
+    exposure_detail = (
+        f"{exposure.get('tickerCount', 0)} tickers analyzed; verdict {(exposure.get('verdict') or {}).get('level')}"
+        if exposure_ok
+        else json.dumps(
+            {
+                "generatedAt": exposure.get("generatedAt"),
+                "tickerCount": exposure.get("tickerCount"),
+            }
+        )
+    )
+    lines.append(summarize_status("Exposure analytics", exposure_ok, exposure_detail))
+    if not exposure_ok:
+        warnings += 1
+
+    edge = load_json_file(EDGE_RESEARCH_FILE) or {}
+    edge_today = in_current_service_cycle(str(edge.get("generatedAt", "")), now=now)
+    edge_ok = edge_today and edge.get("scoredRows") is not None
+    edge_detail = (
+        f"{edge.get('scoredRows', 0)} shovel candidates scored"
+        if edge_ok
+        else json.dumps(
+            {
+                "generatedAt": edge.get("generatedAt"),
+                "scoredRows": edge.get("scoredRows"),
+            }
+        )
+    )
+    lines.append(summarize_status("Edge research", edge_ok, edge_detail))
+    if not edge_ok:
+        warnings += 1
+
+    authority = load_json_file(AUTHORITY_MANIFEST_FILE) or {}
+    authority_today = in_current_service_cycle(str(authority.get("generatedAt", "")), now=now)
+    authority_ok = authority_today and (authority.get("decision") or {}).get("authorityLevel") is not None
+    decision = authority.get("decision") or {}
+    authority_detail = (
+        f"{decision.get('authorityLevel')} | broker submit {decision.get('brokerSubmitAllowed')}"
+        if authority_ok
+        else json.dumps(
+            {
+                "generatedAt": authority.get("generatedAt"),
+                "authorityLevel": decision.get("authorityLevel"),
+            }
+        )
+    )
+    lines.append(summarize_status("Authority manifest", authority_ok, authority_detail))
+    if not authority_ok:
+        warnings += 1
+
+    downloads_manager = load_json_file(DOWNLOADS_MANAGER_FILE) or {}
+    downloads_today = in_current_service_cycle(str(downloads_manager.get("generatedAt", "")), now=now)
+    downloads_ok = downloads_today and downloads_manager.get("importedFiles") is not None
+    downloads_detail = (
+        f"{downloads_manager.get('importedFiles', 0)} files | {downloads_manager.get('importedRows', 0)} rows"
+        if downloads_ok
+        else json.dumps(
+            {
+                "generatedAt": downloads_manager.get("generatedAt"),
+                "importedFiles": downloads_manager.get("importedFiles"),
+            }
+        )
+    )
+    lines.append(summarize_status("Downloads manager", downloads_ok, downloads_detail))
+    if not downloads_ok:
+        warnings += 1
+
+    downloads_watch = load_json_file(DOWNLOADS_WATCH_FILE) or {}
+    downloads_watch_today = in_current_service_cycle(str(downloads_watch.get("generatedAt", "")), now=now)
+    downloads_watch_skipped = bool(downloads_watch.get("skipped", False))
+    skip_reason = str(downloads_watch.get("skipReason") or "")
+    downloads_watch_ok = downloads_watch_today and (
+        not downloads_watch_skipped or "outside" in skip_reason
+    )
+    if downloads_watch_today and downloads_watch_skipped:
+        downloads_watch_detail = f"idle safely | {skip_reason or 'watch window closed'}"
+    elif downloads_watch_today:
+        downloads_watch_detail = (
+            f"{(downloads_watch.get('downloadsManager') or {}).get('importedFiles', 0)} files | "
+            f"{(downloads_watch.get('downloadsManager') or {}).get('importedRows', 0)} rows | "
+            f"export-first {downloads_watch.get('exportFirst', False)}"
+        )
+    else:
+        downloads_watch_detail = json.dumps(
+            {
+                "generatedAt": downloads_watch.get("generatedAt"),
+                "skipped": downloads_watch.get("skipped"),
+            }
+        )
+    lines.append(summarize_status("Downloads watch run", downloads_watch_ok, downloads_watch_detail))
+    if not downloads_watch_ok:
+        warnings += 1
+
+    desktop_automation = load_json_file(DESKTOP_AUTOMATION_FILE) or {}
+    desktop_today = in_current_service_cycle(str(desktop_automation.get("generatedAt", "")), now=now)
+    desktop_verdict = str(desktop_automation.get("verdict") or "")
+    desktop_ok = (
+        not desktop_automation
+        or (
+            desktop_today
+            and desktop_verdict in {"ready", "review", "scheduled-idle"}
+        )
+    )
+    if not desktop_automation:
+        desktop_detail = "not run yet"
+    elif desktop_today:
+        desktop_detail = (
+            f"{desktop_verdict} | {desktop_automation.get('message')}"
+        )
+    else:
+        desktop_detail = json.dumps(
+            {
+                "generatedAt": desktop_automation.get("generatedAt"),
+                "verdict": desktop_verdict,
+            }
+        )
+    # The desktop coordinator is advisory unless it explicitly ran and blocked.
+    lines.append(summarize_status("Desktop automation", desktop_ok, desktop_detail))
+    if desktop_automation and not desktop_ok:
+        warnings += 1
+
+    export_verifier = load_json_file(TOS_EXPORT_VERIFIER_FILE) or {}
+    export_shortcut = (
+        export_verifier.get("shortcut")
+        or os.environ.get("TOS_EXPORT_SHORTCUT")
+        or "command+shift+e"
+    )
+    export_verdict = export_verifier.get("verdict") or ("inactive-safe" if not TOS_EXPORT_AUTOMATION_ENABLED else "unknown")
+    export_ok = export_verdict in {"ready", "ready-live-readonly", "inactive-safe", "manual-check"}
+    export_detail = (
+        f"{export_verdict} | shortcut {export_shortcut} | app running {export_verifier.get('appRunning')}"
+        if export_verifier
+        else f"{'inactive-safe' if not TOS_EXPORT_AUTOMATION_ENABLED else 'unknown'} | shortcut {export_shortcut}"
+    )
+    current_panel = ((export_verifier.get("sessionProbe") or {}).get("currentPanel") if export_verifier else None)
+    current_panel_safety = ((export_verifier.get("sessionProbe") or {}).get("currentPanelSafety") if export_verifier else None)
+    if current_panel:
+        export_detail += f" | panel {current_panel} ({current_panel_safety})"
+    lines.append(summarize_status("TOS export verifier", export_ok, export_detail))
+    if not export_ok:
+        warnings += 1
+
+    session_probe = load_json_file(TOS_SESSION_PROBE_FILE) or {}
+    session_probe_today = in_current_service_cycle(str(session_probe.get("generatedAt", "")), now=now)
+    session_probe_ok = session_probe_today and bool(session_probe.get("ok"))
+    session_probe_detail = (
+        session_probe.get("summary")
+        or session_probe.get("message")
+        or json.dumps({"generatedAt": session_probe.get("generatedAt"), "ok": session_probe.get("ok")})
+    )
+    lines.append(summarize_status("TOS session probe", session_probe_ok, session_probe_detail))
+    if not session_probe_ok:
+        warnings += 1
+
+    export_bridge = load_json_file(TOS_EXPORT_BRIDGE_FILE) or {}
+    export_status = export_bridge.get("status") or ("enabled" if TOS_EXPORT_AUTOMATION_ENABLED else "disabled")
+    # A disabled export bridge is a deliberate safe mode, not an unhealthy desk state.
+    lines.append(summarize_status("TOS export bridge", True, f"{export_status} | shortcut {export_shortcut}"))
+
+    sandbox = load_json_file(TOS_SANDBOX_FILE) or {}
+    sandbox_today = in_current_service_cycle(str(sandbox.get("generatedAt", "")), now=now)
+    sandbox_ok = sandbox_today and sandbox.get("sandboxReady") is not None
+    sandbox_detail = (
+        f"ready={sandbox.get('sandboxReady')} | stageable={sandbox.get('stageableCount', 0)}"
+        if sandbox_ok
+        else json.dumps(
+            {
+                "generatedAt": sandbox.get("generatedAt"),
+                "sandboxReady": sandbox.get("sandboxReady"),
+                "stageableCount": sandbox.get("stageableCount"),
+            }
+        )
+    )
+    lines.append(summarize_status("paperMoney sandbox", sandbox_ok, sandbox_detail))
+    if not sandbox_ok:
+        warnings += 1
+
+    paper_test_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_director_today = in_current_service_cycle(str(paper_test_director.get("generatedAt", "")), now=now)
+    paper_director_verdict = str(paper_test_director.get("verdict") or "")
+    paper_director_ok = paper_director_today and (
+        paper_director_verdict in {"ready-to-paper-stage", "approval-bottleneck", "research-watch"}
+    )
+    director_counts = paper_test_director.get("counts") or {}
+    paper_director_detail = (
+        f"{paper_director_verdict} | stageable={director_counts.get('stageableNow', 0)} | "
+        f"approval-only={director_counts.get('approvalOnly', 0)} | "
+        f"hard-blocked={director_counts.get('hardBlocked', 0)}"
+        if paper_director_today
+        else json.dumps(
+            {
+                "generatedAt": paper_test_director.get("generatedAt"),
+                "verdict": paper_director_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Paper test director", paper_director_ok, paper_director_detail))
+    if paper_test_director and not paper_director_ok:
+        warnings += 1
+
+    paper_evidence_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
+    paper_loop_today = in_current_service_cycle(str(paper_evidence_loop.get("generatedAt", "")), now=now)
+    paper_loop_verdict = str(paper_evidence_loop.get("verdict") or "")
+    paper_loop_ok = paper_loop_today and paper_loop_verdict in {
+        "ready-to-stage",
+        "approval-bottleneck",
+        "collect-paper-outcomes",
+        "evidence-building",
+    }
+    paper_loop_counts = paper_evidence_loop.get("counts") or {}
+    paper_loop_detail = (
+        f"{paper_loop_verdict} | planned-fill={paper_loop_counts.get('plannedFillRows', 0)} | "
+        f"open-fill={paper_loop_counts.get('openFillRows', 0)} | "
+        f"remaining={paper_loop_counts.get('remainingForPromotion', 0)}"
+        if paper_loop_today
+        else json.dumps(
+            {
+                "generatedAt": paper_evidence_loop.get("generatedAt"),
+                "verdict": paper_loop_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Paper evidence loop", paper_loop_ok, paper_loop_detail))
+    if paper_evidence_loop and not paper_loop_ok:
+        warnings += 1
+
+    paper_exit_audit = load_json_file(PAPER_EXIT_AUDIT_FILE) or {}
+    paper_exit_today = in_current_service_cycle(str(paper_exit_audit.get("generatedAt", "")), now=now)
+    paper_exit_verdict = str(paper_exit_audit.get("verdict") or "")
+    paper_exit_ok = paper_exit_today and paper_exit_verdict in {
+        "clean",
+        "review-open-exits",
+        "close-today",
+        "reconcile-open-rows",
+    }
+    paper_exit_counts = paper_exit_audit.get("counts") or {}
+    paper_exit_detail = (
+        f"{paper_exit_verdict} | open={paper_exit_counts.get('openLedgerTickets', 0)} | "
+        f"close-now={paper_exit_counts.get('closeNow', 0)} | "
+        f"review={paper_exit_counts.get('reviewToday', 0)} | "
+        f"reconcile={paper_exit_counts.get('orphanOpenFillRows', 0)}"
+        if paper_exit_today
+        else json.dumps(
+            {
+                "generatedAt": paper_exit_audit.get("generatedAt"),
+                "verdict": paper_exit_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Paper exit audit", paper_exit_ok, paper_exit_detail))
+    if paper_exit_audit and not paper_exit_ok:
+        warnings += 1
+
+    live_account_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    live_sync_generated = str(live_account_sync.get("generatedAt", ""))
+    live_sync_ok = (
+        recent_or_today(live_sync_generated)
+        and bool(live_account_sync.get("ok"))
+        and str(live_account_sync.get("verdict")) in {"healthy", "attention"}
+    )
+    live_sync_counts = live_account_sync.get("counts") or {}
+    live_sync_detail = (
+        f"{live_account_sync.get('verdict')} | positions={live_sync_counts.get('positions', 0)} | "
+        f"matched={live_sync_counts.get('matchedPositions', 0)} | "
+        f"suffix={live_account_sync.get('matchedSuffix') or '-'}"
+        if live_account_sync
+        else "missing"
+    )
+    lines.append(summarize_status("Live account sync", live_sync_ok, live_sync_detail))
+    if not live_sync_ok:
+        warnings += 1
+
+    live_position_review = load_json_file(LIVE_POSITION_REVIEW_FILE) or {}
+    live_review_ok, live_review_detail = live_position_review_status(live_position_review)
+    lines.append(summarize_status("Live position review", live_review_ok, live_review_detail))
+    if not live_review_ok:
+        warnings += 1
+
+    model_command_center = load_json_file(MODEL_COMMAND_CENTER_FILE) or {}
+    command_center_ok, command_center_detail = model_command_center_status(model_command_center)
+    lines.append(summarize_status("Model command center", command_center_ok, command_center_detail))
+    if not command_center_ok:
+        warnings += 1
+
+    action_pulse = load_json_file(ACTION_PULSE_FILE) or {}
+    action_pulse_ok, action_pulse_detail = action_pulse_status(action_pulse)
+    lines.append(summarize_status("Action pulse", action_pulse_ok, action_pulse_detail))
+    if not action_pulse_ok:
+        warnings += 1
+
+    secret_hygiene = load_json_file(SECRET_HYGIENE_FILE) or {}
+    secret_hygiene_ok, secret_hygiene_detail = secret_hygiene_status(secret_hygiene)
+    lines.append(summarize_status("Secret hygiene", secret_hygiene_ok, secret_hygiene_detail))
+    if not secret_hygiene_ok:
+        warnings += 1
+
+    research_cycle = load_json_file(RESEARCH_CYCLE_FILE) or {}
+    research_cycle_ok, research_cycle_detail = research_cycle_status(research_cycle)
+    lines.append(summarize_status("Research cycle", research_cycle_ok, research_cycle_detail))
+    if not research_cycle_ok:
+        warnings += 1
+
+    fill_ingest = load_json_file(TOS_FILL_INGEST_FILE) or {}
+    fill_ingest_today = in_current_service_cycle(str(fill_ingest.get("generatedAt", "")), now=now)
+    fill_ingest_ok = fill_ingest_today and fill_ingest.get("processedRows") is not None
+    fill_ingest_detail = (
+        f"{fill_ingest.get('importedRows', 0)} imported | {fill_ingest.get('closedRows', 0)} closed"
+        if fill_ingest_ok
+        else json.dumps(
+            {
+                "generatedAt": fill_ingest.get("generatedAt"),
+                "processedRows": fill_ingest.get("processedRows"),
+            }
+        )
+    )
+    lines.append(summarize_status("paper fill ingest", fill_ingest_ok, fill_ingest_detail))
+    if not fill_ingest_ok:
+        warnings += 1
+
+    cloud_control_plane = load_json_file(CLOUD_CONTROL_PLANE_FILE) or {}
+    cloud_recent = recent_or_today(str(cloud_control_plane.get("generatedAt", "")), max_age_hours=72)
+    cloud_verdict = str(cloud_control_plane.get("verdict") or "")
+    cloud_ok = cloud_recent and cloud_verdict in {"deployable", "ready"}
+    cloud_detail = (
+        f"{cloud_verdict} | {cloud_control_plane.get('message')}"
+        if cloud_recent
+        else json.dumps(
+            {
+                "generatedAt": cloud_control_plane.get("generatedAt"),
+                "verdict": cloud_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Cloud control plane", cloud_ok, cloud_detail))
+    if not cloud_ok:
+        warnings += 1
+
+    cloud_state = load_json_file(CLOUD_STATE_FILE) or {}
+    cloud_state_ok = not cloud_state or bool(cloud_state.get("ok", True))
+    cloud_state_detail = (
+        "not configured locally"
+        if not cloud_state or not cloud_state.get("enabled")
+        else (
+            f"{cloud_state.get('mode')} | restored {len(cloud_state.get('restored', []))} | "
+            f"persisted {len(cloud_state.get('persisted', []))} | bucket {cloud_state.get('bucket') or 'none'}"
+        )
+    )
+    lines.append(summarize_status("Cloud state vault", cloud_state_ok, cloud_state_detail))
+    if not cloud_state_ok:
+        warnings += 1
+
+    cloud_execution_ok = cloud_execution_today and cloud_execution_verdict == "healthy"
+    cloud_execution_detail = (
+        f"{cloud_execution_verdict} | {cloud_execution.get('projectId')} | {cloud_execution.get('region')}"
+        if cloud_execution_today
+        else json.dumps(
+            {
+                "generatedAt": cloud_execution.get("generatedAt"),
+                "verdict": cloud_execution_verdict,
+            }
+        )
+    )
+    lines.append(summarize_status("Cloud execution audit", cloud_execution_ok, cloud_execution_detail))
+    if not cloud_execution_ok:
         warnings += 1
 
     lines.append("")

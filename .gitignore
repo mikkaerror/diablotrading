@@ -48,6 +48,7 @@ oauth*.json
 cloud-secrets/
 data/
 reports/
+docs/archive/
 logs/
 _backups/
 exports/

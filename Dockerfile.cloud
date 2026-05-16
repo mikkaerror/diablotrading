@@ -1,0 +1,40 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=America/Denver
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-cloud.txt .
+RUN pip install --no-cache-dir -r requirements-cloud.txt
+
+COPY inferno_config.py .
+COPY inferno_authority_controller.py .
+COPY inferno_broker_preview.py .
+COPY inferno_cloud_execution_auditor.py .
+COPY inferno_cloud_state.py .
+COPY inferno_downloads_manager.py .
+COPY inferno_edge_research.py .
+COPY inferno_execution_clerk.py .
+COPY inferno_exposure_analytics.py .
+COPY inferno_outcome_reviewer.py .
+COPY inferno_paper_execution.py .
+COPY inferno_performance_analytics.py .
+COPY inferno_risk_policy.py .
+COPY inferno_shadow_evidence.py .
+COPY inferno_strategy_lab.py .
+COPY inferno_strike_selector.py .
+COPY inferno_tos_sandbox.py .
+COPY inferno_tos_fill_ingest.py .
+COPY morning_inferno_pipeline.py .
+COPY cloud_strike_cycle.py .
+COPY server.py .
+
+RUN mkdir -p data reports logs
+
+CMD ["python", "morning_inferno_pipeline.py", "--cloud-native"]

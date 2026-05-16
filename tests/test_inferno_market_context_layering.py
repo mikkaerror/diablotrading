@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+"""Regression tests for market-context audit and risk layering."""
+
+import unittest
+
+import pandas as pd
+
+from inferno_edge_research import classify_lane, confirmation_score, edge_score
+from inferno_risk_policy import evaluate_strike_item
+from inferno_strike_selector import clean_chain
+from morning_inferno_pipeline import build_market_context_audit
+
+
+class InfernoMarketContextLayeringTests(unittest.TestCase):
+    """Verify confirmation data is consumed consistently across the stack."""
+
+    def test_market_context_audit_reports_full_population(self) -> None:
+        rows = [
+            {
+                "ticker": "NVDA",
+                "marketContext": {
+                    "rvol": 1.42,
+                    "trend": {"label": "Bullish", "tone": "hot"},
+                    "support": 101.0,
+                    "resistance": 118.0,
+                    "alignmentLabel": "Aligned",
+                },
+            },
+            {
+                "ticker": "AMD",
+                "marketContext": {
+                    "rvol": 0.96,
+                    "trend": {"label": "Uptrend", "tone": "hot"},
+                    "support": 91.5,
+                    "resistance": 99.0,
+                    "alignmentLabel": "Developing",
+                },
+            },
+        ]
+        audit = build_market_context_audit(rows)
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["populatedRows"], 2)
+        self.assertEqual(audit["totalRows"], 2)
+        self.assertEqual(audit["bullishRows"], 2)
+
+    def test_market_context_audit_ignores_vendor_gaps(self) -> None:
+        rows = [
+            {
+                "ticker": "COMM",
+                "marketContext": {
+                    "sourceStatus": "unavailable",
+                    "rvol": 1.0,
+                    "trend": {"label": "N/A", "tone": "wild"},
+                    "support": 0.0,
+                    "resistance": 0.0,
+                    "alignmentLabel": "Fragile",
+                },
+            },
+            {
+                "ticker": "NVDA",
+                "marketContext": {
+                    "sourceStatus": "history",
+                    "rvol": 1.42,
+                    "trend": {"label": "Bullish", "tone": "hot"},
+                    "support": 101.0,
+                    "resistance": 118.0,
+                    "alignmentLabel": "Aligned",
+                },
+            },
+        ]
+        audit = build_market_context_audit(rows)
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["populatedRows"], 2)
+        self.assertEqual(audit["totalRows"], 2)
+        self.assertEqual(audit["unavailableTickers"], ["COMM"])
+
+    def test_edge_research_promotes_confirmed_catalyst(self) -> None:
+        row = {
+            "ticker": "NVDA",
+            "readiness": 91,
+            "priority": 6.2,
+            "confidence": 3,
+            "signalTrigger": True,
+            "daysUntilEarnings": 12,
+            "setupRec": "Vertical Call",
+            "longTermScore": 7.4,
+            "marketContext": {
+                "rvol": 1.55,
+                "trend": {"label": "Bullish", "tone": "hot"},
+                "atrExpansion": 1.1,
+                "distanceToResistancePct": 6.2,
+                "distanceToSupportPct": 4.3,
+            },
+        }
+        metadata = {
+            "grossMargins": 0.74,
+            "operatingMargins": 0.34,
+            "profitMargins": 0.28,
+            "revenueGrowth": 0.31,
+            "freeCashflow": 1,
+            "debtToEquity": 35,
+            "forwardPE": 38,
+            "priceToSalesTrailing12Months": 18,
+            "beta": 1.6,
+        }
+        category = {"category": "AI/Compute Picks", "baseScore": 96}
+        scores = edge_score(row, metadata, category)
+        self.assertGreaterEqual(confirmation_score(row), 60)
+        self.assertEqual(classify_lane(row, scores, category), "Catalyst Trade Candidate")
+
+    def test_risk_policy_blocks_bullish_spread_into_resistance(self) -> None:
+        item = {
+            "ticker": "NVDA",
+            "ok": True,
+            "liveTradingAllowed": False,
+            "marketContext": {
+                "rvol": 1.1,
+                "trend": {"label": "Bullish", "tone": "hot"},
+                "atrExpansion": 0.4,
+                "distanceToResistancePct": 1.2,
+                "distanceToSupportPct": 7.8,
+            },
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "estimatedMaxLoss": 220,
+                "estimatedMaxProfit": 180,
+                "estimatedDebit": 2.2,
+                "legs": [
+                    {"instruction": "BUY_TO_OPEN", "symbol": "TESTC1", "ask": 2.5, "bid": 2.3},
+                    {"instruction": "SELL_TO_OPEN", "symbol": "TESTC2", "ask": 1.0, "bid": 0.8},
+                ],
+            },
+        }
+        verdict = evaluate_strike_item(item, strike_plan_generated_at="2026-04-30T06:10:00-06:00", ledger_items=[])
+        self.assertFalse(verdict.passed)
+        self.assertIn("bullish call spread is too close to resistance", verdict.blocks)
+
+    def test_clean_chain_tolerates_missing_quote_columns(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "contractSymbol": ["TEST260515C00050000"],
+                "strike": [50.0],
+            }
+        )
+        cleaned = clean_chain(frame)
+        self.assertIn("ask", cleaned.columns)
+        self.assertIn("bid", cleaned.columns)
+        self.assertIn("lastPrice", cleaned.columns)
+        self.assertTrue(cleaned.empty)
+
+
+if __name__ == "__main__":
+    unittest.main()

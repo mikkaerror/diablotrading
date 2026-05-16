@@ -27,6 +27,10 @@ PAPER_JOURNAL_FILE = REPORTS_DIR / "paper_trade_journal.jsonl"
 APPROVAL_QUEUE_FILE = DATA_DIR / "inferno_approval_queue.json"
 EXECUTION_QUEUE_FILE = DATA_DIR / "inferno_execution_queue.json"
 SMTP_ENV_FILE = ROOT / ".env.smtp"
+LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
+LIVE_POSITION_REVIEW_FILE = DATA_DIR / "inferno_live_position_review.json"
+MODEL_COMMAND_CENTER_FILE = DATA_DIR / "inferno_model_command_center.json"
+CENTRAL_COMMAND_FILE = DATA_DIR / "inferno_central_command.json"
 
 
 def ensure_dirs() -> None:
@@ -80,6 +84,8 @@ def html_from_payload(payload: dict[str, Any]) -> str:
     long_term_rows = payload.get("longTermRows", [])[:5]
     execution_queue = payload.get("executionQueue", {})
     execution_rows = execution_queue.get("items", [])[:5]
+    approval_queue = payload.get("approvalQueue") or {}
+    approval_rows = (approval_queue.get("items") or [])[:5]
     row_markup = "".join(
         f"""
         <tr>
@@ -154,6 +160,36 @@ def html_from_payload(payload: dict[str, Any]) -> str:
       <tbody>{execution_markup}</tbody>
     </table>
 """
+    approval_markup = "".join(
+        f"""
+        <tr>
+          <td>{item.get("ticker", "")}</td>
+          <td>{item.get("approvalStatus", "")}</td>
+          <td>{item.get("approvalToken", "")}</td>
+          <td><code>{item.get("replyApprove", "")}</code></td>
+          <td><code>{item.get("replyDeny", "")}</code></td>
+        </tr>
+        """
+        for item in approval_rows
+    )
+    approval_section = ""
+    if approval_rows:
+        approval_section = f"""
+    <h2 style="color:#f0c36d;">Approval Desk Quick Reply</h2>
+    <p style="color:#b49a86;">Reply with one of these exact commands and the inbox runner will update the approval queue on the next maintenance sweep.</p>
+    <table style="border-collapse:collapse;width:100%;">
+      <thead>
+        <tr>
+          <th align="left">Ticker</th>
+          <th align="left">Status</th>
+          <th align="left">Token</th>
+          <th align="left">Approve</th>
+          <th align="left">Deny</th>
+        </tr>
+      </thead>
+      <tbody>{approval_markup}</tbody>
+    </table>
+"""
     return f"""<!DOCTYPE html>
 <html lang="en">
   <body style="background:#120707;color:#f6e5d1;font-family:Georgia,serif;padding:24px;">
@@ -174,6 +210,7 @@ def html_from_payload(payload: dict[str, Any]) -> str:
       <tbody>{row_markup}</tbody>
     </table>
     {long_term_section}
+    {approval_section}
     {execution_section}
   </body>
 </html>"""
@@ -223,6 +260,10 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                 "watchdogStatus": load_json_file(WATCHDOG_STATUS_FILE),
                 "approvalQueue": load_json_file(APPROVAL_QUEUE_FILE),
                 "executionQueue": load_json_file(EXECUTION_QUEUE_FILE),
+                "liveAccountSync": load_json_file(LIVE_ACCOUNT_SYNC_FILE),
+                "livePositionReview": load_json_file(LIVE_POSITION_REVIEW_FILE),
+                "modelCommandCenter": load_json_file(MODEL_COMMAND_CENTER_FILE),
+                "centralCommand": load_json_file(CENTRAL_COMMAND_FILE),
             }
             self._write_json(payload)
             return
@@ -282,27 +323,55 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                 return
 
             action = str(payload.get("action", "set")).strip().lower()
-            queue = load_json_file(APPROVAL_QUEUE_FILE) or {"generatedAt": None, "count": 0, "items": []}
+            from inferno_approval_queue import (
+                apply_reply_commands,
+                ensure_pending_since,
+                ensure_queue_tokens,
+            )
+
+            queue = ensure_queue_tokens(
+                load_json_file(APPROVAL_QUEUE_FILE) or {"generatedAt": None, "count": 0, "items": []}
+            )
+            ensure_pending_since(queue)
 
             if action == "reset":
                 for item in queue.get("items", []):
                     item["approvalStatus"] = "pending"
                     item.pop("decisionAt", None)
+                    item["pendingSince"] = datetime.now().astimezone().isoformat()
+                    item.pop("expirationReason", None)
+            elif action == "ingest":
+                command_text = str(payload.get("commandText", "") or "")
+                subject = str(payload.get("subject", "") or "")
+                if not command_text.strip() and not subject.strip():
+                    self.send_error(HTTPStatus.BAD_REQUEST, "commandText or subject is required")
+                    return
+                ingest = apply_reply_commands(queue, command_text, subject=subject)
+                if ingest.get("matchedCount", 0) <= 0:
+                    self.send_error(HTTPStatus.BAD_REQUEST, "No approval commands were recognized")
+                    return
             else:
                 ticker = str(payload.get("ticker", "")).strip().upper()
+                token = str(payload.get("token", "")).strip().upper()
                 status = str(payload.get("status", "")).strip().lower()
-                if not ticker or status not in {"approved", "rejected", "pending"}:
-                    self.send_error(HTTPStatus.BAD_REQUEST, "Ticker and valid status are required")
+                target = token or ticker
+                if not target or status not in {"approved", "rejected", "pending"}:
+                    self.send_error(HTTPStatus.BAD_REQUEST, "Ticker/token and valid status are required")
                     return
 
                 updated = False
                 for item in queue.get("items", []):
-                    if item.get("ticker") == ticker:
+                    token_match = str(item.get("approvalToken") or "").strip().upper() == target
+                    ticker_match = str(item.get("ticker") or "").strip().upper() == target
+                    if token_match or ticker_match:
                         item["approvalStatus"] = status
                         if status == "pending":
                             item.pop("decisionAt", None)
+                            item["pendingSince"] = datetime.now().astimezone().isoformat()
                         else:
                             item["decisionAt"] = datetime.now().astimezone().isoformat()
+                            item.pop("pendingSince", None)
+                        item.pop("expirationReason", None)
                         updated = True
                 if not updated:
                     self.send_error(HTTPStatus.NOT_FOUND, "Ticker was not found in the approval queue")

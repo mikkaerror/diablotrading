@@ -1436,6 +1436,23 @@ tbody tr.temp-wild {
   font-size: 1.8rem;
 }
 
+.confirmation-card {
+  display: grid;
+  gap: 8px;
+}
+
+.confirmation-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.detail-confirmation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .score-stack {
   display: grid;
   gap: 12px;
@@ -1992,10 +2009,49 @@ button.candidate-card:hover {
   gap: 12px;
 }
 
+.brief-subgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .brief-card {
   white-space: pre-wrap;
   line-height: 1.25;
   min-width: 0;
+}
+
+.brief-supervisor-card {
+  display: grid;
+  gap: 8px;
+  white-space: normal;
+}
+
+.brief-supervisor-card p {
+  margin: 0;
+}
+
+.brief-supervisor-card .eyebrow {
+  margin-bottom: 2px;
+}
+
+.brief-statline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brief-statline span {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid rgba(199, 160, 106, 0.22);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .guide-card {
@@ -2096,7 +2152,9 @@ button.candidate-card:hover {
   }
 
   .score-tiles,
-  .score-sigils {
+  .score-sigils,
+  .detail-confirmation-grid,
+  .brief-subgrid {
     grid-template-columns: 1fr;
   }
 }

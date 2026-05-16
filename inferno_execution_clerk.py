@@ -15,6 +15,7 @@ from inferno_config import (
     MAX_DAILY_RISK_UNITS,
     MAX_SINGLE_TRADE_RISK_UNITS,
 )
+from inferno_io import atomic_write_json, atomic_write_text
 from server import (
     APPROVAL_QUEUE_FILE,
     DATA_DIR,
@@ -108,6 +109,8 @@ def next_step_for_intent(intent_status: str, approval_status: str, blocks: list[
 def build_ticket_blueprint(intent: dict[str, Any]) -> str:
     trigger_text = "trigger live" if intent.get("signalTrigger") else "trigger wait"
     block_text = "; ".join(intent.get("intentBlocks", [])) or "all checks clear"
+    market_context = intent.get("marketContext") or {}
+    trend = (market_context.get("trend") or {}).get("label") or intent.get("trend") or "Neutral"
     return "\n".join(
         [
             f"Ticker: {intent.get('ticker')}",
@@ -121,6 +124,8 @@ def build_ticket_blueprint(intent: dict[str, Any]) -> str:
             f"Confidence: {intent.get('confidence')} / 3",
             f"Timing: {intent.get('daysUntilEarnings')}d to earnings",
             f"Trigger: {trigger_text}",
+            f"Confirmation: RVOL {market_context.get('rvol', 'N/A')}x | {trend} | "
+            f"S {market_context.get('support', 'N/A')} / R {market_context.get('resistance', 'N/A')}",
             f"Risk units: {intent.get('riskUnits')}",
             f"Approval: {intent.get('approvalStatus')}",
             f"Next step: {intent.get('nextStep')}",
@@ -134,6 +139,9 @@ def build_ticket_blueprint(intent: dict[str, Any]) -> str:
 def build_execution_queue(
     snapshot: dict[str, Any] | None = None,
     approval_queue: dict[str, Any] | None = None,
+    *,
+    limit_override: int | None = None,
+    enforce_capacity_limits: bool = True,
 ) -> dict[str, Any]:
     snapshot = snapshot or load_snapshot()
     approval_queue = approval_queue or load_approval_queue()
@@ -146,7 +154,8 @@ def build_execution_queue(
     staged_risk = 0.0
     active_ready = 0
 
-    for rank, ticker in enumerate(snapshot.get("reviewQueueTickers", [])[:EXECUTION_QUEUE_LIMIT], start=1):
+    queue_limit = limit_override if limit_override is not None else EXECUTION_QUEUE_LIMIT
+    for rank, ticker in enumerate(snapshot.get("reviewQueueTickers", [])[:queue_limit], start=1):
         row = rows_by_ticker.get(ticker)
         if not row:
             continue
@@ -156,7 +165,7 @@ def build_execution_queue(
         blocks = intent_blocks(row, approval_item)
         status = "blocked" if blocks else "approval-ready"
 
-        if status == "approval-ready":
+        if status == "approval-ready" and enforce_capacity_limits:
             if active_ready >= MAX_ACTIVE_EXECUTION_INTENTS:
                 blocks.append("daily active intent cap reached")
                 status = "blocked"
@@ -181,6 +190,7 @@ def build_execution_queue(
             "signalTrigger": row.get("signalTrigger"),
             "price": row.get("price"),
             "priority": row.get("priority"),
+            "marketContext": row.get("marketContext") or {},
             "convictionTier": conviction_tier(row),
             "riskUnits": risk_units,
             "approvalStatus": approval_item.get("approvalStatus", "pending") if approval_item else "pending",
@@ -252,8 +262,8 @@ def build_execution_text(queue: dict[str, Any]) -> str:
 
 def save_execution_queue(queue: dict[str, Any]) -> dict[str, str]:
     ensure_dirs()
-    EXECUTION_QUEUE_FILE.write_text(json.dumps(queue, indent=2), encoding="utf-8")
-    EXECUTION_TEXT_FILE.write_text(build_execution_text(queue), encoding="utf-8")
+    atomic_write_json(EXECUTION_QUEUE_FILE, queue)
+    atomic_write_text(EXECUTION_TEXT_FILE, build_execution_text(queue))
     return {
         "json": str(EXECUTION_QUEUE_FILE),
         "text": str(EXECUTION_TEXT_FILE),
