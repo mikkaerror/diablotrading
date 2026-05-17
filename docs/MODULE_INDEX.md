@@ -100,9 +100,12 @@ Safety            — authority, risk, secrets
 | `inferno_regime_drift.py` | Two-sided CUSUM change-point detection per strategy stream | `reports/regime_drift_latest.txt` |
 | `inferno_information_gain.py` | Mutual information ranking of features over win/loss outcomes | `reports/information_gain_latest.txt` |
 | `inferno_options_math.py` | Black-Scholes primitives: d1/d2, implied move, deltas, IV-rank conversion | pure library, no artifact |
-| `inferno_walk_forward.py` | **NEW** Chronological train/validate split; six-state edge survival ladder | `reports/walk_forward_latest.txt` |
-| `inferno_factor_regression.py` | **NEW** Hand-rolled logistic regression on one-hot features; bootstrap-CI coefficients | `reports/factor_regression_latest.txt` |
-| `inferno_math_verify.py` | **NEW** Cross-module invariant checker over every math artifact | `reports/math_verify_latest.txt` |
+| `inferno_walk_forward.py` | Chronological train/validate split; six-state edge survival ladder | `reports/walk_forward_latest.txt` |
+| `inferno_factor_regression.py` | Hand-rolled logistic regression on one-hot features; bootstrap-CI coefficients | `reports/factor_regression_latest.txt` |
+| `inferno_math_verify.py` | Cross-module invariant checker over every math artifact | `reports/math_verify_latest.txt` |
+| `inferno_slate_normalizer.py` | **NEW** Scale-invariant percentile ranks over the current slate; research-only fallback context | `reports/slate_normalized_latest.txt` |
+| `inferno_paper_bootstrap.py` | Seeds paper ledger at relaxed gating so promotion math can earn Phase 2 | `reports/paper_bootstrap_latest.txt` |
+| `inferno_slate_normalizer.py` | **NEW** Scale-invariant percentile ranks; fixes the broken absolute-threshold gates | `reports/slate_normalized_latest.txt` |
 | `inferno_performance_analytics.py` | Per-ticket performance with block-reason histogram | `data/inferno_performance_analytics.json` |
 | `inferno_research_cycle.py` | Periodic research roll-up across the thinking layer | `data/inferno_research_cycle.json` |
 | `inferno_outcome_reviewer.py` | Re-score closed paper outcomes against expectations | `data/inferno_outcome_reviewer.json` |

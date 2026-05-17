@@ -15,7 +15,9 @@ each attempt into a fail-mode bucket. The tests below freeze the contract:
 
 import unittest
 from typing import Any
+from unittest.mock import patch
 
+import inferno_tos_export_stability as stability_module
 from inferno_tos_export_stability import (
     FAIL_MODES,
     REMEDIATION,
@@ -170,12 +172,13 @@ class StabilityReportTests(unittest.TestCase):
         self.assertIn("recovered", payload["narrative"].lower())
 
     def test_all_blocked_yields_blocked_with_dominant(self) -> None:
-        payload = build_stability_report(
-            attempts=3,
-            backoff_seconds=0,
-            sleep=lambda _seconds: None,
-            verifier=lambda **_kw: _attempt("manual-check", main_window=False),
-        )
+        with patch.object(stability_module, "TOS_EXPORT_AUTOMATION_ENABLED", True):
+            payload = build_stability_report(
+                attempts=3,
+                backoff_seconds=0,
+                sleep=lambda _seconds: None,
+                verifier=lambda **_kw: _attempt("manual-check", main_window=False),
+            )
         self.assertEqual(payload["verdict"], "blocked")
         self.assertEqual(payload["dominantFailMode"], "window-missing")
         self.assertIn(
@@ -191,6 +194,22 @@ class StabilityReportTests(unittest.TestCase):
             verifier=lambda **_kw: _attempt("inactive-safe"),
         )
         self.assertEqual(payload["verdict"], "inactive-safe")
+
+    def test_closed_tos_low_power_mode_is_inactive_safe(self) -> None:
+        """Closed TOS is expected when background export automation is off."""
+        with (
+            patch.object(stability_module, "TOS_EXPORT_AUTOMATION_ENABLED", False),
+            patch.object(stability_module, "TOS_BACKGROUND_EXPORT_ALLOWED", False),
+        ):
+            payload = build_stability_report(
+                attempts=2,
+                backoff_seconds=0,
+                sleep=lambda _seconds: None,
+                verifier=lambda **_kw: _attempt("manual-check", app_running=False),
+            )
+        self.assertEqual(payload["verdict"], "inactive-safe")
+        self.assertEqual(payload["dominantFailMode"], "tos-closed-low-power")
+        self.assertIn("low-performance mode", payload["narrative"])
 
     def test_exception_in_verifier_lands_in_unknown(self) -> None:
         def verifier(**_kw: Any) -> dict[str, Any]:

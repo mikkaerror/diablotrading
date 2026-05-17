@@ -27,7 +27,12 @@ import json
 import time
 from typing import Any, Callable
 
-from inferno_config import approved_account_scope, local_now
+from inferno_config import (
+    TOS_BACKGROUND_EXPORT_ALLOWED,
+    TOS_EXPORT_AUTOMATION_ENABLED,
+    approved_account_scope,
+    local_now,
+)
 from inferno_io import atomic_write_json, atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
@@ -43,6 +48,7 @@ FAIL_MODES: tuple[str, ...] = (
     "ok-ready-live-readonly",
     "ok-ready-paper",
     "inactive-by-config",
+    "tos-closed-low-power",
     "tos-not-running",
     "accessibility-blocked",
     "window-missing",
@@ -66,6 +72,11 @@ REMEDIATION: dict[str, str] = {
     "inactive-by-config": (
         "TOS_EXPORT_AUTOMATION_ENABLED is False — this is intentional; flip it "
         "only when the operator is at the keyboard"
+    ),
+    "tos-closed-low-power": (
+        "thinkorswim is closed by operator choice. Keep it closed for math, "
+        "tracker, brief, and paper-evidence runs; open it only for supervised "
+        "export or manual order staging"
     ),
     "tos-not-running": (
         "thinkorswim is not running on this Mac. Launch it, wait for the main "
@@ -170,6 +181,23 @@ def classify_attempt(attempt: dict[str, Any]) -> str:
 
 def _is_ok_mode(mode: str) -> bool:
     return mode.startswith("ok-")
+
+
+def _is_low_power_closed_mode(attempt_records: list[dict[str, Any]]) -> bool:
+    """Return True when TOS absence is expected, not a broken automation lane.
+
+    The normal desk posture is intentionally conservative: export automation is
+    disabled and background agents are not allowed to foreground thinkorswim.
+    In that mode, a closed/missing broker window should read as ``inactive-safe``
+    so the morning loop can keep running on a lightweight Mac without burning
+    memory on TOS.
+    """
+    if TOS_EXPORT_AUTOMATION_ENABLED or TOS_BACKGROUND_EXPORT_ALLOWED:
+        return False
+    if not attempt_records:
+        return False
+    tolerated_modes = {"tos-not-running", "window-missing"}
+    return all(record.get("failMode") in tolerated_modes for record in attempt_records)
 
 
 def build_stability_report(
@@ -286,6 +314,15 @@ def finalize_stability_report(
         narrative = (
             "Export automation is disabled by config and the verifier confirmed "
             "that on every probe. This is the safe-default desk posture."
+        )
+    elif _is_low_power_closed_mode(attempt_records):
+        verdict = "inactive-safe"
+        dominant_mode = "tos-closed-low-power"
+        narrative = (
+            "TOS is closed or not visible while background export automation is "
+            "disabled. That is the intended low-performance mode: keep the broker "
+            "closed for math, tracker, brief, and paper-evidence work; open it only "
+            "for supervised export or manual order staging."
         )
     elif ok_attempts == attempts:
         verdict = "stable-ready"

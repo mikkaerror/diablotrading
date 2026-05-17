@@ -8,16 +8,11 @@ afternoon. It does *not* refresh upstream system artifacts (that is
 diagnostics that consume those artifacts and emits one combined digest.
 
 Diagnostics chained, in order:
-1. approval cadence (batting order)
-2. per-ticker decision briefs
-3. promotion gap (current vs thresholds)
-4. threshold sensitivity (calibration sweep)
-5. strategy replay (shadow as paper)
-6. daily success scorecard (green/yellow/red)
-7. TOS export stability (verifier with backoff + fail-mode classifier)
-8. skills audit (which subsystems went silent)
-9. heartbeat ledger (which subsystems are still beating)
-10. command-center brain refresh (so onboard digest stays current)
+1. approval cadence and decision briefs
+2. promotion, threshold, replay, and success checks
+3. breathing checks for TOS, skills, and heartbeat
+4. research/math layers, including normalized slate ranks
+5. paper bootstrap, math verify, command center, and cycle journal
 
 The loop also emits a short natural-language narrative paragraph that
 summarises the run as if it were a colleague handing over a verbal brief.
@@ -67,6 +62,8 @@ from inferno_factor_regression import (
     save_factor_regression,
 )
 from inferno_math_verify import build_math_verify, save_math_verify
+from inferno_paper_bootstrap import build_bootstrap, save_bootstrap
+from inferno_slate_normalizer import build_normalized, save_normalized
 from inferno_daily_success import build_daily_success, save_daily_success
 from inferno_decision_brief import build_decision_briefs, save_decision_briefs
 from inferno_heartbeat import (
@@ -473,6 +470,7 @@ def build_daily_loop() -> dict[str, Any]:
     walk_forward_payload: dict[str, Any] | None = None
     factor_regression_payload: dict[str, Any] | None = None
     math_verify_payload: dict[str, Any] | None = None
+    slate_normalizer_payload: dict[str, Any] | None = None
 
     def walk_forward_builder() -> dict[str, Any]:
         nonlocal walk_forward_payload
@@ -493,6 +491,24 @@ def build_daily_loop() -> dict[str, Any]:
         math_verify_payload = build_math_verify()
         save_math_verify(math_verify_payload)
         return math_verify_payload
+
+    def slate_normalizer_builder() -> dict[str, Any]:
+        # Scale-invariant ranks are research-only; they help the operator
+        # inspect relative strength without changing live authority.
+        nonlocal slate_normalizer_payload
+        slate_normalizer_payload = build_normalized()
+        save_normalized(slate_normalizer_payload)
+        return slate_normalizer_payload
+
+    paper_bootstrap_payload: dict[str, Any] | None = None
+
+    def paper_bootstrap_builder() -> dict[str, Any]:
+        # Seeds the paper ledger at relaxed gating so the promotion math
+        # can earn its way to Phase 2. Never proposes a live trade.
+        nonlocal paper_bootstrap_payload
+        paper_bootstrap_payload = build_bootstrap()
+        save_bootstrap(paper_bootstrap_payload)
+        return paper_bootstrap_payload
 
     def command_builder() -> dict[str, Any]:
         nonlocal command_payload
@@ -530,6 +546,8 @@ def build_daily_loop() -> dict[str, Any]:
     steps.append(_run_step("factorRegression", factor_regression_builder))
     steps.append(_run_step("kellySizing", kelly_builder))
     steps.append(_run_step("evidenceStrength", evidence_strength_builder))
+    steps.append(_run_step("slateNormalizer", slate_normalizer_builder))
+    steps.append(_run_step("paperBootstrap", paper_bootstrap_builder))
     steps.append(_run_step("mathVerify", math_verify_builder))
     steps.append(_run_step("commandCenter", command_builder))
     # cycleJournal must run last so it snapshots the freshest artifacts. The
@@ -708,7 +726,13 @@ def compose_narrative(
     elif stability_verdict == "transient-recovered":
         living.append("TOS export path recovered after a transient probe blip.")
     elif stability_verdict == "inactive-safe":
-        living.append("TOS export automation is intentionally disabled.")
+        if stability_dominant == "tos-closed-low-power":
+            living.append(
+                "TOS is intentionally closed for low-performance mode; open it only "
+                "for supervised export or manual order staging."
+            )
+        else:
+            living.append("TOS export automation is intentionally disabled.")
     else:
         living.append(
             f"TOS export path is currently {stability_verdict} "

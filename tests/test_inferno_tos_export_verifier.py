@@ -184,7 +184,8 @@ class TOSExportVerifierTests(unittest.TestCase):
         _route_mock: object,
         _save_mock: object,
     ) -> None:
-        report = verify_export_bridge(require_enabled=False, allow_recovery=True)
+        with patch("inferno_tos_export_verifier.TOS_EXPORT_AUTOMATION_ENABLED", True):
+            report = verify_export_bridge(require_enabled=False, allow_recovery=True)
         self.assertEqual(report["verdict"], "ready")
         self.assertTrue(report["allowRecovery"])
         self.assertEqual(report["sessionProbe"]["accountMode"], "paper")

@@ -39,17 +39,29 @@ def prune_files(files: list[Path], keep: int, dry_run: bool) -> list[Path]:
     return doomed
 
 
-def trim_log(path: Path, keep_lines: int, dry_run: bool) -> tuple[int, int]:
+def trim_log(path: Path, keep_lines: int, dry_run: bool) -> tuple[int, int, str | None]:
+    """Trim a log file while failing soft on local filesystem read issues.
+
+    Runtime logs live outside git and can be touched by launch agents, iCloud,
+    or a still-running process. Housekeeping should report those problems, not
+    crash the entire cleanup pass.
+    """
     if not path.exists():
-        return (0, 0)
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return (0, 0, None)
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return (0, 0, f"{type(exc).__name__}: {exc}")
     original_count = len(lines)
     if original_count <= keep_lines:
-        return (original_count, original_count)
+        return (original_count, original_count, None)
     trimmed = lines[-keep_lines:]
     if not dry_run:
-        path.write_text("\n".join(trimmed) + "\n", encoding="utf-8")
-    return (original_count, len(trimmed))
+        try:
+            path.write_text("\n".join(trimmed) + "\n", encoding="utf-8")
+        except OSError as exc:
+            return (original_count, original_count, f"{type(exc).__name__}: {exc}")
+    return (original_count, len(trimmed), None)
 
 
 def parse_args() -> argparse.Namespace:
@@ -89,8 +101,11 @@ def main() -> int:
 
     report_lines.append("Log trimming:")
     for log_name in LOG_FILES:
-        original_count, final_count = trim_log(LOGS_DIR / log_name, args.keep_log_lines, args.dry_run)
-        report_lines.append(f"- {log_name}: {original_count} -> {final_count} lines")
+        original_count, final_count, error = trim_log(LOGS_DIR / log_name, args.keep_log_lines, args.dry_run)
+        if error:
+            report_lines.append(f"- {log_name}: skipped ({error})")
+        else:
+            report_lines.append(f"- {log_name}: {original_count} -> {final_count} lines")
 
     print("\n".join(report_lines))
     return 0

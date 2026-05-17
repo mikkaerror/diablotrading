@@ -102,6 +102,69 @@ def _setup_clean_artifacts(data_dir: Path) -> None:
             "verdict": "positive-edge",
         }],
     })
+    _write(data_dir / "inferno_paper_bootstrap.json", {
+        "slateSize": 3,
+        "proposalCount": 2,
+        "scoreHistogram": {"0": 0, "1": 0, "2": 1, "3": 1, "4": 1, "5": 0},
+        "proposals": [
+            {
+                "ticker": "A", "score": 4, "paperBootstrap": True,
+                "liveQualityYet": False, "failedGates": ["readyOk"],
+            },
+            {
+                "ticker": "B", "score": 3, "paperBootstrap": True,
+                "liveQualityYet": False, "failedGates": ["readyOk", "triggerOk"],
+            },
+        ],
+    })
+    _write(data_dir / "inferno_slate_normalized.json", {
+        "slateSize": 3,
+        "passingCount": 1,
+        "gatePercentile": 80,
+        "rows": [
+            {
+                "ticker": "A", "readyRank": 95.0, "valueRank": 90.0,
+                "momentumRank": 75.0, "squeezeRank": None,
+                "ivPercentileRank": 60.0, "compositeRank": 85.0,
+                "passesReadyPercentileGate": True,
+            },
+            {
+                "ticker": "B", "readyRank": 50.0, "valueRank": 50.0,
+                "momentumRank": 50.0, "squeezeRank": None,
+                "ivPercentileRank": 50.0, "compositeRank": 50.0,
+                "passesReadyPercentileGate": False,
+            },
+        ],
+    })
+    _write(data_dir / "inferno_slate_normalized.json", {
+        "researchOnly": True,
+        "diagnosticOnly": True,
+        "promotable": False,
+        "slateSize": 2,
+        "passingCount": 1,
+        "rows": [
+            {
+                "ticker": "A",
+                "readyRank": 90.0,
+                "valueRank": 80.0,
+                "momentumRank": 70.0,
+                "squeezeRank": 60.0,
+                "ivPercentileRank": 50.0,
+                "compositeRank": 74.0,
+                "passesReadyPercentileGate": True,
+            },
+            {
+                "ticker": "B",
+                "readyRank": 40.0,
+                "valueRank": 35.0,
+                "momentumRank": 30.0,
+                "squeezeRank": 25.0,
+                "ivPercentileRank": 20.0,
+                "compositeRank": 32.0,
+                "passesReadyPercentileGate": False,
+            },
+        ],
+    })
 
 
 class ContractTests(unittest.TestCase):
@@ -249,6 +312,26 @@ class ViolationDetectionTests(unittest.TestCase):
             })
             payload = mv.build_math_verify(data_dir=data_dir)
             self.assertGreater(payload["findings"]["walkForward"]["violationCount"], 0)
+
+    def test_slate_normalizer_contract_drift_caught(self) -> None:
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            _setup_clean_artifacts(data_dir)
+            _write(data_dir / "inferno_slate_normalized.json", {
+                "researchOnly": False,
+                "diagnosticOnly": True,
+                "promotable": False,
+                "slateSize": 1,
+                "passingCount": 0,
+                "rows": [{
+                    "ticker": "BAD",
+                    "readyRank": 120.0,
+                    "compositeRank": 101.0,
+                    "passesReadyPercentileGate": True,
+                }],
+            })
+            payload = mv.build_math_verify(data_dir=data_dir)
+            self.assertGreater(payload["findings"]["slateNormalizer"]["violationCount"], 0)
 
 
 class TextRenderTests(unittest.TestCase):

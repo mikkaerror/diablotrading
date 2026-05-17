@@ -22,6 +22,22 @@ That means:
 - inferno decides the risk budget
 - thinkorswim is where the order is actually staged, supervised, and eventually submitted
 
+## Low-Performance Mode
+
+TOS does not need to stay open all day. Keep it closed while the desk runs
+tracker updates, daily math, paper-evidence checks, and email briefs. The local
+automation defaults below prevent background jobs from foregrounding or
+reopening the broker:
+
+```bash
+TOS_EXPORT_AUTOMATION_ENABLED=0
+TOS_BACKGROUND_EXPORT_ALLOWED=0
+```
+
+Open TOS only for supervised export capture or manual order staging. If a report
+mentions `tos-closed-low-power`, that is an intentional safe state, not a broker
+failure.
+
 ## Safer Path To Automation
 
 ### Step 1: Human-supervised execution

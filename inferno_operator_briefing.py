@@ -61,8 +61,106 @@ HARD_CAP_PER_DAY = 1500.0
 QUARTER_KELLY_CAP_FRACTION = 0.25
 
 LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
+PAPER_BOOTSTRAP_FILE = DATA_DIR / "inferno_paper_bootstrap.json"
+SLATE_NORMALIZED_FILE = DATA_DIR / "inferno_slate_normalized.json"
+
+# Top-N by composite rank to surface in the email when the live filter
+# blanks out. We pick the most-conviction names by *cross-sectional rank*,
+# which works regardless of whether the absolute Ready Score scale is fixed.
+RANKED_TIER_DEFAULT_TOP_N = int(os.environ.get("INFERNO_RANKED_TOP_N", "5"))
+
+
+def _load_ranked_slate() -> dict[str, Any]:
+    """Best-effort read of the latest normalized slate (percentile ranks).
+
+    Returns an empty-shaped dict when the file is missing so the briefing
+    can always render the email without crashing. The renderer simply
+    skips the ranked block when ``available`` is False.
+    """
+    info: dict[str, Any] = {
+        "available": False,
+        "verdict": None,
+        "slateSize": 0,
+        "gatePercentile": None,
+        "passingCount": 0,
+        "topByComposite": [],
+    }
+    if not SLATE_NORMALIZED_FILE.exists():
+        return info
+    try:
+        payload = json.loads(SLATE_NORMALIZED_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return info
+    info["available"] = True
+    info["verdict"] = payload.get("verdict")
+    info["slateSize"] = payload.get("slateSize") or 0
+    info["gatePercentile"] = payload.get("gatePercentile")
+    info["passingCount"] = payload.get("passingCount") or 0
+    rows = payload.get("rows") or []
+    info["topByComposite"] = [
+        {
+            "ticker": r.get("ticker"),
+            "compositeRank": r.get("compositeRank"),
+            "readyRank": r.get("readyRank"),
+            "ivPercentileRank": r.get("ivPercentileRank"),
+            "readyScoreRaw": r.get("readyScoreRaw"),
+            "passesReadyPercentileGate": r.get("passesReadyPercentileGate"),
+        }
+        for r in rows[:RANKED_TIER_DEFAULT_TOP_N]
+    ]
+    return info
+
+
 # Age beyond which the live cash readout is stale and we won't trust it.
 LIVE_CASH_STALE_HOURS = float(os.environ.get("INFERNO_LIVE_CASH_STALE_HOURS", "8"))
+
+
+def _load_paper_bootstrap() -> dict[str, Any]:
+    """Best-effort read of the latest paper-bootstrap proposals.
+
+    Returns a stripped-down dict that's safe to include in the email
+    even when the file is missing or unreadable. The briefing uses these
+    proposals as a *fallback*: when the live filter produces no
+    candidates, the email surfaces the bootstrap proposals so the
+    operator still has actionable paper work to seed shadow evidence.
+    """
+    info: dict[str, Any] = {
+        "available": False,
+        "verdict": None,
+        "proposalCount": 0,
+        "liveQualityCount": 0,
+        "paperOnlyCount": 0,
+        "proposals": [],
+        "ticketDollars": None,
+    }
+    if not PAPER_BOOTSTRAP_FILE.exists():
+        return info
+    try:
+        payload = json.loads(PAPER_BOOTSTRAP_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return info
+    info["available"] = True
+    info["verdict"] = payload.get("verdict")
+    info["proposalCount"] = payload.get("proposalCount") or 0
+    info["liveQualityCount"] = payload.get("liveQualityCount") or 0
+    info["paperOnlyCount"] = payload.get("paperOnlyCount") or 0
+    info["ticketDollars"] = payload.get("ticketDollars")
+    proposals = payload.get("proposals") or []
+    info["proposals"] = [
+        {
+            "ticker": p.get("ticker"),
+            "score": p.get("score"),
+            "readyScore": p.get("readyScore"),
+            "confidence": p.get("confidence"),
+            "daysUntilEarnings": p.get("daysUntilEarnings"),
+            "suggestedStrategy": p.get("suggestedStrategy"),
+            "paperBudgetDollars": p.get("paperBudgetDollars"),
+            "failedGates": p.get("failedGates") or [],
+            "liveQualityYet": p.get("liveQualityYet"),
+        }
+        for p in proposals[:5]
+    ]
+    return info
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -380,6 +478,14 @@ def build_briefing(
     sizing = size_tickets(qualified, cash=resolved_cash, max_tickets=max_tickets)
     sizing["cashSource"] = cash_source
 
+    # Pull paper-bootstrap proposals so the email can pivot to research
+    # work when the live filter blanks out.
+    bootstrap_info = _load_paper_bootstrap()
+    # Pull the percentile-ranked slate so the email can surface
+    # rank-based candidates regardless of the absolute-threshold gate.
+    ranked_info = _load_ranked_slate()
+    ranked_info = _load_ranked_slate()
+
     if not rows:
         verdict = "no-slate"
         narrative = (
@@ -388,10 +494,19 @@ def build_briefing(
         )
     elif not qualified:
         verdict = "no-candidates"
-        narrative = (
-            f"Scanned {len(rows)} ticker(s) on the slate; none cleared all five "
-            "conviction gates today. Sit on cash."
-        )
+        bs_count = bootstrap_info.get("proposalCount") or 0
+        if bs_count > 0:
+            narrative = (
+                f"Scanned {len(rows)} ticker(s); none cleared all five live "
+                f"conviction gates. Sit on live cash — but {bs_count} paper-bootstrap "
+                "proposal(s) are queued below for shadow-evidence work. "
+                "Their outcomes feed the Phase-2 promotion math, not live authority."
+            )
+        else:
+            narrative = (
+                f"Scanned {len(rows)} ticker(s) on the slate; none cleared all five "
+                "conviction gates today and no paper-bootstrap proposals queued. Sit on cash."
+            )
     elif sizing["actualTickets"] == 0:
         verdict = "no-cash"
         narrative = "Candidates exist but cash sizing produced zero tickets — check INFERNO_OPERATOR_CASH."
@@ -424,6 +539,8 @@ def build_briefing(
             "hardCapPerDay": HARD_CAP_PER_DAY,
             "quarterKellyFraction": QUARTER_KELLY_CAP_FRACTION,
         },
+        "paperBootstrap": bootstrap_info,
+        "rankedSlate": ranked_info,
     }
 
 
@@ -476,6 +593,105 @@ def render_text(payload: dict[str, Any]) -> str:
             trigger = t.get("signalTrigger")
             if trigger:
                 lines.append(f"   trigger: {trigger}")
+        lines.append("")
+
+    ranked = payload.get("rankedSlate") or {}
+    ranked_rows = ranked.get("topByComposite") or []
+    if not tickets and ranked_rows:
+        lines.append("RANKED SLATE FALLBACK (relative strength; not live authority)")
+        lines.append("-" * 60)
+        lines.append(
+            f"Verdict: {ranked.get('verdict')}  "
+            f"passing ready-rank gate: {ranked.get('passingCount')} / {ranked.get('slateSize')}  "
+            f"gate percentile: {ranked.get('gatePercentile')}"
+        )
+        lines.append(f"{'#':>2} {'Ticker':<8} {'CompR':>6} {'ReadyR':>7} {'IVR':>6} {'RawReady':>8} {'Gate'}")
+        for i, row in enumerate(ranked_rows, 1):
+            gate = "PASS" if row.get("passesReadyPercentileGate") else "-"
+            lines.append(
+                f"{i:>2} {str(row.get('ticker'))[:8]:<8} "
+                f"{row.get('compositeRank') if row.get('compositeRank') is not None else '-':>6} "
+                f"{row.get('readyRank') if row.get('readyRank') is not None else '-':>7} "
+                f"{row.get('ivPercentileRank') if row.get('ivPercentileRank') is not None else '-':>6} "
+                f"{row.get('readyScoreRaw') if row.get('readyScoreRaw') is not None else '-':>8} "
+                f"{gate}"
+            )
+        lines.append("")
+        lines.append("Use this as review context only. It does not override the five live gates.")
+        lines.append("")
+
+    ranked = payload.get("rankedSlate") or {}
+    ranked_rows = ranked.get("topByComposite") or []
+    if ranked_rows:
+        gate_pct = ranked.get("gatePercentile")
+        passing_n = ranked.get("passingCount") or 0
+        slate_n = ranked.get("slateSize") or 0
+        top_n = int(100 - gate_pct) if isinstance(gate_pct, (int, float)) else None
+        lines.append("RANKED-BY-PERCENTILE CANDIDATES (scale-invariant; cross-sectional)")
+        lines.append("-" * 60)
+        if top_n is not None:
+            lines.append(
+                f"Top {top_n}% gate (readyRank >= {gate_pct}): "
+                f"{passing_n} of {slate_n} pass."
+            )
+        lines.append(
+            f"{'#':>2} {'Ticker':<8} {'Comp':>6} {'ReadyR':>7} {'IV%R':>6} "
+            f"{'Ready':>8} {'Gate'}"
+        )
+        for i, r in enumerate(ranked_rows, 1):
+            comp = r.get("compositeRank")
+            ready_r = r.get("readyRank")
+            iv_r = r.get("ivPercentileRank")
+            raw = r.get("readyScoreRaw")
+            gate = "PASS" if r.get("passesReadyPercentileGate") else "-"
+            lines.append(
+                f"{i:>2} {str(r.get('ticker'))[:8]:<8} "
+                f"{comp if comp is not None else '-':>6} "
+                f"{ready_r if ready_r is not None else '-':>7} "
+                f"{iv_r if iv_r is not None else '-':>6} "
+                f"{raw if raw is not None else '-':>8} "
+                f"{gate}"
+            )
+        lines.append("")
+        lines.append(
+            "Composite is the geometric mean of Ready/Value/Momentum/Squeeze ranks."
+        )
+        lines.append(
+            "These rank highest on this slate — they're not auto-approved trades."
+        )
+        lines.append("")
+
+    bootstrap = payload.get("paperBootstrap") or {}
+    bootstrap_proposals = bootstrap.get("proposals") or []
+    if bootstrap_proposals:
+        lines.append("PAPER-BOOTSTRAP PROPOSALS (shadow-evidence seed; not live)")
+        lines.append("-" * 60)
+        budget = bootstrap.get("ticketDollars")
+        lines.append(
+            f"Verdict: {bootstrap.get('verdict')}  "
+            f"proposals: {bootstrap.get('proposalCount')}  "
+            f"live-quality: {bootstrap.get('liveQualityCount')}  "
+            f"paper-only: {bootstrap.get('paperOnlyCount')}  "
+            f"@ ${budget}/ticket paper"
+        )
+        lines.append(
+            f"{'#':>2} {'Ticker':<8} {'Score':>5} {'Ready':>6} {'Conf':>5} "
+            f"{'DTE':>4} {'Strategy':<14} {'Missing gates'}"
+        )
+        for i, p in enumerate(bootstrap_proposals, 1):
+            failed = ", ".join(p.get("failedGates") or []) or "(none)"
+            lines.append(
+                f"{i:>2} {str(p.get('ticker'))[:8]:<8} "
+                f"{p.get('score'):>5} "
+                f"{p.get('readyScore') or 0:>6} "
+                f"{p.get('confidence') or 0:>5} "
+                f"{p.get('daysUntilEarnings') or 0:>4} "
+                f"{str(p.get('suggestedStrategy'))[:14]:<14} "
+                f"{failed}"
+            )
+        lines.append("")
+        lines.append("These are PAPER seeds — they do NOT count toward live promotion math.")
+        lines.append("Stage via: ./run_inferno_paper_test_director.sh")
         lines.append("")
 
     gates = payload.get("gates") or {}

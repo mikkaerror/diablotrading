@@ -40,6 +40,7 @@ DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
 DOWNLOADS_WATCH_FILE = ROOT / "data" / "inferno_downloads_watch.json"
 TOS_EXPORT_BRIDGE_FILE = ROOT / "data" / "inferno_tos_export_bridge.json"
 TOS_EXPORT_VERIFIER_FILE = ROOT / "data" / "inferno_tos_export_verifier.json"
+TOS_EXPORT_STABILITY_FILE = ROOT / "data" / "inferno_tos_export_stability.json"
 TOS_SESSION_PROBE_FILE = ROOT / "data" / "inferno_tos_session_probe.json"
 TOS_SANDBOX_FILE = ROOT / "data" / "inferno_tos_sandbox_session.json"
 TOS_FILL_INGEST_FILE = ROOT / "data" / "inferno_tos_fill_ingest.json"
@@ -847,6 +848,21 @@ def main() -> int:
     lines.append(summarize_status("Desktop automation", desktop_ok, desktop_detail))
     if desktop_automation and not desktop_ok:
         warnings += 1
+
+    export_stability = load_json_file(TOS_EXPORT_STABILITY_FILE) or {}
+    if export_stability:
+        stability_verdict = export_stability.get("verdict") or "unknown"
+        stability_dominant = export_stability.get("dominantFailMode") or "n/a"
+        stability_today = in_current_service_cycle(str(export_stability.get("generatedAt", "")), now=now)
+        stability_ok = stability_today and stability_verdict in {
+            "stable-ready",
+            "transient-recovered",
+            "inactive-safe",
+        }
+        stability_detail = f"{stability_verdict} | dominant {stability_dominant}"
+        lines.append(summarize_status("TOS export stability", stability_ok, stability_detail))
+        if not stability_ok:
+            warnings += 1
 
     export_verifier = load_json_file(TOS_EXPORT_VERIFIER_FILE) or {}
     export_shortcut = (

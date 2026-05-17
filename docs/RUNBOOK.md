@@ -57,6 +57,21 @@ TOS_BACKGROUND_EXPORT_ALLOWED=0
 Leave that value at `0` for normal operation. Manual/supervised export remains
 available when the operator explicitly runs the export bridge.
 
+### Low-performance broker-closed mode
+
+It is safe to leave thinkorswim closed during normal research, tracker updates,
+daily-loop checks, paper-evidence generation, and email brief delivery. The desk
+now treats a missing TOS window as `inactive-safe` when both of these are true:
+
+```bash
+TOS_EXPORT_AUTOMATION_ENABLED=0
+TOS_BACKGROUND_EXPORT_ALLOWED=0
+```
+
+Use this mode when the Mac is hot, slow, or on battery. Open thinkorswim only
+when you need to capture a fresh export, reconcile a live watchlist, or manually
+stage an order from the broker preview.
+
 The deploy preflight is the shipping-grade version of that check. It adds
 compile checks, local regression tests, shell-wrapper validation, cloud-native
 pipeline smoke, and an explicit split between cloud readiness and desktop
@@ -1042,6 +1057,19 @@ Once a name becomes `approval-ready`, use the desk's `Copy Ticket` action to gra
 python3 inferno_housekeeping.py --dry-run
 python3 inferno_housekeeping.py
 ```
+
+### Rank the slate without trusting absolute score scale
+
+Use this when `Ready Score` looks like it is on the wrong scale but the
+relative ordering still matters:
+
+```bash
+python3 inferno_slate_normalizer.py
+python3 inferno_slate_normalizer.py status
+```
+
+This writes `reports/slate_normalized_latest.txt` and is research-only.
+It does not override the live conviction gates.
 
 ## Where The Important Files Live
 

@@ -259,6 +259,134 @@ def verify_walk_forward(payload: dict[str, Any] | None) -> list[str]:
     return violations
 
 
+def verify_slate_normalizer(payload: dict[str, Any] | None) -> list[str]:
+    """Slate-normalizer invariants:
+    - every present rank lies in [0, 100]
+    - composite rank lies in [0, 100] when present
+    - passing-count never exceeds slate-size
+    - gate percentile lies in [0, 100]
+    """
+    if not payload:
+        return ["slate_normalizer artifact missing"]
+    violations: list[str] = []
+    gate = payload.get("gatePercentile")
+    if isinstance(gate, (int, float)):
+        _assert(0 <= gate <= 100, f"slate_normalizer: gatePercentile {gate} outside [0,100]", violations)
+    slate = payload.get("slateSize")
+    passing = payload.get("passingCount")
+    if isinstance(slate, int) and isinstance(passing, int):
+        _assert(0 <= passing <= slate, f"slate_normalizer: passing {passing} > slate {slate}", violations)
+    for r in payload.get("rows") or []:
+        ticker = r.get("ticker") or "?"
+        for key in ("readyRank", "valueRank", "momentumRank", "squeezeRank",
+                    "ivPercentileRank", "compositeRank"):
+            v = r.get(key)
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                _assert(0 <= v <= 100, f"slate_normalizer.{ticker}.{key}={v} outside [0,100]", violations)
+    return violations
+
+
+def verify_paper_bootstrap(payload: dict[str, Any] | None) -> list[str]:
+    """Bootstrap invariants:
+    - every proposal carries paperBootstrap=true (the gate that keeps these
+      out of live promotion math)
+    - score ∈ [0, 5]
+    - liveQualityYet iff score == 5
+    - score histogram bucket counts sum to slateSize
+    - proposalCount equals len(proposals)
+    """
+    if not payload:
+        return ["paper_bootstrap artifact missing"]
+    violations: list[str] = []
+    proposals = payload.get("proposals") or []
+    declared_count = payload.get("proposalCount")
+    if isinstance(declared_count, int):
+        _assert(
+            declared_count == len(proposals),
+            f"paper_bootstrap: proposalCount={declared_count} but len(proposals)={len(proposals)}",
+            violations,
+        )
+    for p in proposals:
+        ticker = p.get("ticker") or "?"
+        score = p.get("score")
+        if isinstance(score, int):
+            _assert(0 <= score <= 5, f"paper_bootstrap.{ticker}: score {score} outside [0,5]", violations)
+        _assert(
+            p.get("paperBootstrap") is True,
+            f"paper_bootstrap.{ticker}: paperBootstrap flag must be True",
+            violations,
+        )
+        live_quality = p.get("liveQualityYet")
+        if isinstance(score, int) and isinstance(live_quality, bool):
+            expected = (score == 5)
+            _assert(
+                live_quality == expected,
+                f"paper_bootstrap.{ticker}: liveQualityYet={live_quality} but score={score}",
+                violations,
+            )
+    histogram = payload.get("scoreHistogram") or {}
+    slate_size = payload.get("slateSize")
+    if histogram and isinstance(slate_size, int):
+        # JSON dict keys are stringified; accept both.
+        bucket_total = sum(histogram.values())
+        _assert(
+            bucket_total == slate_size,
+            f"paper_bootstrap: histogram sum {bucket_total} != slateSize {slate_size}",
+            violations,
+        )
+    return violations
+
+
+def verify_slate_normalizer(payload: dict[str, Any] | None) -> list[str]:
+    """Slate-normalizer invariants:
+    - artifact remains research-only / non-promotable
+    - percentile fields stay in [0, 100]
+    - passingCount equals rows clearing the ready percentile gate
+    - slateSize equals len(rows)
+    - rows are sorted by compositeRank descending
+    """
+    if not payload:
+        return ["slate_normalizer artifact missing"]
+    violations: list[str] = []
+    rows = payload.get("rows") or []
+    slate_size = payload.get("slateSize")
+    if isinstance(slate_size, int):
+        _assert(slate_size == len(rows), f"slate_normalizer: slateSize {slate_size} != len(rows) {len(rows)}", violations)
+    _assert(payload.get("researchOnly") is True, "slate_normalizer: researchOnly must be True", violations)
+    _assert(payload.get("diagnosticOnly") is True, "slate_normalizer: diagnosticOnly must be True", violations)
+    _assert(payload.get("promotable") is False, "slate_normalizer: promotable must be False", violations)
+
+    passing_count = 0
+    prior_composite = float("inf")
+    for row in rows:
+        ticker = row.get("ticker") or "?"
+        if row.get("passesReadyPercentileGate"):
+            passing_count += 1
+        for field in ("readyRank", "valueRank", "momentumRank", "squeezeRank", "ivPercentileRank", "compositeRank"):
+            value = row.get(field)
+            if isinstance(value, (int, float)):
+                _assert(0 <= value <= 100, f"slate_normalizer.{ticker}.{field}={value} outside [0,100]", violations)
+        composite = row.get("compositeRank")
+        if isinstance(composite, (int, float)):
+            _assert(
+                composite <= prior_composite + 1e-9,
+                f"slate_normalizer.{ticker}: compositeRank not sorted descending",
+                violations,
+            )
+            prior_composite = composite
+
+    declared_passing = payload.get("passingCount")
+    if isinstance(declared_passing, int):
+        _assert(
+            declared_passing == passing_count,
+            f"slate_normalizer: passingCount {declared_passing} != counted {passing_count}",
+            violations,
+        )
+    return violations
+
+
 def verify_regime_drift(payload: dict[str, Any] | None) -> list[str]:
     if not payload:
         return ["regime_drift artifact missing"]
@@ -351,6 +479,9 @@ VERIFIERS: dict[str, tuple[str, Callable[[dict[str, Any] | None], list[str]]]] =
     "walkForward": ("inferno_walk_forward.json", verify_walk_forward),
     "regimeDrift": ("inferno_regime_drift.json", verify_regime_drift),
     "factorRegression": ("inferno_factor_regression.json", verify_factor_regression),
+    "slateNormalizer": ("inferno_slate_normalized.json", verify_slate_normalizer),
+    "paperBootstrap": ("inferno_paper_bootstrap.json", verify_paper_bootstrap),
+    "slateNormalizer": ("inferno_slate_normalized.json", verify_slate_normalizer),
 }
 
 

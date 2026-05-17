@@ -11,6 +11,10 @@ The one page you reread every morning before clicking submit on anything.
 
 ## Step 1 — See the state (3 minutes)
 
+You do not need thinkorswim open for Steps 1–5. Keep the broker closed if the
+Mac is slow; the desk should still run the tracker, math, paper evidence, and
+briefing stack in low-performance mode.
+
 ```bash
 cd "<repo-root>"
 python3 inferno_doctor.py
@@ -80,8 +84,8 @@ exceeds your per-ticket cap or reward/risk is below
 
 ## Step 6 — Place the trade in thinkorswim
 
-You. Manually. In the already-open TOS window. With the exact strikes,
-debit/credit, and quantity from the broker preview.
+Open TOS only here, after the offline broker preview is clean. You. Manually.
+With the exact strikes, debit/credit, and quantity from the broker preview.
 
 - Use a **debit spread** or a **vertical** unless you have a specific
   reason to be naked.

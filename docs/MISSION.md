@@ -81,6 +81,19 @@ Until those line up, every trade is *manual*: the operator clicks submit
 on what their own discretion approves. The desk filters and sizes; it
 doesn't decide.
 
+### The bridge to Phase 2
+
+The promotion gates above require ~30 closed paper outcomes per
+strategy. The strict live filter rarely clears anything on a given day,
+so `inferno_paper_bootstrap` seeds the paper ledger at *relaxed* gating
+(default 3-of-5 conviction gates cleared, paper-only at $50 notional)
+so the math has something to learn from. Bootstrap outcomes feed shadow
+evidence but **never count toward live promotion math** until manually
+reclassified. The bootstrap proposals appear in the daily email
+whenever the live filter blanks out — that's the desk telling you "no
+live trade today, but here's research work that moves us closer to
+Phase 2."
+
 ## Entry framework (the five conviction gates)
 
 For any name to be considered, all five must pass:

@@ -2,6 +2,23 @@
 
 How to walk into this project for the first time.
 
+## Start With Live State
+
+Run the onboard digest first:
+
+```bash
+python3 inferno_central_command.py onboard
+```
+
+Then run the one-screen console:
+
+```bash
+python3 inferno_brain_console.py
+```
+
+Generated artifacts are the current trading-day truth. Durable docs explain
+why the system exists and how to change it safely.
+
 ## The five-doc anchor (10 minutes)
 
 Read these in order. After them, you can write or operate without breaking
@@ -28,44 +45,33 @@ the safety rails:
 
 ## Operate the desk (add ~50 minutes)
 
-7. [**RUNBOOK.md**](RUNBOOK.md) — every CLI command, the day-to-day reference.
-8. [**OPERATING_MODEL.md**](OPERATING_MODEL.md) — how decisions flow from evidence to action.
-9. [**CHECKLISTS.md**](CHECKLISTS.md) — daily, weekly, pre-trade.
-10. [**RISK_POLICY.md**](RISK_POLICY.md) — hard caps no automation may exceed.
+10. [**RUNBOOK.md**](RUNBOOK.md) — every CLI command, the day-to-day reference.
+11. [**OPERATING_MODEL.md**](OPERATING_MODEL.md) — how decisions flow from evidence to action.
+12. [**CHECKLISTS.md**](CHECKLISTS.md) — daily, weekly, pre-trade.
+13. [**RISK_POLICY.md**](RISK_POLICY.md) — hard caps no automation may exceed.
 
 ## Touch execution
 
-11. [**EXECUTION_MODEL.md**](EXECUTION_MODEL.md) — order flow from approval to broker preview.
-12. [**PAPER_TEST_LOOP.md**](PAPER_TEST_LOOP.md) — paper-evidence promotion gate.
-13. [**BROKER_AUTOMATION_REQUIREMENTS.md**](BROKER_AUTOMATION_REQUIREMENTS.md) — what must be true before live submit.
-14. [**AUTOTRADING_ROADMAP.md**](AUTOTRADING_ROADMAP.md) — long-term path to broker-assisted execution.
+14. [**EXECUTION_MODEL.md**](EXECUTION_MODEL.md) — order flow from approval to broker preview.
+15. [**PAPER_TEST_LOOP.md**](PAPER_TEST_LOOP.md) — paper-evidence promotion gate.
+16. [**BROKER_AUTOMATION_REQUIREMENTS.md**](BROKER_AUTOMATION_REQUIREMENTS.md) — what must be true before live submit.
+17. [**AUTOTRADING_ROADMAP.md**](AUTOTRADING_ROADMAP.md) — long-term path to broker-assisted execution.
 
 ## Touch thinkorswim
 
-15. [**THINKORSWIM_AUTOMATION.md**](THINKORSWIM_AUTOMATION.md) — AppleScript / accessibility automation.
-16. [**THINKORSWIM_SANDBOX.md**](THINKORSWIM_SANDBOX.md) — paperMoney mode and sandbox isolation.
+18. [**THINKORSWIM_AUTOMATION.md**](THINKORSWIM_AUTOMATION.md) — AppleScript / accessibility automation.
+19. [**THINKORSWIM_SANDBOX.md**](THINKORSWIM_SANDBOX.md) — paperMoney mode and sandbox isolation.
 
 ## Touch cloud automation
 
-17. [**CLOUD_AUTOMATION.md**](CLOUD_AUTOMATION.md) — Cloud Run scheduler topology.
+20. [**CLOUD_AUTOMATION.md**](CLOUD_AUTOMATION.md) — Cloud Run scheduler topology.
 
 ## Research and playbooks
 
-18. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
-19. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
-20. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
-21. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
-
-## Models running a session
-
-Run the onboard digest first:
-
-```bash
-python3 inferno_central_command.py onboard
-```
-
-That tells you what to read and what the desk's current verdict is. If
-that disagrees with this doc, the onboard digest wins.
+21. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
+22. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
+23. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
+24. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
 
 ## Authoritative ordering
 

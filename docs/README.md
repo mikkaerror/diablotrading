@@ -1,11 +1,24 @@
 # Docs
 
-This is the index. The full reading order lives in
+This is the clean index for the desk. The deeper first-session path lives in
 [`READING_ORDER.md`](READING_ORDER.md).
 
-## The five-doc anchor
+## Command Center First
 
-Read these first — together they define the desk:
+Always start with live artifacts before reading long docs:
+
+```bash
+python3 inferno_model_command_center.py build
+python3 inferno_brain_console.py
+python3 inferno_doctor.py
+```
+
+If generated artifacts disagree with durable docs, the artifacts win for the
+current trading day.
+
+## The Five-Doc Anchor
+
+Read these first. Together they define the desk:
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current state, priorities, saved truth, and next moves.
 - [`MODEL_COLLABORATION_BRIEF.md`](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
@@ -13,28 +26,28 @@ Read these first — together they define the desk:
 - [`MODULE_INDEX.md`](MODULE_INDEX.md) — which module owns what.
 - [`ENGINEERING_CONVENTIONS.md`](ENGINEERING_CONVENTIONS.md) — the patterns every new module follows.
 
-## The mission (read once a month)
+## Mission
 
-- [`MISSION.md`](MISSION.md) — the honest North Star: compound survival, four phases, entry + **exit** framework, milestones, ambitious compounding without ruin.
+- [`MISSION.md`](MISSION.md) — the honest North Star: compound survival, four phases, entry + exit framework, milestones, ambitious compounding without ruin.
 
-## Operator one-pagers
+## Operator One-Pagers
 
 - [`TRADING_DAY_CHECKLIST.md`](TRADING_DAY_CHECKLIST.md) — the daily flow from morning brief to filled order, with the exit rules built in.
 - [`DAILY_BRIEFING_SETUP.md`](DAILY_BRIEFING_SETUP.md) — get the operator briefing in your inbox at 6:10 AM every day.
 
-## The math
+## Math
 
 - [`MATH.md`](MATH.md) — every probability and statistical primitive the desk uses, with formulas, edge cases, and worked examples. Required reading before changing any math module.
 
-## Operate the desk
+## Operate The Desk
 
 - [`RUNBOOK.md`](RUNBOOK.md) — every operator command.
 - [`OPERATING_MODEL.md`](OPERATING_MODEL.md) — process flow, role ownership.
-- [`CHECKLISTS.md`](CHECKLISTS.md) — daily / weekly / pre-trade.
+- [`CHECKLISTS.md`](CHECKLISTS.md) — daily, weekly, and pre-trade checklists.
 - [`RISK_POLICY.md`](RISK_POLICY.md) — hard caps.
 - [`REPOSITORY_HYGIENE.md`](REPOSITORY_HYGIENE.md) — what is safe to commit, ignore, and push.
 
-## Execution lane
+## Execution Lane
 
 - [`EXECUTION_MODEL.md`](EXECUTION_MODEL.md)
 - [`PAPER_TEST_LOOP.md`](PAPER_TEST_LOOP.md)
@@ -50,39 +63,20 @@ Read these first — together they define the desk:
 
 - [`CLOUD_AUTOMATION.md`](CLOUD_AUTOMATION.md)
 
-## Research / math
+## Research And Playbooks
 
-- [`MATH.md`](MATH.md) — every probability and statistical primitive the desk uses (Wilson, bootstrap, Kelly, VRP).
 - [`HEDGE_FUND_METRICS.md`](HEDGE_FUND_METRICS.md)
 - [`CAMPAIGN_SIMULATION.md`](CAMPAIGN_SIMULATION.md)
 - [`PLAYBOOK_EARNINGS.md`](PLAYBOOK_EARNINGS.md)
 - [`PLAYBOOK_LONG_TERM.md`](PLAYBOOK_LONG_TERM.md)
 
-## Live state
+## Collaboration And Hygiene
 
-Live state lives in artifacts, not docs. Start with the command center:
-
-```bash
-python3 inferno_model_command_center.py build
-```
-
-Then read:
-
-- `reports/model_command_center_latest.txt` — executive summary, safety rails, next actions, canonical report map.
-- `docs/PROJECT_STATUS.md` — durable PM snapshot and priorities.
-
-For a fast console view, run the brain console:
-
-```bash
-python3 inferno_brain_console.py
-```
-
-For health only, run the doctor:
-
-```bash
-python3 inferno_doctor.py
-```
+- [`MODEL_COLLABORATION_BRIEF.md`](MODEL_COLLABORATION_BRIEF.md) — how Codex, Claude, and the operator split work.
+- [`REPOSITORY_HYGIENE.md`](REPOSITORY_HYGIENE.md) — what is safe to commit, ignore, and push.
+- [`ENGINEERING_CONVENTIONS.md`](ENGINEERING_CONVENTIONS.md) — how to add modules without turning the repo into spaghetti.
 
 ## Archive
 
-Historical plan docs (shipped or superseded): [`archive/`](archive/).
+Historical plan docs, shipped plans, and superseded notes live in
+[`archive/`](archive/). Useful for archaeology, not daily operation.

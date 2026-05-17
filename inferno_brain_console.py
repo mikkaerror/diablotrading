@@ -69,6 +69,8 @@ ARTIFACT_PATHS: dict[str, Path] = {
     "walkForward": DATA_DIR / "inferno_walk_forward.json",
     "factorRegression": DATA_DIR / "inferno_factor_regression.json",
     "mathVerify": DATA_DIR / "inferno_math_verify.json",
+    "slateNormalizer": DATA_DIR / "inferno_slate_normalized.json",
+    "paperBootstrap": DATA_DIR / "inferno_paper_bootstrap.json",
     "heartbeat": DATA_DIR / "inferno_heartbeat.json",
     "tosStability": DATA_DIR / "inferno_tos_export_stability.json",
     "tosChain": DATA_DIR / "inferno_tos_export_chain.json",
@@ -176,6 +178,8 @@ def build_console_state(now: datetime | None = None) -> dict[str, Any]:
     walk_forward = snapshot["walkForward"]["payload"] or {}
     factor_regression = snapshot["factorRegression"]["payload"] or {}
     math_verify = snapshot["mathVerify"]["payload"] or {}
+    slate_normalizer = snapshot["slateNormalizer"]["payload"] or {}
+    paper_bootstrap = snapshot["paperBootstrap"]["payload"] or {}
     heartbeat = snapshot["heartbeat"]["payload"] or {}
     stability = snapshot["tosStability"]["payload"] or {}
     chain_payload = snapshot["tosChain"]["payload"] or {}
@@ -303,6 +307,21 @@ def build_console_state(now: datetime | None = None) -> dict[str, Any]:
             "totalViolations": math_verify.get("totalViolations"),
             "missingArtifacts": math_verify.get("missingArtifacts"),
             "moduleCount": math_verify.get("moduleCount"),
+        },
+        "slateNormalizer": {
+            "verdict": slate_normalizer.get("verdict"),
+            "slateSize": slate_normalizer.get("slateSize"),
+            "passing": slate_normalizer.get("passingCount"),
+            "gatePercentile": slate_normalizer.get("gatePercentile"),
+            "topTicker": (slate_normalizer.get("rows") or [{}])[0].get("ticker"),
+            "topComposite": (slate_normalizer.get("rows") or [{}])[0].get("compositeRank"),
+        },
+        "paperBootstrap": {
+            "verdict": paper_bootstrap.get("verdict"),
+            "proposals": paper_bootstrap.get("proposalCount"),
+            "liveQuality": paper_bootstrap.get("liveQualityCount"),
+            "paperOnly": paper_bootstrap.get("paperOnlyCount"),
+            "slateSize": paper_bootstrap.get("slateSize"),
         },
         "breathing": {
             "heartbeatVerdict": heartbeat.get("verdict"),
@@ -537,6 +556,28 @@ def render_console(state: dict[str, Any]) -> str:
             f"−features {fr_state.get('negative', 0)} | "
             f"N={fr_state.get('sampleSize', 0)} "
             f"({fr_state.get('featureCount', 0)} cols)"
+        )
+    sn_state = state.get("slateNormalizer") or {}
+    if sn_state.get("verdict"):
+        top = sn_state.get("topTicker") or "-"
+        top_rank = sn_state.get("topComposite")
+        top_str = (
+            f" | top {top} ({top_rank:.1f})"
+            if isinstance(top_rank, (int, float))
+            else f" | top {top}"
+        )
+        lines.append(
+            f"SLATE NORMALIZER  {sn_state.get('verdict')} | "
+            f"passing {sn_state.get('passing', 0)}/{sn_state.get('slateSize', 0)} | "
+            f"gate >= {sn_state.get('gatePercentile')}{top_str}"
+        )
+    pb_state = state.get("paperBootstrap") or {}
+    if pb_state.get("verdict"):
+        lines.append(
+            f"PAPER BOOTSTRAP   {pb_state.get('verdict')} | "
+            f"proposals {pb_state.get('proposals', 0)} | "
+            f"live-quality {pb_state.get('liveQuality', 0)} | "
+            f"paper-only {pb_state.get('paperOnly', 0)}"
         )
     mv_state = state.get("mathVerify") or {}
     if mv_state.get("verdict"):

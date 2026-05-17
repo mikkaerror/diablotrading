@@ -514,6 +514,129 @@ last-line defense against silent math drift between modules.
 
 **Module:** `inferno_math_verify`.
 
+## 18. Paper bootstrap scoring
+
+The bridge from Phase 1 to Phase 2. Phase 2 unlocks when the math has
+~30 closed paper outcomes per active strategy, but the strict live
+filter (all five conviction gates simultaneously) typically clears zero
+names per day. Without paper data the promotion math has nothing to
+learn from. The bootstrapper solves this by scoring each slate row on
+*how many* of the five gates it clears:
+
+```
+score = sum([
+    readyScore   >= 72,
+    confidence   >= 2,
+    daysToEarnings <= 21,
+    setupRec     not in {"Avoid"},
+    bool(signalTrigger),
+])
+```
+
+Each predicate evaluates to 0 or 1, so `score ∈ [0, 5]`. The default
+admit threshold is 3-of-5; the operator can raise it (stricter paper
+seeding) or lower it (more seed data, lower quality).
+
+Every proposal carries `paperBootstrap: true`, which the strategy lab
+and authority controller respect — bootstrap outcomes feed the shadow
+ledger but **never count toward live promotion math** until the operator
+manually reclassifies them. The `liveQualityYet` flag is true *only*
+when `score == 5`, i.e. the proposal would have cleared the live filter
+on its own.
+
+Sizing: each bootstrap paper ticket is `BOOTSTRAP_TICKET_DOLLARS = $50`
+of paper notional. Total open bootstrap tickets capped at 10. These caps
+are intentionally tiny — bootstrap seed data is not live capital.
+
+Verdict ladder:
+
+| Condition                                 | Verdict                  |
+|-------------------------------------------|--------------------------|
+| no slate                                  | no-evidence              |
+| no row at or above threshold              | insufficient-relaxation  |
+| fewer than 3 admitted                     | slate-too-thin           |
+| ≥ 3 admitted, all live-quality            | live-quality-found       |
+| ≥ 3 admitted, mixed                       | ready-to-seed            |
+
+**Module:** `inferno_paper_bootstrap`.
+
+## 19. Slate normalizer percentile ranks
+
+The slate normalizer solves a practical scale bug: if an upstream tracker
+producer emits `Ready Score` on a 0-10 scale while the historical gate
+expects 0-100, absolute thresholds can fail every name forever. The
+normalizer adds a research-only, cross-sectional layer that asks:
+"which names are strongest *relative to today's slate*?"
+
+For a vector of non-null values `x_1, ..., x_n`, percentile rank is:
+
+```
+rank(x_i) = 100 * (count_below + 0.5 * count_equal) / n
+```
+
+This averaged-rank convention is stable under ties and invariant to
+linear scaling. A score of `2.1` on a 0-10 axis and `21` on a 0-100 axis
+rank identically if the cross-sectional ordering is unchanged.
+
+Ranked fields:
+
+| Field | Rank output |
+|---|---|
+| `readyScore` | `readyRank` |
+| `valueScore` | `valueRank` |
+| `momentumScore` | `momentumRank` |
+| `squeezeScore` | `squeezeRank` |
+| `ivRank` | `ivPercentileRank` |
+
+`compositeRank` is the geometric mean of available component ranks, so
+one weak pillar drags the whole candidate down. This mirrors the
+evidence-strength philosophy: the weakest part of the thesis matters.
+
+Strict contract: `researchOnly=true`, `diagnosticOnly=true`,
+`promotable=false`. The normalizer is review context only. It does not
+override the five live gates, touch authority, or make a trade eligible.
+
+**Module:** `inferno_slate_normalizer`.
+
+## 19. Cross-sectional percentile rank (the absolute-threshold fix)
+
+The conviction gate `readyScore ≥ 72` is brittle: if the upstream score
+formula changes scale (or breaks), the gate either lets everything in or
+nothing. The empirical finding on the live 143-name slate was that
+*every* name produced a Ready Score under 10 — the gate had been
+pinned to a 100-scale while the formula produced 0–10.
+
+Percentile rank is **scale-invariant**. For a column ``x_1, ..., x_n``,
+the rank of value ``x_i`` is:
+
+```
+rank(x_i) = 100 · (count_below + 0.5 · count_equal) / n
+```
+
+This is the *averaged* percentile-rank convention — robust to ties,
+well-defined on any scale. Multiplying every value by 10× leaves ranks
+unchanged. Adding a constant leaves ranks unchanged. The gate becomes
+"top N percent of slate" instead of "above threshold X."
+
+Composite rank across multiple score columns uses the geometric mean
+(same asymmetry as `inferno_evidence_strength` — the weakest component
+caps the composite):
+
+```
+composite_rank = exp( (1/k) · Σ ln(rank_i) )      over k active components
+```
+
+The default gate is `top 20%` (readyRank ≥ 80). Picky operator modes:
+
+| Gate | Meaning |
+|------|---------|
+| ≥ 80 | top 20% (default) |
+| ≥ 90 | top 10% (Ackman-strict) |
+| ≥ 95 | top 5% (Buffett-strict) |
+| ≥ 99 | top 1% (Simons-strict, bell-cow only) |
+
+**Module:** `inferno_slate_normalizer`.
+
 ## Where to add a new metric
 
 When the desk adds a new probability or statistical primitive:

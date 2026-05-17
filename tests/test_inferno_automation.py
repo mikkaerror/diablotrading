@@ -22,6 +22,15 @@ from inferno_tos_ui_route import monitor_account_statement_visible, preferred_ce
 class ExportShortcutTests(unittest.TestCase):
     """Verify keyboard shortcut parsing stays deterministic."""
 
+    def setUp(self) -> None:
+        """Keep export-bridge tests independent from the operator's local mode."""
+        self._export_enabled_patch = patch(
+            "inferno_tos_export_bridge.TOS_EXPORT_AUTOMATION_ENABLED",
+            True,
+        )
+        self._export_enabled_patch.start()
+        self.addCleanup(self._export_enabled_patch.stop)
+
     def test_parse_shortcut_keeps_key_and_modifiers(self) -> None:
         """A standard command-shift shortcut should parse cleanly."""
         key, modifiers = parse_shortcut("command+shift+e")
