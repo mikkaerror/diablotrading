@@ -63,6 +63,7 @@ from inferno_factor_regression import (
 )
 from inferno_math_verify import build_math_verify, save_math_verify
 from inferno_paper_bootstrap import build_bootstrap, save_bootstrap
+from inferno_paper_bottleneck_reducer import build_reducer, save_reducer
 from inferno_slate_normalizer import build_normalized, save_normalized
 from inferno_daily_success import build_daily_success, save_daily_success
 from inferno_decision_brief import build_decision_briefs, save_decision_briefs
@@ -294,6 +295,19 @@ def _extract_summary(name: str, payload: dict[str, Any]) -> dict[str, Any]:
             "bestByWilsonLower": rankings.get("bestByWilsonLower"),
             "bestByProfitFactor": rankings.get("bestByProfitFactor"),
         }
+    if name == "paperBottleneckReducer":
+        counts = payload.get("counts") or {}
+        return {
+            "verdict": payload.get("verdict"),
+            "scenarioTarget": payload.get("scenarioTarget"),
+            "scenarios": counts.get("scenarios"),
+            "executablePaper": counts.get("executablePaper"),
+            "shadowOnly": counts.get("shadowOnly"),
+            "topFive": [
+                item.get("ticker")
+                for item in (payload.get("topFiveFocus") or [])
+            ],
+        }
     return {"generatedAt": payload.get("generatedAt")}
 
 
@@ -501,6 +515,7 @@ def build_daily_loop() -> dict[str, Any]:
         return slate_normalizer_payload
 
     paper_bootstrap_payload: dict[str, Any] | None = None
+    paper_reducer_payload: dict[str, Any] | None = None
 
     def paper_bootstrap_builder() -> dict[str, Any]:
         # Seeds the paper ledger at relaxed gating so the promotion math
@@ -509,6 +524,14 @@ def build_daily_loop() -> dict[str, Any]:
         paper_bootstrap_payload = build_bootstrap()
         save_bootstrap(paper_bootstrap_payload)
         return paper_bootstrap_payload
+
+    def paper_reducer_builder() -> dict[str, Any]:
+        # Builds a larger research slate so the desk can collect evidence
+        # without relaxing paperMoney or live authority gates.
+        nonlocal paper_reducer_payload
+        paper_reducer_payload = build_reducer()
+        save_reducer(paper_reducer_payload)
+        return paper_reducer_payload
 
     def command_builder() -> dict[str, Any]:
         nonlocal command_payload
@@ -548,6 +571,7 @@ def build_daily_loop() -> dict[str, Any]:
     steps.append(_run_step("evidenceStrength", evidence_strength_builder))
     steps.append(_run_step("slateNormalizer", slate_normalizer_builder))
     steps.append(_run_step("paperBootstrap", paper_bootstrap_builder))
+    steps.append(_run_step("paperBottleneckReducer", paper_reducer_builder))
     steps.append(_run_step("mathVerify", math_verify_builder))
     steps.append(_run_step("commandCenter", command_builder))
     # cycleJournal must run last so it snapshots the freshest artifacts. The

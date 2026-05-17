@@ -52,6 +52,7 @@ MARKET_CONTEXT_AUDIT_FILE = ROOT / "data" / "inferno_market_context_audit.json"
 TICKER_UNIVERSE_AUDIT_FILE = ROOT / "data" / "inferno_ticker_universe_audit.json"
 DATA_READINESS_AUDIT_FILE = ROOT / "data" / "inferno_data_readiness_audit.json"
 PAPER_TEST_DIRECTOR_FILE = ROOT / "data" / "inferno_paper_test_director.json"
+PAPER_BOTTLENECK_REDUCER_FILE = ROOT / "data" / "inferno_paper_bottleneck_reducer.json"
 PAPER_EVIDENCE_LOOP_FILE = ROOT / "data" / "inferno_paper_evidence_loop.json"
 PAPER_EXIT_AUDIT_FILE = ROOT / "data" / "inferno_paper_exit_audit.json"
 LIVE_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_live_account_sync.json"
@@ -941,6 +942,29 @@ def main() -> int:
     )
     lines.append(summarize_status("Paper test director", paper_director_ok, paper_director_detail))
     if paper_test_director and not paper_director_ok:
+        warnings += 1
+
+    paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    paper_reducer_today = in_current_service_cycle(str(paper_reducer.get("generatedAt", "")), now=now)
+    paper_reducer_counts = paper_reducer.get("counts") or {}
+    paper_reducer_ok = paper_reducer_today and paper_reducer.get("verdict") in {
+        "scenario-slate-ready",
+        "scenario-slate-thin",
+    }
+    paper_reducer_detail = (
+        f"{paper_reducer.get('verdict')} | scenarios={paper_reducer_counts.get('scenarios', 0)} | "
+        f"paper={paper_reducer_counts.get('executablePaper', 0)} | "
+        f"shadow={paper_reducer_counts.get('shadowOnly', 0)}"
+        if paper_reducer_today
+        else json.dumps(
+            {
+                "generatedAt": paper_reducer.get("generatedAt"),
+                "verdict": paper_reducer.get("verdict"),
+            }
+        )
+    )
+    lines.append(summarize_status("Paper bottleneck reducer", paper_reducer_ok, paper_reducer_detail))
+    if paper_reducer and not paper_reducer_ok:
         warnings += 1
 
     paper_evidence_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}

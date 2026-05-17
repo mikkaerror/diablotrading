@@ -146,6 +146,7 @@ Safety            — authority, risk, secrets
 | Module | Purpose | Artifact |
 |---|---|---|
 | `inferno_paper_test_director.py` | Coordinator for paper-staged tickets | `data/inferno_paper_test_director.json` |
+| `inferno_paper_bottleneck_reducer.py` | Builds a 10+ scenario paper/shadow evidence slate without widening authority | `data/inferno_paper_bottleneck_reducer.json` |
 | `inferno_paper_evidence_loop.py` | Track paper outcomes from staging through close | `data/inferno_paper_evidence_loop.json` |
 | `inferno_paper_execution.py` | Stage paper orders (paperMoney only) | side-effects on paper ledger |
 | `inferno_paper_exit_auditor.py` | Audit open paper positions for stale exits | `data/inferno_paper_exit_auditor.json` |

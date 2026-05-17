@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-15.
+Last updated: 2026-05-17.
 
 The desk's "where are we right now" memo. Read this first.
 
@@ -10,10 +10,12 @@ The desk's "where are we right now" memo. Read this first.
 approved suffix, the live book is clear, capital can be reviewed manually with
 warnings, and all automated live trading remains locked.
 
-Latest readiness sweep: 2026-05-15 13:36 MT. Capital deployment readiness is
+Latest readiness sweep: 2026-05-17 15:31 MT. Capital deployment readiness is
 `manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
 `clean`; paper evidence is still the bottleneck with 30 closed scored outcomes
-remaining before any automation promotion.
+remaining before any automation promotion. The new bottleneck reducer now
+creates a 12-scenario daily paper/shadow evidence slate while preserving the
+paper director's stricter stageability warning.
 
 `reports/model_command_center_latest.txt` is now the PM landing page. If this
 doc disagrees with that artifact, the command-center artifact wins.
@@ -22,7 +24,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 
 1. Capital deployment readiness: review operator-entered cash manually, keep live submit OFF.
 2. Live account lane: read-only, scoped to the configured approved suffix.
-3. Paper evidence: produce closed promotion-quality samples.
+3. Paper evidence: run the 12-scenario reducer, then score the top-five focus names.
 4. Tracker sync: clean, fail-closed on vendor gaps.
 5. Morning brief + ops maintenance: fresh, no silent failures.
 6. Docs + artifacts: easy for the next model to inherit.
@@ -52,6 +54,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Factor regression | shipped | hand-rolled logistic regression with bootstrap-CI coefficients |
 | Math invariant verifier | shipped | cross-module sanity check against every formula in MATH.md |
 | Paper bootstrapper | shipped | seeds paper ledger at relaxed gating so promotion math can earn Phase 2 |
+| Paper bottleneck reducer | shipped | targets 12 paper/shadow scenarios daily; top five become review focus |
 | Slate normalizer | shipped | scale-invariant percentile ranks; absolute gates are no longer brittle |
 | Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
 | Paper evidence | blocked for automation | no viable paper tests; 30 closed scored outcomes still needed |
@@ -69,6 +72,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Can I size tomorrow's capital? | `reports/capital_deployment_readiness_latest.txt` |
 | Which risk gates are blocking? | `reports/risk_gate_audit_latest.txt` |
 | What did the paper lane produce? | `reports/paper_test_director_latest.txt` |
+| What 10+ scenarios should we track? | `reports/paper_bottleneck_reducer_latest.txt` |
 | Do the formulas still check out? | `reports/math_verify_latest.txt` |
 | What is the morning brief? | `reports/morning_brief_latest.txt` |
 
@@ -84,7 +88,7 @@ If this doc disagrees with those artifacts, the artifacts win.
 
 ## What still needs work
 
-- Paper evidence: more closed promotion-quality samples.
+- Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios but all current rows are shadow-only.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: manual review only; no automated submission.
 - Automation promotion: manual approval only until paper evidence clears promotion gates.
@@ -94,8 +98,8 @@ If this doc disagrees with those artifacts, the artifacts win.
 
 1. Treat deployable cash as manual-review capital only; no live automation.
 2. Run the command center, capital readiness, and risk gate audit before sizing any ticket.
-3. Let the paper loop accumulate. The reconciler + autorefresh handle
-   intake; the question is sample size, not infrastructure.
+3. Let the paper loop accumulate. Use the reducer's top-five focus list for
+   review, and keep the full 12-scenario slate for after-the-fact scoring.
 4. Keep the morning ops lane green so the desk stays trustworthy.
 5. Refresh this doc when the desk's verdict shifts. The four other anchor
    docs change rarely; this one is the dashboard.
