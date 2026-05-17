@@ -51,9 +51,9 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Walk-forward validator | shipped | chronological train/validate split; six-state edge survival ladder |
 | Factor regression | shipped | hand-rolled logistic regression with bootstrap-CI coefficients |
 | Math invariant verifier | shipped | cross-module sanity check against every formula in MATH.md |
-| Slate normalizer | staged | scale-invariant percentile ranks; research-only, no authority promotion |
 | Paper bootstrapper | shipped | seeds paper ledger at relaxed gating so promotion math can earn Phase 2 |
 | Slate normalizer | shipped | scale-invariant percentile ranks; absolute gates are no longer brittle |
+| Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
 | Paper evidence | blocked for automation | no viable paper tests; 30 closed scored outcomes still needed |
 
 ## Live truth lives in artifacts, not docs

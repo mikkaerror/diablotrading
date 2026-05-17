@@ -201,6 +201,24 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         self.assertTrue(statement["ok"])
         self.assertEqual(statement["_refreshFallback"], "window not visible")
 
+    @patch("inferno_live_account_sync.scrape_account_statement")
+    @patch("inferno_live_account_sync.load_json_file")
+    def test_load_statement_prefers_last_good_when_latest_artifact_failed(
+        self,
+        mock_load_json_file,
+        mock_scrape_account_statement,
+    ) -> None:
+        """Closed-TOS low-power probes should not poison live-sync artifacts."""
+        latest_failed = {"ok": False, "message": "thinkorswim main window is not visible"}
+        last_good = {"ok": True, "accountMode": "live", "accountSuffixCandidates": ["11111234"]}
+        mock_load_json_file.side_effect = [latest_failed, last_good]
+
+        statement = load_statement(refresh=False)
+
+        self.assertTrue(statement["ok"])
+        self.assertEqual(statement["accountMode"], "live")
+        mock_scrape_account_statement.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

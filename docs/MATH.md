@@ -637,6 +637,59 @@ The default gate is `top 20%` (readyRank ≥ 80). Picky operator modes:
 
 **Module:** `inferno_slate_normalizer`.
 
+## 20. Determinism and seed discipline (`inferno_math_config`)
+
+Boring, repeatable, trustworthy math depends on one rule: **same inputs
+always produce the same outputs**. The desk enforces this with a single
+master seed and deterministic per-module derivation.
+
+```
+module_seed(name) = (MATH_SEED + BLAKE2b(name)) mod 2³¹
+```
+
+`MATH_SEED` is the only number that anchors every random stream on the
+desk. Reproducing any historical run requires fixing only `MATH_SEED`
+(via `INFERNO_MATH_SEED`).
+
+### What lives in the central config
+
+`inferno_math_config` is the auditor's one-screen target view of every
+math knob. New math modules should import from it, and existing inline
+constants should migrate toward it one module at a time:
+
+- Master seed and per-module derivation
+- Bootstrap / permutation / posterior resample counts
+- Default `alpha` and `z`
+- Promotion gates (Wilson floor, sample size minimum, devil's advocate
+  thresholds, evidence strength bands)
+- Risk caps (`MAX_KELLY_FRACTION`, `MAX_DAILY_RISK_UNITS`)
+- Picky-operator levels: `default` / `ackman` / `buffett` / `simons`
+  map to the readyRank gate percentile
+- The complete verdict vocabulary (every word every math module can emit)
+
+### The single picky-operator dial
+
+The operator decides how picky the desk should be once, via
+`INFERNO_OPERATOR_LEVEL`, and every threshold downstream shifts
+consistently. Levels:
+
+| Level | readyRank gate | Meaning |
+|-------|---------------:|---------|
+| `default` | 80 | Top 20% — production default |
+| `ackman` | 90 | Top 10% — concentrated, willing to wait |
+| `buffett` | 95 | Top 5% — bell-cow names only |
+| `simons` | 99 | Top 1% — stat-arb tight |
+
+### What this buys
+
+- One file to inspect when calibrating the target threshold policy.
+- One seed discipline to migrate toward when reproducing historical runs.
+- One vocabulary to audit when reviewing every verdict the math emits.
+- Future calibration changes touch one file and are unit-tested by
+  `tests/test_inferno_math_config`.
+
+**Module:** `inferno_math_config`.
+
 ## Where to add a new metric
 
 When the desk adds a new probability or statistical primitive:

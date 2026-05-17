@@ -176,6 +176,10 @@ def load_statement(*, refresh: bool) -> dict[str, Any]:
             fallback["_refreshFallback"] = text(refreshed.get("message")) or "fresh scrape unavailable"
             return fallback
         return refreshed
+    if existing and existing.get("ok"):
+        return existing
+    if last_good and last_good.get("ok"):
+        return last_good
     if existing:
         return existing
     if last_good:
