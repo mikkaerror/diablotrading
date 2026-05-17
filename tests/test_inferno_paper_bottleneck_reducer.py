@@ -2,9 +2,11 @@ from __future__ import annotations
 
 """Regression tests for the paper bottleneck reducer."""
 
+import csv
 import unittest
+from io import StringIO
 
-from inferno_paper_bottleneck_reducer import build_reducer, tracker_shadow_candidates
+from inferno_paper_bottleneck_reducer import build_reducer, reducer_csv, tracker_shadow_candidates
 
 
 class PaperBottleneckReducerTests(unittest.TestCase):
@@ -93,6 +95,37 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertEqual([row["ticker"] for row in rows], ["MRVL"])
         self.assertTrue(rows[0]["shadowOnly"])
         self.assertEqual(rows[0]["evidenceLane"], "tracker-shadow-scenario")
+
+    def test_reducer_csv_is_flat_and_spreadsheet_friendly(self) -> None:
+        payload = {
+            "scenarioSlate": [
+                {
+                    "rank": 1,
+                    "ticker": "VNET",
+                    "evidenceLane": "shadow-scenario",
+                    "sourceLane": "hard-blocked",
+                    "scenarioScore": 84.18,
+                    "setupRec": "Straddle",
+                    "strategy": "LONG_STRADDLE",
+                    "daysUntilEarnings": 9,
+                    "readiness": 99,
+                    "confidence": 2,
+                    "estimatedMaxLoss": 750,
+                    "capitalGap": 250,
+                    "executableInPaperMoney": False,
+                    "requiresApproval": False,
+                    "shadowOnly": True,
+                    "reducerAction": "Track as shadow only.",
+                    "reasons": ["max loss exceeds cap", "wide spread"],
+                }
+            ]
+        }
+
+        rows = list(csv.DictReader(StringIO(reducer_csv(payload))))
+
+        self.assertEqual(rows[0]["ticker"], "VNET")
+        self.assertEqual(rows[0]["reasons"], "max loss exceeds cap; wide spread")
+        self.assertEqual(rows[0]["shadowOnly"], "True")
 
 
 if __name__ == "__main__":

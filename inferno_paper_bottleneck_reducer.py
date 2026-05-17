@@ -15,8 +15,10 @@ without confusing research scenarios with tradable orders.
 """
 
 import argparse
+import csv
 import json
 import os
+from io import StringIO
 from typing import Any, Callable
 
 from inferno_config import MAX_SINGLE_TICKET_DOLLARS, local_now
@@ -26,6 +28,7 @@ from server import DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_
 
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 PAPER_BOTTLENECK_REDUCER_TEXT_FILE = REPORTS_DIR / "paper_bottleneck_reducer_latest.txt"
+PAPER_BOTTLENECK_REDUCER_CSV_FILE = REPORTS_DIR / "paper_bottleneck_reducer_latest.csv"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 
 DEFAULT_SCENARIO_TARGET = int(os.environ.get("INFERNO_PBR_SCENARIO_TARGET", "12"))
@@ -334,11 +337,65 @@ def reducer_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def reducer_csv(payload: dict[str, Any]) -> str:
+    """Render the scenario slate as a spreadsheet-friendly CSV.
+
+    This is intentionally narrow and stable: the CSV is for quick review,
+    sorting, and model handoff. Nested reasons are joined into a plain-text
+    cell so the file remains easy to import into Sheets or another analysis
+    tool.
+    """
+    output = StringIO()
+    fields = [
+        "rank",
+        "ticker",
+        "evidenceLane",
+        "sourceLane",
+        "scenarioScore",
+        "setupRec",
+        "strategy",
+        "daysUntilEarnings",
+        "readiness",
+        "confidence",
+        "estimatedMaxLoss",
+        "capitalGap",
+        "executableInPaperMoney",
+        "requiresApproval",
+        "shadowOnly",
+        "reducerAction",
+        "reasons",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    for item in payload.get("scenarioSlate") or []:
+        writer.writerow({
+            "rank": item.get("rank"),
+            "ticker": item.get("ticker"),
+            "evidenceLane": item.get("evidenceLane"),
+            "sourceLane": item.get("sourceLane"),
+            "scenarioScore": item.get("scenarioScore"),
+            "setupRec": item.get("setupRec"),
+            "strategy": item.get("strategy"),
+            "daysUntilEarnings": item.get("daysUntilEarnings"),
+            "readiness": item.get("readiness"),
+            "confidence": item.get("confidence"),
+            "estimatedMaxLoss": item.get("estimatedMaxLoss"),
+            "capitalGap": item.get("capitalGap"),
+            "executableInPaperMoney": item.get("executableInPaperMoney"),
+            "requiresApproval": item.get("requiresApproval"),
+            "shadowOnly": item.get("shadowOnly"),
+            "reducerAction": item.get("reducerAction"),
+            "reasons": "; ".join(str(reason) for reason in (item.get("reasons") or [])),
+        })
+    return output.getvalue()
+
+
 def save_reducer(payload: dict[str, Any]) -> None:
-    """Persist the reducer JSON and text report."""
+    """Persist the reducer JSON, text report, and review CSV."""
     ensure_dirs()
     atomic_write_json(PAPER_BOTTLENECK_REDUCER_FILE, payload)
     atomic_write_text(PAPER_BOTTLENECK_REDUCER_TEXT_FILE, reducer_text(payload))
+    atomic_write_text(PAPER_BOTTLENECK_REDUCER_CSV_FILE, reducer_csv(payload))
 
 
 def parse_args() -> argparse.Namespace:

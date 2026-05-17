@@ -41,6 +41,7 @@ LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 PAPER_EVIDENCE_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
@@ -84,6 +85,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper",
         "question": "What paper evidence is next?",
         "artifact": "reports/paper_test_director_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "paper-scenarios",
+        "question": "What 10+ paper/shadow scenarios should we track?",
+        "artifact": "reports/paper_bottleneck_reducer_latest.csv",
         "owner": "shared",
     },
     {
@@ -318,6 +325,7 @@ def build_executive_summary(
         (
             "Evidence: "
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
+            f"scenarios={metrics.get('paperScenarioCount', 0)}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
             f"math={status_value(status.get('mathVerify') or {})}"
         ),
@@ -337,6 +345,7 @@ def build_command_center() -> dict[str, Any]:
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
@@ -370,6 +379,7 @@ def build_command_center() -> dict[str, Any]:
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
+        "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),
@@ -385,6 +395,11 @@ def build_command_center() -> dict[str, Any]:
         "liveBookWarnings": live_packet_counts.get("warnings", 0),
         "paperStageable": paper_counts.get("stageableNow", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
+        "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
+        "paperScenarioTopFive": [
+            item.get("ticker")
+            for item in (paper_reducer.get("topFiveFocus") or [])
+        ],
         "paperRemainingForPromotion": loop_counts.get("remainingForPromotion", 0),
         "capitalDeploymentVerdict": capital_readiness.get("verdict"),
         "capitalDeploymentDate": capital_readiness.get("deploymentDate"),
@@ -493,6 +508,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
+            f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
             f"- Math verify: {status_value(status.get('mathVerify') or {})}",
             "",
@@ -503,6 +519,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live review warnings: {metrics.get('liveBookWarnings', 0)}",
             f"- Paper stageable: {metrics.get('paperStageable', 0)}",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
+            f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
+            f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
             f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
             f"- Auto live allowed: {metrics.get('autoLiveAllowed')}",
             f"- Risk gate hard fails: {metrics.get('riskGateHardFails')}",
