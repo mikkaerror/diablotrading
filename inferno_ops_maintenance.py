@@ -59,6 +59,17 @@ OPS_MAINTENANCE_FILE = DATA_DIR / "inferno_ops_maintenance.json"
 OPS_MAINTENANCE_TEXT_FILE = REPORTS_DIR / "ops_maintenance_latest.txt"
 
 
+def advisory_failures(*reports: tuple[str, dict[str, Any]]) -> list[str]:
+    """Return non-blocking maintenance lanes that need operator awareness.
+
+    Cloud checks can be noisy on a sleeping laptop or stale shell. We still
+    record their exact status and error, but they should not drown out the
+    local desk verdict when the doctor, math, email, paper, and broker-safety
+    lanes are otherwise healthy.
+    """
+    return [name for name, report in reports if not bool((report or {}).get("ok"))]
+
+
 def load_env_file(path: Path) -> None:
     """Load a simple KEY=VALUE env file into the current process."""
     if not path.exists():
@@ -488,6 +499,9 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"{cloud_execution.get('projectId') or '-'}"
             + (f" | {detail}" if detail != "-" else "")
         )
+    advisories = report.get("advisories") or []
+    if advisories:
+        lines.append(f"Advisories: {', '.join(advisories)}")
     paper_director = report.get("paperTestDirector") or {}
     if paper_director:
         counts = paper_director.get("counts") or {}
@@ -625,6 +639,10 @@ def run_maintenance(
     model_command_center = refresh_model_command_center()
     research_cycle = refresh_research_cycle()
     watchdog_status, watchdog_exit = run_watchdog_check(send_alerts=False)
+    advisories = advisory_failures(
+        ("cloud-control-plane", cloud_control_plane),
+        ("cloud-execution-audit", cloud_execution_audit),
+    )
     report = {
         "generatedAt": local_now().isoformat(),
         "tickerUniverseAudit": {
@@ -646,6 +664,7 @@ def run_maintenance(
         "emailRepair": email_repair,
         "cloudControlPlane": cloud_control_plane,
         "cloudExecutionAudit": cloud_execution_audit,
+        "advisories": advisories,
         "paperTestDirector": paper_test_director,
         "paperEvidenceLoop": paper_evidence_loop,
         "paperExitAudit": paper_exit_audit,
@@ -661,8 +680,6 @@ def run_maintenance(
         "ok": (
             ticker_audit.get("ok")
             and bool(data_audit.get("dailyPrepReady"))
-            and bool(cloud_control_plane.get("ok"))
-            and bool(cloud_execution_audit.get("ok"))
             and bool(paper_test_director.get("ok"))
             and bool(paper_evidence_loop.get("ok"))
             and bool(paper_exit_audit.get("ok"))

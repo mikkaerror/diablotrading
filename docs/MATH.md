@@ -525,13 +525,23 @@ learn from. The bootstrapper solves this by scoring each slate row on
 
 ```
 score = sum([
-    readyScore   >= 72,
+    readiness    >= 72,            # 0-100 percent, computed via score_to_percent
     confidence   >= 2,
     daysToEarnings <= 21,
     setupRec     not in {"Avoid"},
     bool(signalTrigger),
 ])
 ```
+
+The gate is evaluated against the row's computed ``readiness`` field
+(0–100 percent, produced by ``morning_inferno_pipeline.score_to_percent``
+from the raw ``readyScore`` column). Earlier revisions of this doc and of
+``inferno_paper_bootstrap`` compared the raw 0–~4 sheet column directly
+against the 0–100 threshold; that was the bug §19 below describes.
+Hand-built fixtures and legacy rows without a ``readiness`` field still
+fall back to treating ``readyScore`` as if it were already on a 0–100
+axis (see ``_readiness_percent``), which preserves historical test
+semantics.
 
 Each predicate evaluates to 0 or 1, so `score ∈ [0, 5]`. The default
 admit threshold is 3-of-5; the operator can raise it (stricter paper
@@ -562,23 +572,42 @@ Verdict ladder:
 
 ## 19. Slate normalizer percentile ranks
 
-The slate normalizer solves a practical scale bug: if an upstream tracker
-producer emits `Ready Score` on a 0-10 scale while the historical gate
-expects 0-100, absolute thresholds can fail every name forever. The
-normalizer adds a research-only, cross-sectional layer that asks:
-"which names are strongest *relative to today's slate*?"
+The slate normalizer solves a practical scale bug — and provides a
+permanent scale-invariant safety net so that fix can never silently
+regress.
 
-For a vector of non-null values `x_1, ..., x_n`, percentile rank is:
+### The bug it was built for
+
+The historical conviction gate ``readyScore ≥ 72`` was brittle: if the
+upstream score formula changes scale (or breaks), the gate either lets
+everything in or nothing. The empirical finding on the live 143-name
+slate was that *every* name produced a raw Ready Score under 10 — the
+gate had been pinned to a 100-scale while the formula (a Google Sheets
+cell written by ``morning_inferno_pipeline.sync_score_formulas`` —
+upstream of Inferno's daily refresh, not in the Backtest repo) produced
+values in the 0–~4 range.
+
+The downstream gate now compares ``readiness`` (a 0–100 percent
+produced by ``score_to_percent(readyScore, ceiling=2.5)``) against the
+72 threshold, in both ``inferno_operator_briefing`` and
+``inferno_paper_bootstrap``. With that fix in place, the slate
+normalizer's percentile ranks are belt-and-suspenders rather than
+load-bearing.
+
+### Percentile rank math
+
+For a column ``x_1, ..., x_n``, the rank of value ``x_i`` is:
 
 ```
-rank(x_i) = 100 * (count_below + 0.5 * count_equal) / n
+rank(x_i) = 100 · (count_below + 0.5 · count_equal) / n
 ```
 
-This averaged-rank convention is stable under ties and invariant to
-linear scaling. A score of `2.1` on a 0-10 axis and `21` on a 0-100 axis
-rank identically if the cross-sectional ordering is unchanged.
+This is the *averaged* percentile-rank convention — stable under ties,
+well-defined on any scale. Multiplying every value by 10× leaves ranks
+unchanged. Adding a constant leaves ranks unchanged. The gate becomes
+"top N percent of slate" instead of "above threshold X."
 
-Ranked fields:
+### Ranked fields
 
 | Field | Rank output |
 |---|---|
@@ -588,49 +617,18 @@ Ranked fields:
 | `squeezeScore` | `squeezeRank` |
 | `ivRank` | `ivPercentileRank` |
 
-`compositeRank` is the geometric mean of available component ranks, so
-one weak pillar drags the whole candidate down. This mirrors the
-evidence-strength philosophy: the weakest part of the thesis matters.
-
-Strict contract: `researchOnly=true`, `diagnosticOnly=true`,
-`promotable=false`. The normalizer is review context only. It does not
-override the five live gates, touch authority, or make a trade eligible.
-
-**Module:** `inferno_slate_normalizer`.
-
-## 19. Cross-sectional percentile rank (the absolute-threshold fix)
-
-The historical conviction gate `readyScore ≥ 72` was brittle: if the upstream score
-formula changes scale (or breaks), the gate either lets everything in or
-nothing. The empirical finding on the live 143-name slate was that
-*every* name produced a Ready Score under 10 — the gate had been
-pinned to a 100-scale while the formula produced 0–10.
-
-The current live gate uses computed `readiness ≥ 72`, where `readiness`
-is normalized to a 0-100 axis before the operator briefing, paper
-bootstrapper, and dashboard apply the threshold.
-
-Percentile rank is **scale-invariant**. For a column ``x_1, ..., x_n``,
-the rank of value ``x_i`` is:
-
-```
-rank(x_i) = 100 · (count_below + 0.5 · count_equal) / n
-```
-
-This is the *averaged* percentile-rank convention — robust to ties,
-well-defined on any scale. Multiplying every value by 10× leaves ranks
-unchanged. Adding a constant leaves ranks unchanged. The gate becomes
-"top N percent of slate" instead of "above threshold X."
-
-Composite rank across multiple score columns uses the geometric mean
-(same asymmetry as `inferno_evidence_strength` — the weakest component
-caps the composite):
+``compositeRank`` is the geometric mean of available component ranks:
 
 ```
 composite_rank = exp( (1/k) · Σ ln(rank_i) )      over k active components
 ```
 
-The default gate is `top 20%` (readyRank ≥ 80). Picky operator modes:
+One weak pillar drags the whole candidate down — the same asymmetry as
+``inferno_evidence_strength``.
+
+### Picky-operator gates
+
+The default gate is ``top 20%`` (readyRank ≥ 80). Picky operator modes:
 
 | Gate | Meaning |
 |------|---------|
@@ -638,6 +636,12 @@ The default gate is `top 20%` (readyRank ≥ 80). Picky operator modes:
 | ≥ 90 | top 10% (Ackman-strict) |
 | ≥ 95 | top 5% (Buffett-strict) |
 | ≥ 99 | top 1% (Simons-strict, bell-cow only) |
+
+### Strict contract
+
+``researchOnly=true``, ``diagnosticOnly=true``, ``promotable=false``.
+The normalizer is review context only. It does not override the five
+live gates, touch authority, or make a trade eligible.
 
 **Module:** `inferno_slate_normalizer`.
 

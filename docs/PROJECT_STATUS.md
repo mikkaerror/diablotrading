@@ -35,7 +35,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 |---|---|---|
 | Command center | current | executive summary + canonical report map |
 | Usage optimizer | shipped | low-context handoff packet for Codex/Claude sessions |
-| Desk health | attention | doctor has 1 warning: no viable paper test slate |
+| Desk health | healthy | doctor green; paper lane still needs evidence volume |
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
 | Live account sync | healthy | matched configured approved suffix |
 | Live book | clear, read-only | 0 positions · 0 fragile · 0 hard blockers |

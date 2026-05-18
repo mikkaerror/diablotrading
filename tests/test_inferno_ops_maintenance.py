@@ -261,6 +261,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertTrue(report["ok"])
             self.assertEqual(saved["cloudControlPlane"]["status"], "ready")
             self.assertEqual(saved["cloudExecutionAudit"]["status"], "healthy")
+            self.assertEqual(saved["advisories"], [])
             self.assertEqual(saved["paperTestDirector"]["status"], "approval-bottleneck")
             self.assertEqual(saved["paperEvidenceLoop"]["status"], "approval-bottleneck")
             self.assertEqual(saved["brokerPreview"]["status"], "preview-built")
@@ -281,6 +282,15 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))
+
+    def test_advisory_failures_keep_cloud_noise_visible_without_blocking_core_desk(self) -> None:
+        """Cloud refresh failures are advisory so local ops can still proceed."""
+        advisories = ops_maintenance.advisory_failures(
+            ("cloud-control-plane", {"ok": False, "status": "refresh-failed", "error": "timeout"}),
+            ("cloud-execution-audit", {"ok": True, "status": "healthy"}),
+        )
+
+        self.assertEqual(advisories, ["cloud-control-plane"])
 
     def test_refresh_stale_approval_governor_demotes_only_pending(self) -> None:
         """The governor delegate must surface demotions and rebuild execution queue exactly once."""

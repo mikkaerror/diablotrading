@@ -500,8 +500,8 @@ For a fast new-model landing packet:
 
 The usage optimizer writes:
 
-- [data/inferno_usage_optimizer.json](data/inferno_usage_optimizer.json)
-- [reports/usage_optimizer_latest.txt](reports/usage_optimizer_latest.txt)
+- [data/inferno_usage_optimizer.json](../data/inferno_usage_optimizer.json)
+- [reports/usage_optimizer_latest.txt](../reports/usage_optimizer_latest.txt)
 
 Use it to keep Codex/Claude handoffs small: read the listed files first,
 avoid pasting generated data/logs by default, and replace repeated manual
