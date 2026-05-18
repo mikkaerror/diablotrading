@@ -84,6 +84,19 @@ Where docs conflict (rare):
 5. `MODEL_THEORY.md` — operating theory.
 6. Everything else — context.
 
+## Low-Context Handoff
+
+When usage is tight, run:
+
+```bash
+./run_inferno_central_command.sh
+./run_inferno_usage_optimizer.sh
+```
+
+Then start with `reports/usage_optimizer_latest.txt`. It lists the smallest
+safe reading set and the generated artifacts that should not be pasted by
+default.
+
 ## Archive
 
 Historical plans live in [`archive/`](archive/). Useful for archeology;

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-17.
+Last updated: 2026-05-18.
 
 The desk's "where are we right now" memo. Read this first.
 
@@ -34,6 +34,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Lane | State | Notes |
 |---|---|---|
 | Command center | current | executive summary + canonical report map |
+| Usage optimizer | shipped | low-context handoff packet for Codex/Claude sessions |
 | Desk health | attention | doctor has 1 warning: no viable paper test slate |
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
 | Live account sync | healthy | matched configured approved suffix |
@@ -65,6 +66,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 |---|---|
 | Is anything broken? | `reports/doctor_latest.txt` |
 | What matters right now? | `reports/model_command_center_latest.txt` |
+| What should a new model read first? | `reports/usage_optimizer_latest.txt` |
 | What does the brain see right now? | `inferno_brain_console.py` |
 | Did today count as a good day? | `reports/daily_success_latest.txt` |
 | What is the live book? | `reports/live_position_review_latest.txt` |
@@ -85,6 +87,7 @@ If this doc disagrees with those artifacts, the artifacts win.
 - The TOS lane stays read-only. Background export triggering is disabled; manual/supervised export remains available.
 - Watchlist intake now flows TOS → sheet → reconcile every 5 minutes.
 - Command-center reporting now starts with executive summary, math status, and canonical report map.
+- Usage optimizer now creates a compact read-first / do-not-paste handoff to reduce repeated context spend.
 
 ## What still needs work
 
@@ -101,7 +104,8 @@ If this doc disagrees with those artifacts, the artifacts win.
 3. Let the paper loop accumulate. Use the reducer's top-five focus list for
    review, and keep the full 12-scenario slate for after-the-fact scoring.
 4. Keep the morning ops lane green so the desk stays trustworthy.
-5. Refresh this doc when the desk's verdict shifts. The four other anchor
+5. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.
+6. Refresh this doc when the desk's verdict shifts. The four other anchor
    docs change rarely; this one is the dashboard.
 
 ## Model lanes

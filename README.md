@@ -15,10 +15,12 @@ matures.
 Run this first for the current operating truth:
 
 ```bash
-python3 inferno_model_command_center.py build
+./run_inferno_central_command.sh
+./run_inferno_usage_optimizer.sh
 ```
 
-Then read `reports/model_command_center_latest.txt`.
+Then read `reports/usage_optimizer_latest.txt` and
+`reports/model_command_center_latest.txt`.
 
 After that, the anchor docs are:
 
@@ -27,8 +29,9 @@ After that, the anchor docs are:
 3. [`docs/MODEL_THEORY.md`](docs/MODEL_THEORY.md) — how the desk thinks.
 4. [`docs/MODULE_INDEX.md`](docs/MODULE_INDEX.md) — which module owns what.
 5. [`docs/ENGINEERING_CONVENTIONS.md`](docs/ENGINEERING_CONVENTIONS.md) — the patterns every new module follows.
+6. [`docs/USAGE_OPTIMIZATION.md`](docs/USAGE_OPTIMIZATION.md) — how to keep model handoffs compact.
 
-Operating from those five docs is enough to land in this repo and ship
+Operating from those docs is enough to land in this repo and ship
 without breaking the safety rails. After the anchor five, work from
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
