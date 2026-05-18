@@ -600,11 +600,15 @@ override the five live gates, touch authority, or make a trade eligible.
 
 ## 19. Cross-sectional percentile rank (the absolute-threshold fix)
 
-The conviction gate `readyScore ≥ 72` is brittle: if the upstream score
+The historical conviction gate `readyScore ≥ 72` was brittle: if the upstream score
 formula changes scale (or breaks), the gate either lets everything in or
 nothing. The empirical finding on the live 143-name slate was that
 *every* name produced a Ready Score under 10 — the gate had been
 pinned to a 100-scale while the formula produced 0–10.
+
+The current live gate uses computed `readiness ≥ 72`, where `readiness`
+is normalized to a 0-100 axis before the operator briefing, paper
+bootstrapper, and dashboard apply the threshold.
 
 Percentile rank is **scale-invariant**. For a column ``x_1, ..., x_n``,
 the rank of value ``x_i`` is:

@@ -49,6 +49,9 @@ OPERATOR_BRIEFING_HTML_FILE = REPORTS_DIR / "operator_briefing_latest.html"
 OPERATOR_BRIEFING_STAGE = "operator-briefing-research-only"
 
 # Conviction gates — must match frontend/modules/dataProcessor.js convictionConfig.
+# MIN_READY_SCORE is a threshold on the 0–100 ``readiness`` percent (derived
+# upstream via ``score_to_percent(readyScore, ceiling=2.5)``), NOT on the raw
+# ``readyScore`` column from the sheet (which is on a 0–~4 scale).
 MIN_READY_SCORE = 72
 MIN_CONFIDENCE = 2
 MAX_DAYS_UNTIL_EARNINGS = 21
@@ -150,6 +153,7 @@ def _load_paper_bootstrap() -> dict[str, Any]:
         {
             "ticker": p.get("ticker"),
             "score": p.get("score"),
+            "readiness": p.get("readiness"),
             "readyScore": p.get("readyScore"),
             "confidence": p.get("confidence"),
             "daysUntilEarnings": p.get("daysUntilEarnings"),
@@ -293,13 +297,29 @@ def _coerce_str(value: Any) -> str:
     return str(value).strip() if value is not None else ""
 
 
+def _readiness_percent(row: dict[str, Any]) -> int | None:
+    """Return the row's 0–100 readiness, preferring the computed field.
+
+    Production slate rows from ``morning_inferno_pipeline`` carry a
+    ``readiness`` field on a 0–100 percent scale, computed via
+    ``score_to_percent(readyScore, ceiling=2.5)``. That is the field the
+    conviction gate (``>= MIN_READY_SCORE``) is calibrated against.
+    Legacy fixtures and hand-built rows that only carry ``readyScore``
+    fall back to treating it as already on the 0–100 axis so historical
+    test semantics are preserved.
+    """
+    if row.get("readiness") is not None:
+        return _coerce_int(row.get("readiness"))
+    return _coerce_int(row.get("readyScore") or row.get("Ready Score"))
+
+
 def evaluate_gates(row: dict[str, Any]) -> tuple[bool, list[str]]:
     """Return ``(passes_all_gates, failed_gate_labels)``."""
     failures: list[str] = []
 
-    ready = _coerce_int(row.get("readyScore") or row.get("Ready Score"))
-    if ready is None or ready < MIN_READY_SCORE:
-        failures.append(f"readyScore={ready} < {MIN_READY_SCORE}")
+    readiness = _readiness_percent(row)
+    if readiness is None or readiness < MIN_READY_SCORE:
+        failures.append(f"readiness={readiness} < {MIN_READY_SCORE}")
 
     confidence = _coerce_int(row.get("confidence") or row.get("Confidence (3 MAX)"))
     if confidence is None or confidence < MIN_CONFIDENCE:
@@ -321,18 +341,23 @@ def evaluate_gates(row: dict[str, Any]) -> tuple[bool, list[str]]:
 
 
 def filter_qualified(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the slate rows that clear every gate, sorted by ready score desc."""
+    """Return rows that clear every gate, sorted by readiness percent desc."""
     qualified: list[dict[str, Any]] = []
     for row in rows:
         passes, _ = evaluate_gates(row)
         if not passes:
             continue
         qualified.append(row)
+
+    def sort_key(row: dict[str, Any]) -> tuple[int, int]:
+        # Sort on the same 0-100 readiness axis the gate uses. This avoids
+        # accidentally ranking by the raw sheet score after a row passes.
+        readiness = _readiness_percent(row) or 0
+        dte = _coerce_int(row.get("daysUntilEarnings") or row.get("Days until earnings")) or 99
+        return -readiness, dte
+
     qualified.sort(
-        key=lambda r: (
-            -(_coerce_int(r.get("readyScore") or r.get("Ready Score")) or 0),
-            (_coerce_int(r.get("daysUntilEarnings") or r.get("Days until earnings")) or 99),
-        )
+        key=sort_key
     )
     return qualified
 
@@ -374,6 +399,7 @@ def size_tickets(
         ticker = _coerce_str(row.get("ticker") or row.get("Ticker"))
         tickets.append({
             "ticker": ticker,
+            "readiness": _readiness_percent(row),
             "readyScore": _coerce_int(row.get("readyScore") or row.get("Ready Score")),
             "confidence": _coerce_int(row.get("confidence") or row.get("Confidence (3 MAX)")),
             "daysUntilEarnings": _coerce_int(row.get("daysUntilEarnings") or row.get("Days until earnings")),
@@ -484,7 +510,6 @@ def build_briefing(
     # Pull the percentile-ranked slate so the email can surface
     # rank-based candidates regardless of the absolute-threshold gate.
     ranked_info = _load_ranked_slate()
-    ranked_info = _load_ranked_slate()
 
     if not rows:
         verdict = "no-slate"
@@ -580,11 +605,14 @@ def render_text(payload: dict[str, Any]) -> str:
     if tickets:
         lines.append("CANDIDATES (in order of conviction)")
         lines.append("-" * 60)
-        lines.append(f"{'#':>2} {'Ticker':<8} {'Ready':>6} {'Conf':>5} {'DTE':>4} {'Setup':<14} ${'Alloc':<8}")
+        lines.append(f"{'#':>2} {'Ticker':<8} {'Ready%':>6} {'Conf':>5} {'DTE':>4} {'Setup':<14} ${'Alloc':<8}")
         for i, t in enumerate(tickets, 1):
+            ready_display = t.get('readiness')
+            if ready_display is None:
+                ready_display = t.get('readyScore', 0)
             lines.append(
                 f"{i:>2} {str(t['ticker'])[:8]:<8} "
-                f"{t.get('readyScore', 0):>6} "
+                f"{ready_display:>6} "
                 f"{t.get('confidence', 0):>5} "
                 f"{t.get('daysUntilEarnings', 0):>4} "
                 f"{str(t.get('setupRec'))[:14]:<14} "
@@ -675,15 +703,18 @@ def render_text(payload: dict[str, Any]) -> str:
             f"@ ${budget}/ticket paper"
         )
         lines.append(
-            f"{'#':>2} {'Ticker':<8} {'Score':>5} {'Ready':>6} {'Conf':>5} "
+            f"{'#':>2} {'Ticker':<8} {'Score':>5} {'Ready%':>6} {'Conf':>5} "
             f"{'DTE':>4} {'Strategy':<14} {'Missing gates'}"
         )
         for i, p in enumerate(bootstrap_proposals, 1):
             failed = ", ".join(p.get("failedGates") or []) or "(none)"
+            ready_display = p.get("readiness")
+            if ready_display is None:
+                ready_display = p.get("readyScore") or 0
             lines.append(
                 f"{i:>2} {str(p.get('ticker'))[:8]:<8} "
                 f"{p.get('score'):>5} "
-                f"{p.get('readyScore') or 0:>6} "
+                f"{ready_display:>6} "
                 f"{p.get('confidence') or 0:>5} "
                 f"{p.get('daysUntilEarnings') or 0:>4} "
                 f"{str(p.get('suggestedStrategy'))[:14]:<14} "
@@ -698,7 +729,7 @@ def render_text(payload: dict[str, Any]) -> str:
     lines.extend([
         "CONVICTION GATES",
         "-" * 60,
-        f"  - Ready Score >= {gates.get('minReadyScore')}",
+        f"  - Readiness% >= {gates.get('minReadyScore')}",
         f"  - Confidence >= {gates.get('minConfidence')}",
         f"  - Days until earnings <= {gates.get('maxDaysUntilEarnings')}",
         f"  - Setup Rec not in {gates.get('bannedSetups')}",
@@ -741,11 +772,14 @@ def render_html(payload: dict[str, Any]) -> str:
     rows_html = ""
     for i, t in enumerate(tickets, 1):
         trigger = t.get("signalTrigger") or ""
+        ready_display = t.get("readiness")
+        if ready_display is None:
+            ready_display = t.get("readyScore", 0)
         rows_html += f"""
         <tr>
           <td>{i}</td>
           <td><strong>{t.get('ticker')}</strong></td>
-          <td style="text-align:right">{t.get('readyScore', 0)}</td>
+          <td style="text-align:right">{ready_display}</td>
           <td style="text-align:right">{t.get('confidence', 0)}</td>
           <td style="text-align:right">{t.get('daysUntilEarnings', 0)}</td>
           <td>{t.get('setupRec', '')}</td>
@@ -783,7 +817,7 @@ def render_html(payload: dict[str, Any]) -> str:
     <thead><tr style="background:#f0f0f0;">
       <th style="text-align:left; padding:6px;">#</th>
       <th style="text-align:left; padding:6px;">Ticker</th>
-      <th style="text-align:right; padding:6px;">Ready</th>
+      <th style="text-align:right; padding:6px;">Ready%</th>
       <th style="text-align:right; padding:6px;">Conf</th>
       <th style="text-align:right; padding:6px;">DTE</th>
       <th style="text-align:left; padding:6px;">Setup</th>
@@ -795,7 +829,7 @@ def render_html(payload: dict[str, Any]) -> str:
 
   <h2>Conviction Gates</h2>
   <ul>
-    <li>Ready Score &ge; {gates.get('minReadyScore')}</li>
+    <li>Readiness% &ge; {gates.get('minReadyScore')}</li>
     <li>Confidence &ge; {gates.get('minConfidence')}</li>
     <li>Days until earnings &le; {gates.get('maxDaysUntilEarnings')}</li>
     <li>Setup Rec not in {gates.get('bannedSetups')}</li>

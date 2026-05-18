@@ -105,7 +105,7 @@ The next 6:10 AM run uses the new value.
 
 1. **Verdict** at top: `ready-to-execute` / `no-candidates` / `no-slate`.
 2. **Today's plan** with cash, tickets to place, per-ticket size, total deployed.
-3. **Candidate table** — ranked by Ready Score, with allocation column already filled.
+3. **Candidate table** — ranked by Readiness%, with allocation column already filled.
 4. **Conviction gates** so you can sanity-check each name.
 5. **Next steps** — the exact seven commands to run, in order.
 6. **Reminder** that the desk doesn't click submit. You do.

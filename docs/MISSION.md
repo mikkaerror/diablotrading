@@ -100,7 +100,7 @@ For any name to be considered, all five must pass:
 
 | Gate | Threshold |
 |---|---|
-| Ready Score | ≥ 72 |
+| Readiness% | ≥ 72 |
 | Confidence | ≥ 2 of 3 |
 | Days until earnings | ≤ 21 |
 | Setup Rec | not in `Avoid` |

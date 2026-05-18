@@ -56,6 +56,18 @@ class ScoreRowTests(unittest.TestCase):
         self.assertEqual(result["score"], 5)
         self.assertEqual(result["failedGates"], [])
 
+    def test_computed_readiness_drives_ready_gate(self) -> None:
+        result = pb.score_row(make_row(readiness=88, readyScore=2))
+        self.assertEqual(result["score"], 5)
+        self.assertNotIn("readyOk", result["failedGates"])
+        self.assertEqual(result["readiness"], 88)
+        self.assertEqual(result["readyScore"], 2)
+
+    def test_low_computed_readiness_fails_even_when_raw_score_is_high(self) -> None:
+        result = pb.score_row(make_row(readiness=60, readyScore=99))
+        self.assertEqual(result["score"], 4)
+        self.assertIn("readyOk", result["failedGates"])
+
     def test_avoid_setup_fails_setup_gate(self) -> None:
         result = pb.score_row(make_row(setupRec="Avoid"))
         self.assertEqual(result["score"], 4)
@@ -103,6 +115,14 @@ class RankCandidatesTests(unittest.TestCase):
         admitted = pb.rank_candidates(rows, admit_threshold=3)
         self.assertEqual(admitted[0]["ticker"], "HIGHER")
         self.assertEqual(admitted[1]["ticker"], "LOWER")
+
+    def test_tie_break_sorts_by_computed_readiness_not_raw_score(self) -> None:
+        rows = [
+            make_row(ticker="RAW_HIGH", readiness=75, readyScore=99),
+            make_row(ticker="READY_HIGH", readiness=95, readyScore=1),
+        ]
+        admitted = pb.rank_candidates(rows, admit_threshold=5)
+        self.assertEqual([r["ticker"] for r in admitted], ["READY_HIGH", "RAW_HIGH"])
 
 
 class BuildBootstrapTests(unittest.TestCase):
@@ -223,6 +243,16 @@ class BuildBootstrapTests(unittest.TestCase):
         self.assertTrue(by_ticker["FIVE"]["liveQualityYet"])
         self.assertFalse(by_ticker["FOUR"]["liveQualityYet"])
         self.assertFalse(by_ticker["THREE"]["liveQualityYet"])
+
+    def test_proposals_carry_readiness_for_reporting(self) -> None:
+        rows = [make_row(ticker="READY", readiness=91, readyScore=2)]
+        payload = pb.build_bootstrap(
+            snapshot_loader=lambda: fake_snapshot(rows),
+            admit_threshold=5,
+            max_tickets=1,
+        )
+        self.assertEqual(payload["proposals"][0]["readiness"], 91)
+        self.assertEqual(payload["proposals"][0]["readyScore"], 2)
 
 
 class HistogramTests(unittest.TestCase):

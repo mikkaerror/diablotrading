@@ -1060,8 +1060,8 @@ python3 inferno_housekeeping.py
 
 ### Rank the slate without trusting absolute score scale
 
-Use this when `Ready Score` looks like it is on the wrong scale but the
-relative ordering still matters:
+Use this when the raw `readyScore` looks like it is on the wrong scale but
+the relative ordering still matters:
 
 ```bash
 python3 inferno_slate_normalizer.py

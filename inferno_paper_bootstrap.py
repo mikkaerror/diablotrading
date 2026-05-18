@@ -6,7 +6,7 @@ What it does:
     Phase 1 has a chicken-and-egg problem: the paper-evidence promotion
     gates in `docs/MATH.md` § 10 need ~30 closed paper outcomes per
     strategy before they produce trustworthy verdicts, but the live-gate
-    filter (Ready≥72 AND Conf≥2 AND DTE≤21 AND not-Avoid AND Trigger)
+    filter (Readiness≥72 AND Conf≥2 AND DTE≤21 AND not-Avoid AND Trigger)
     is too strict to clear on most days. Without paper data, the math
     cannot earn the right to promote to Phase 2. Forever.
 
@@ -37,13 +37,24 @@ For each slate row, the *gates cleared* score is:
 
 ```
 score = sum([
-    readyScore >= 72,
+    readiness >= 72,        # percent-scaled, computed via score_to_percent
     confidence >= 2,
     daysUntilEarnings <= 21,
     setupRec not in {"Avoid"},
     bool(signalTrigger),
 ])
 ```
+
+The readiness gate is evaluated against ``row["readiness"]`` (a 0–100
+percent produced by ``morning_inferno_pipeline.score_to_percent`` from
+the raw ``readyScore`` column). Earlier revisions mistakenly compared
+the raw ``readyScore`` (which is on a 0–~4 sheet-formula scale) against
+the 0–100 threshold — that gate failed every name on every slate and
+the slate normalizer's percentile rank was carrying the load. Rows that
+only carry a raw ``readyScore`` (hand-built fixtures, legacy callers)
+are still accepted: ``_readiness_percent`` falls back to treating the
+field as if it were already on a 0–100 scale, preserving historical
+test semantics.
 
 Each predicate evaluates to 0 or 1. The score is an integer in `[0, 5]`.
 
@@ -94,6 +105,9 @@ BOOTSTRAP_TICKET_DOLLARS = float(os.environ.get("INFERNO_PB_TICKET_DOLLARS", "50
 # Live conviction gates — kept identical to inferno_operator_briefing so the
 # scoring stays consistent. Loosening these here would only loosen *paper*
 # seeding; live gating is unchanged.
+# MIN_READY_SCORE is a threshold on the 0–100 ``readiness`` percent (derived
+# upstream via ``score_to_percent(readyScore, ceiling=2.5)``), NOT on the raw
+# ``readyScore`` column from the sheet (which is on a 0–~4 scale).
 MIN_READY_SCORE = 72
 MIN_CONFIDENCE = 2
 MAX_DAYS_UNTIL_EARNINGS = 21
@@ -114,6 +128,26 @@ def _coerce_int(value: Any) -> int | None:
 
 def _coerce_str(value: Any) -> str:
     return str(value).strip() if value is not None else ""
+
+
+def _readiness_percent(row: dict[str, Any]) -> int | None:
+    """Return the row's 0–100 readiness, preferring the computed field.
+
+    Production slate rows from ``morning_inferno_pipeline`` carry a
+    ``readiness`` field on a 0–100 percent scale, computed via
+    ``score_to_percent(readyScore, ceiling=2.5)``. That is the field the
+    conviction gate (``>= MIN_READY_SCORE``) is calibrated against.
+
+    Legacy fixtures and hand-built rows that only carry ``readyScore``
+    on a percent scale (or that pre-date the readiness field) are still
+    honored: when ``readiness`` is absent we fall back to treating the
+    raw ``readyScore`` as if it were already on a 0–100 axis. The
+    fallback preserves historical test semantics. Production rows will
+    never hit it because ``readiness`` is always present.
+    """
+    if row.get("readiness") is not None:
+        return _coerce_int(row.get("readiness"))
+    return _coerce_int(row.get("readyScore") or row.get("Ready Score"))
 
 
 def _load_snapshot() -> dict[str, Any]:
@@ -141,14 +175,15 @@ def _candidate_rows(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
 
 def score_row(row: dict[str, Any]) -> dict[str, Any]:
     """Return a dict with each gate evaluated and an integer ``score`` ∈ [0,5]."""
-    ready = _coerce_int(row.get("readyScore") or row.get("Ready Score"))
+    readiness = _readiness_percent(row)
+    raw_ready = _coerce_int(row.get("readyScore") or row.get("Ready Score"))
     confidence = _coerce_int(row.get("confidence") or row.get("Confidence (3 MAX)"))
     dte = _coerce_int(row.get("daysUntilEarnings") or row.get("Days until earnings"))
     setup = _coerce_str(row.get("setupRec") or row.get("Setup Rec"))
     trigger = _coerce_str(row.get("signalTrigger") or row.get("Signal Trigger"))
 
     gates = {
-        "readyOk": ready is not None and ready >= MIN_READY_SCORE,
+        "readyOk": readiness is not None and readiness >= MIN_READY_SCORE,
         "confidenceOk": confidence is not None and confidence >= MIN_CONFIDENCE,
         "dteOk": dte is not None and dte <= MAX_DAYS_UNTIL_EARNINGS,
         "setupOk": bool(setup) and setup not in BANNED_SETUPS,
@@ -158,7 +193,8 @@ def score_row(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "ticker": _coerce_str(row.get("ticker") or row.get("Ticker")),
-        "readyScore": ready,
+        "readiness": readiness,
+        "readyScore": raw_ready,
         "confidence": confidence,
         "daysUntilEarnings": dte,
         "setupRec": setup,
@@ -175,13 +211,13 @@ def rank_candidates(
     admit_threshold: int = DEFAULT_ADMIT_THRESHOLD,
 ) -> list[dict[str, Any]]:
     """Score every row and return only those scoring at or above the threshold,
-    sorted by score desc, then readyScore desc, then DTE asc."""
+    sorted by score desc, then readiness desc, then DTE asc."""
     scored = [score_row(r) for r in rows if isinstance(r, dict)]
     admitted = [s for s in scored if s["score"] >= admit_threshold]
     admitted.sort(
         key=lambda s: (
             -s["score"],
-            -(s["readyScore"] or 0),
+            -((s["readiness"] if s["readiness"] is not None else s["readyScore"]) or 0),
             (s["daysUntilEarnings"] if s["daysUntilEarnings"] is not None else 99),
             s["ticker"],
         )
@@ -224,6 +260,7 @@ def build_proposals(
             "failedGates": candidate["failedGates"],
             "suggestedStrategy": suggested_strategy,
             "paperBudgetDollars": round(ticket_dollars, 2),
+            "readiness": candidate["readiness"],
             "readyScore": candidate["readyScore"],
             "confidence": candidate["confidence"],
             "daysUntilEarnings": candidate["daysUntilEarnings"],
@@ -355,11 +392,15 @@ def bootstrap_text(payload: dict[str, Any]) -> str:
     if proposals:
         lines.append("Proposals (top by score):")
         lines.append(
-            f"  {'Ticker':<8} {'Score':>5} {'Ready':>6} {'Conf':>5} {'DTE':>4} "
+            f"  {'Ticker':<8} {'Score':>5} {'Ready%':>6} {'Conf':>5} {'DTE':>4} "
             f"{'Setup':<14} {'Strategy':<14} ${'Paper':<7}"
         )
         for p in proposals:
-            ready = p.get('readyScore') if p.get('readyScore') is not None else 0
+            # Prefer readiness (0–100 percent) — that's what the gate is on.
+            # Fall back to raw readyScore for hand-built rows.
+            ready = p.get('readiness')
+            if ready is None:
+                ready = p.get('readyScore') or 0
             conf = p.get('confidence') if p.get('confidence') is not None else 0
             dte = p.get('daysUntilEarnings') if p.get('daysUntilEarnings') is not None else 0
             lines.append(

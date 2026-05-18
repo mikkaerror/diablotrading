@@ -33,7 +33,7 @@ A name has to clear **all five** to be considered.
 
 | Gate | Threshold | Source |
 |---|---|---|
-| Ready Score | ≥ 72 | sheet column |
+| Readiness% | ≥ 72 | computed 0-100 field |
 | Confidence | ≥ 2 of 3 | sheet column |
 | Days until earnings | ≤ 21 | sheet column |
 | Setup Rec | not in `Avoid` | sheet column |
