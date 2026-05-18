@@ -50,12 +50,13 @@ or skip the day entirely. The market's open tomorrow.
 Use the deployable cash printed by the latest capital readiness report.
 
 ```
-ticket_size = deployable_cash / candidates_today
+max_options_risk = deployable_cash * 0.25
+ticket_size = max_options_risk / candidates_today
 ticket_size = min(ticket_size, printed_single-ticket_cap)
 ```
 
 Never exceed the printed single-ticket cap regardless of conviction.
-Never exceed the printed daily deployment cap.
+Never exceed the printed max options risk budget.
 
 ## Step 4 — Paper-stage before live (3 minutes)
 

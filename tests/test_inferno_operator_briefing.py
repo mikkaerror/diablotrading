@@ -61,6 +61,15 @@ class RankingAndSizingTests(unittest.TestCase):
         self.assertEqual(ticket["readiness"], 93)
         self.assertEqual(ticket["readyScore"], 2)
 
+    def test_size_tickets_caps_total_to_options_risk_budget(self) -> None:
+        rows = [make_row(ticker=f"T{i}", readiness=95 - i) for i in range(5)]
+        sizing = ob.size_tickets(rows, cash=1000, max_tickets=5)
+
+        self.assertEqual(sizing["maxOptionsRiskBudget"], 250.0)
+        self.assertEqual(sizing["totalDeployed"], 250.0)
+        self.assertEqual(sizing["perTicket"], 50.0)
+        self.assertEqual(sizing["binding"], "options-risk-budget")
+
 
 class RenderTests(unittest.TestCase):
     def test_render_text_labels_readiness_percent(self) -> None:

@@ -59,6 +59,7 @@ BANNED_SETUPS = frozenset({"Avoid"})
 
 DEFAULT_CASH = float(os.environ.get("INFERNO_OPERATOR_CASH", "1050"))
 DEFAULT_MAX_TICKETS = int(os.environ.get("INFERNO_OPERATOR_MAX_TICKETS", "5"))
+DEFAULT_MAX_OPTIONS_RISK_FRACTION = float(os.environ.get("INFERNO_OPERATOR_MAX_OPTIONS_RISK_FRACTION", "0.25"))
 HARD_CAP_PER_TICKET = 500.0
 HARD_CAP_PER_DAY = 1500.0
 QUARTER_KELLY_CAP_FRACTION = 0.25
@@ -367,13 +368,15 @@ def size_tickets(
     *,
     cash: float = DEFAULT_CASH,
     max_tickets: int = DEFAULT_MAX_TICKETS,
+    max_options_risk_fraction: float = DEFAULT_MAX_OPTIONS_RISK_FRACTION,
 ) -> dict[str, Any]:
     """Allocate cash across the top-N qualified tickets.
 
-    Even split, then capped at quarter-Kelly per ticket and at the
-    desk's ``HARD_CAP_PER_TICKET``. The daily total is then capped at
-    ``HARD_CAP_PER_DAY``.
+    Even split, then capped at the current options sleeve budget,
+    quarter-Kelly per ticket, and the desk's ``HARD_CAP_PER_TICKET``.
+    The daily total is also capped at ``HARD_CAP_PER_DAY``.
     """
+    max_options_budget = round(max(cash, 0.0) * max_options_risk_fraction, 2)
     if cash <= 0 or max_tickets <= 0 or not qualified:
         return {
             "cash": cash,
@@ -381,6 +384,7 @@ def size_tickets(
             "actualTickets": 0,
             "perTicket": 0.0,
             "totalDeployed": 0.0,
+            "maxOptionsRiskBudget": max_options_budget,
             "tickets": [],
             "binding": "no-candidates" if not qualified else "no-cash",
         }
@@ -388,13 +392,27 @@ def size_tickets(
     n = min(len(qualified), max_tickets)
     even = cash / n
     quarter_kelly = QUARTER_KELLY_CAP_FRACTION * cash
-    per_ticket = min(even, quarter_kelly, HARD_CAP_PER_TICKET)
+    options_budget_per_ticket = max_options_budget / n if n else 0.0
+    per_ticket = min(even, options_budget_per_ticket, quarter_kelly, HARD_CAP_PER_TICKET)
     per_ticket = round(per_ticket, 2)
+    if per_ticket <= 0:
+        return {
+            "cash": cash,
+            "targetTickets": max_tickets,
+            "actualTickets": 0,
+            "perTicket": 0.0,
+            "totalDeployed": 0.0,
+            "maxOptionsRiskBudget": max_options_budget,
+            "tickets": [],
+            "binding": "no-options-risk-budget",
+        }
 
     tickets: list[dict[str, Any]] = []
     total = 0.0
     for row in qualified[:n]:
-        if total + per_ticket > HARD_CAP_PER_DAY:
+        # Both caps are checked before ticket creation so the rendered memo
+        # cannot suggest more tactical options risk than the capital plan allows.
+        if total + per_ticket > HARD_CAP_PER_DAY or total + per_ticket > max_options_budget:
             break
         ticker = _coerce_str(row.get("ticker") or row.get("Ticker"))
         tickets.append({
@@ -410,12 +428,16 @@ def size_tickets(
         total += per_ticket
 
     binding = "even-split"
-    if abs(per_ticket - quarter_kelly) < 1e-6:
+    if abs(per_ticket - options_budget_per_ticket) < 1e-6:
+        binding = "options-risk-budget"
+    elif abs(per_ticket - quarter_kelly) < 1e-6:
         binding = "quarter-kelly-cap"
     elif abs(per_ticket - HARD_CAP_PER_TICKET) < 1e-6:
         binding = "hard-cap-per-ticket"
     if total >= HARD_CAP_PER_DAY - 1e-6:
         binding = "hard-cap-per-day"
+    elif total >= max_options_budget - 1e-6:
+        binding = "options-risk-budget"
 
     return {
         "cash": cash,
@@ -423,6 +445,7 @@ def size_tickets(
         "actualTickets": len(tickets),
         "perTicket": per_ticket,
         "totalDeployed": round(total, 2),
+        "maxOptionsRiskBudget": max_options_budget,
         "tickets": tickets,
         "binding": binding,
     }
@@ -595,6 +618,7 @@ def render_text(payload: dict[str, Any]) -> str:
         "-" * 60,
         cash_line,
         f"Target tickets:  {sizing.get('targetTickets')}",
+        f"Max options risk: ${sizing.get('maxOptionsRiskBudget', 0):,.2f}",
         f"Actual tickets:  {sizing.get('actualTickets')}",
         f"Per ticket:      ${sizing.get('perTicket', 0):,.2f}",
         f"Total deployed:  ${sizing.get('totalDeployed', 0):,.2f}",
@@ -806,6 +830,7 @@ def render_html(payload: dict[str, Any]) -> str:
   {(lambda cs: f'''<p style="color:#666; font-size:12px; margin:0 0 8px 0;">Cash source: <strong>{cs.get('chosenSource')}</strong>{(' — TOS suffix ' + str((cs.get('live') or {}).get('matchedSuffix')) + ', ' + str((cs.get('live') or {}).get('ageHours')) + 'h old') if cs.get('chosenSource') == 'live-tos' else ''}</p>''')(sizing.get('cashSource') or {})}
   <table style="border-collapse:collapse; width:100%;">
     <tr><td><strong>Deployable cash</strong></td><td style="text-align:right">${sizing.get('cash', 0):,.2f}</td></tr>
+    <tr><td><strong>Max options risk</strong></td><td style="text-align:right">${sizing.get('maxOptionsRiskBudget', 0):,.2f}</td></tr>
     <tr><td><strong>Tickets to place</strong></td><td style="text-align:right">{sizing.get('actualTickets')} of {sizing.get('targetTickets')} target</td></tr>
     <tr><td><strong>Per ticket</strong></td><td style="text-align:right">${sizing.get('perTicket', 0):,.2f}</td></tr>
     <tr><td><strong>Total deployed</strong></td><td style="text-align:right">${sizing.get('totalDeployed', 0):,.2f}</td></tr>
