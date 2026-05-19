@@ -117,8 +117,10 @@ def build_actions(payload: dict[str, Any]) -> list[str]:
     actions: list[str] = []
     if counts.get("stageableNow", 0) > 0:
         actions.append("Paper-stage the current clean sandbox names and update the seeded fill-log rows immediately.")
+    elif counts.get("autoPaperSelected", 0) > 0:
+        actions.append("Paper-stage the model-selected auto slate; this is simulated evidence only, not live authority.")
     elif counts.get("approvalOnly", 0) > 0:
-        actions.append("Resolve the approval-only slate first so the desk can produce a real paper-stageable ticket.")
+        actions.append("Review the approval-only slate only for live-style discretion; do not let it block paper evidence throughput.")
     if counts.get("plannedFillRows", 0) > 0:
         actions.append("Replace planned fill-log placeholders with real paperMoney execution facts as soon as a test is staged.")
     if counts.get("openFillRows", 0) > 0 or counts.get("paperOpenTickets", 0) > 0:
@@ -150,6 +152,7 @@ def build_audit() -> dict[str, Any]:
 
     counts = {
         "stageableNow": int((sandbox.get("stageableCount") or 0)),
+        "autoPaperSelected": int(((paper_director.get("counts") or {}).get("autoPaperSelected")) or 0),
         "approvalOnly": int(((paper_director.get("counts") or {}).get("approvalOnly")) or 0),
         "plannedFillRows": planned_fill_rows(fill_rows),
         "openFillRows": count_fill_status(fill_rows, "open"),
@@ -161,7 +164,7 @@ def build_audit() -> dict[str, Any]:
         "remainingForPromotion": remaining,
     }
 
-    if counts["stageableNow"] > 0:
+    if counts["stageableNow"] > 0 or counts["autoPaperSelected"] > 0:
         verdict = "ready-to-stage"
     elif counts["openFillRows"] > 0 or counts["paperOpenTickets"] > 0 or counts["closedFillRows"] > 0:
         verdict = "collect-paper-outcomes"
@@ -206,6 +209,7 @@ def audit_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- stageable now: {counts.get('stageableNow', 0)}",
+        f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
         f"- approval only: {counts.get('approvalOnly', 0)}",
         f"- planned fill rows: {counts.get('plannedFillRows', 0)}",
         f"- open fill rows: {counts.get('openFillRows', 0)}",

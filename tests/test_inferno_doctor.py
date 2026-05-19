@@ -15,6 +15,7 @@ from inferno_doctor import (
     in_current_service_cycle,
     live_position_review_status,
     model_command_center_status,
+    paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
 )
@@ -192,6 +193,57 @@ class InfernoDoctorInformationalSignalsTests(unittest.TestCase):
         ok, detail = concentration_governor_status({})
         self.assertTrue(ok)
         self.assertEqual(detail, "no strike plan yet")
+
+    def test_paper_test_director_status_accepts_shadow_fallback(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        director = {
+            "generatedAt": "2026-05-19T08:55:00-06:00",
+            "verdict": "no-viable-paper-tests",
+            "counts": {"stageableNow": 0, "approvalOnly": 0, "hardBlocked": 7},
+        }
+        reducer = {
+            "generatedAt": "2026-05-19T08:56:00-06:00",
+            "verdict": "scenario-slate-ready",
+            "counts": {"scenarios": 12, "shadowOnly": 12},
+        }
+
+        ok, detail = paper_test_director_status(director, reducer, now)
+
+        self.assertTrue(ok)
+        self.assertIn("no-viable-paper-tests", detail)
+        self.assertIn("shadow-fallback=ready", detail)
+
+    def test_paper_test_director_status_accepts_auto_paper_selection(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        director = {
+            "generatedAt": "2026-05-19T08:55:00-06:00",
+            "verdict": "auto-paper-selected",
+            "counts": {"stageableNow": 0, "autoPaperSelected": 2, "approvalOnly": 0, "hardBlocked": 1},
+        }
+
+        ok, detail = paper_test_director_status(director, {}, now)
+
+        self.assertTrue(ok)
+        self.assertIn("auto-paper-selected", detail)
+        self.assertIn("auto-paper=2", detail)
+
+    def test_paper_test_director_status_warns_without_shadow_fallback(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        director = {
+            "generatedAt": "2026-05-19T08:55:00-06:00",
+            "verdict": "no-viable-paper-tests",
+            "counts": {"stageableNow": 0, "approvalOnly": 0, "hardBlocked": 7},
+        }
+        reducer = {
+            "generatedAt": "2026-05-19T08:56:00-06:00",
+            "verdict": "scenario-slate-thin",
+            "counts": {"scenarios": 0, "shadowOnly": 0},
+        }
+
+        ok, detail = paper_test_director_status(director, reducer, now)
+
+        self.assertFalse(ok)
+        self.assertIn("hard-blocked=7", detail)
 
 
 if __name__ == "__main__":

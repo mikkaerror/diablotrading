@@ -29,23 +29,29 @@ The reducer targets 12 daily scenarios and highlights the top five. Only rows
 marked `PAPER` are eligible for paperMoney staging. Rows marked `SHADOW` are
 for observation and after-the-fact scoring only.
 
-4. Approve sparingly.
+4. Let approval-only paper setups auto-select when risk is clean.
+
+`auto-paper-selected` means the model found a setup where the only remaining
+blocker is human approval. That is enough for simulated paper evidence, but it
+does not authorize a live order.
+
+5. Approve sparingly for live-style review.
 
 ```bash
 python3 inferno_approval_queue.py approve TICKER
 ./run_inferno_strike_cycle.sh
 ```
 
-5. Stage only when the sandbox says the ticket is stageable.
+6. Stage only when the sandbox says the ticket is stageable.
 
-6. Log fills immediately.
+7. Log fills immediately.
 
 ```bash
 ./run_inferno_tos_fill_ingest.sh
 ./run_inferno_paper_evidence_loop.sh
 ```
 
-7. Close and score outcomes.
+8. Close and score outcomes.
 
 ```bash
 ./run_inferno_outcome_review.sh
@@ -56,6 +62,7 @@ python3 inferno_doctor.py
 ## Paper States
 
 - `ready-to-paper-stage`: at least one clean paper ticket is available.
+- `auto-paper-selected`: viable paper-only candidate exists and approval is the only blocker.
 - `approval-bottleneck`: viable candidate exists, approval is missing.
 - `research-watch`: no clean ticket, but names are worth monitoring.
 - `no-viable-paper-tests`: slate is too weak, expensive, illiquid, or broken.

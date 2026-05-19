@@ -120,6 +120,30 @@ STRATEGY_REFERENCES: tuple[dict[str, str], ...] = (
         "deskUse": "Do not buy event vol blindly; compare implied/realized pressure before choosing straddles vs verticals.",
         "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1359527",
     },
+    {
+        "theoryTag": "AMP13",
+        "name": "Value and momentum everywhere",
+        "researcher": "Asness, Moskowitz & Pedersen",
+        "signal": "Value and momentum premia appear across asset classes and tend to diversify each other.",
+        "deskUse": "Prefer names where trend strength is not fighting valuation discipline or quality checks.",
+        "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1363476",
+    },
+    {
+        "theoryTag": "NM13",
+        "name": "Gross profitability premium",
+        "researcher": "Novy-Marx",
+        "signal": "Profitable firms can behave like quality compounders even when headline valuation looks demanding.",
+        "deskUse": "Use quality as a separate pillar so a data-center winner is not judged by PE alone.",
+        "source": "https://www.nber.org/papers/w15940",
+    },
+    {
+        "theoryTag": "GS09",
+        "name": "Option returns and volatility spread",
+        "researcher": "Goyal & Saretto",
+        "signal": "Option returns are linked to the gap between realized and implied volatility.",
+        "deskUse": "Treat IV rank as incomplete until the desk has realised-vs-implied evidence for the setup.",
+        "source": "https://doi.org/10.1016/j.jfineco.2009.01.001",
+    },
 )
 
 REGIME_REFERENCES: tuple[dict[str, Any], ...] = (
@@ -374,6 +398,135 @@ def gut_check_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
     )
 
 
+def core_pillar_values(pillars: dict[str, float]) -> list[float]:
+    """Return the near-term pillars used to measure breadth."""
+    return [
+        number(pillars.get("theme")),
+        number(pillars.get("timing")),
+        number(pillars.get("options")),
+        number(pillars.get("structure")),
+        number(pillars.get("quality")),
+        number(pillars.get("valuation")),
+        number(pillars.get("evidence")),
+    ]
+
+
+def pillar_balance_score(pillars: dict[str, float]) -> float:
+    """Score how evenly conviction is distributed across independent pillars.
+
+    A one-pillar wonder should not outrank a broad, boring compounder. The
+    geometric/arithmetic mean ratio punishes lopsided rows while leaving
+    balanced rows close to 100. The epsilon prevents log(0)-style blowups when
+    a pillar is missing or truly weak.
+    """
+    values = [clamp(value, 0.0, 100.0) for value in core_pillar_values(pillars)]
+    if not values:
+        return 0.0
+    arithmetic = sum(values) / len(values)
+    if arithmetic <= 0:
+        return 0.0
+    product = 1.0
+    for value in values:
+        product *= max(value, 1.0)
+    geometric = product ** (1.0 / len(values))
+    return round(clamp(geometric / arithmetic * 100.0), 2)
+
+
+def uncertainty_penalty(
+    row: dict[str, Any],
+    edge: dict[str, Any] | None,
+    pillars: dict[str, float],
+    flags: list[str],
+) -> float:
+    """Quantify how much to haircut the gut score for fragile evidence.
+
+    This is intentionally conservative. Missing source quality, unclassified
+    themes, and risk flags do not forbid research, but they reduce trust in the
+    score until the operator or data pipeline resolves the uncertainty.
+    """
+    ticker = str(row.get("ticker") or "").upper()
+    penalty = 0.0
+    if str(context(row).get("sourceStatus") or "").lower() == "fallback":
+        penalty += 8.0
+    if edge is None and ticker not in GIANT_TICKERS and ticker not in CATEGORY_OVERRIDES:
+        penalty += 6.0
+    if not row.get("signalTrigger"):
+        penalty += 4.0
+    if number(pillars.get("evidence")) < 55:
+        penalty += 4.0
+    if number(pillars.get("structure")) < 45:
+        penalty += 3.0
+    penalty += min(len(flags), 4) * 1.75
+    if "high PE" in flags:
+        penalty += 2.5
+    if "near resistance" in flags and "far from support" in flags:
+        # Stretched both ways means the entry is doing more work than the thesis.
+        penalty += 3.0
+    return round(clamp(penalty, 0.0, 32.0), 2)
+
+
+def conviction_adjusted_score(gut: float, pillars: dict[str, float], penalty: float) -> float:
+    """Blend gut score, pillar breadth, and evidence quality after haircuts."""
+    balance = pillar_balance_score(pillars)
+    evidence = number(pillars.get("evidence"))
+    adjusted = gut * 0.74 + balance * 0.16 + evidence * 0.10 - penalty
+    return round(clamp(adjusted), 2)
+
+
+def evidence_grade(adjusted: float, balance: float, penalty: float) -> str:
+    """Turn adjusted conviction into a plain-English quality grade."""
+    if adjusted >= 78 and balance >= 78 and penalty <= 8:
+        return "A"
+    if adjusted >= 68 and balance >= 68 and penalty <= 14:
+        return "B"
+    if adjusted >= 56 and penalty <= 22:
+        return "C"
+    return "D"
+
+
+def research_action(row: dict[str, Any], adjusted: float, long_term: float, flags: list[str]) -> str:
+    """Suggest the next research workflow without authorising a trade."""
+    if adjusted >= 72 and row.get("signalTrigger") and len(flags) <= 2:
+        return "prioritize paper evidence"
+    if long_term >= 72:
+        return "inventory watchlist"
+    if adjusted >= 62:
+        return "manual thesis review"
+    if row.get("signalTrigger"):
+        return "shadow only"
+    return "watch only"
+
+
+def reason_codes(
+    row: dict[str, Any],
+    edge: dict[str, Any] | None,
+    pillars: dict[str, float],
+    flags: list[str],
+) -> list[str]:
+    """Emit short machine-readable reasons for why a row scored where it did."""
+    ticker = str(row.get("ticker") or "").upper()
+    reasons: list[str] = []
+    if ticker in GIANT_TICKERS:
+        reasons.append("behemoth")
+    if ticker in SLEEPER_HINTS:
+        reasons.append("sleeper")
+    if number(pillars.get("theme")) >= 82:
+        reasons.append("theme-aligned")
+    if number(pillars.get("timing")) >= 75:
+        reasons.append("timing-live")
+    if number(pillars.get("options")) >= 62:
+        reasons.append("options-aligned")
+    if number(pillars.get("structure")) >= 62:
+        reasons.append("structure-clean")
+    if number(pillars.get("valuation")) >= 70:
+        reasons.append("valuation-respectable")
+    if edge:
+        reasons.append("edge-research-linked")
+    if flags:
+        reasons.append("risk-flagged")
+    return reasons[:8]
+
+
 def archetype(row: dict[str, Any], edge: dict[str, Any] | None, score: float) -> str:
     """Classify the name for operator psychology: giant, sleeper, winner, or wait."""
     ticker = str(row.get("ticker") or "").upper()
@@ -424,12 +577,21 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
         "evidence": evidence_score(row, edge),
         "longTerm": long_term,
     }
+    flags = risk_flags(row, edge)
+    balance = pillar_balance_score(pillars)
+    penalty = uncertainty_penalty(row, edge, pillars, flags)
+    adjusted = conviction_adjusted_score(gut, pillars, penalty)
     return {
         "ticker": ticker,
         "archetype": archetype(row, edge, gut),
         "category": CATEGORY_OVERRIDES.get(ticker) or (edge or {}).get("category") or ("AI/Data Center Giant" if ticker in GIANT_TICKERS else "Unclassified"),
         "gutCheckScore": gut,
+        "convictionAdjustedScore": adjusted,
+        "pillarBalanceScore": balance,
+        "uncertaintyPenalty": penalty,
+        "evidenceGrade": evidence_grade(adjusted, balance, penalty),
         "longTermConvictionScore": long_term,
+        "researchAction": research_action(row, adjusted, long_term, flags),
         "readiness": row.get("readiness"),
         "daysUntilEarnings": row.get("daysUntilEarnings"),
         "setupRec": row.get("setupRec"),
@@ -442,7 +604,8 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
         "ivRank": row.get("ivRank"),
         "atrZScore": row.get("atrZScore"),
         "pillars": pillars,
-        "riskFlags": risk_flags(row, edge),
+        "riskFlags": flags,
+        "reasonCodes": reason_codes(row, edge, pillars, flags),
         "thesis": conviction_thesis(row, edge, gut, long_term),
     }
 
@@ -455,7 +618,7 @@ def ctx_value(row: dict[str, Any], key: str) -> Any:
 def conviction_thesis(row: dict[str, Any], edge: dict[str, Any] | None, gut: float, long_term: float) -> str:
     """Write a concise thesis line for a conviction row."""
     ticker = str(row.get("ticker") or "").upper()
-    category = (edge or {}).get("category") or "theme"
+    category = CATEGORY_OVERRIDES.get(ticker) or (edge or {}).get("category") or "theme"
     if gut >= 78:
         return f"{ticker} has multi-pillar confirmation in {category}; trust it only through sizing and strike gates."
     if long_term >= 72:
@@ -508,6 +671,12 @@ def build_conviction_research(
         lambda item: item["pillars"]["options"] >= 62 and number(item["daysUntilEarnings"], 999) <= 45,
         limit=limit,
     )
+    balanced = top_filter(
+        ranked,
+        lambda item: item["evidenceGrade"] in {"A", "B", "C"},
+        limit=limit,
+        key="convictionAdjustedScore",
+    )
     long_term_buy_zone = top_filter(
         ranked,
         lambda item: item["longTermConvictionScore"] >= 66 and number(item.get("support"), 0) > 0,
@@ -525,6 +694,7 @@ def build_conviction_research(
         "stage": "conviction-research-only",
         "researchOnly": True,
         "promotable": False,
+        "mathVersion": "conviction-v2-balance-uncertainty",
         "trackedRows": len(snapshot_rows),
         "scoredRows": len(ranked),
         "regimeThesis": "AI/data-center semiconductor bull cycle remains strong; the desk still requires local ticker evidence and sizing discipline.",
@@ -535,12 +705,16 @@ def build_conviction_research(
             "longTermConvictionScore = theme, quality, valuation, long-term score, and buy-zone discipline",
             "options pillar = IV rank sweet spot, IV impulse, ATR pressure, and setup type",
             "structure pillar = trend, RVOL, ATR expansion, support distance, resistance headroom, and alignment",
+            "convictionAdjustedScore = gut score blended with pillar balance and evidence, then haircut by uncertainty",
+            "pillarBalanceScore = geometric/arithmetic mean ratio across the seven near-term pillars",
+            "uncertaintyPenalty = fallback data, missing edge research, weak evidence, dead trigger, and risk-flag haircuts",
             "riskFlags = fallback data, high valuation, near resistance, far from support, weak options, weak theme, or dead trigger",
         ],
         "behemoths": behemoths,
         "sleepers": sleepers,
         "nearTermWinners": near_term,
         "optionsWatch": options_watch,
+        "bestBalanced": balanced,
         "longTermBuyZone": long_term_buy_zone,
         "contradictions": contradictions,
         "ranked": ranked[: max(limit * 3, 30)],
@@ -562,12 +736,14 @@ def render_section(title: str, items: list[dict[str, Any]], *, score_key: str = 
         flags = ", ".join(item.get("riskFlags") or []) or "none"
         lines.append(
             f"{index}. {item.get('ticker')} | {item.get('category')} | "
-            f"{score_key} {item.get(score_key)} | ready {item.get('readiness')} | "
+            f"{score_key} {item.get(score_key)} | adj {item.get('convictionAdjustedScore')} | "
+            f"grade {item.get('evidenceGrade')} | ready {item.get('readiness')} | "
             f"{item.get('setupRec')} | {item.get('daysUntilEarnings')}d"
         )
         lines.append(
             f"   {item.get('thesis')} "
-            f"R/S {item.get('resistance')}/{item.get('support')} | flags: {flags}"
+            f"R/S {item.get('resistance')}/{item.get('support')} | "
+            f"action: {item.get('researchAction')} | flags: {flags}"
         )
     return lines
 
@@ -591,6 +767,7 @@ def conviction_research_text(report: dict[str, Any]) -> str:
     lines.extend(render_section("Sleepers to investigate", report.get("sleepers") or []))
     lines.extend(render_section("Near-term winners", report.get("nearTermWinners") or []))
     lines.extend(render_section("Options watch", report.get("optionsWatch") or []))
+    lines.extend(render_section("Best balanced conviction", report.get("bestBalanced") or [], score_key="convictionAdjustedScore"))
     lines.extend(render_section("Long-term buy-zone candidates", report.get("longTermBuyZone") or [], score_key="longTermConvictionScore"))
     lines.extend(render_section("Contradictions / gut checks", report.get("contradictions") or []))
 

@@ -96,6 +96,7 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
         "Headline metrics:",
         f"- Live supported: {metrics.get('liveSupported', 0)}",
         f"- Live fragile: {metrics.get('liveFragile', 0)}",
+        f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
         f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
         f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
         "",

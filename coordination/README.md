@@ -82,7 +82,7 @@ python3 inferno_model_command_center.py mission-update \
 
 - Codex: capital deployment readiness, risk gates, test coverage, docs, command-center hygiene.
 - Claude: native thinkorswim export stabilization and broker UI evidence collection.
-- Shared: paper evidence loop, backtest artifacts, and handoff notes.
+- Shared: paper evidence loop, paper-auto selections, shadow/backtest artifacts, and handoff notes.
 
 Codex and Claude should not solve the same problem at the same time unless the
 mission queue explicitly says the work is shared.

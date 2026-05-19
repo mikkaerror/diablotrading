@@ -122,7 +122,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (data_dir / "inferno_paper_test_director.json").write_text(
-                json.dumps({"generatedAt": "2026-05-10T10:03:00-06:00", "verdict": "approval-bottleneck", "counts": {"stageableNow": 0, "approvalOnly": 1}, "nextActions": ["Approve FLNC if thesis still holds."]}),
+                json.dumps({"generatedAt": "2026-05-10T10:03:00-06:00", "verdict": "auto-paper-selected", "counts": {"stageableNow": 0, "autoPaperSelected": 2, "approvalOnly": 1}, "nextActions": ["Stage FLNC in paper only."]}),
                 encoding="utf-8",
             )
             (data_dir / "inferno_paper_bottleneck_reducer.json").write_text(
@@ -175,6 +175,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                         "behemoths": [{"ticker": "NVDA"}, {"ticker": "AVGO"}],
                         "sleepers": [{"ticker": "MOD"}],
                         "nearTermWinners": [{"ticker": "MRVL"}],
+                        "bestBalanced": [{"ticker": "NVDA"}, {"ticker": "MOD"}],
                     }
                 ),
                 encoding="utf-8",
@@ -227,6 +228,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["liveFragile"], 1)
             self.assertEqual(payload["headlineMetrics"]["liveBookHardBlockers"], 1)
             self.assertEqual(payload["headlineMetrics"]["liveBookWarnings"], 1)
+            self.assertEqual(payload["headlineMetrics"]["paperAutoSelected"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioTopFive"], ["FLNC", "THR"])
@@ -234,6 +236,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["convictionBehemoths"], ["NVDA", "AVGO"])
             self.assertEqual(payload["headlineMetrics"]["convictionSleepers"], ["MOD"])
             self.assertEqual(payload["headlineMetrics"]["convictionNearTermWinners"], ["MRVL"])
+            self.assertEqual(payload["headlineMetrics"]["convictionBestBalanced"], ["NVDA", "MOD"])
             self.assertEqual(payload["headlineMetrics"]["capitalDeploymentVerdict"], "manual-ready-with-warnings")
             self.assertFalse(payload["headlineMetrics"]["autoLiveAllowed"])
             self.assertEqual(payload["headlineMetrics"]["riskGateVerdict"], "blocked")
@@ -268,6 +271,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)
             self.assertIn("Conviction giants: NVDA, AVGO", text_report)
+            self.assertIn("Conviction balanced: NVDA, MOD", text_report)
 
             digest = command_center.onboard_digest(payload)
             self.assertIn("reports/usage_optimizer_latest.txt", digest)

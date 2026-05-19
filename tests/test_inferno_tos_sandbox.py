@@ -66,6 +66,25 @@ class InfernoTosSandboxFillLogTests(unittest.TestCase):
         self.assertEqual(status, "stage-in-papermoney")
         self.assertEqual(reasons, [])
 
+    def test_intent_stage_status_auto_stages_approval_only_paper_ticket(self) -> None:
+        status, reasons = inferno_tos_sandbox.intent_stage_status(
+            {
+                "ticker": "WSC",
+                "approvalStatus": "pending",
+                "intentStatus": "blocked",
+                "intentBlocks": ["human approval still required"],
+            },
+            {
+                "ok": True,
+                "riskVerdict": {"passed": True, "blocks": [], "warnings": []},
+                "strikePlan": {"strategy": "LONG_STRADDLE", "liquidityNotes": []},
+            },
+            True,
+        )
+
+        self.assertEqual(status, "stage-in-papermoney")
+        self.assertEqual(reasons, [])
+
     def test_seed_fill_log_from_stageable_inserts_stub_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             work_file = Path(tmpdir) / "fill.csv"

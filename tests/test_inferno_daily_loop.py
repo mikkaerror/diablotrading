@@ -146,6 +146,7 @@ HEALTHY_CONVICTION_RESEARCH = {
     "behemoths": [{"ticker": "NVDA"}, {"ticker": "AVGO"}],
     "sleepers": [{"ticker": "MOD"}],
     "nearTermWinners": [{"ticker": "MRVL"}],
+    "bestBalanced": [{"ticker": "NVDA"}, {"ticker": "MOD"}],
 }
 HEALTHY_FALSIFICATION = {
     "generatedAt": "2026-05-10T08:00:00-06:00",

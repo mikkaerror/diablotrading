@@ -41,6 +41,13 @@ If that ever changes, it changes because the evidence earned it.
 
 If a feature would weaken one of these rails, the feature is wrong.
 
+## Paper automation distinction
+
+The desk may auto-select and paper-stage simulated candidates when the only
+remaining blocker is human approval. That is evidence collection, not trading
+authority. Live orders remain explicit-confirmation only until closed paper
+outcomes earn promotion through the authority controller.
+
 ## What another model should read first
 
 Before reading docs, refresh the compact handoff surface:

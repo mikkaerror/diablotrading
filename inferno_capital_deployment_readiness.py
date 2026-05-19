@@ -265,8 +265,14 @@ def evaluate_readiness(
             artifacts["paperDirector"].get("approvalOnly"),
         )
     )
-    if paper_stageable <= 0 and paper_approval <= 0:
-        warnings.append("Paper test director has no stageable or approval-only candidates.")
+    paper_auto = number(
+        first_present(
+            nested(artifacts["paperDirector"], ("counts", "autoPaperSelected")),
+            artifacts["paperDirector"].get("autoPaperSelected"),
+        )
+    )
+    if paper_stageable <= 0 and paper_auto <= 0 and paper_approval <= 0:
+        warnings.append("Paper test director has no stageable, auto-selected, or approval-only candidates.")
 
     strategy_verdict = artifact_verdict(artifacts["strategyLab"])
     if strategy_verdict in {"insufficient-data", "missing"}:

@@ -196,8 +196,28 @@ def _is_low_power_closed_mode(attempt_records: list[dict[str, Any]]) -> bool:
         return False
     if not attempt_records:
         return False
-    tolerated_modes = {"tos-not-running", "window-missing"}
+    tolerated_modes = {"tos-not-running", "window-missing", "tos-closed-low-power"}
     return all(record.get("failMode") in tolerated_modes for record in attempt_records)
+
+
+def classify_verifier_exception(exc: Exception) -> str:
+    """Classify verifier exceptions without turning low-power mode into noise.
+
+    Some local shells, CI runners, or stripped-down desktop sessions do not
+    expose macOS helper binaries such as ``launchctl``. When broker export
+    automation is disabled, that absence should not page the operator: the desk
+    is intentionally not trying to foreground TOS. Other exceptions stay
+    ``unknown`` so new real symptoms still force review.
+    """
+    message = f"{type(exc).__name__}: {exc}".lower()
+    if (
+        not TOS_EXPORT_AUTOMATION_ENABLED
+        and not TOS_BACKGROUND_EXPORT_ALLOWED
+        and "filenotfounderror" in message
+        and "launchctl" in message
+    ):
+        return "tos-closed-low-power"
+    return "unknown"
 
 
 def build_stability_report(
@@ -233,16 +253,17 @@ def build_stability_report(
         try:
             raw_attempt = verifier(require_enabled=False, allow_recovery=False)
         except Exception as exc:  # noqa: BLE001
+            mode = classify_verifier_exception(exc)
             attempt_records.append(
                 {
                     "index": index,
                     "ok": False,
                     "verdict": "exception",
                     "message": f"{type(exc).__name__}: {exc}",
-                    "failMode": "unknown",
+                    "failMode": mode,
                 }
             )
-            classification_counts["unknown"] += 1
+            classification_counts[mode] += 1
             continue
 
         mode = classify_attempt(raw_attempt)

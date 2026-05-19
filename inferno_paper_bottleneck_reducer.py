@@ -89,7 +89,8 @@ def scenario_from_director_candidate(
     """
     ticker = normalize_ticker(candidate.get("ticker"))
     category = str(candidate.get("category") or lane)
-    executable = category == "stageable-now"
+    auto_paper_selected = category == "auto-paper-selected" or bool(candidate.get("paperAutoSelected"))
+    executable = category in {"stageable-now", "auto-paper-selected"}
     approval_needed = category == "approval-only"
     shadow_only = not executable
     max_loss = float_value(candidate.get("estimatedMaxLoss"))
@@ -117,8 +118,9 @@ def scenario_from_director_candidate(
         "shadowOnly": shadow_only,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
-        "authorityEligible": executable,
-        "evidenceLane": "paper-stage" if executable else "shadow-scenario",
+        "authorityEligible": category == "stageable-now" and not auto_paper_selected,
+        "paperAutoSelected": auto_paper_selected,
+        "evidenceLane": "paper-auto-stage" if auto_paper_selected else ("paper-stage" if executable else "shadow-scenario"),
         "reducerAction": reducer_action_for_candidate(candidate, category, capital_gap),
         "reasons": candidate.get("reasons") or [],
         "warnings": candidate.get("warnings") or [],
@@ -130,8 +132,12 @@ def scenario_from_director_candidate(
 def reducer_action_for_candidate(candidate: dict[str, Any], category: str, capital_gap: float) -> str:
     """Return the safest next action for one scenario."""
     ticker = normalize_ticker(candidate.get("ticker"))
+    if candidate.get("paperAutoSelected"):
+        return f"Auto-stage/track {ticker} in paperMoney only; no live order authority."
     if category == "stageable-now":
         return f"Stage {ticker} in paperMoney only; record fill immediately."
+    if category == "auto-paper-selected":
+        return f"Auto-stage/track {ticker} in paperMoney only; no live order authority."
     if category == "approval-only":
         return f"Approve or reject {ticker}; if approved, rebuild strike cycle before staging."
     if capital_gap > 0:
@@ -211,6 +217,7 @@ def collect_director_scenarios(director: dict[str, Any]) -> list[dict[str, Any]]
     """Collect director cohorts in safety-first priority order."""
     cohorts = [
         ("stageable", director.get("stageableSlate") or []),
+        ("auto-paper", director.get("autoPaperSlate") or []),
         ("approval", director.get("approvalSlate") or []),
         ("research", director.get("researchWatchlist") or []),
         ("capital-near-miss", director.get("capitalNearMissSlate") or []),
@@ -360,6 +367,7 @@ def reducer_csv(payload: dict[str, Any]) -> str:
         "estimatedMaxLoss",
         "capitalGap",
         "executableInPaperMoney",
+        "paperAutoSelected",
         "requiresApproval",
         "shadowOnly",
         "reducerAction",
@@ -382,6 +390,7 @@ def reducer_csv(payload: dict[str, Any]) -> str:
             "estimatedMaxLoss": item.get("estimatedMaxLoss"),
             "capitalGap": item.get("capitalGap"),
             "executableInPaperMoney": item.get("executableInPaperMoney"),
+            "paperAutoSelected": item.get("paperAutoSelected"),
             "requiresApproval": item.get("requiresApproval"),
             "shadowOnly": item.get("shadowOnly"),
             "reducerAction": item.get("reducerAction"),

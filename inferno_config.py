@@ -177,6 +177,12 @@ BROKER_EXECUTION_SURFACE = "thinkorswim"
 BROKER_API_TARGET = "Schwab Trader API"
 EXECUTION_MODE = "approval-only"
 BROKER_ADAPTER_MODE = os.environ.get("BROKER_ADAPTER_MODE", "OFF").upper()
+AUTO_PAPER_SELECTION_ENABLED = os.environ.get("INFERNO_AUTO_PAPER_SELECTION", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 MAX_DAILY_RISK_UNITS = 3.0
 MAX_SINGLE_TRADE_RISK_UNITS = 1.0
 MAX_ACTIVE_EXECUTION_INTENTS = 3

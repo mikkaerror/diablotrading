@@ -283,9 +283,10 @@ def evaluate_paper_director_gate(paper_director: dict[str, Any]) -> dict[str, An
     """Verify there is a clean paper action path for the next cycle."""
     counts = paper_director.get("counts") or {}
     stageable = number(counts.get("stageableNow"))
+    auto_paper = number(counts.get("autoPaperSelected"))
     approval_only = number(counts.get("approvalOnly"))
     hard_blocked = number(counts.get("hardBlocked"))
-    if stageable > 0:
+    if stageable > 0 or auto_paper > 0:
         status = "pass"
     elif approval_only > 0:
         status = "warn"
@@ -297,8 +298,8 @@ def evaluate_paper_director_gate(paper_director: dict[str, Any]) -> dict[str, An
         "paper-evidence",
         PROMOTION,
         status,
-        f"stageable={int(stageable)} approvalOnly={int(approval_only)} hardBlocked={int(hard_blocked)}",
-        "Approve or reject the approval-only slate; do not force hard-blocked tickets.",
+        f"stageable={int(stageable)} autoPaper={int(auto_paper)} approvalOnly={int(approval_only)} hardBlocked={int(hard_blocked)}",
+        "Use stageable or auto-selected paper tickets only; do not force hard-blocked tickets.",
         artifact="data/inferno_paper_test_director.json",
     )
 

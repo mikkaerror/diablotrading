@@ -22,6 +22,7 @@ not automated.
 3. Paper evidence is the promotion gate.
 4. Broker surfaces are outputs, not brains.
 5. Authority is computed from evidence, never granted by mood.
+6. Paper-only auto selection is allowed when approval is the only blocker; live authority is not.
 
 ## Flow
 
@@ -53,6 +54,7 @@ not an error to route around.
 
 - `pending`: candidate exists, approval still required.
 - `approval-ready`: approval, trigger, setup, and budget all pass.
+- `auto-paper-selected`: model selected the setup for simulated paper evidence; live confirmation is still required for real orders.
 - `paper-staged`: valid ticket is ready for paper rehearsal.
 - `paper-blocked`: thesis may exist, but risk, quote quality, size, or setup fails.
 - `review`: live position or paper result needs operator attention.
@@ -61,7 +63,8 @@ not an error to route around.
 ## Hard Rules
 
 - No auto-submit until the paper evidence loop has a real track record.
-- No order intent without approval or an explicit logged manual override.
+- No real-money order intent without approval or an explicit logged manual override.
+- No paper-auto selection if size, liquidity, stale-data, quote, or risk gates fail.
 - No broker automation that bypasses risk policy.
 - No script should both rank names and submit real orders.
 - No authority change outside the authority controller.

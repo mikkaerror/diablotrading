@@ -337,6 +337,156 @@ class TradeConvictionAuditTests(unittest.TestCase):
         ):
             self.assertIn(section, text, f"missing section: {section}")
 
+    # ─────────── master-trader rules (MASTER_TRADERS.md) ───────────
+
+    def test_ptj_rr_floor_bear_fires_below_1_5(self):
+        """Tudor Jones: R:R below 1.5x must fire a bear bullet citing PTJ-MW89."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(maxGain=40.0, maxLoss=54.0)]},  # 0.74 R:R
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertIn("PTJ-MW89", bear)
+        self.assertIn("reward:risk", bear)
+
+    def test_ptj_rr_disagreement_fires_below_1_0(self):
+        """R:R below 1.0x is an outright disagreement, not just a bear."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(maxGain=30.0, maxLoss=54.0)]},  # 0.55 R:R
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        dis = " | ".join(report["audits"][0]["disagreements"])
+        self.assertIn("PTJ-MW89", dis)
+        self.assertIn("defense-floor", dis)
+
+    def test_ptj_rr_does_not_fire_above_floor(self):
+        """R:R at or above 1.5x must NOT fire the PTJ bear."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(maxGain=150.0, maxLoss=54.0)]},  # 2.78 R:R
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertNotIn("PTJ-MW89", bear)
+
+    def test_taleb_concave_structure_fires_steamroller_bear(self):
+        """Taleb: concave structures (iron condor, butterfly, credit spread) must
+        fire the picking-pennies-in-front-of-the-steamroller bear bullet."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(structure="IRON CONDOR 100/105/110/115")]},
+            decision_briefs={"briefs": [_brief(tracker={"rec1": "IRON CONDOR"})]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertIn("TALEB-AF12", bear)
+        self.assertIn("concave", bear.lower())
+
+    def test_taleb_convex_structure_does_not_fire_steamroller(self):
+        """A long vertical call is convex; the Taleb bullet must NOT fire."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(structure="Vertical Call")]},
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertNotIn("TALEB-AF12", bear)
+
+    def test_marks_cycle_stage_bear_fires_on_rich_iv_long_premium(self):
+        """Marks: IV-rank in Q4 + long premium = wise-man-fool bear bullet."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(structure="Straddle")]},
+            decision_briefs={"briefs": [_brief(tracker={"rec1": "STRADDLE (10)", "ivRank": 85.0})]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertIn("MARKS-MIC18", bear)
+        self.assertIn("wise man", bear)
+
+    def test_marks_cycle_stage_silent_on_normal_iv(self):
+        """At IV-rank 50, Marks pendulum bullet must NOT fire."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(structure="Straddle")]},
+            decision_briefs={"briefs": [_brief(tracker={"rec1": "STRADDLE (10)", "ivRank": 50.0})]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        bear = " | ".join(report["audits"][0]["bear"])
+        self.assertNotIn("MARKS-MIC18", bear)
+
+    def test_klarman_sit_out_advisory_fires_when_nothing_qualifies(self):
+        """If no ticket clears readiness 75 with classified edge, sit out."""
+        # Readiness 60 — below floor
+        weak = _ticket(readiness=60)
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [weak]},
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        advisory = report.get("sitOutAdvisory")
+        self.assertTrue(advisory["sitOut"])
+        self.assertIn("KLARMAN-MOS91", advisory["reminder"])
+        # Reminder must be first in the reminders list when sit-out fires
+        self.assertIn("sit-out", report["reminders"][0])
+
+    def test_klarman_sit_out_does_not_fire_when_qualifier_exists(self):
+        """If at least one ticket clears the floor + has classified edge, no sit-out."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(readiness=99)]},
+            decision_briefs={"briefs": [_brief()]},  # edge category = "AI/Compute Picks"
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        advisory = report.get("sitOutAdvisory")
+        self.assertFalse(advisory["sitOut"])
+        self.assertEqual(advisory["qualifyingTickers"], ["TEST"])
+
+    def test_klarman_sit_out_fires_when_only_unclassified_edge_qualifies(self):
+        """Readiness 99 + Unclassified edge must still trigger sit-out."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(readiness=99)]},
+            decision_briefs={"briefs": [_brief(
+                edge={"category": "Unclassified", "lane": "Ignore For Theme",
+                      "sector": "Consumer Cyclical"},
+            )]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        advisory = report.get("sitOutAdvisory")
+        self.assertTrue(advisory["sitOut"])
+
+    def test_klarman_sit_out_fires_when_no_tickets(self):
+        """An empty slate is itself a sit-out signal."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": []},
+            decision_briefs={"briefs": []},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        advisory = report.get("sitOutAdvisory")
+        self.assertTrue(advisory["sitOut"])
+        self.assertIn("no audited tickets", advisory["reason"])
+
+    def test_rendered_text_shows_sit_out_advisory(self):
+        """The rendered audit must include the SIT-OUT ADVISORY block."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(readiness=60)]},
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        text = audit.conviction_audit_text(report)
+        self.assertIn("SIT-OUT ADVISORY", text)
+        self.assertIn("SIT OUT", text)
+
 
 if __name__ == "__main__":
     unittest.main()

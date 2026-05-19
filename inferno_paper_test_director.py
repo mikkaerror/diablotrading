@@ -16,7 +16,7 @@ import json
 from collections import Counter
 from typing import Any
 
-from inferno_config import MAX_SINGLE_TICKET_DOLLARS, local_now
+from inferno_config import AUTO_PAPER_SELECTION_ENABLED, MAX_SINGLE_TICKET_DOLLARS, local_now
 from inferno_doctor import in_current_service_cycle
 from inferno_execution_clerk import build_execution_queue
 from inferno_io import atomic_write_json, atomic_write_text
@@ -47,7 +47,7 @@ APPROVAL_ONLY_REASONS = {
     "human approval still required",
     "execution intent is not approval-ready",
 }
-GOOD_VERDICTS = {"ready-to-paper-stage", "approval-bottleneck"}
+GOOD_VERDICTS = {"ready-to-paper-stage", "auto-paper-selected", "approval-bottleneck"}
 
 
 def normalize_reason(reason: Any) -> str:
@@ -209,6 +209,7 @@ def classify_candidate(
         "approvalStatus": strike_item.get("approvalStatus"),
         "intentStatus": strike_item.get("intentStatus"),
         "sandboxStatus": sandbox_ticket.get("status"),
+        "paperAutoSelected": bool(sandbox_ticket.get("paperAutoSelected")),
         "readiness": execution_item.get("readiness"),
         "daysUntilEarnings": strike_item.get("daysUntilEarnings"),
         "estimatedMaxLoss": strike_plan.get("estimatedMaxLoss"),
@@ -242,7 +243,7 @@ def classify_candidate(
         and strike_item.get("approvalStatus") != "approved"
         and not non_approval_reasons
     ):
-        candidate["category"] = "approval-only"
+        candidate["category"] = "auto-paper-selected" if AUTO_PAPER_SELECTION_ENABLED else "approval-only"
         return candidate
 
     if risk_verdict.get("passed") is True and not non_approval_reasons:
@@ -334,10 +335,23 @@ def classify_candidates(
     ]
 
 
-def split_candidates(candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def split_candidates(
+    candidates: list[dict[str, Any]],
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     """Return the candidate cohorts used by the paper-test director."""
     stageable = sorted(
         [candidate for candidate in candidates if candidate["category"] == "stageable-now"],
+        key=lambda item: (-float_value(item.get("priorityScore")), float_value(item.get("estimatedMaxLoss"), 99999.0)),
+    )
+    auto_paper = sorted(
+        [candidate for candidate in candidates if candidate["category"] == "auto-paper-selected"],
         key=lambda item: (-float_value(item.get("priorityScore")), float_value(item.get("estimatedMaxLoss"), 99999.0)),
     )
     approval_only = sorted(
@@ -353,7 +367,7 @@ def split_candidates(candidates: list[dict[str, Any]]) -> tuple[list[dict[str, A
         key=lambda item: (-float_value(item.get("priorityScore")), item.get("ticker", "")),
     )
     near_miss = capital_near_miss_slate(hard_blocked)
-    return stageable, approval_only, research_watch, hard_blocked, near_miss
+    return stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss
 
 
 def build_director() -> dict[str, Any]:
@@ -372,9 +386,9 @@ def build_director() -> dict[str, Any]:
     expanded_tickers: list[str] = []
 
     candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox)
-    stageable, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
+    stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
 
-    if not stageable and not approval_only and not research_watch:
+    if not stageable and not auto_paper and not approval_only and not research_watch:
         expanded_tickers = expanded_rehearsal_tickers(snapshot, execution_queue)
         primary_tickers = queue_tickers(execution_queue)
         if expanded_tickers and expanded_tickers != primary_tickers:
@@ -389,13 +403,17 @@ def build_director() -> dict[str, Any]:
             source_label = "expanded-eligible-universe"
             save_rehearsal_strike_plan(source_strike_plan)
             candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox)
-            stageable, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
+            stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
 
     scored_tickets = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
     remaining_for_promotion = max(0, PROMOTION_TARGET - scored_tickets)
+    auto_paper_stageable = [candidate for candidate in stageable if candidate.get("paperAutoSelected")]
+    combined_auto_paper = auto_paper_stageable + auto_paper
 
     if stageable:
         verdict = "ready-to-paper-stage"
+    elif auto_paper:
+        verdict = "auto-paper-selected"
     elif approval_only:
         verdict = "approval-bottleneck"
     elif research_watch:
@@ -406,6 +424,10 @@ def build_director() -> dict[str, Any]:
     next_actions: list[str] = []
     if stageable:
         next_actions.append("Paper stageable names exist now. Rehearse only the stageable slate in paperMoney.")
+    elif auto_paper:
+        next_actions.append(
+            "Data selected paper-only names automatically. Rehearse the auto paper slate; live orders still require explicit confirmation."
+        )
     elif approval_only:
         next_actions.append("The bottleneck is approval, not discovery. Decide the pending paper-safe names first.")
         next_actions.extend(approval_operator_steps(approval_only))
@@ -437,6 +459,7 @@ def build_director() -> dict[str, Any]:
         "counts": {
             "totalCandidates": len(candidates),
             "stageableNow": len(stageable),
+            "autoPaperSelected": len(combined_auto_paper),
             "approvalOnly": len(approval_only),
             "researchWatch": len(research_watch),
             "hardBlocked": len(hard_blocked),
@@ -448,6 +471,7 @@ def build_director() -> dict[str, Any]:
         "authorityWarnings": (authority.get("decision") or {}).get("warnings") or [],
         "blockerCounts": blocker_table(candidates),
         "stageableSlate": stageable,
+        "autoPaperSlate": combined_auto_paper,
         "approvalSlate": approval_only,
         "researchWatchlist": research_watch,
         "hardBlockedSlate": hard_blocked,
@@ -472,6 +496,7 @@ def director_text(payload: dict[str, Any]) -> str:
         "Counts:",
         f"- total candidates: {counts.get('totalCandidates', 0)}",
         f"- stageable now: {counts.get('stageableNow', 0)}",
+        f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
         f"- approval only: {counts.get('approvalOnly', 0)}",
         f"- research watch: {counts.get('researchWatch', 0)}",
         f"- hard blocked: {counts.get('hardBlocked', 0)}",
@@ -505,6 +530,8 @@ def director_text(payload: dict[str, Any]) -> str:
                 f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
                 f"maps to {candidate.get('paperVariantOfStrategy')}"
             )
+        if candidate.get("paperAutoSelected"):
+            lines.append("  paper-only auto selection; live authority remains locked")
         trend = (candidate.get("marketContextSummary") or {}).get("trend", "Unknown")
         lines.append(
             f"  {candidate.get('daysUntilEarnings')}d to earnings | readiness {candidate.get('readiness')} | "
@@ -543,6 +570,22 @@ def director_text(payload: dict[str, Any]) -> str:
                 f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
                 f"maps to {candidate.get('paperVariantOfStrategy')}"
             )
+
+    lines.extend(["", "Auto paper slate:"])
+    auto_paper_slate = payload.get("autoPaperSlate") or []
+    if not auto_paper_slate:
+        lines.append("- none")
+    for candidate in auto_paper_slate:
+        lines.append(
+            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
+            f"priority {candidate.get('priorityScore')} | max loss ${float_value(candidate.get('estimatedMaxLoss')):.2f}"
+        )
+        if candidate.get("paperVariantOnly"):
+            lines.append(
+                f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
+                f"maps to {candidate.get('paperVariantOfStrategy')}"
+            )
+        lines.append("  paper-only auto selection; live authority remains locked")
 
     lines.extend(["", "Hard blocked slate:"])
     blocked = payload.get("hardBlockedSlate") or []

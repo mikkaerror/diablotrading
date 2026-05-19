@@ -114,6 +114,14 @@ NEAR_LEVEL_PCT = 5.0               # within 5% of support/resistance = level adj
 LOW_RVOL_FLOOR = 0.4               # below this, intra-day participation is thin
 EVIDENCE_PRIOR_ONLY_SAMPLES = 30   # below this, all calls are prior-only, not posterior
 
+# Master-trader principle thresholds (see docs/MASTER_TRADERS.md).
+# These are calibrated to short-DTE options, not to PTJ's macro futures
+# 5:1 floor — verticals routinely run R:R between 1:1 and 2:1 by design.
+RR_BEAR_FLOOR = 1.5         # below this R:R, the audit fires a bear bullet
+RR_DISAGREEMENT_FLOOR = 1.0 # below this R:R, the audit fires a disagreement (capital is being asked to take negative expectancy unless win-rate > 50%)
+SIT_OUT_READINESS_FLOOR = 75      # if NO ticket meets this *and* has classified edge, advise sitting out
+SIT_OUT_EDGE_REQUIRED = True      # whether sit-out also requires edge to be classified
+
 
 # ───────────────────────── citation tags (single source of truth) ──────
 
@@ -152,6 +160,16 @@ CITES = {
     # PEAD
     "BB68": "Ball & Brown (1968) — original post-earnings announcement drift",
     "BT89": "Bernard & Thomas (1989) — PEAD persists 60+ trading days; outside our 7–21 DTE window",
+    # master-trader principles (see docs/MASTER_TRADERS.md)
+    "PTJ-MW89": "Tudor Jones in Market Wizards (Schwager 1989) — defense > offense; aim for 5:1 R:R so a 20% hit ratio still pays",
+    "TALEB-AF12": "Taleb, Antifragile (2012) — barbell payoff structure; long convexity > picking pennies in front of the steamroller",
+    "TALEB-SITG18": "Taleb, Skin in the Game (2018) — ergodicity; a sequence of +EV bets with non-zero ruin probability is a negative time-average",
+    "MARKS-MIC18": "Marks, Mastering the Market Cycle (2018) — pendulum cycles; 'what the wise man does in the beginning, the fool does in the end'",
+    "KLARMAN-MOS91": "Klarman, Margin of Safety (1991) — cash is a position; abstain when nothing meets the bar",
+    "DRUCK-MW12": "Druckenmiller in Hedge Fund Market Wizards (Schwager 2012) — concentration on highest conviction; preservation of capital + home runs",
+    "MUNGER-PCA05": "Munger, Poor Charlie's Almanack (Kaufman ed., 2005) — invert always invert; mandatory bear is the desk's daily inversion",
+    "BUFFETT-BRK": "Buffett, Berkshire Hathaway letters — circle of competence; risk comes from not knowing what you're doing",
+    "TURTLE-D83": "Dennis, Turtle training material (1983; Faith 2007) — system discipline beats discretionary willpower; pre-commit exits",
 }
 
 
@@ -352,12 +370,125 @@ def _collect_bear(ticket: dict[str, Any], brief: dict[str, Any], evidence: dict[
             f"not posterior {_cite('WIL27')} {_cite('ET93')}"
         )
 
+    # Tudor Jones — reward:risk floor. See docs/MASTER_TRADERS.md §9.
+    # Below 1.5x, the operator needs a > 60% hit ratio to be net positive;
+    # below 1.0x, they need a > 50% hit ratio AND the math is asymmetric
+    # against them on every loss. Both are bears.
+    rr = _rr_ratio(ticket)
+    if rr is not None:
+        if rr < RR_BEAR_FLOOR:
+            bear.append(
+                f"reward:risk ratio {rr:.2f} below floor {RR_BEAR_FLOOR:.2f}; "
+                f"a {RR_BEAR_FLOOR:.2f}x setup needs a > {100*(1/(1+RR_BEAR_FLOOR)):.0f}% "
+                f"hit ratio to be net positive — Tudor Jones aimed for 5:1 so a 20% "
+                f"hit ratio still paid {_cite('PTJ-MW89')}"
+            )
+
+    # Taleb — convexity / concavity tag. See docs/MASTER_TRADERS.md §5.
+    # Concave structures (credit spreads, condors, flies) collect bounded
+    # premium against unbounded-direction risk — Taleb's "picking pennies
+    # in front of the steamroller" pattern. They aren't blocked; they get
+    # a named bullet so the operator decides with eyes open.
+    convexity = _convexity_tag(rec1)
+    if convexity == "concave":
+        bear.append(
+            f"structure '{rec1.title()}' is concave: capped credit on the upside, "
+            f"tail risk on the downside — Taleb's picking-pennies-in-front-of-the-"
+            f"steamroller payoff {_cite('TALEB-AF12')}. The desk's default is "
+            f"convex (defined max loss + open right tail); deviating from that "
+            f"orientation should be an explicit choice, not a default."
+        )
+
+    # Marks — cycle-stage bear when buying premium at the top of the IV
+    # pendulum. See docs/MASTER_TRADERS.md §4. We already fire an IV-crush
+    # bear at IV_RANK_RICH; this adds the cycle-stage framing alongside
+    # so the operator sees the pendulum metaphor, not just the number.
+    if iv_rank is not None and iv_rank >= IV_RANK_RICH and _is_long_premium(rec1):
+        bear.append(
+            f"IV rank {iv_rank:.0f} places us in the top quartile of the vol "
+            f"pendulum and the desk is buying premium — 'what the wise man does "
+            f"in the beginning, the fool does in the end' {_cite('MARKS-MIC18')}; "
+            f"the early money is already paid, we are not it"
+        )
+
     if not bear:
         bear.append(
             "no rule-based bear fired; this is *not* the same as 'safe' — it means "
             "the auditor failed to imagine the bear and the operator must construct one"
         )
     return bear
+
+
+# ───────────────────────── master-trader rule helpers ─────────────────
+
+
+def _convexity_tag(structure_upper: str) -> str:
+    """Classify a structure as convex / concave / banned.
+
+    See docs/MASTER_TRADERS.md §5 (Taleb). The desk prefers convex
+    payoffs (defined max loss + open or asymmetric right tail) and
+    flags concave payoffs (capped credit with tail exposure) for
+    operator attention. Banned structures are already hard-blocked by
+    inferno_blowup_guardrails G1; this helper labels them anyway so the
+    audit speaks the same vocabulary as the guardrails.
+    """
+    s = (structure_upper or "").upper()
+    # Banned — undefined-loss patterns (already enforced by G1)
+    if any(p in s for p in (
+        "NAKED CALL", "NAKED PUT", "SHORT STRADDLE", "SHORT STRANGLE",
+        "SHORT CALL", "SHORT PUT", "UNCOVERED",
+    )):
+        return "banned"
+    # Concave — capped credit + tail risk
+    if any(p in s for p in (
+        "IRON CONDOR", "CONDOR", "BUTTERFLY", "FLY",
+        "CREDIT SPREAD", "CREDIT VERTICAL", "COVERED CALL",
+    )):
+        return "concave"
+    # Default: convex — long call, long put, long straddle, long strangle,
+    # debit vertical (the desk's default structure)
+    return "convex"
+
+
+def _rr_ratio(ticket: dict[str, Any]) -> float | None:
+    """Compute the reward:risk ratio for a ticket if both legs are known.
+
+    Looks for explicit ``maxGain`` / ``maxLoss`` first (preferred); falls
+    back to ``rewardRiskRatio`` if the briefing already computed it; and
+    finally tries ``target`` / ``allocation`` as a last resort. Returns
+    None when no usable inputs exist.
+    """
+    direct = _safe_float(ticket.get("rewardRiskRatio") or ticket.get("rrRatio"))
+    if direct is not None and direct > 0:
+        return direct
+    max_gain = _safe_float(ticket.get("maxGain") or ticket.get("targetGain"))
+    max_loss = _safe_float(ticket.get("maxLoss") or ticket.get("allocation"))
+    if max_gain is not None and max_loss is not None and max_loss > 0:
+        return max_gain / max_loss
+    return None
+
+
+def _is_long_premium(rec1_upper: str) -> bool:
+    """True when the structure is buying option premium (long vol).
+
+    A long vertical (debit) is treated as long-premium because the operator
+    is paying for asymmetric exposure even if delta is partial. Calendar
+    spreads and diagonal spreads sit on a boundary; we treat them as
+    long-premium for the cycle-stage check because the long leg dominates
+    the vega exposure in the 7-21 DTE window.
+    """
+    s = rec1_upper or ""
+    if "CONDOR" in s or "BUTTERFLY" in s or "FLY" in s:
+        return False
+    if "CREDIT" in s:
+        return False
+    if any(p in s for p in ("STRADDLE", "STRANGLE", "DEBIT", "CALENDAR", "DIAGONAL")):
+        return True
+    # Plain "VERTICAL CALL" / "VERTICAL PUT" / "CALL" / "PUT" — assume long
+    # premium unless explicitly marked as a credit structure.
+    if any(p in s for p in ("VERTICAL", "CALL", "PUT")) and "SHORT" not in s:
+        return True
+    return False
 
 
 def _structure_label_from_rec(rec1_upper: str) -> str:
@@ -432,6 +563,19 @@ def _collect_disagreements(ticket: dict[str, Any], brief: dict[str, Any]) -> lis
         out.append(
             f"IV rank {iv_rank:.0f} (cheap) but proposed structure sells vol — "
             f"premium received does not compensate the tail risk at this IV-rank"
+        )
+
+    # Tudor Jones — R:R below 1.0x is an outright disagreement: the trade
+    # asks the operator to take negative expectancy unless win-rate > 50%,
+    # which by construction is *not* what readiness alone proves. See
+    # docs/MASTER_TRADERS.md §9.
+    rr = _rr_ratio(ticket)
+    if rr is not None and rr < RR_DISAGREEMENT_FLOOR:
+        out.append(
+            f"reward:risk ratio {rr:.2f} below the {RR_DISAGREEMENT_FLOOR:.2f} "
+            f"defense-floor — even a 50% hit ratio is barely break-even, and "
+            f"readiness gates measure *setup quality*, not win-rate "
+            f"{_cite('PTJ-MW89')}"
         )
 
     return out
@@ -561,6 +705,7 @@ def _references_for(ticket: dict[str, Any], brief: dict[str, Any]) -> list[str]:
         "inferno_devils_advocate.py — sign-flip falsification engine",
         "inferno_vol_premium.py — direction × IV-bucket discriminator",
         "inferno_regime_drift.py — CUSUM tagging (same family as Renaissance's HMM regime detection)",
+        "docs/MASTER_TRADERS.md — Druckenmiller, Soros, Dalio, Marks, Taleb, Munger, Klarman, Buffett/Graham, Tudor Jones, Turtles; principles → rules",
     ]
     return refs
 
@@ -718,6 +863,13 @@ def _briefing_tickets(briefing: dict[str, Any]) -> list[dict[str, Any]]:
                 or _safe_float(cand.get("daysUntilEarnings"))
                 or 0.0
             ),
+            # R:R inputs for the PTJ rule. Carried through *as provided* —
+            # absent values stay None so the rule simply doesn't fire.
+            "maxGain": _safe_float(cand.get("maxGain") or cand.get("targetGain")),
+            "maxLoss": _safe_float(cand.get("maxLoss")),
+            "rewardRiskRatio": _safe_float(
+                cand.get("rewardRiskRatio") or cand.get("rrRatio")
+            ),
         })
     return out
 
@@ -761,6 +913,21 @@ def build_conviction_audit(
             devils=devils,
         ))
 
+    # Klarman — sit-out advisory. See docs/MASTER_TRADERS.md §7.
+    # When no slate ticket meets a meaningful readiness threshold AND has
+    # a classified edge, the audit recommends abstention. Cash is a
+    # position; the desk should not talk itself into a marginal trade.
+    sit_out_payload = _build_sit_out_advisory(audits, by_ticker_brief)
+
+    reminders = [
+        "diagnostic only; nothing here approves, rejects, or sizes a trade",
+        "operator must read at least one bear point per ticket before sizing",
+        "if the bull list is shorter than the bear list, the trade is *not* a yes",
+        "below 30 closed paper samples, every readiness number is prior-only",
+    ]
+    if sit_out_payload["sitOut"]:
+        reminders.insert(0, sit_out_payload["reminder"])
+
     return {
         "generatedAt": local_now().isoformat(),
         "stage": CONVICTION_AUDIT_STAGE,
@@ -775,13 +942,73 @@ def build_conviction_audit(
         "regimeDriftVerdict": regime.get("verdict"),
         "auditCount": len(audits),
         "audits": audits,
+        "sitOutAdvisory": sit_out_payload,
         "references": _references_for({}, {}),
-        "reminders": [
-            "diagnostic only; nothing here approves, rejects, or sizes a trade",
-            "operator must read at least one bear point per ticket before sizing",
-            "if the bull list is shorter than the bear list, the trade is *not* a yes",
-            "below 30 closed paper samples, every readiness number is prior-only",
-        ],
+        "reminders": reminders,
+    }
+
+
+def _build_sit_out_advisory(
+    audits: list[dict[str, Any]],
+    briefs_by_ticker: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Klarman sit-out advisory: are any tickets actually worth the day?
+
+    Returns a small payload the renderer surfaces to the operator. The
+    rule is intentionally light — we only ask whether at least *one*
+    ticket clears the readiness threshold *and* (optionally) has a
+    classified edge. If not, the advisory fires.
+    """
+    if not audits:
+        return {
+            "sitOut": True,
+            "reason": "no audited tickets in today's slate",
+            "reminder": (
+                "today is a sit-out day — no tickets to audit; cash is the position "
+                f"{_cite('KLARMAN-MOS91')}"
+            ),
+            "qualifyingTickers": [],
+            "floor": SIT_OUT_READINESS_FLOOR,
+        }
+
+    qualifying = []
+    for audit in audits:
+        readiness = _safe_float((audit.get("priors") or {}).get("readiness")) or 0
+        if readiness < SIT_OUT_READINESS_FLOOR:
+            continue
+        brief = briefs_by_ticker.get(str(audit.get("ticker") or "").upper()) or {}
+        edge = brief.get("edge") or {}
+        if SIT_OUT_EDGE_REQUIRED:
+            if (edge.get("category") in (None, "", "Unclassified")
+                    or edge.get("lane") == "Ignore For Theme"):
+                continue
+        qualifying.append(audit.get("ticker"))
+
+    if qualifying:
+        return {
+            "sitOut": False,
+            "reason": (
+                f"{len(qualifying)} ticket(s) clear readiness {SIT_OUT_READINESS_FLOOR} "
+                f"with a classified edge"
+            ),
+            "reminder": None,
+            "qualifyingTickers": qualifying,
+            "floor": SIT_OUT_READINESS_FLOOR,
+        }
+
+    return {
+        "sitOut": True,
+        "reason": (
+            f"no slate ticket clears readiness {SIT_OUT_READINESS_FLOOR} with a "
+            f"classified edge"
+        ),
+        "reminder": (
+            f"today is a sit-out day — no slate ticket clears readiness "
+            f"{SIT_OUT_READINESS_FLOOR} with a classified edge; cash is the position "
+            f"{_cite('KLARMAN-MOS91')}"
+        ),
+        "qualifyingTickers": [],
+        "floor": SIT_OUT_READINESS_FLOOR,
     }
 
 
@@ -806,6 +1033,17 @@ def conviction_audit_text(report: dict[str, Any]) -> str:
         f"Audited tickets: {report.get('auditCount', 0)}",
         "",
     ]
+
+    sit_out = report.get("sitOutAdvisory") or {}
+    if sit_out:
+        verdict = "SIT OUT" if sit_out.get("sitOut") else "QUALIFIED"
+        lines.append(f"SIT-OUT ADVISORY (Klarman): {verdict}")
+        lines.append(f"  reason: {sit_out.get('reason')}")
+        if sit_out.get("qualifyingTickers"):
+            lines.append(
+                f"  qualifying tickers: {', '.join(sit_out.get('qualifyingTickers') or [])}"
+            )
+        lines.append("")
 
     audits = report.get("audits") or []
     if not audits:

@@ -508,6 +508,7 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
         lines.append(
             f"Paper test director: {paper_director.get('status')} | "
             f"stageable {counts.get('stageableNow', 0)} | "
+            f"auto-paper {counts.get('autoPaperSelected', 0)} | "
             f"approval-only {counts.get('approvalOnly', 0)}"
         )
     paper_loop = report.get("paperEvidenceLoop") or {}

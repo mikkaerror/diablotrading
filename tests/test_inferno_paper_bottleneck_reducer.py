@@ -81,6 +81,39 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertFalse(scenario["brokerSubmitAllowed"])
         self.assertFalse(scenario["liveTradingAllowed"])
 
+    def test_auto_paper_candidate_is_executable_but_not_authority_eligible(self) -> None:
+        director = {
+            "verdict": "auto-paper-selected",
+            "autoPaperSlate": [
+                {
+                    "ticker": "WSC",
+                    "category": "auto-paper-selected",
+                    "strategy": "LONG_STRADDLE",
+                    "setupRec": "Straddle",
+                    "readiness": 88,
+                    "daysUntilEarnings": 2,
+                    "estimatedMaxLoss": 295.0,
+                    "priorityScore": 84,
+                    "reasons": ["human approval is missing"],
+                }
+            ],
+        }
+
+        payload = build_reducer(
+            director_loader=lambda: director,
+            snapshot_loader=lambda: {"rows": []},
+            scenario_target=1,
+        )
+
+        scenario = payload["scenarioSlate"][0]
+        self.assertTrue(scenario["executableInPaperMoney"])
+        self.assertTrue(scenario["paperAutoSelected"])
+        self.assertFalse(scenario["requiresApproval"])
+        self.assertFalse(scenario["authorityEligible"])
+        self.assertEqual(scenario["evidenceLane"], "paper-auto-stage")
+        self.assertFalse(scenario["brokerSubmitAllowed"])
+        self.assertFalse(scenario["liveTradingAllowed"])
+
     def test_tracker_shadow_candidates_exclude_existing_and_negative_dte(self) -> None:
         snapshot = {
             "rows": [

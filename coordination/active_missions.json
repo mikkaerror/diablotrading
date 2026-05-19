@@ -36,7 +36,7 @@
     "createdAt": "2026-05-10T15:10:09.158120-06:00",
     "updatedAt": "2026-05-18T22:05:35.744612-06:00",
     "title": "Advance paper evidence bottleneck",
-    "body": "Shared lane: convert approval-only candidates and shadow scenarios into scored paper evidence. Keep promotion gated on closed outcomes; no live authority expansion.",
+    "body": "Shared lane: convert auto-paper selections and shadow scenarios into scored paper evidence. Approval-only is live-style discretion, not a paper bottleneck. Keep promotion gated on closed outcomes; no live authority expansion.",
     "owner": "shared",
     "status": "in-progress",
     "priority": "high",

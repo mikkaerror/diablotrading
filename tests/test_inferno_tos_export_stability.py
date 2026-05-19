@@ -23,6 +23,7 @@ from inferno_tos_export_stability import (
     REMEDIATION,
     STABILITY_STAGE,
     build_stability_report,
+    classify_verifier_exception,
     classify_attempt,
     finalize_stability_report,
     stability_text,
@@ -210,6 +211,31 @@ class StabilityReportTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "inactive-safe")
         self.assertEqual(payload["dominantFailMode"], "tos-closed-low-power")
         self.assertIn("low-performance mode", payload["narrative"])
+
+    def test_missing_launchctl_in_low_power_mode_is_inactive_safe(self) -> None:
+        """Missing macOS helper binaries should not block disabled export automation."""
+
+        def verifier(**_kw: Any) -> dict[str, Any]:
+            raise FileNotFoundError(2, "No such file or directory", "launchctl")
+
+        with (
+            patch.object(stability_module, "TOS_EXPORT_AUTOMATION_ENABLED", False),
+            patch.object(stability_module, "TOS_BACKGROUND_EXPORT_ALLOWED", False),
+        ):
+            payload = build_stability_report(
+                attempts=2,
+                backoff_seconds=0,
+                sleep=lambda _seconds: None,
+                verifier=verifier,
+            )
+
+        self.assertEqual(payload["verdict"], "inactive-safe")
+        self.assertEqual(payload["dominantFailMode"], "tos-closed-low-power")
+        self.assertEqual(payload["classificationCounts"]["tos-closed-low-power"], 2)
+        self.assertEqual(
+            classify_verifier_exception(FileNotFoundError(2, "No such file or directory", "launchctl")),
+            "tos-closed-low-power",
+        )
 
     def test_exception_in_verifier_lands_in_unknown(self) -> None:
         def verifier(**_kw: Any) -> dict[str, Any]:

@@ -66,10 +66,11 @@ cat reports/strike_plan_latest.txt
 cat reports/paper_test_director_latest.txt
 ```
 
-The strike cycle picks strikes for the approved tickets, then the paper
-test director gives you a single memo with: stageable now / blocked by
-approval only / hard-blocked. Only consider names that come out
-**stageable**.
+The strike cycle picks strikes for approved or paper-auto tickets, then the
+paper test director gives you a single memo with: stageable now / auto-paper
+selected / approval only / hard-blocked. For paperMoney evidence, use only
+**stageable** or **auto-paper-selected** names. Live trades still require
+explicit manual confirmation.
 
 ## Step 5 — Read the broker preview (2 minutes)
 

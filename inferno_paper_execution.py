@@ -13,7 +13,7 @@ import hashlib
 import json
 from typing import Any
 
-from inferno_config import local_now
+from inferno_config import AUTO_PAPER_SELECTION_ENABLED, local_now
 from inferno_risk_policy import evaluate_strike_item
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
@@ -25,6 +25,12 @@ PAPER_EXECUTION_TEXT_FILE = REPORTS_DIR / "paper_execution_ledger_latest.txt"
 LEDGER_VERSION = 1
 DEFAULT_LIMIT = 50
 PAPER_VARIANT_ONLY = True
+PAPER_AUTO_APPROVAL_REASONS = {
+    "human approval is missing",
+    "human approval missing",
+    "human approval still required",
+    "execution intent is not approval-ready",
+}
 
 
 def load_strike_plan() -> dict[str, Any]:
@@ -118,6 +124,16 @@ def strategy_cost(strike_plan: dict[str, Any]) -> tuple[str, float]:
     return "unknown", 0.0
 
 
+def normalize_reason(value: Any) -> str:
+    """Normalize a blocker reason for approval-only paper checks."""
+    return str(value or "").strip().lower()
+
+
+def non_approval_reasons(reasons: list[Any]) -> list[str]:
+    """Return blocker reasons that cannot be bypassed for paper evidence."""
+    return [str(reason or "").strip() for reason in reasons if normalize_reason(reason) not in PAPER_AUTO_APPROVAL_REASONS]
+
+
 def size_cap_only_primary_blocks(item: dict[str, Any]) -> bool:
     """Return whether the primary strike item is blocked only by size limits."""
     blocks = list(((item.get("riskVerdict") or {}).get("blocks") or []))
@@ -154,8 +170,9 @@ def paper_status_for_item(
     """Classify a strike ticket without allowing unsafe tickets to pass.
 
     `paper-staged` means the idea is eligible for simulated tracking only. It
-    still does not mean live trading is allowed. Liquidity warnings, missing
-    human approval, or failed strike construction all fail closed.
+    still does not mean live trading is allowed. Liquidity, size, stale-data, or
+    failed strike construction fail closed. Human approval can be bypassed only
+    in the paper lane when it is the sole blocker.
     """
     reasons: list[str] = []
     risk_verdict = evaluate_strike_item(
@@ -170,9 +187,12 @@ def paper_status_for_item(
 
     strike_plan = item.get("strikePlan") or {}
     liquidity_notes = strike_plan.get("liquidityNotes") or []
+    intent_blocks = list(item.get("intentBlocks") or [])
+    paper_auto_selected = paper_auto_selection_applies(item, risk_verdict, liquidity_notes, intent_blocks)
     if item.get("intentStatus") != "approval-ready":
-        reasons.append("execution intent is not approval-ready")
-    if item.get("approvalStatus") != "approved":
+        blocks = intent_blocks or ["execution intent is not approval-ready"]
+        reasons.extend(non_approval_reasons(blocks) if paper_auto_selected else blocks)
+    if item.get("approvalStatus") != "approved" and not paper_auto_selected:
         reasons.append("human approval missing")
     if liquidity_notes:
         reasons.extend(liquidity_notes)
@@ -181,6 +201,34 @@ def paper_status_for_item(
     if reasons:
         return "paper-blocked", reasons, risk_verdict.as_dict()
     return "paper-staged", [], risk_verdict.as_dict()
+
+
+def paper_auto_selection_applies(
+    item: dict[str, Any],
+    risk_verdict: Any,
+    liquidity_notes: list[Any],
+    intent_blocks: list[Any],
+) -> bool:
+    """Return True when a pending ticket may become paper evidence automatically.
+
+    The function deliberately permits only approval-only friction to fall away.
+    It never changes live-trading flags, never touches broker submission, and
+    still blocks if the risk policy finds any non-approval issue.
+    """
+    if not AUTO_PAPER_SELECTION_ENABLED:
+        return False
+    if item.get("approvalStatus") in {"approved", "rejected"}:
+        return False
+    if not item.get("ok"):
+        return False
+    if not getattr(risk_verdict, "passed", False):
+        return False
+    if non_approval_reasons(intent_blocks) or non_approval_reasons(liquidity_notes):
+        return False
+    # Legacy strike plans did not carry `intentBlocks`; risk/liquidity gates are
+    # still enforced, so a pending blocked intent can be paper-staged only when
+    # nothing except approval remains visible.
+    return item.get("intentStatus") in {"approval-ready", "blocked"}
 
 
 def build_ledger_entry(
@@ -220,6 +268,7 @@ def build_ledger_entry(
         "blockReasons": block_reasons,
         "paperOnly": True,
         "liveTradingAllowed": False,
+        "paperAutoSelected": bool(status == "paper-staged" and item.get("approvalStatus") != "approved"),
         "intentStatus": item.get("intentStatus"),
         "approvalStatus": item.get("approvalStatus"),
         "riskVerdict": risk_verdict,

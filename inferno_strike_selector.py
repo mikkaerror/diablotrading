@@ -473,6 +473,7 @@ def build_strike_plan_for_intent(intent: dict[str, Any]) -> dict[str, Any]:
         "generatedAt": local_now().isoformat(),
         "automationStage": AUTOMATION_STAGE,
         "intentStatus": intent.get("intentStatus"),
+        "intentBlocks": intent.get("intentBlocks") or [],
         "approvalStatus": intent.get("approvalStatus"),
         "setupRec": setup,
         "price": intent.get("price"),

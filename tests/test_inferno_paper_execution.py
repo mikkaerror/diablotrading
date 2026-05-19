@@ -10,6 +10,37 @@ import inferno_paper_execution as paper_execution
 class InfernoPaperExecutionVariantTests(unittest.TestCase):
     """Verify capped rehearsal variants are recorded without widening authority."""
 
+    def test_paper_status_auto_stages_approval_only_ticket(self) -> None:
+        item = {
+            "ticker": "WSC",
+            "setupRec": "Straddle",
+            "ok": True,
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "intentBlocks": ["human approval still required"],
+            "strikePlan": {
+                "strategy": "LONG_STRADDLE",
+                "estimatedDebit": 2.95,
+                "estimatedMaxLoss": 295.0,
+                "estimatedMaxProfit": "uncapped",
+                "liquidityNotes": [],
+                "legs": [
+                    {"symbol": "WSC_20260515C50", "instruction": "BUY_TO_OPEN", "ask": 1.5},
+                    {"symbol": "WSC_20260515P50", "instruction": "BUY_TO_OPEN", "ask": 1.45},
+                ],
+            },
+        }
+
+        status, reasons, verdict = paper_execution.paper_status_for_item(
+            item,
+            strike_plan_generated_at=paper_execution.local_now().isoformat(),
+            ledger={"items": []},
+        )
+
+        self.assertEqual(status, "paper-staged")
+        self.assertEqual(reasons, [])
+        self.assertTrue(verdict["passed"])
+
     def test_rehearsal_variant_item_only_appears_for_size_cap_blocks(self) -> None:
         item = {
             "ticker": "GDS",

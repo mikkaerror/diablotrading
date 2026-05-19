@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from inferno_config import BROKER_EXECUTION_SURFACE, local_now
+from inferno_config import AUTO_PAPER_SELECTION_ENABLED, BROKER_EXECUTION_SURFACE, local_now
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -30,6 +30,12 @@ TOS_FILL_LOG_WORK_FILE = DATA_DIR / "inferno_tos_fill_log.csv"
 
 SANDBOX_READY_AUTHORITIES = {"paper-evidence-only", "broker-preview-only", "live-review-required"}
 MAX_STAGEABLE_TICKETS = 5
+PAPER_AUTO_APPROVAL_REASONS = {
+    "human approval is missing",
+    "human approval missing",
+    "human approval still required",
+    "execution intent is not approval-ready",
+}
 FILL_LOG_COLUMNS = [
     "sessionDate",
     "ticketId",
@@ -54,6 +60,21 @@ FILL_LOG_COLUMNS = [
 def text(value: Any) -> str:
     """Normalize arbitrary values into trimmed text."""
     return str(value or "").strip()
+
+
+def normalize_reason(value: Any) -> str:
+    """Normalize a blocker reason for approval-only comparisons."""
+    return text(value).lower()
+
+
+def non_approval_reasons(reasons: list[Any]) -> list[str]:
+    """Return reasons that should still block automated paper selection.
+
+    Approval-only blockers are allowed to fall away in the paper lane because
+    they do not grant live authority. Size, liquidity, stale-data, and risk
+    blockers must remain hard stops.
+    """
+    return [text(reason) for reason in reasons if normalize_reason(reason) not in PAPER_AUTO_APPROVAL_REASONS]
 
 
 def authority_decision() -> dict[str, Any]:
@@ -171,16 +192,28 @@ def intent_stage_status(
     reasons: list[str] = []
     strike_plan_item = effective_paper_plan_item(strike_plan_item)
     risk_verdict = strike_plan_item.get("riskVerdict") or {}
+    risk_blocks = list(risk_verdict.get("blocks") or [])
+    liquidity_notes = list((strike_plan_item.get("strikePlan") or {}).get("liquidityNotes") or [])
+    intent_blocks = list(intent.get("intentBlocks") or [])
+    paper_auto_selected = paper_auto_selection_applies(
+        intent,
+        strike_plan_item,
+        ready=ready,
+        intent_blocks=intent_blocks,
+        risk_blocks=risk_blocks,
+        liquidity_notes=liquidity_notes,
+    )
     if not ready:
         reasons.append("authority manifest does not allow paperMoney staging today")
-    if intent.get("approvalStatus") != "approved":
+    if intent.get("approvalStatus") != "approved" and not paper_auto_selected:
         reasons.append("human approval is missing")
     if intent.get("intentStatus") != "approval-ready":
-        reasons.extend(intent.get("intentBlocks") or ["intent is not approval-ready"])
+        blocks = intent_blocks or ["intent is not approval-ready"]
+        reasons.extend(non_approval_reasons(blocks) if paper_auto_selected else blocks)
     if not strike_plan_item.get("ok", True):
         reasons.append(str(strike_plan_item.get("reason") or "strike plan failed"))
-    reasons.extend(risk_verdict.get("blocks") or [])
-    reasons.extend((strike_plan_item.get("strikePlan") or {}).get("liquidityNotes") or [])
+    reasons.extend(risk_blocks)
+    reasons.extend(liquidity_notes)
     if reasons:
         # Preserve order but drop duplicate strings so the sandbox memo stays
         # readable when the same blocker is surfaced by multiple layers.
@@ -194,6 +227,39 @@ def intent_stage_status(
             deduped.append(value)
         return "blocked", deduped
     return "stage-in-papermoney", []
+
+
+def paper_auto_selection_applies(
+    intent: dict[str, Any],
+    strike_plan_item: dict[str, Any],
+    *,
+    ready: bool,
+    intent_blocks: list[Any],
+    risk_blocks: list[Any],
+    liquidity_notes: list[Any],
+) -> bool:
+    """Return True when paperMoney can auto-stage an approval-only setup.
+
+    This is the key separation between simulated evidence and live authority:
+    the model may pursue paper data if approval is the *only* blocker, but any
+    real risk, liquidity, stale-data, failed-construction, or rejected ticket
+    reason still blocks the paper stage.
+    """
+    if not AUTO_PAPER_SELECTION_ENABLED or not ready:
+        return False
+    if intent.get("approvalStatus") == "approved":
+        return False
+    if intent.get("approvalStatus") == "rejected":
+        return False
+    if not strike_plan_item.get("ok", True):
+        return False
+    if not (strike_plan_item.get("riskVerdict") or {}).get("passed"):
+        return False
+    if non_approval_reasons(intent_blocks) or non_approval_reasons(risk_blocks) or non_approval_reasons(liquidity_notes):
+        return False
+    if intent.get("intentStatus") != "approval-ready" and not intent_blocks:
+        return False
+    return True
 
 
 def build_stageable_ticket(
@@ -216,6 +282,8 @@ def build_stageable_ticket(
         "paperVariantFamily": (ledger_ticket or {}).get("paperVariantFamily") or strike_plan_item.get("paperVariantFamily"),
         "paperVariantOfStrategy": (ledger_ticket or {}).get("paperVariantOfStrategy") or strike_plan_item.get("paperVariantOfStrategy"),
         "status": status,
+        "approvalStatus": intent.get("approvalStatus"),
+        "paperAutoSelected": bool(status == "stage-in-papermoney" and intent.get("approvalStatus") != "approved"),
         "routeFamily": intent.get("routeFamily"),
         "setupRec": intent.get("setupRec"),
         "readiness": intent.get("readiness"),

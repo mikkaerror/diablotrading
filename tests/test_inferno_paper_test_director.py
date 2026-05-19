@@ -13,7 +13,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
 
     @patch("inferno_paper_test_director.load_strike_plan")
     @patch("inferno_paper_test_director.load_json_file")
-    def test_build_director_surfaces_approval_bottleneck(self, mock_load_json_file, mock_load_strike_plan) -> None:
+    def test_build_director_auto_selects_approval_only_paper_candidates(self, mock_load_json_file, mock_load_strike_plan) -> None:
         strike_plan = {
             "items": [
                 {
@@ -90,11 +90,12 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
         mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance]
 
         payload = build_director()
-        self.assertEqual(payload["verdict"], "approval-bottleneck")
+        self.assertEqual(payload["verdict"], "auto-paper-selected")
         self.assertTrue(payload["paperCycleHealthy"])
-        self.assertEqual(payload["counts"]["approvalOnly"], 1)
+        self.assertEqual(payload["counts"]["autoPaperSelected"], 1)
+        self.assertEqual(payload["counts"]["approvalOnly"], 0)
         self.assertEqual(payload["counts"]["hardBlocked"], 1)
-        self.assertEqual(payload["approvalSlate"][0]["ticker"], "WSC")
+        self.assertEqual(payload["autoPaperSlate"][0]["ticker"], "WSC")
         self.assertEqual(payload["hardBlockedSlate"][0]["ticker"], "PRIM")
 
     @patch("inferno_paper_test_director.load_strike_plan")
@@ -228,11 +229,11 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
 
         payload = build_director()
 
-        self.assertEqual(payload["verdict"], "approval-bottleneck")
+        self.assertEqual(payload["verdict"], "auto-paper-selected")
         self.assertTrue(payload["expandedUniverseUsed"])
         self.assertEqual(payload["sourceUniverse"], "expanded-eligible-universe")
         self.assertIn("ENS", payload["expandedUniverseTickers"])
-        self.assertEqual(payload["approvalSlate"][0]["ticker"], "ENS")
+        self.assertEqual(payload["autoPaperSlate"][0]["ticker"], "ENS")
 
 
 if __name__ == "__main__":

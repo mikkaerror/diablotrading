@@ -153,6 +153,32 @@ post correctly reproduces a numeric result we can re-derive.
   alignment, but only when support/resistance and options structure do
   not contradict the chase.
 
+- **[AMP13]** Asness, C. S., Moskowitz, T. J., & Pedersen, L. H. (2013).
+  *Value and Momentum Everywhere.* Journal of Finance, 68(3), 929–985.
+  — value and momentum premia appear across asset classes and diversify
+  each other better together than alone. Operational consequence: the
+  conviction map now rewards broad pillar agreement instead of one loud
+  momentum/theme signal.
+
+## Quality and profitability
+
+- **[NM13]** Novy-Marx, R. (2013). *The Other Side of Value: The Gross
+  Profitability Premium.* Journal of Financial Economics, 108(1), 1–28.
+  — gross profitability has power distinct from book-to-market value.
+  Operational consequence: the conviction map keeps quality separate
+  from valuation so expensive data-center names can still earn respect
+  when the quality evidence is real.
+
+## Options cross-section
+
+- **[GS09]** Goyal, A., & Saretto, A. (2009). *Cross-section of option
+  returns and volatility.* Journal of Financial Economics, 94(2),
+  310–326.
+  — option returns depend on the relationship between realised and
+  implied volatility. Operational consequence: IV rank alone is not
+  enough; the desk treats options conviction as provisional until
+  realised-vs-implied evidence accumulates in our own ledger.
+
 ## AI / semiconductor / data-center regime context
 
 - **[SIA26]** Semiconductor Industry Association (2026). *Global Annual
@@ -286,6 +312,97 @@ post correctly reproduces a numeric result we can re-derive.
   Kelly solve. Future work: when paper evidence supports it, replace
   the global hard-cap-per-day with a vector-Kelly fraction that
   accounts for slate correlation.
+
+## Master-trader principles
+
+The following anchors are interviews and books rather than peer-reviewed
+papers. The desk treats them as authoritative *posture* citations: they
+underwrite rules in the conviction audit that encode principles
+discretionary masters have stated explicitly and survived by. Each tag
+maps to a section in [`docs/MASTER_TRADERS.md`](MASTER_TRADERS.md).
+`[gray]` where the cited statement is a paraphrased interview quote
+rather than a written passage.
+
+- **[PTJ-MW89]** Paul Tudor Jones interview in *Market Wizards*
+  (Schwager, 1989). The 5:1 reward:risk target ("I can be wrong 80%
+  of the time and still not lose") and the "play great defense, not
+  great offense" maxim. `[gray]` for any specific R:R ratio quoted
+  here; the desk uses 1.5:1 / 1.0:1 thresholds calibrated to short-DTE
+  options rather than PTJ's macro futures.
+- **[TALEB-AF12]** Taleb, N. N. (2012). *Antifragile: Things That Gain
+  from Disorder.* Random House. — barbell construction, antifragility,
+  picking-pennies-in-front-of-the-steamroller as the canonical fragile
+  payoff. The desk uses this anchor to tag option *structures* as
+  convex (defined-max-loss + open right tail) or concave (capped
+  credit with tail risk) rather than as a numeric input.
+- **[TALEB-SITG18]** Taleb, N. N. (2018). *Skin in the Game.* Random
+  House. — formal statement of the ergodicity argument: time-average
+  ≠ ensemble-average when any path admits ruin. Anchors the desk's
+  ruin-prevention posture in the blowup guardrails (`docs/MATH.md`
+  §23). See also Peters & Gell-Mann (2016), *Evaluating gambles using
+  dynamics*, Chaos 26(2).
+- **[MARKS-MIC18]** Marks, H. (2018). *Mastering the Market Cycle:
+  Getting the Odds on Your Side.* Houghton Mifflin Harcourt. — the
+  pendulum metaphor, the three stages of a bull market, "what the
+  wise man does in the beginning, the fool does in the end." Used by
+  the cycle-stage bear rule when IV-rank is in its top quartile and
+  the desk is buying premium.
+- **[MARKS-MIT11]** Marks, H. (2011). *The Most Important Thing:
+  Uncommon Sense for the Thoughtful Investor.* Columbia Business
+  School Publishing. — second-level thinking; the bar for above-
+  average returns is to think *differently from*, not *more than*,
+  the consensus.
+- **[KLARMAN-MOS91]** Klarman, S. A. (1991). *Margin of Safety:
+  Risk-Averse Value Investing Strategies for the Thoughtful Investor.*
+  HarperCollins. — margin-of-safety as the singular metric, and cash
+  as a position when nothing meets the bar. Anchors the desk's
+  sit-out advisory: when *no* slate ticket clears the readiness ×
+  edge-classification threshold, the audit reminders flip to "today
+  is a sit-out day; cash is the position."
+- **[DRUCK-MW12]** Druckenmiller, S., interview in *Hedge Fund Market
+  Wizards* (Schwager, 2012); cross-cited with the 2023 Sohn talk and
+  the *Hustle* Q&A. Concentration as the source of outsized returns;
+  "preservation of capital and home runs" as Soros's two-part
+  formula. Anchors a *future* conviction-weighted sizing tilt
+  (deferred; not in code yet).
+- **[SOROS-AOF87]** Soros, G. (1987). *The Alchemy of Finance.* Simon
+  & Schuster. — reflexivity as a two-way feedback loop between
+  perception and reality; the boom-bust structural form. Anchors a
+  *future* reflexivity-check rule (deferred).
+- **[POPPER-LSD]** Popper, K. R. (1959). *The Logic of Scientific
+  Discovery.* Routledge. — Popper taught Soros at LSE; the
+  falsification principle ("theories can never be proved, only
+  disproved") is the philosophical floor under the desk's
+  devil's-advocate, math-verify, and CUSUM modules.
+- **[DALIO-PRIN17]** Dalio, R. (2017). *Principles.* Simon & Schuster.
+  — the "Holy Grail" of 15–20 uncorrelated return streams; the four-
+  quadrant All Weather framework (growth × inflation). Anchors a
+  *future* quadrant-concentration advisory (deferred).
+- **[MUNGER-PCA05]** Kaufman, P. D., editor (2005). *Poor Charlie's
+  Almanack: The Wit and Wisdom of Charles T. Munger.* Donning Company
+  Publishers. — inversion ("invert, always invert"), the latticework
+  of mental models, the lollapalooza effect when ≥ 5–6 biases push
+  the same direction. The audit's mandatory-bear rule is the desk's
+  one-line operationalisation of inversion. A formal lollapalooza
+  rule is deferred.
+- **[BUFFETT-BRK]** Buffett, W. E. *Berkshire Hathaway annual
+  shareholder letters* (1965–present), available at
+  `berkshirehathaway.com/letters`. — Rule no. 1 (never lose money);
+  circle of competence; Mr. Market parable (which Buffett attributes
+  to Graham, *The Intelligent Investor* 1949).
+- **[GRAHAM-II49]** Graham, B. (1949). *The Intelligent Investor.*
+  HarperCollins (rev. ed. 2003). — margin of safety as a doctrine
+  rather than a metric; the Mr. Market parable; the
+  defensive-vs-enterprising-investor distinction. Klarman's 1991
+  book is the cleanest modern restatement.
+- **[TURTLE-D83]** Dennis, R. (1983 training material), reconstructed
+  in Faith, C. (2007). *Way of the Turtle: The Secret Methods That
+  Turned Ordinary People into Legendary Traders.* McGraw-Hill. — the
+  20-day and 55-day Donchian breakout systems, 1%-of-bankroll risk
+  per trade, and the principle that *system discipline beats
+  discretionary willpower over a career*. The desk's pre-committed
+  falsification triggers are the same posture, applied to options
+  exits instead of futures entries.
 
 ## Why this matters
 

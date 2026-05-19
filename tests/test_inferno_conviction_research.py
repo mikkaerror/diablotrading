@@ -130,12 +130,54 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertTrue(report["researchOnly"])
         self.assertFalse(report["promotable"])
         self.assertEqual(report["trackedRows"], 3)
+        self.assertEqual(report["mathVersion"], "conviction-v2-balance-uncertainty")
         self.assertEqual(report["behemoths"][0]["ticker"], "NVDA")
         self.assertEqual(report["sleepers"][0]["ticker"], "MOD")
+        self.assertTrue(report["bestBalanced"])
         self.assertTrue(any(item["ticker"] == "HOTRISK" for item in report["contradictions"]))
         self.assertTrue(any("high PE" in item["riskFlags"] for item in report["contradictions"]))
         self.assertTrue(report["strategyReferences"])
         self.assertTrue(report["regimeReferences"])
+
+    def test_adjusted_score_haircuts_lopsided_fragile_rows(self) -> None:
+        report = conviction.build_conviction_research(
+            rows=sample_rows(),
+            edge_research=sample_edge_research(),
+            limit=5,
+        )
+        ranked_by_ticker = {item["ticker"]: item for item in report["ranked"]}
+
+        risky = ranked_by_ticker["HOTRISK"]
+        giant = ranked_by_ticker["NVDA"]
+
+        self.assertLess(risky["convictionAdjustedScore"], risky["gutCheckScore"])
+        self.assertGreater(risky["uncertaintyPenalty"], giant["uncertaintyPenalty"])
+        self.assertEqual(risky["evidenceGrade"], "D")
+        self.assertIn("risk-flagged", risky["reasonCodes"])
+        self.assertIn(giant["evidenceGrade"], {"A", "B", "C"})
+
+    def test_pillar_balance_penalizes_one_pillar_wonders(self) -> None:
+        balanced = {
+            "theme": 75,
+            "timing": 75,
+            "options": 75,
+            "structure": 75,
+            "quality": 75,
+            "valuation": 75,
+            "evidence": 75,
+        }
+        lopsided = {
+            "theme": 100,
+            "timing": 100,
+            "options": 100,
+            "structure": 20,
+            "quality": 20,
+            "valuation": 20,
+            "evidence": 20,
+        }
+
+        self.assertGreater(conviction.pillar_balance_score(balanced), 99)
+        self.assertLess(conviction.pillar_balance_score(lopsided), 85)
 
     def test_rendered_text_contains_sources_and_safety(self) -> None:
         report = conviction.build_conviction_research(
@@ -148,6 +190,7 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertIn("Inferno Conviction Research", text)
         self.assertIn("Behemoths / giants", text)
         self.assertIn("Sleepers to investigate", text)
+        self.assertIn("Best balanced conviction", text)
         self.assertIn("Research references", text)
         self.assertIn("Research-only", text)
 
