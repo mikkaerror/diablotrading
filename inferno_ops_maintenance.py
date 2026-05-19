@@ -440,6 +440,7 @@ def refresh_research_cycle() -> dict[str, Any]:
     strategy = report.get("strategyLab") or {}
     replay = report.get("strategyReplay") or {}
     shadow = report.get("shadow") or {}
+    scenario_backtest = report.get("scenarioBacktest") or {}
     return {
         "ok": bool(report.get("ok", True)),
         "status": str(report.get("verdict") or "unknown"),
@@ -450,6 +451,10 @@ def refresh_research_cycle() -> dict[str, Any]:
         "strategyScoredCount": int(strategy.get("scoredCount") or 0),
         "replayVerdict": replay.get("verdict"),
         "replayScoredCount": int(replay.get("scoredCount") or 0),
+        "scenarioCount": int(scenario_backtest.get("scenarioCount") or 0),
+        "scenarioClosedEvidenceCount": int(scenario_backtest.get("closedEvidenceCount") or 0),
+        "scenarioVerdictCounts": scenario_backtest.get("verdictCounts") or {},
+        "scenarioTopFocusTickers": scenario_backtest.get("topFocusTickers") or [],
     }
 
 
@@ -594,7 +599,9 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"shadow tracked {research_cycle.get('shadowTrackedCount', 0)} | "
             f"shadow closed {research_cycle.get('shadowClosedCount', 0)} | "
             f"strategy {research_cycle.get('strategyVerdict') or '-'} "
-            f"({research_cycle.get('strategyScoredCount', 0)} scored)"
+            f"({research_cycle.get('strategyScoredCount', 0)} scored) | "
+            f"scenarios {research_cycle.get('scenarioCount', 0)} | "
+            f"scenario evidence {research_cycle.get('scenarioClosedEvidenceCount', 0)}"
         )
     watchdog = report.get("watchdog") or {}
     if watchdog:

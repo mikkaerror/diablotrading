@@ -241,6 +241,10 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                             "shadowClosedCount": 10,
                             "strategyVerdict": "insufficient-data",
                             "strategyScoredCount": 0,
+                            "scenarioCount": 12,
+                            "scenarioClosedEvidenceCount": 2,
+                            "scenarioVerdictCounts": {"insufficient-data": 12},
+                            "scenarioTopFocusTickers": ["MOD", "THR"],
                         },
                     )
                 )
@@ -274,6 +278,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["livePositionReview"]["status"], "review")
             self.assertEqual(saved["modelCommandCenter"]["status"], "ready")
             self.assertEqual(saved["researchCycle"]["status"], "research-refreshed")
+            self.assertEqual(saved["researchCycle"]["scenarioCount"], 12)
             self.assertIn("Cloud control plane: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper test director: approval-bottleneck", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Broker preview: preview-built", report_text_file.read_text(encoding="utf-8"))
@@ -282,6 +287,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("scenarios 12", report_text_file.read_text(encoding="utf-8"))
 
     def test_advisory_failures_keep_cloud_noise_visible_without_blocking_core_desk(self) -> None:
         """Cloud refresh failures are advisory so local ops can still proceed."""

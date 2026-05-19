@@ -11,6 +11,7 @@ from inferno_hypothesis_lab import build_hypothesis_lab, save_hypothesis_lab
 from inferno_hypothesis_ledger import build_ledger_report, save_ledger_report, update_ledger
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_performance_analytics import build_performance_analytics, save_performance_analytics
+from inferno_scenario_backtest import build_scenario_backtest, save_scenario_backtest
 from inferno_shadow_evidence import build_shadow_evidence, save_shadow_evidence
 from inferno_strategy_lab import build_strategy_lab, save_strategy_lab
 from inferno_strategy_replay import build_replay, save_replay
@@ -42,10 +43,14 @@ def build_research_cycle() -> dict[str, Any]:
     ledger_report = build_ledger_report(payload=ledger)
     save_ledger_report(ledger_report)
 
+    scenario_backtest = build_scenario_backtest()
+    save_scenario_backtest(scenario_backtest)
+
     overall = strategy_lab.get("overall") or {}
     performance_desk = performance.get("deskVerdict") or {}
     shadow_overall = shadow.get("overall") or {}
     replay_overall = ((replay.get("lab") or {}).get("overall") or {})
+    scenario_counts = scenario_backtest.get("counts") or {}
     return {
         "generatedAt": local_now().isoformat(),
         "ok": True,
@@ -80,10 +85,23 @@ def build_research_cycle() -> dict[str, Any]:
             "totalHypotheses": ledger_report.get("totalHypotheses"),
             "trajectoryCounts": ledger_report.get("trajectoryCounts") or {},
         },
+        "scenarioBacktest": {
+            "stage": scenario_backtest.get("stage"),
+            "scenarioCount": scenario_backtest.get("scenarioCount"),
+            "closedEvidenceCount": scenario_backtest.get("closedEvidenceCount"),
+            "verdictCounts": scenario_counts.get("verdictCounts") or {},
+            "topFocusTickers": [
+                item.get("ticker")
+                for item in (scenario_backtest.get("topFocus") or [])[:5]
+                if item.get("ticker")
+            ],
+            "promotable": bool(scenario_backtest.get("promotable")),
+        },
         "nextActions": [
             "Use shadow replay as research context only; do not confuse it with promotable paper evidence.",
             "Keep filling the paper evidence loop until the real strategy lab exits insufficient-data.",
             "Review top hypotheses for filters worth testing in the next approval cycle.",
+            "Use scenario backtest scope labels to separate honest evidence from seductive but thin setups.",
         ],
     }
 
@@ -115,6 +133,13 @@ def research_cycle_text(report: dict[str, Any]) -> str:
         f"- total hypotheses: {(report.get('hypothesisLab') or {}).get('totalHypotheses')}",
         f"- top ids: {', '.join((report.get('hypothesisLab') or {}).get('topHypothesisIds') or []) or 'none'}",
         f"- trajectories: {json.dumps((report.get('hypothesisLedger') or {}).get('trajectoryCounts') or {})}",
+        "",
+        "Scenario backtest lane:",
+        f"- scenarios: {(report.get('scenarioBacktest') or {}).get('scenarioCount')}",
+        f"- closed evidence records: {(report.get('scenarioBacktest') or {}).get('closedEvidenceCount')}",
+        f"- verdicts: {json.dumps((report.get('scenarioBacktest') or {}).get('verdictCounts') or {})}",
+        f"- top focus: {', '.join((report.get('scenarioBacktest') or {}).get('topFocusTickers') or []) or 'none'}",
+        f"- promotable: {(report.get('scenarioBacktest') or {}).get('promotable')}",
         "",
         "Next actions:",
     ]

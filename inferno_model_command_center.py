@@ -42,6 +42,7 @@ CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readi
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
+SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 PAPER_EVIDENCE_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
@@ -98,6 +99,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper-scenarios",
         "question": "What 10+ paper/shadow scenarios should we track?",
         "artifact": "reports/paper_bottleneck_reducer_latest.csv",
+        "owner": "shared",
+    },
+    {
+        "lane": "scenario-backtest",
+        "question": "What can the current scenario slate honestly teach us from closed evidence?",
+        "artifact": "reports/scenario_backtest_latest.txt",
         "owner": "shared",
     },
     {
@@ -351,6 +358,7 @@ def build_executive_summary(
             "Evidence: "
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
             f"scenarios={metrics.get('paperScenarioCount', 0)}; "
+            f"scenario evidence={metrics.get('scenarioClosedEvidenceCount', 0)}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
             f"math={status_value(status.get('mathVerify') or {})}"
         ),
@@ -371,6 +379,7 @@ def build_command_center() -> dict[str, Any]:
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
@@ -406,6 +415,7 @@ def build_command_center() -> dict[str, Any]:
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
+        "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),
@@ -427,6 +437,12 @@ def build_command_center() -> dict[str, Any]:
         "paperScenarioTopFive": [
             item.get("ticker")
             for item in (paper_reducer.get("topFiveFocus") or [])
+        ],
+        "scenarioClosedEvidenceCount": scenario_backtest.get("closedEvidenceCount", 0),
+        "scenarioBacktestVerdicts": (scenario_backtest.get("counts") or {}).get("verdictCounts") or {},
+        "scenarioBacktestTopFocus": [
+            item.get("ticker")
+            for item in (scenario_backtest.get("topFocus") or [])
         ],
         "paperRemainingForPromotion": loop_counts.get("remainingForPromotion", 0),
         "capitalDeploymentVerdict": capital_readiness.get("verdict"),
@@ -487,6 +503,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_dawn_cycle.sh",
             "./run_inferno_strike_cycle.sh",
             "./run_inferno_ops_maintenance.sh",
+            "./run_inferno_scenario_backtest.sh",
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
@@ -511,6 +528,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
+            str(ROOT / "reports/scenario_backtest_latest.txt"),
             str(ROOT / "reports/conviction_research_latest.txt"),
             str(ROOT / "reports/ops_maintenance_latest.txt"),
             str(ROOT / "reports/live_position_review_latest.txt"),
@@ -560,6 +578,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
+            f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
             f"- Math verify: {status_value(status.get('mathVerify') or {})}",
             f"- Conviction research: {status_value(status.get('convictionResearch') or {}, key='stage')}",
@@ -574,6 +593,9 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
             f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
+            f"- Scenario backtest evidence: {metrics.get('scenarioClosedEvidenceCount', 0)}",
+            f"- Scenario backtest verdicts: {json.dumps(metrics.get('scenarioBacktestVerdicts') or {})}",
+            f"- Scenario backtest focus: {', '.join(metrics.get('scenarioBacktestTopFocus') or []) or 'none'}",
             f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
             f"- Auto live allowed: {metrics.get('autoLiveAllowed')}",
             f"- Risk gate hard fails: {metrics.get('riskGateHardFails')}",

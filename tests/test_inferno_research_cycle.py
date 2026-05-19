@@ -31,6 +31,14 @@ class InfernoResearchCycleTests(unittest.TestCase):
             "allHypotheses": [{"id": "h1"}],
         }
         ledger_report = {"totalHypotheses": 1, "trajectoryCounts": {"new": 1}}
+        scenario_backtest = {
+            "stage": "scenario-backtest-research-only",
+            "scenarioCount": 12,
+            "closedEvidenceCount": 2,
+            "counts": {"verdictCounts": {"insufficient-data": 12}},
+            "topFocus": [{"ticker": "MOD"}, {"ticker": "THR"}],
+            "promotable": False,
+        }
 
         with (
             patch.object(research_cycle, "build_shadow_evidence", return_value=shadow),
@@ -46,6 +54,8 @@ class InfernoResearchCycleTests(unittest.TestCase):
             patch.object(research_cycle, "update_ledger", return_value={"hypotheses": {"h1": {}}}),
             patch.object(research_cycle, "build_ledger_report", return_value=ledger_report),
             patch.object(research_cycle, "save_ledger_report"),
+            patch.object(research_cycle, "build_scenario_backtest", return_value=scenario_backtest),
+            patch.object(research_cycle, "save_scenario_backtest"),
         ):
             report = research_cycle.build_research_cycle()
 
@@ -53,6 +63,10 @@ class InfernoResearchCycleTests(unittest.TestCase):
         self.assertEqual(report["shadow"]["trackedCount"], 34)
         self.assertEqual(report["strategyReplay"]["promotionCandidates"], ["LONG_STRADDLE"])
         self.assertEqual(report["hypothesisLab"]["totalHypotheses"], 7)
+        self.assertEqual(report["scenarioBacktest"]["scenarioCount"], 12)
+        self.assertEqual(report["scenarioBacktest"]["closedEvidenceCount"], 2)
+        self.assertFalse(report["scenarioBacktest"]["promotable"])
+        self.assertEqual(report["scenarioBacktest"]["topFocusTickers"], ["MOD", "THR"])
 
 
 if __name__ == "__main__":

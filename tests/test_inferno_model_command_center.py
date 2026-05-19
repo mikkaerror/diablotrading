@@ -137,6 +137,21 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_scenario_backtest.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:45-06:00",
+                        "stage": "scenario-backtest-research-only",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "scenarioCount": 12,
+                        "closedEvidenceCount": 4,
+                        "counts": {"verdictCounts": {"insufficient-data": 10, "mixed": 2}},
+                        "topFocus": [{"ticker": "FLNC"}, {"ticker": "THR"}, {"ticker": "MOD"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_paper_evidence_loop.json").write_text(
                 json.dumps({"generatedAt": "2026-05-10T10:04:00-06:00", "verdict": "approval-bottleneck", "counts": {"remainingForPromotion": 30}, "actions": ["Convert approvals into closed scored evidence."]}),
                 encoding="utf-8",
@@ -211,6 +226,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
+                ("SCENARIO_BACKTEST_FILE", data_dir / "inferno_scenario_backtest.json"),
                 ("PAPER_EVIDENCE_LOOP_FILE", data_dir / "inferno_paper_evidence_loop.json"),
                 ("PERFORMANCE_ANALYTICS_FILE", data_dir / "inferno_performance_analytics.json"),
                 ("STRATEGY_LAB_FILE", data_dir / "inferno_strategy_lab.json"),
@@ -232,6 +248,8 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioTopFive"], ["FLNC", "THR"])
+            self.assertEqual(payload["headlineMetrics"]["scenarioClosedEvidenceCount"], 4)
+            self.assertEqual(payload["headlineMetrics"]["scenarioBacktestTopFocus"], ["FLNC", "THR", "MOD"])
             self.assertEqual(payload["headlineMetrics"]["edgeRanked"], 2)
             self.assertEqual(payload["headlineMetrics"]["convictionBehemoths"], ["NVDA", "AVGO"])
             self.assertEqual(payload["headlineMetrics"]["convictionSleepers"], ["MOD"])
@@ -261,12 +279,16 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", text_report)
+            self.assertIn("Scenario backtest: scenario-backtest-research-only", text_report)
             self.assertIn("Paper scenarios: 12", text_report)
             self.assertIn("Paper top five: FLNC, THR", text_report)
+            self.assertIn("Scenario backtest evidence: 4", text_report)
+            self.assertIn("Scenario backtest focus: FLNC, THR, MOD", text_report)
             self.assertIn("Math verify: clean", text_report)
             self.assertIn("Math violations: 0", text_report)
             self.assertIn("Canonical report map:", text_report)
             self.assertIn("reports/paper_bottleneck_reducer_latest.csv", text_report)
+            self.assertIn("reports/scenario_backtest_latest.txt", text_report)
             self.assertIn("reports/math_verify_latest.txt", text_report)
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)

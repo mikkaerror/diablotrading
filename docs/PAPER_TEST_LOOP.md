@@ -23,11 +23,17 @@ The paper loop turns conviction into evidence without risking live capital.
 
 ```bash
 cat reports/paper_bottleneck_reducer_latest.txt
+./run_inferno_scenario_backtest.sh
+cat reports/scenario_backtest_latest.txt
 ```
 
 The reducer targets 12 daily scenarios and highlights the top five. Only rows
 marked `PAPER` are eligible for paperMoney staging. Rows marked `SHADOW` are
 for observation and after-the-fact scoring only.
+
+The scenario backtest then compares those names against closed paper/shadow
+evidence. Treat `insufficient-data` as a useful warning, not a failure: it means
+the setup can be tracked, but the desk has not earned confidence yet.
 
 4. Let approval-only paper setups auto-select when risk is clean.
 
@@ -74,6 +80,7 @@ python3 inferno_doctor.py
 
 - [reports/paper_test_director_latest.txt](../reports/paper_test_director_latest.txt)
 - [reports/paper_bottleneck_reducer_latest.txt](../reports/paper_bottleneck_reducer_latest.txt)
+- [reports/scenario_backtest_latest.txt](../reports/scenario_backtest_latest.txt)
 - [reports/paper_evidence_loop_latest.txt](../reports/paper_evidence_loop_latest.txt)
 - [reports/paper_exit_audit_latest.txt](../reports/paper_exit_audit_latest.txt)
 - [reports/tos_sandbox_session_latest.txt](../reports/tos_sandbox_session_latest.txt)

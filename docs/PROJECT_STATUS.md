@@ -62,6 +62,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
 | Theory references | shipped | one place for primary literature tags used by the audit |
+| Scenario backtest | shipped | daily 10+ scenario slate now compares against closed paper/shadow evidence by ticker, strategy family, and DTE window |
 | Paper evidence | auto-paper evidence lane | 1 auto-selected paper setup staged; 30 closed scored outcomes still needed |
 
 ## Live truth lives in artifacts, not docs
@@ -79,6 +80,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Which risk gates are blocking? | `reports/risk_gate_audit_latest.txt` |
 | What did the paper lane produce? | `reports/paper_test_director_latest.txt` |
 | What 10+ scenarios should we track? | `reports/paper_bottleneck_reducer_latest.txt` |
+| What can today's scenario slate honestly teach us? | `reports/scenario_backtest_latest.txt` |
 | Do the formulas still check out? | `reports/math_verify_latest.txt` |
 | What's the math case for each ready trade? | `reports/trade_conviction_audit_latest.txt` |
 | Which blow-up patterns is today's slate brushing against? | `reports/blowup_guardrails_latest.txt` |
@@ -98,7 +100,7 @@ If this doc disagrees with those artifacts, the artifacts win.
 
 ## What still needs work
 
-- Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios, and approval-only names can become paper-only auto selections when all risk gates pass.
+- Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios, scenario backtest labels thin evidence explicitly, and approval-only names can become paper-only auto selections when all risk gates pass.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: manual review only; no automated submission.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
@@ -109,7 +111,8 @@ If this doc disagrees with those artifacts, the artifacts win.
 1. Treat deployable cash as manual-review capital only; no live automation.
 2. Run the command center, capital readiness, and risk gate audit before sizing any ticket.
 3. Let the paper loop accumulate. Use the reducer's top-five focus list for
-   review, and keep the full 12-scenario slate for after-the-fact scoring.
+   review, then use scenario backtest to decide what the full 12-scenario slate
+   can and cannot teach us after the fact.
 4. Use `reports/conviction_research_latest.txt` as the watchlist intelligence layer: giants for bell-cow confirmation, sleepers for investigation, contradictions for restraint.
 5. Keep the morning ops lane green so the desk stays trustworthy.
 6. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.

@@ -323,6 +323,7 @@ This is the simplest “do the backtest” command now. It rebuilds:
 - the research-only shadow replay
 - the hypothesis lab
 - the hypothesis ledger
+- the scenario backtest scorecard for the current paper/shadow slate
 
 Use this when you want one fresh evidence picture before market prep or before
 we let another model collaborate on research decisions.
@@ -330,6 +331,22 @@ we let another model collaborate on research decisions.
 This cycle is also refreshed by the ops-maintenance sweep now, so the desk
 keeps one current research snapshot even when you do not run the script
 manually.
+
+### Score today's scenario slate against closed evidence
+
+```bash
+./run_inferno_scenario_backtest.sh
+```
+
+This writes:
+
+- [data/inferno_scenario_backtest.json](data/inferno_scenario_backtest.json)
+- [reports/scenario_backtest_latest.txt](reports/scenario_backtest_latest.txt)
+
+This is the “what can today actually teach us?” layer. It compares the current
+paper bottleneck reducer slate against closed paper and shadow outcomes by
+ticker, strategy family, and days-to-earnings window. It is research-only:
+`promotable=false`, `liveTradingAllowed=false`, and `brokerSubmitAllowed=false`.
 
 ### Size the allocator for actual deployable cash
 

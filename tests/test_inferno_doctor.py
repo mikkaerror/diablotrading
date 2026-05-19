@@ -115,11 +115,13 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                     "verdict": "research-refreshed",
                     "shadow": {"trackedCount": 39, "closedCount": 10},
                     "strategyLab": {"verdict": "insufficient-data", "scoredCount": 0},
+                    "scenarioBacktest": {"scenarioCount": 12, "closedEvidenceCount": 2},
                 }
             )
         self.assertTrue(ok)
         self.assertIn("research-refreshed", detail)
         self.assertIn("shadow tracked=39", detail)
+        self.assertIn("scenarios=12", detail)
 
     def test_research_cycle_status_warns_when_missing(self) -> None:
         ok, detail = research_cycle_status({})

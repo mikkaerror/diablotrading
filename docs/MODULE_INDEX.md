@@ -110,6 +110,7 @@ Safety            — authority, risk, secrets
 | `inferno_math_config.py` | **NEW** Audited target source of truth for math knobs — seeds, resample counts, thresholds, vocabulary | pure library, no artifact |
 | `inferno_performance_analytics.py` | Per-ticket performance with block-reason histogram | `data/inferno_performance_analytics.json` |
 | `inferno_research_cycle.py` | Periodic research roll-up across the thinking layer | `data/inferno_research_cycle.json` |
+| `inferno_scenario_backtest.py` | Research-only scorecard comparing today's 10+ scenario slate against closed paper/shadow evidence | `reports/scenario_backtest_latest.txt` |
 | `inferno_outcome_reviewer.py` | Re-score closed paper outcomes against expectations | `data/inferno_outcome_reviewer.json` |
 | `inferno_shadow_evidence.py` | Shadow ledger of paper tickets and their outcomes | `data/inferno_shadow_evidence.json` |
 
