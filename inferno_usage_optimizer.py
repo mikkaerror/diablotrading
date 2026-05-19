@@ -45,13 +45,13 @@ READ_FIRST: tuple[dict[str, str], ...] = (
         "path": "docs/PROJECT_STATUS.md",
         "why": "stable PM summary; update only when verdict changes",
     },
+)
+
+READ_IF_NEEDED: tuple[dict[str, str], ...] = (
     {
         "path": "docs/MODEL_COLLABORATION_BRIEF.md",
         "why": "mission, safety rails, division of labor",
     },
-)
-
-READ_IF_NEEDED: tuple[dict[str, str], ...] = (
     {
         "path": "docs/REPOSITORY_HYGIENE.md",
         "why": "how to clean, stage, and document without leaking secrets",
