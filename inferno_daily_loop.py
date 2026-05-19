@@ -71,6 +71,10 @@ from inferno_trade_conviction_audit import (
     build_conviction_audit,
     save_conviction_audit,
 )
+from inferno_blowup_guardrails import (
+    build_guardrails,
+    save_guardrails,
+)
 from inferno_conviction_research import (
     build_conviction_research,
     save_conviction_research,
@@ -331,6 +335,10 @@ def _extract_summary(name: str, payload: dict[str, Any]) -> dict[str, Any]:
                 item.get("ticker")
                 for item in (payload.get("nearTermWinners") or [])[:5]
             ],
+            "bestBalanced": [
+                item.get("ticker")
+                for item in (payload.get("bestBalanced") or [])[:5]
+            ],
         }
     return {"generatedAt": payload.get("generatedAt")}
 
@@ -377,6 +385,16 @@ def build_daily_loop() -> dict[str, Any]:
         # cite the freshest sample counts. Diagnostic only.
         payload = build_conviction_audit()
         save_conviction_audit(payload)
+        return payload
+
+    def blowup_guardrails_builder() -> dict[str, Any]:
+        # Visibility layer over historical blow-ups (Niederhoffer, LTCM,
+        # Archegos, Amaranth, Karen-the-Supertrader, Cordier). Reads today's
+        # operator briefing slate and surfaces any concentration / sizing /
+        # undefined-loss patterns. Diagnostic only — the briefing's own caps
+        # are the enforcement layer.
+        payload = build_guardrails()
+        save_guardrails(payload)
         return payload
 
     def gap_builder() -> dict[str, Any]:
@@ -611,6 +629,7 @@ def build_daily_loop() -> dict[str, Any]:
     steps.append(_run_step("paperBootstrap", paper_bootstrap_builder))
     steps.append(_run_step("paperBottleneckReducer", paper_reducer_builder))
     steps.append(_run_step("tradeConvictionAudit", conviction_audit_builder))
+    steps.append(_run_step("blowupGuardrails", blowup_guardrails_builder))
     steps.append(_run_step("convictionResearch", conviction_research_builder))
     steps.append(_run_step("mathVerify", math_verify_builder))
     steps.append(_run_step("commandCenter", command_builder))
@@ -665,6 +684,7 @@ def build_daily_loop() -> dict[str, Any]:
             "operator should walk the decideTodayTickers list using the brief memos",
             "see reports/decision_briefs_latest.txt for per-ticker context",
             "see reports/trade_conviction_audit_latest.txt for the bull/bear/disagreement math case per ticket",
+            "see reports/blowup_guardrails_latest.txt for the six historical-blow-up visibility checks against the slate",
             "see reports/conviction_research_latest.txt for whole-universe giants, sleepers, winners, and contradictions",
         ],
     }

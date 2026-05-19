@@ -10,12 +10,12 @@ The desk's "where are we right now" memo. Read this first.
 approved suffix, the live book is clear, capital can be reviewed manually with
 warnings, and all automated live trading remains locked.
 
-Latest readiness sweep: 2026-05-17 15:31 MT. Capital deployment readiness is
+Latest readiness sweep: 2026-05-19 14:13 MT. Capital deployment readiness is
 `manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
 `clean`; paper evidence is still the bottleneck with 30 closed scored outcomes
-remaining before any automation promotion. The new bottleneck reducer now
-creates a 12-scenario daily paper/shadow evidence slate while preserving the
-paper director's stricter stageability warning.
+remaining before any automation promotion. The new conviction v2 layer now
+adds best-balanced rankings, and the paper lane can auto-select approval-only
+setups for simulated paper evidence while keeping live orders locked.
 
 `reports/model_command_center_latest.txt` is now the PM landing page. If this
 doc disagrees with that artifact, the command-center artifact wins.
@@ -58,10 +58,11 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Paper bottleneck reducer | shipped | targets 12 paper/shadow scenarios daily; top five become review focus |
 | Slate normalizer | shipped | scale-invariant percentile ranks; absolute gates are no longer brittle |
 | Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
-| Trade conviction audit | shipped | per-ticket math case (bull / bear / disagreements / falsification triggers) with peer-reviewed citations; refuses to be a yes-man |
+| Trade conviction audit | shipped | per-ticket math case (bull / bear / disagreements / falsification triggers / blow-up risks) with peer-reviewed citations; refuses to be a yes-man |
+| Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
 | Theory references | shipped | one place for primary literature tags used by the audit |
-| Paper evidence | blocked for automation | no viable paper tests; 30 closed scored outcomes still needed |
+| Paper evidence | auto-paper evidence lane | 1 auto-selected paper setup staged; 30 closed scored outcomes still needed |
 
 ## Live truth lives in artifacts, not docs
 
@@ -80,6 +81,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | What 10+ scenarios should we track? | `reports/paper_bottleneck_reducer_latest.txt` |
 | Do the formulas still check out? | `reports/math_verify_latest.txt` |
 | What's the math case for each ready trade? | `reports/trade_conviction_audit_latest.txt` |
+| Which blow-up patterns is today's slate brushing against? | `reports/blowup_guardrails_latest.txt` |
 | Which giants, sleepers, and winners deserve attention? | `reports/conviction_research_latest.txt` |
 | What is the morning brief? | `reports/morning_brief_latest.txt` |
 
@@ -96,11 +98,11 @@ If this doc disagrees with those artifacts, the artifacts win.
 
 ## What still needs work
 
-- Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios but all current rows are shadow-only.
+- Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios, and approval-only names can become paper-only auto selections when all risk gates pass.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: manual review only; no automated submission.
-- Automation promotion: manual approval only until paper evidence clears promotion gates.
-- Paper candidate quality: current slate has no clean stageable ticket under cap.
+- Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
+- Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 

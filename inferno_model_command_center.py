@@ -113,6 +113,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "shared",
     },
     {
+        "lane": "blowup-guardrails",
+        "question": "Which historical blow-up patterns is today's slate brushing up against?",
+        "artifact": "reports/blowup_guardrails_latest.txt",
+        "owner": "shared",
+    },
+    {
         "lane": "conviction-research",
         "question": "Which giants, sleepers, and near-term winners deserve attention?",
         "artifact": "reports/conviction_research_latest.txt",
@@ -415,6 +421,7 @@ def build_command_center() -> dict[str, Any]:
         "liveBookHardBlockers": live_packet_counts.get("hardBlockers", 0),
         "liveBookWarnings": live_packet_counts.get("warnings", 0),
         "paperStageable": paper_counts.get("stageableNow", 0),
+        "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
         "paperScenarioTopFive": [
@@ -443,6 +450,10 @@ def build_command_center() -> dict[str, Any]:
         "convictionNearTermWinners": [
             item.get("ticker")
             for item in (conviction_research.get("nearTermWinners") or [])[:5]
+        ],
+        "convictionBestBalanced": [
+            item.get("ticker")
+            for item in (conviction_research.get("bestBalanced") or [])[:5]
         ],
         "mathVerifyVerdict": math_verify.get("verdict"),
         "mathViolations": math_verify.get("totalViolations"),
@@ -504,6 +515,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/ops_maintenance_latest.txt"),
             str(ROOT / "reports/live_position_review_latest.txt"),
             str(ROOT / "reports/trade_conviction_audit_latest.txt"),
+            str(ROOT / "reports/blowup_guardrails_latest.txt"),
         ],
         "nextActions": next_actions[:12],
         "activeMissions": missions,
@@ -558,6 +570,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live hard blockers: {metrics.get('liveBookHardBlockers', 0)}",
             f"- Live review warnings: {metrics.get('liveBookWarnings', 0)}",
             f"- Paper stageable: {metrics.get('paperStageable', 0)}",
+            f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
             f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
@@ -568,6 +581,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Conviction giants: {', '.join(metrics.get('convictionBehemoths') or []) or 'none'}",
             f"- Conviction sleepers: {', '.join(metrics.get('convictionSleepers') or []) or 'none'}",
             f"- Conviction near-term: {', '.join(metrics.get('convictionNearTermWinners') or []) or 'none'}",
+            f"- Conviction balanced: {', '.join(metrics.get('convictionBestBalanced') or []) or 'none'}",
             "",
             "Next actions:",
         ]

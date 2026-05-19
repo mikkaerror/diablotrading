@@ -565,6 +565,71 @@ def _references_for(ticket: dict[str, Any], brief: dict[str, Any]) -> list[str]:
     return refs
 
 
+def _collect_blowup_risks(ticket: dict[str, Any], brief: dict[str, Any]) -> list[str]:
+    """Return the blow-up patterns this ticket would create *if* it were
+    oversized or stacked. Diagnostic only — the actual blocking happens
+    in inferno_blowup_guardrails. The audit's job here is to make the
+    historical reason audible per trade.
+
+    Every bullet maps to a case study in docs/BLOWUP_CASE_STUDIES.md.
+    """
+    out: list[str] = []
+    tracker = brief.get("tracker") or {}
+    edge = brief.get("edge") or {}
+    exposure = brief.get("exposure") or {}
+    structure = (ticket.get("structure") or "").upper()
+    iv_rank = _safe_float(tracker.get("ivRank"))
+    largest_share = _safe_float(exposure.get("largestSectorShare")) or 0
+    largest_sector = exposure.get("largestSector")
+    ticker_sector = edge.get("sector")
+
+    # Always-loud: defined max loss check
+    undefined = any(p in structure for p in (
+        "NAKED CALL", "NAKED PUT", "SHORT STRADDLE", "SHORT STRANGLE",
+        "SHORT CALL", "SHORT PUT", "UNCOVERED",
+    ))
+    if undefined:
+        out.append(
+            f"**HARD BLOCK** — structure '{structure}' is undefined-loss; "
+            f"matches Niederhoffer 1997 and Cordier 2018 — no naked short premium, ever"
+        )
+
+    # Concentration that maps to LTCM / Hwang
+    if largest_share >= 0.50 and ticker_sector == largest_sector:
+        out.append(
+            f"adding this ticket pushes slate concentration in {largest_sector} above "
+            f"the {int(largest_share*100)}% mark; correlated blow-up shape (LTCM 1998, Hwang 2021) — "
+            f"diversification is the cheap defense"
+        )
+
+    # Rich IV + buying premium = the wrong side of VRP in the wrong DTE window
+    if iv_rank is not None and iv_rank >= 80 and ("STRADDLE" in structure or "STRANGLE" in structure):
+        out.append(
+            f"buying rich IV ({iv_rank:.0f}) on a long-premium structure is the same shape that "
+            f"caught operators when vol mean-reverts faster than the underlying moves — "
+            f"if you must own this view, calendar spread is cheaper exposure"
+        )
+
+    # Disposition-roll antipattern reminder
+    if ("STRADDLE" in structure or "STRANGLE" in structure or "CALL" in structure or "PUT" in structure):
+        out.append(
+            "if this ticket loses, *close* it; do not roll it forward to avoid realising the loss "
+            "(Karen Bruton 2014-2016 — the disposition-effect antipattern is one of the most common operator killers)"
+        )
+
+    # Sizing self-check
+    allocation = _safe_float(ticket.get("allocation")) or 0
+    if allocation > 0:
+        # rough self-check; the real check is in inferno_blowup_guardrails
+        out.append(
+            f"per-ticket risk ${allocation:.2f} must remain ≤ quarter-Kelly of bankroll — "
+            f"over-betting Kelly is asymmetrically punishing (negative long-run growth above 2× optimal) "
+            f"[KEL56] [RT92]"
+        )
+
+    return out
+
+
 def _audit_ticket(
     ticket: dict[str, Any],
     *,
@@ -578,6 +643,7 @@ def _audit_ticket(
     disagreements = _collect_disagreements(ticket, brief)
     triggers = _falsification_triggers(ticket, brief)
     soe = _state_of_evidence(evidence, devils)
+    blowup_risks = _collect_blowup_risks(ticket, brief)
 
     # Conviction tag: passes gates, but math case is honest
     if disagreements or len(bear) > len(bull):
@@ -612,6 +678,7 @@ def _audit_ticket(
         "disagreements": disagreements,
         "falsificationTriggers": triggers,
         "stateOfEvidence": soe,
+        "blowupRisks": blowup_risks,
     }
 
 
@@ -768,6 +835,12 @@ def conviction_audit_text(report: dict[str, Any]) -> str:
         lines.append("")
         lines.append("STATE OF EVIDENCE:")
         lines.extend(_bullets("  · ", audit.get("stateOfEvidence") or []))
+        lines.append("")
+        lines.append("BLOW-UP RISKS (case-study-linked):")
+        if not audit.get("blowupRisks"):
+            lines.append("  ! no blow-up patterns surfaced; see reports/blowup_guardrails_latest.txt for the hard checks")
+        else:
+            lines.extend(_bullets("  ! ", audit.get("blowupRisks") or []))
         lines.append("")
 
     lines.append("REFERENCES:")

@@ -832,6 +832,61 @@ longTermConvictionScore =
 `buyZone = clamp(100 - distanceToSupportPct / 14 · 100)`, so a name
 near support gets more long-term credit than a name already stretched.
 
+### Balance and uncertainty overlay
+
+The v2 conviction map adds a second score that asks a harder question:
+*is this conviction broad and trustworthy, or is one loud pillar doing
+all the work?*
+
+First, the module measures breadth across the seven near-term pillars:
+
+```
+pillarBalanceScore = geometric_mean(pillars) / arithmetic_mean(pillars) · 100
+```
+
+If every pillar is equally strong, the ratio is close to 100. If theme
+and timing are hot but evidence, valuation, or structure are weak, the
+geometric mean collapses faster than the arithmetic mean. This is the
+same geometric-mean instinct used in §5: the weakest component should
+matter.
+
+Then the module computes an uncertainty haircut:
+
+```
+uncertaintyPenalty =
+    fallback_data
+  + missing_edge_research
+  + dead_trigger
+  + weak_evidence
+  + weak_structure
+  + risk_flag_count
+  + high_PE_addon
+  + stretched_entry_addon
+```
+
+The adjusted score is:
+
+```
+convictionAdjustedScore =
+    0.74 · gutCheckScore
+  + 0.16 · pillarBalanceScore
+  + 0.10 · evidence
+  - uncertaintyPenalty
+```
+
+Finally the row receives an evidence grade:
+
+| Grade | Meaning |
+|---|---|
+| A | high adjusted score, broad pillar balance, low uncertainty |
+| B | good adjusted score with manageable uncertainty |
+| C | useful research candidate, not clean enough for blind trust |
+| D | shadow/watch only until evidence improves |
+
+This overlay is intentionally conservative. It can demote exciting names
+that are stretched, fallback-sourced, unclassified, or too dependent on a
+single pillar.
+
 ### Options setup logic
 
 The options pillar intentionally treats structures differently:
@@ -872,6 +927,99 @@ regime references in `docs/THEORY_REFERENCES.md`.
 **Strict contract:** `researchOnly=true`, `promotable=false`.
 
 **Module:** `inferno_conviction_research`.
+
+## 23. Position sizing as ruin protection
+
+Most of the math on this desk answers the question *what is the
+edge?* This section answers a different, more important question:
+*what bet size makes ruin acceptably rare even if the edge is real?*
+
+The two answers are not the same. Edge tells you whether to take a
+trade. Ruin math tells you whether you survive being *wrong* about
+the edge.
+
+### Risk of ruin — the closed-form intuition
+
+For independent bets at even money with edge `e` (so win probability
+`p = 0.5 + e/2`), starting bankroll `B`, and fixed bet size `b`:
+
+```
+P(ruin) ≈ ((1 - e) / (1 + e)) ^ (B / b)
+```
+
+Two consequences worth internalising:
+
+1. Risk of ruin shrinks **exponentially** in `B/b`. Doubling the
+   bankroll-to-bet ratio doesn't halve ruin; it *squares* the small
+   ruin probability. The simplest robustness move is always: smaller
+   `b` relative to `B`.
+2. Risk of ruin shrinks only **linearly** in edge. Doubling the edge
+   reduces ruin once; doubling the bankroll-to-bet ratio reduces it
+   exponentially. Sizing dominates skill in the survival math.
+
+### Asymmetric cost of over-betting Kelly
+
+Full-Kelly betting maximises long-run compound growth under perfect
+knowledge of edge and payoff. Two well-documented facts about
+deviation from optimal:
+
+- Betting *less* than Kelly: linear loss of growth, large reduction
+  in drawdown.
+- Betting *more* than Kelly: growth falls off **quadratically**;
+  betting twice optimal Kelly yields **zero** long-run growth even
+  with a real edge; betting more than that produces *negative*
+  long-run growth.
+
+So when win probability and R are estimated (always), the cost of
+under-betting is small and bounded, the cost of over-betting is
+unbounded. This asymmetry is why the desk caps at quarter-Kelly,
+not half — under estimation error, the quarter-Kelly user has a
+~1% risk-of-ruin profile, half-Kelly ~5%, full-Kelly ~13.5% (per
+the practitioner benchmarks in the Kelly literature).
+
+References: [`KEL56`](THEORY_REFERENCES.md), [`RT92`](THEORY_REFERENCES.md),
+[`MTZ10`](THEORY_REFERENCES.md).
+
+### The four constraints we actually enforce
+
+The desk imposes four constraints, each tied to a specific blow-up
+mode documented in [`BLOWUP_CASE_STUDIES.md`](BLOWUP_CASE_STUDIES.md):
+
+| # | Constraint | What it prevents | Case |
+|---|---|---|---|
+| 1 | Every position has a defined maximum loss known at trade open | Margin spiral on undefined-loss positions | Niederhoffer, Cordier |
+| 2 | Per-ticket dollar risk ≤ quarter-Kelly of bankroll | Over-betting under estimation error | Kelly literature |
+| 3 | Daily-total risk ≤ configured fraction of bankroll | One-day book-ending loss | Hwang, Amaranth |
+| 4 | Slate concentration caps on sector / setup / underlying | Correlated blow-up that ignores diversification claim | LTCM, Hwang |
+
+These are *guardrails*, not advisories. A trade that violates any of
+them is blocked at the briefing layer regardless of conviction.
+
+### Bankroll discipline
+
+Two stop-loss-style operator rules layered on top of the constraints:
+
+- **Daily-drawdown circuit breaker.** If realised loss for the day
+  exceeds a configured fraction of bankroll, no new tickets that
+  day. Resets at the next session.
+- **Consecutive-loss size tightening.** After N consecutive losing
+  tickets, per-ticket size is halved until a winning ticket lands.
+  This is the desk's mechanical answer to revenge-trading.
+
+Both are deliberately *mechanical*. The disposition-effect
+literature (`[SS85]`) is clear that humans staring at red P/L cannot
+be trusted to set their own size; the desk does not give them the
+chance.
+
+### Why this is in MATH and not just OPS
+
+Because the ruin math is one of the most important *quantitative*
+results on the desk and is often skipped in favour of edge math.
+The point of putting it here, alongside Wilson intervals and
+percentile bootstraps, is to make clear that *survival* is the
+math the desk is committed to first, *growth* second.
+
+**Module:** `inferno_blowup_guardrails`.
 
 ## Where to add a new metric
 

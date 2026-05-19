@@ -262,6 +262,60 @@ class TradeConvictionAuditTests(unittest.TestCase):
         self.assertIn("RT92", soe)
         self.assertIn("quarter-Kelly", soe)
 
+    def test_blowup_risks_section_present_on_every_audit(self):
+        """The BLOW-UP RISKS section must exist on every audit ticket."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket()]},
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        a = report["audits"][0]
+        self.assertIn("blowupRisks", a)
+        self.assertIsInstance(a["blowupRisks"], list)
+
+    def test_naked_short_structure_fires_hard_block_blowup(self):
+        """Undefined-loss structures must surface as a HARD BLOCK in the
+        blow-up risks list — Niederhoffer/Cordier rule."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket(structure="NAKED CALL 50")]},
+            decision_briefs={"briefs": [_brief(tracker={"rec1": "NAKED CALL 50"})]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        risks = " | ".join(report["audits"][0]["blowupRisks"])
+        self.assertIn("HARD BLOCK", risks)
+        self.assertIn("Niederhoffer", risks)
+
+    def test_concentration_surfaces_ltcm_archegos_pattern(self):
+        """Slate concentration matching ticket sector must cite LTCM/Hwang."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket()]},
+            decision_briefs={"briefs": [_brief(
+                edge={"sector": "Technology"},
+                exposure={"largestSector": "Technology", "largestSectorShare": 0.6,
+                          "setupShares": {"Vertical Call": 0.6}},
+            )]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        risks = " | ".join(report["audits"][0]["blowupRisks"])
+        self.assertIn("LTCM", risks)
+        self.assertIn("Hwang", risks)
+
+    def test_blowup_risks_always_include_dont_roll_loser(self):
+        """Karen-the-Supertrader antipattern — close losers, do not roll —
+        must surface for every option ticket as a reminder."""
+        report = audit.build_conviction_audit(
+            briefing={"candidates": [_ticket()]},
+            decision_briefs={"briefs": [_brief()]},
+            evidence={"totalSamples": 0},
+            devils={"strategyCount": 0},
+        )
+        risks = " | ".join(report["audits"][0]["blowupRisks"])
+        self.assertIn("Karen Bruton", risks)
+        self.assertIn("close", risks.lower())
+
     def test_rendered_text_contains_required_sections(self):
         """The human-facing report must always include all eight sections."""
         report = audit.build_conviction_audit(
@@ -277,6 +331,7 @@ class TradeConvictionAuditTests(unittest.TestCase):
             "DISAGREEMENTS",
             "FALSIFICATION TRIGGERS",
             "STATE OF EVIDENCE",
+            "BLOW-UP RISKS",
             "REFERENCES",
             "REMINDERS",
         ):

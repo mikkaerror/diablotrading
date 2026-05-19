@@ -36,6 +36,7 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
 DOWNLOADS_WATCH_FILE = ROOT / "data" / "inferno_downloads_watch.json"
@@ -399,6 +400,40 @@ def action_pulse_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def blowup_guardrails_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the blow-up guardrails artifact without granting authority.
+
+    Healthy means: the artifact is fresh, research-only flags are pinned, and
+    verdict is one of the recognized values. A "blocked" or "advisory-warn"
+    verdict is informational — the doctor reports it but does not treat it
+    as a desk failure because the guardrails are visibility-only and the
+    operator briefing's own caps are the enforcement layer.
+    """
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    research_only = bool(report.get("researchOnly")) and not bool(report.get("promotable"))
+    verdict = str(report.get("verdict") or "")
+    known_verdicts = {"clear", "advisory-warn", "blocked"}
+    ok = fresh and research_only and verdict in known_verdicts
+    slate_size = report.get("slateSize")
+    detail = (
+        f"{verdict} | slate={slate_size} | research-only={research_only}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "researchOnly": report.get("researchOnly"),
+                "promotable": report.get("promotable"),
+            }
+        )
+    )
+    return ok, detail
+
+
 def conviction_research_status(report: dict) -> tuple[bool, str]:
     """Evaluate the research-only conviction map without granting authority."""
     if not report:
@@ -432,6 +467,48 @@ def conviction_research_status(report: dict) -> tuple[bool, str]:
             }
         )
     )
+    return ok, detail
+
+
+def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> tuple[bool, str]:
+    """Evaluate paper-test readiness with a shadow-evidence fallback.
+
+    A `no-viable-paper-tests` director verdict is a real warning when nothing
+    else can advance. It is *not* a desk failure when the bottleneck reducer has
+    already produced a fresh shadow-only scenario slate, because the research
+    loop can keep collecting evidence without broker staging or live authority.
+    """
+    if not director:
+        return False, "missing"
+
+    director_fresh = in_current_service_cycle(str(director.get("generatedAt", "")), now=now)
+    verdict = str(director.get("verdict") or "")
+    counts = director.get("counts") or {}
+    reducer_fresh = in_current_service_cycle(str(reducer.get("generatedAt", "")), now=now)
+    reducer_counts = reducer.get("counts") or {}
+    shadow_fallback_ready = (
+        reducer_fresh
+        and reducer.get("verdict") == "scenario-slate-ready"
+        and int(reducer_counts.get("scenarios") or 0) > 0
+        and int(reducer_counts.get("shadowOnly") or 0) > 0
+    )
+    ok_verdicts = {"ready-to-paper-stage", "auto-paper-selected", "approval-bottleneck", "research-watch"}
+    ok = director_fresh and (verdict in ok_verdicts or (verdict == "no-viable-paper-tests" and shadow_fallback_ready))
+    detail = (
+        f"{verdict} | stageable={counts.get('stageableNow', 0)} | "
+        f"auto-paper={counts.get('autoPaperSelected', 0)} | "
+        f"approval-only={counts.get('approvalOnly', 0)} | "
+        f"hard-blocked={counts.get('hardBlocked', 0)}"
+        if director_fresh
+        else json.dumps(
+            {
+                "generatedAt": director.get("generatedAt"),
+                "verdict": verdict,
+            }
+        )
+    )
+    if director_fresh and shadow_fallback_ready:
+        detail += f" | shadow-fallback=ready ({reducer_counts.get('shadowOnly', 0)})"
     return ok, detail
 
 
@@ -804,6 +881,12 @@ def main() -> int:
     if not conviction_ok:
         warnings += 1
 
+    blowup_guardrails = load_json_file(BLOWUP_GUARDRAILS_FILE) or {}
+    blowup_ok, blowup_detail = blowup_guardrails_status(blowup_guardrails)
+    lines.append(summarize_status("Blow-up guardrails", blowup_ok, blowup_detail))
+    if not blowup_ok:
+        warnings += 1
+
     authority = load_json_file(AUTHORITY_MANIFEST_FILE) or {}
     authority_today = in_current_service_cycle(str(authority.get("generatedAt", "")), now=now)
     authority_ok = authority_today and (authority.get("decision") or {}).get("authorityLevel") is not None
@@ -964,32 +1047,16 @@ def main() -> int:
     if not sandbox_ok:
         warnings += 1
 
+    paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    paper_reducer_today = in_current_service_cycle(str(paper_reducer.get("generatedAt", "")), now=now)
+    paper_reducer_counts = paper_reducer.get("counts") or {}
+
     paper_test_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
-    paper_director_today = in_current_service_cycle(str(paper_test_director.get("generatedAt", "")), now=now)
-    paper_director_verdict = str(paper_test_director.get("verdict") or "")
-    paper_director_ok = paper_director_today and (
-        paper_director_verdict in {"ready-to-paper-stage", "approval-bottleneck", "research-watch"}
-    )
-    director_counts = paper_test_director.get("counts") or {}
-    paper_director_detail = (
-        f"{paper_director_verdict} | stageable={director_counts.get('stageableNow', 0)} | "
-        f"approval-only={director_counts.get('approvalOnly', 0)} | "
-        f"hard-blocked={director_counts.get('hardBlocked', 0)}"
-        if paper_director_today
-        else json.dumps(
-            {
-                "generatedAt": paper_test_director.get("generatedAt"),
-                "verdict": paper_director_verdict,
-            }
-        )
-    )
+    paper_director_ok, paper_director_detail = paper_test_director_status(paper_test_director, paper_reducer, now)
     lines.append(summarize_status("Paper test director", paper_director_ok, paper_director_detail))
     if paper_test_director and not paper_director_ok:
         warnings += 1
 
-    paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
-    paper_reducer_today = in_current_service_cycle(str(paper_reducer.get("generatedAt", "")), now=now)
-    paper_reducer_counts = paper_reducer.get("counts") or {}
     paper_reducer_ok = paper_reducer_today and paper_reducer.get("verdict") in {
         "scenario-slate-ready",
         "scenario-slate-thin",
