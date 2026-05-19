@@ -32,10 +32,11 @@ GitHub.
 
 ## Before Staging
 
-1. Run the command center:
+1. Run central command and refresh the low-context handoff:
 
 ```bash
-python3 inferno_model_command_center.py build
+./run_inferno_central_command.sh
+./run_inferno_usage_optimizer.sh
 ```
 
 2. Run the doctor:

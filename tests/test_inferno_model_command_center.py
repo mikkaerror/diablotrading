@@ -225,7 +225,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["systemStatus"]["mathVerify"]["verdict"], "clean")
             self.assertEqual(payload["systemStatus"]["strategyLab"]["verdict"], "insufficient-data")
             self.assertTrue(payload["executiveSummary"][0].startswith("Capital:"))
-            self.assertEqual(payload["reportingMap"][0]["lane"], "health")
+            self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
+            self.assertEqual(payload["reportingMap"][1]["lane"], "health")
+            self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
             self.assertEqual(len(payload["activeMissions"]), 1)
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
@@ -245,6 +247,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Canonical report map:", text_report)
             self.assertIn("reports/paper_bottleneck_reducer_latest.csv", text_report)
             self.assertIn("reports/math_verify_latest.txt", text_report)
+            self.assertIn("reports/usage_optimizer_latest.txt", text_report)
+
+            digest = command_center.onboard_digest(payload)
+            self.assertIn("reports/usage_optimizer_latest.txt", digest)
+            self.assertIn("reports/central_command_latest.txt", digest)
 
     def test_note_and_mission_helpers_persist_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

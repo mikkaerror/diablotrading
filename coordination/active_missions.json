@@ -2,46 +2,49 @@
   {
     "id": "mission-9b615675",
     "createdAt": "2026-05-10T15:10:09.054079-06:00",
-    "updatedAt": "2026-05-14T10:41:40.943936-06:00",
-    "title": "Capital deployment readiness for 2026-05-15",
-    "body": "Codex owns tomorrow's readiness brief, allocator guardrails, checklist, tests, and command-center hygiene. No live submit. Explicit user confirmation only.",
+    "updatedAt": "2026-05-18T22:05:35.633074-06:00",
+    "title": "Capital readiness and risk-rail maintenance",
+    "body": "Codex owns readiness briefs, allocator guardrails, tests, and command-center hygiene. Rerun capital readiness before sizing any new cash. No live submit; explicit user confirmation only.",
     "owner": "codex",
     "status": "in-progress",
     "priority": "high",
     "tags": [
       "capital",
       "readiness",
-      "risk"
+      "risk",
+      "ops"
     ]
   },
   {
     "id": "mission-5fb99c1b",
     "createdAt": "2026-05-10T15:10:09.071822-06:00",
-    "updatedAt": "2026-05-14T10:41:41.018929-06:00",
-    "title": "Stabilize native TOS export path",
-    "body": "Claude owns thinkorswim native export stabilization and broker UI evidence collection. Do not change capital authority or place trades.",
+    "updatedAt": "2026-05-18T22:05:35.687950-06:00",
+    "title": "Stabilize native TOS export evidence path",
+    "body": "Claude owns thinkorswim native export stabilization and broker UI evidence collection. Codex consumes exported artifacts and tests downstream logic. Do not open a new TOS instance, change authority, or place trades.",
     "owner": "claude",
     "status": "in-progress",
     "priority": "high",
     "tags": [
       "tos",
       "export",
-      "automation"
+      "automation",
+      "safety"
     ]
   },
   {
     "id": "mission-f765f5f1",
     "createdAt": "2026-05-10T15:10:09.158120-06:00",
-    "updatedAt": "2026-05-10T15:10:09.158120-06:00",
-    "title": "Advance paper promotion evidence",
-    "body": "Tighten approval, fill, and exit loops until the desk produces enough scored paper outcomes to move strategy-lab evidence beyond insufficient-data without weakening authority gates.",
+    "updatedAt": "2026-05-18T22:05:35.744612-06:00",
+    "title": "Advance paper evidence bottleneck",
+    "body": "Shared lane: convert approval-only candidates and shadow scenarios into scored paper evidence. Keep promotion gated on closed outcomes; no live authority expansion.",
     "owner": "shared",
-    "status": "pending",
+    "status": "in-progress",
     "priority": "high",
     "tags": [
       "paper",
       "backtest",
-      "risk"
+      "risk",
+      "evidence"
     ]
   }
 ]

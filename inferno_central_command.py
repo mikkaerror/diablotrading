@@ -157,7 +157,8 @@ def build_central_command(
         "shortcutCommands": [
             'cd "<repo-root>"',
             "./run_inferno_central_command.sh",
-            "./run_inferno_model_command_center.sh onboard",
+            "./run_inferno_central_command.sh onboard",
+            "./run_inferno_usage_optimizer.sh",
             "python3 inferno_doctor.py",
         ],
     }

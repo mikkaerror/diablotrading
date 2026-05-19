@@ -52,6 +52,12 @@ MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
 
 REPORTING_MAP: tuple[dict[str, str], ...] = (
     {
+        "lane": "handoff",
+        "question": "What should a fresh model read first?",
+        "artifact": "reports/usage_optimizer_latest.txt",
+        "owner": "shared",
+    },
+    {
         "lane": "health",
         "question": "Is the desk broken?",
         "artifact": "reports/doctor_latest.txt",
@@ -446,6 +452,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
+            "./run_inferno_usage_optimizer.sh",
             f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --send --force-send",
             f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
@@ -453,7 +460,9 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_risk_gate_audit.sh",
         ],
         "recommendedReads": [
+            str(ROOT / "reports/usage_optimizer_latest.txt"),
             str(ROOT / "reports/model_command_center_latest.txt"),
+            str(ROOT / "reports/central_command_latest.txt"),
             str(ROOT / "docs/PROJECT_STATUS.md"),
             str(ROOT / "docs/MODEL_COLLABORATION_BRIEF.md"),
             str(ROOT / "docs/RUNBOOK.md"),
@@ -470,8 +479,8 @@ def build_command_center() -> dict[str, Any]:
         "activeMissions": missions,
         "recentNotes": notes,
         "collaborationPrompt": (
-            "Read the collaboration brief, preserve the safety rails, claim or update a mission, "
-            "append a note with what you changed, and rebuild the command center artifact."
+            "Start with the usage optimizer packet, preserve the safety rails, claim or update a mission, "
+            "append a note with what you changed, and rebuild central command plus usage optimizer."
         ),
     }
     save_command_center(payload)
@@ -642,11 +651,12 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
     lines.extend([
         "",
         "Read before doing anything:",
+        "- reports/usage_optimizer_latest.txt",
         "- reports/model_command_center_latest.txt",
+        "- reports/central_command_latest.txt",
         "- docs/PROJECT_STATUS.md",
         "- docs/MODEL_COLLABORATION_BRIEF.md",
-        "- docs/RUNBOOK.md",
-        "- docs/archive/AGENT_BRAIN_PLAN.md",
+        "- docs/RUNBOOK.md only when you need operating procedure detail",
         "",
         "Collaboration prompt:",
         f"  {payload.get('collaborationPrompt')}",

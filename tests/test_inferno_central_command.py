@@ -59,6 +59,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertEqual(saved["modelCommandCenter"]["missionCount"], 1)
             self.assertEqual(saved["modelCommandCenter"]["noteCount"], 1)
             self.assertEqual(saved["recommendedNextMove"], "Manual risk review: GDS.")
+            self.assertIn("./run_inferno_usage_optimizer.sh", saved["shortcutCommands"])
             self.assertIn("Supervisor verdict: healthy", report_text_file.read_text(encoding="utf-8"))
 
 

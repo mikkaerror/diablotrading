@@ -33,7 +33,8 @@ Build or refresh the command center:
 
 ```bash
 cd "<repo-root>"
-./run_inferno_model_command_center.sh
+./run_inferno_central_command.sh
+./run_inferno_usage_optimizer.sh
 ```
 
 Append a note:
@@ -69,12 +70,13 @@ python3 inferno_model_command_center.py mission-update \
 
 ## Workflow
 
-1. Read `../docs/MODEL_COLLABORATION_BRIEF.md`
-2. Read `../reports/model_command_center_latest.txt`
-3. Claim or update a mission
-4. Make changes with tests and backups
-5. Append a note
-6. Rebuild the command center
+1. Run `../run_inferno_central_command.sh` and `../run_inferno_usage_optimizer.sh`
+2. Read `../reports/usage_optimizer_latest.txt`
+3. Read `../reports/model_command_center_latest.txt`
+4. Claim or update a mission
+5. Make changes with tests and backups
+6. Append a note
+7. Rebuild central command and the usage optimizer
 
 ## Specialization lanes
 
