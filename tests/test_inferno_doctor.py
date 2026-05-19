@@ -9,6 +9,7 @@ from unittest.mock import patch
 from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
+    conviction_research_status,
     cycle_days,
     cycle_reference_day,
     in_current_service_cycle,
@@ -123,6 +124,36 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         ok, detail = research_cycle_status({})
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
+
+    def test_conviction_research_status_accepts_research_only_payload(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = conviction_research_status(
+                {
+                    "generatedAt": "2026-05-18T21:30:00-06:00",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "scoredRows": 40,
+                    "behemoths": [{"ticker": "NVDA"}, {"ticker": "AVGO"}],
+                    "sleepers": [{"ticker": "MOD"}],
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("40 scored", detail)
+        self.assertIn("giants=NVDA, AVGO", detail)
+        self.assertIn("sleepers=MOD", detail)
+
+    def test_conviction_research_status_warns_when_promotable(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = conviction_research_status(
+                {
+                    "generatedAt": "2026-05-18T21:30:00-06:00",
+                    "researchOnly": True,
+                    "promotable": True,
+                    "scoredRows": 40,
+                }
+            )
+        self.assertFalse(ok)
+        self.assertIn("research-only=False", detail)
 
 
 class InfernoDoctorInformationalSignalsTests(unittest.TestCase):

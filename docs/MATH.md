@@ -698,6 +698,181 @@ consistently. Levels:
 
 **Module:** `inferno_math_config`.
 
+## 21. Trade conviction audit (per-ticket math case)
+
+Most numbers on the desk answer a binary question: *does the gate pass?*
+The trade-conviction audit answers a richer question: *given the gate
+passed, is the math case for the trade stronger than the math case
+against it?*
+
+The auditor is research-only. It cannot approve, reject, or size any
+ticket. Its purpose is to keep the operator from confusing a gate pass
+with conviction.
+
+### Inputs
+
+For each ready-to-execute ticket on `inferno_operator_briefing`:
+
+- the briefing's chosen structure, allocation, readiness, confidence, DTE
+- the matching `inferno_decision_brief` row (tracker, edge, exposure, live)
+- `inferno_evidence_strength` (sample size and verdict)
+- `inferno_devils_advocate` (falsification verdict)
+- `inferno_vol_premium` (direction × IV bucket)
+- `inferno_regime_drift` (CUSUM)
+
+### Output
+
+Per ticket, five lists and one conviction tag:
+
+| Section | Rule |
+|---|---|
+| **bull** | every quantitative reason the gates passed, with explicit numbers and a citation tag |
+| **bear** | the strongest available counter-argument; auditor must produce at least one bullet — if no rule fires, the state-of-evidence bullet (prior-only) is inserted automatically so the audit is *never* zero-bear |
+| **disagreements** | layers that contradict each other (e.g. readiness ≥ 90 but edge category = Unclassified) |
+| **falsification triggers** | pre-committed fold-if-X clauses; the operator commits to an exit *before* sizing |
+| **state of evidence** | what the desk does and does not yet know (below `EVIDENCE_PRIOR_ONLY_SAMPLES` closed samples, every readiness number is labelled prior-only) |
+| **convictionTag** | `supportable` / `mixed` / `weak`; downgrades when bear ≥ bull or any disagreement fires |
+
+### Why a bear is mandatory
+
+A trade-conviction audit that never produces a bear bullet is a
+yes-man. To preserve adversarial rigor under refactors, the test suite
+pins the no-yes-man invariant:
+
+```python
+def test_clean_ticket_still_gets_a_bear(self):
+    # Even on a maximally clean ticket, auditor must produce a bear bullet.
+```
+
+### Disagreement detection
+
+A disagreement is any pair of evidence layers that point in opposite
+directions on conviction. The rule set is deterministic and small. Each
+rule names the two layers, quotes their numbers, and links to where to
+verify. Examples already shipping:
+
+- readiness ≥ 90 AND edge.lane in {Unclassified, Ignore For Theme}
+- ticker.sector == slate.largestSector AND largestSectorShare ≥ 0.50
+- trend == Bullish AND chosen structure delta-neutral (straddle)
+- IV rank ≥ 80 AND chosen structure is long-premium
+
+When a disagreement fires, conviction is at least *mixed*. The audit
+does not block the trade — that is the operator's call — but it
+guarantees the operator made the call with the disagreement visible.
+
+### Citations
+
+Every theory tag in a bull or bear bullet resolves through
+`docs/THEORY_REFERENCES.md` to a peer-reviewed paper. The bear case for
+long straddles, for example, cites Bakshi & Kapadia (2003) on the
+variance risk premium and Diavatopoulos et al. (2012) on post-earnings
+IV crush. Heuristics that lack a citation are labelled honestly.
+
+### Strict contract
+
+``researchOnly=true``, ``diagnosticOnly=true``, ``promotable=false``.
+The auditor never approves, rejects, or sizes. It cannot touch the
+authority manifest, the broker, the queue, or any TOS surface.
+
+**Module:** `inferno_trade_conviction_audit`.
+
+## 22. Conviction research map (giants, sleepers, winners)
+
+`inferno_conviction_research` is the desk's "trust your gut, but make it
+survive cross-examination" layer. It is research-only: it cannot approve,
+reject, size, stage, or submit a trade. It ranks the whole tracker universe
+into four operator-readable groups:
+
+| Group | Meaning |
+|---|---|
+| Behemoths / giants | Bell-cow AI, semis, cloud, and data-center names where theme relevance is already obvious |
+| Sleepers | Less obvious power, cooling, networking, server, optical, test, or data-center operators that can still participate in the boom |
+| Near-term winners | Names where readiness, trigger, DTE, and multi-pillar evidence line up now |
+| Contradictions | Names that look exciting but carry explicit reasons to slow down |
+
+### Pillars
+
+Every scored row gets these 0-100 pillars:
+
+| Pillar | Inputs |
+|---|---|
+| `theme` | category override, edge-research thesis, AI/data-center supply-chain mapping |
+| `timing` | readiness, priority, confidence, trigger state, days until earnings |
+| `options` | setup type, IV rank sweet spot, IV-rank impulse, ATR%-Z, ATR% |
+| `structure` | trend, RVOL, ATR expansion, support distance, resistance headroom, alignment |
+| `quality` | edge-research quality when available; otherwise value score + PE proxy |
+| `valuation` | edge-research valuation-risk score when available; otherwise long-term score + PE proxy |
+| `evidence` | source quality, edge-score agreement, confidence |
+| `longTerm` | theme, quality, valuation, long-term score, and buy-zone discipline |
+
+The near-term gut score is:
+
+```
+gutCheckScore =
+    0.18 · theme
+  + 0.20 · timing
+  + 0.17 · options
+  + 0.16 · structure
+  + 0.13 · quality
+  + 0.09 · valuation
+  + 0.07 · evidence
+```
+
+The long-term accumulation score is:
+
+```
+longTermConvictionScore =
+    0.22 · theme
+  + 0.22 · quality
+  + 0.22 · valuation
+  + 0.22 · trackerLongTerm
+  + 0.12 · buyZone
+```
+
+`buyZone = clamp(100 - distanceToSupportPct / 14 · 100)`, so a name
+near support gets more long-term credit than a name already stretched.
+
+### Options setup logic
+
+The options pillar intentionally treats structures differently:
+
+- Vertical calls prefer mid/cheaper IV, positive ATR pressure, and IV
+  impulse without panic pricing.
+- Straddles need expansion; IV impulse and ATR pressure carry more
+  weight than raw IV rank because high IV alone can be a trap.
+- Iron condors prefer calm structure; ATR expansion is penalised.
+
+This is not a signal to buy/sell. It is a classification surface that
+answers: "Does the proposed option structure match the environment?"
+
+### Risk flags
+
+The row is slowed down when any of these fire:
+
+- market context fallback
+- high PE
+- near resistance
+- far from support
+- options setup thin
+- theme edge weak
+- trigger not live
+
+Contradictions are deliberately not hidden. A hot name with flags can
+still appear in the near-term list, but it also appears in the
+contradictions section so the operator sees both the bull case and the
+reason to hesitate.
+
+### References
+
+The layer explicitly cites momentum (Jegadeesh & Titman), PEAD
+(Ball/Brown and Bernard/Thomas), Kelly sizing discipline (Kelly, Thorp,
+Rotando/Thorp), VRP (Bakshi/Kapadia and Carr/Wu), and the AI/data-center
+regime references in `docs/THEORY_REFERENCES.md`.
+
+**Strict contract:** `researchOnly=true`, `promotable=false`.
+
+**Module:** `inferno_conviction_research`.
+
 ## Where to add a new metric
 
 When the desk adds a new probability or statistical primitive:

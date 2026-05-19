@@ -35,6 +35,7 @@ PERFORMANCE_ANALYTICS_FILE = ROOT / "data" / "inferno_performance_analytics.json
 STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
+CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
 DOWNLOADS_WATCH_FILE = ROOT / "data" / "inferno_downloads_watch.json"
@@ -394,6 +395,42 @@ def action_pulse_status(report: dict) -> tuple[bool, str]:
         f"{phase} | verdict={verdict} | delivery={delivery.get('status') or 'not-requested'}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
+def conviction_research_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the research-only conviction map without granting authority."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    research_only = bool(report.get("researchOnly")) and not bool(report.get("promotable"))
+    scored_rows = report.get("scoredRows")
+    ok = fresh and research_only and scored_rows is not None
+    behemoths = ", ".join(
+        str(item.get("ticker") or "")
+        for item in (report.get("behemoths") or [])[:3]
+        if item.get("ticker")
+    )
+    sleepers = ", ".join(
+        str(item.get("ticker") or "")
+        for item in (report.get("sleepers") or [])[:3]
+        if item.get("ticker")
+    )
+    detail = (
+        f"{scored_rows} scored | giants={behemoths or 'none'} | "
+        f"sleepers={sleepers or 'none'} | research-only={research_only}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "scoredRows": scored_rows,
+                "researchOnly": report.get("researchOnly"),
+                "promotable": report.get("promotable"),
+            }
+        )
     )
     return ok, detail
 
@@ -759,6 +796,12 @@ def main() -> int:
     )
     lines.append(summarize_status("Edge research", edge_ok, edge_detail))
     if not edge_ok:
+        warnings += 1
+
+    conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
+    conviction_ok, conviction_detail = conviction_research_status(conviction_research)
+    lines.append(summarize_status("Conviction research", conviction_ok, conviction_detail))
+    if not conviction_ok:
         warnings += 1
 
     authority = load_json_file(AUTHORITY_MANIFEST_FILE) or {}

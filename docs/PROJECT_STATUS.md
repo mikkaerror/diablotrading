@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-18.
+Last updated: 2026-05-19.
 
 The desk's "where are we right now" memo. Read this first.
 
@@ -58,6 +58,9 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Paper bottleneck reducer | shipped | targets 12 paper/shadow scenarios daily; top five become review focus |
 | Slate normalizer | shipped | scale-invariant percentile ranks; absolute gates are no longer brittle |
 | Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
+| Trade conviction audit | shipped | per-ticket math case (bull / bear / disagreements / falsification triggers) with peer-reviewed citations; refuses to be a yes-man |
+| Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
+| Theory references | shipped | one place for primary literature tags used by the audit |
 | Paper evidence | blocked for automation | no viable paper tests; 30 closed scored outcomes still needed |
 
 ## Live truth lives in artifacts, not docs
@@ -76,6 +79,8 @@ doc disagrees with that artifact, the command-center artifact wins.
 | What did the paper lane produce? | `reports/paper_test_director_latest.txt` |
 | What 10+ scenarios should we track? | `reports/paper_bottleneck_reducer_latest.txt` |
 | Do the formulas still check out? | `reports/math_verify_latest.txt` |
+| What's the math case for each ready trade? | `reports/trade_conviction_audit_latest.txt` |
+| Which giants, sleepers, and winners deserve attention? | `reports/conviction_research_latest.txt` |
 | What is the morning brief? | `reports/morning_brief_latest.txt` |
 
 If this doc disagrees with those artifacts, the artifacts win.
@@ -103,9 +108,10 @@ If this doc disagrees with those artifacts, the artifacts win.
 2. Run the command center, capital readiness, and risk gate audit before sizing any ticket.
 3. Let the paper loop accumulate. Use the reducer's top-five focus list for
    review, and keep the full 12-scenario slate for after-the-fact scoring.
-4. Keep the morning ops lane green so the desk stays trustworthy.
-5. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.
-6. Refresh this doc when the desk's verdict shifts. The four other anchor
+4. Use `reports/conviction_research_latest.txt` as the watchlist intelligence layer: giants for bell-cow confirmation, sleepers for investigation, contradictions for restraint.
+5. Keep the morning ops lane green so the desk stays trustworthy.
+6. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.
+7. Refresh this doc when the desk's verdict shifts. The four other anchor
    docs change rarely; this one is the dashboard.
 
 ## Model lanes

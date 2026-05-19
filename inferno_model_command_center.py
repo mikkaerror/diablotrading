@@ -47,6 +47,7 @@ PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
+CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
 MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
 
 
@@ -103,6 +104,18 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "math",
         "question": "Do the formulas still check out?",
         "artifact": "reports/math_verify_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "conviction",
+        "question": "What's the math case for and against each ready trade?",
+        "artifact": "reports/trade_conviction_audit_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "conviction-research",
+        "question": "Which giants, sleepers, and near-term winners deserve attention?",
+        "artifact": "reports/conviction_research_latest.txt",
         "owner": "codex",
     },
     {
@@ -357,6 +370,7 @@ def build_command_center() -> dict[str, Any]:
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
     shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
     edge = load_json_file(EDGE_RESEARCH_FILE) or {}
+    conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
     math_verify = load_json_file(MATH_VERIFY_FILE) or {}
 
     missions = load_active_missions()
@@ -391,6 +405,7 @@ def build_command_center() -> dict[str, Any]:
         "strategyLab": strategy_lab_status(strategy_lab),
         "shadowEvidence": artifact_summary(SHADOW_EVIDENCE_FILE, keys=("verdict", "generatedAt", "message")),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
+        "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
         "mathVerify": artifact_summary(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
     }
     headline_metrics = {
@@ -417,6 +432,18 @@ def build_command_center() -> dict[str, Any]:
         "shadowTracked": (shadow.get("counts") or {}).get("tracked", shadow.get("trackedCount")),
         "shadowClosed": (shadow.get("counts") or {}).get("closed", shadow.get("closedCount")),
         "edgeRanked": len(edge.get("ranked") or []),
+        "convictionBehemoths": [
+            item.get("ticker")
+            for item in (conviction_research.get("behemoths") or [])[:5]
+        ],
+        "convictionSleepers": [
+            item.get("ticker")
+            for item in (conviction_research.get("sleepers") or [])[:5]
+        ],
+        "convictionNearTermWinners": [
+            item.get("ticker")
+            for item in (conviction_research.get("nearTermWinners") or [])[:5]
+        ],
         "mathVerifyVerdict": math_verify.get("verdict"),
         "mathViolations": math_verify.get("totalViolations"),
         "mathMissingArtifacts": math_verify.get("missingArtifacts"),
@@ -458,6 +485,7 @@ def build_command_center() -> dict[str, Any]:
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
             "./run_inferno_risk_gate_audit.sh",
+            "./run_inferno_conviction_research.sh",
         ],
         "recommendedReads": [
             str(ROOT / "reports/usage_optimizer_latest.txt"),
@@ -472,8 +500,10 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
+            str(ROOT / "reports/conviction_research_latest.txt"),
             str(ROOT / "reports/ops_maintenance_latest.txt"),
             str(ROOT / "reports/live_position_review_latest.txt"),
+            str(ROOT / "reports/trade_conviction_audit_latest.txt"),
         ],
         "nextActions": next_actions[:12],
         "activeMissions": missions,
@@ -520,6 +550,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
             f"- Math verify: {status_value(status.get('mathVerify') or {})}",
+            f"- Conviction research: {status_value(status.get('convictionResearch') or {}, key='stage')}",
             "",
             "Headline metrics:",
             f"- Live supported: {metrics.get('liveSupported', 0)}",
@@ -534,6 +565,9 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Auto live allowed: {metrics.get('autoLiveAllowed')}",
             f"- Risk gate hard fails: {metrics.get('riskGateHardFails')}",
             f"- Math violations: {metrics.get('mathViolations')}",
+            f"- Conviction giants: {', '.join(metrics.get('convictionBehemoths') or []) or 'none'}",
+            f"- Conviction sleepers: {', '.join(metrics.get('convictionSleepers') or []) or 'none'}",
+            f"- Conviction near-term: {', '.join(metrics.get('convictionNearTermWinners') or []) or 'none'}",
             "",
             "Next actions:",
         ]

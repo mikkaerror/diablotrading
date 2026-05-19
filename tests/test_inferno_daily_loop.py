@@ -138,6 +138,15 @@ HEALTHY_COUNTERFACTUAL = {
     },
     "policies": [],
 }
+HEALTHY_CONVICTION_RESEARCH = {
+    "generatedAt": "2026-05-10T08:00:00-06:00",
+    "stage": "conviction-research-only",
+    "researchOnly": True,
+    "promotable": False,
+    "behemoths": [{"ticker": "NVDA"}, {"ticker": "AVGO"}],
+    "sleepers": [{"ticker": "MOD"}],
+    "nearTermWinners": [{"ticker": "MRVL"}],
+}
 HEALTHY_FALSIFICATION = {
     "generatedAt": "2026-05-10T08:00:00-06:00",
     "stage": "devils-advocate-falsification",
@@ -183,6 +192,7 @@ def patch_all_builders(*, fail: str | None = None):
         "build_hypothesis_lab": HEALTHY_HYPOTHESES,
         "build_ledger_report": HEALTHY_LEDGER,
         "build_counterfactual": HEALTHY_COUNTERFACTUAL,
+        "build_conviction_research": HEALTHY_CONVICTION_RESEARCH,
         "build_falsification": HEALTHY_FALSIFICATION,
         "build_evidence_strength": HEALTHY_EVIDENCE_STRENGTH,
         "snapshot_cycle": HEALTHY_CYCLE_JOURNAL,
@@ -191,7 +201,8 @@ def patch_all_builders(*, fail: str | None = None):
               "save_sensitivity", "save_replay", "save_daily_success",
               "save_stability_report", "save_skills_audit", "save_heartbeat_report",
               "save_theme_report", "save_hypothesis_lab", "save_ledger_report",
-              "save_counterfactual", "save_falsification", "save_evidence_strength",
+              "save_counterfactual", "save_conviction_research",
+              "save_falsification", "save_evidence_strength",
               "save_journal_memo"]
     patches = []
     for name, payload in payloads.items():
@@ -279,7 +290,7 @@ class DailyLoopTests(unittest.TestCase):
                           "tosExportStability", "skillsAudit", "heartbeat",
                           "themeSynthesizer", "hypothesisLab", "hypothesisLedger",
                           "counterfactual", "devilsAdvocate", "evidenceStrength",
-                          "commandCenter", "cycleJournal"):
+                          "convictionResearch", "commandCenter", "cycleJournal"):
             self.assertIn(step_name, text)
         self.assertIn("Narrative:", text)
         self.assertIn("Watch the brain operate", text)

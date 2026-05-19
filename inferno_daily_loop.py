@@ -67,6 +67,14 @@ from inferno_paper_bottleneck_reducer import build_reducer, save_reducer
 from inferno_slate_normalizer import build_normalized, save_normalized
 from inferno_daily_success import build_daily_success, save_daily_success
 from inferno_decision_brief import build_decision_briefs, save_decision_briefs
+from inferno_trade_conviction_audit import (
+    build_conviction_audit,
+    save_conviction_audit,
+)
+from inferno_conviction_research import (
+    build_conviction_research,
+    save_conviction_research,
+)
 from inferno_heartbeat import (
     build_heartbeat_report,
     record_heartbeat,
@@ -308,6 +316,22 @@ def _extract_summary(name: str, payload: dict[str, Any]) -> dict[str, Any]:
                 for item in (payload.get("topFiveFocus") or [])
             ],
         }
+    if name == "convictionResearch":
+        return {
+            "stage": payload.get("stage"),
+            "behemoths": [
+                item.get("ticker")
+                for item in (payload.get("behemoths") or [])[:5]
+            ],
+            "sleepers": [
+                item.get("ticker")
+                for item in (payload.get("sleepers") or [])[:5]
+            ],
+            "nearTermWinners": [
+                item.get("ticker")
+                for item in (payload.get("nearTermWinners") or [])[:5]
+            ],
+        }
     return {"generatedAt": payload.get("generatedAt")}
 
 
@@ -347,6 +371,13 @@ def build_daily_loop() -> dict[str, Any]:
         briefs_payload = build_decision_briefs()
         save_decision_briefs(briefs_payload)
         return briefs_payload
+
+    def conviction_audit_builder() -> dict[str, Any]:
+        # Runs after evidence-strength and devil's-advocate so the audit can
+        # cite the freshest sample counts. Diagnostic only.
+        payload = build_conviction_audit()
+        save_conviction_audit(payload)
+        return payload
 
     def gap_builder() -> dict[str, Any]:
         nonlocal gap_payload
@@ -533,6 +564,13 @@ def build_daily_loop() -> dict[str, Any]:
         save_reducer(paper_reducer_payload)
         return paper_reducer_payload
 
+    def conviction_research_builder() -> dict[str, Any]:
+        # Research-only gut-check layer: giants, sleepers, winners, and
+        # contradictions. No queue, broker, or authority mutation.
+        report = build_conviction_research()
+        save_conviction_research(report)
+        return report
+
     def command_builder() -> dict[str, Any]:
         nonlocal command_payload
         command_payload = build_command_center()
@@ -572,6 +610,8 @@ def build_daily_loop() -> dict[str, Any]:
     steps.append(_run_step("slateNormalizer", slate_normalizer_builder))
     steps.append(_run_step("paperBootstrap", paper_bootstrap_builder))
     steps.append(_run_step("paperBottleneckReducer", paper_reducer_builder))
+    steps.append(_run_step("tradeConvictionAudit", conviction_audit_builder))
+    steps.append(_run_step("convictionResearch", conviction_research_builder))
     steps.append(_run_step("mathVerify", math_verify_builder))
     steps.append(_run_step("commandCenter", command_builder))
     # cycleJournal must run last so it snapshots the freshest artifacts. The
@@ -624,6 +664,8 @@ def build_daily_loop() -> dict[str, Any]:
             "diagnostic only; cannot change desk state",
             "operator should walk the decideTodayTickers list using the brief memos",
             "see reports/decision_briefs_latest.txt for per-ticker context",
+            "see reports/trade_conviction_audit_latest.txt for the bull/bear/disagreement math case per ticket",
+            "see reports/conviction_research_latest.txt for whole-universe giants, sleepers, winners, and contradictions",
         ],
     }
     # Append the stream-of-consciousness row. Done outside _run_step so a
@@ -883,6 +925,7 @@ def daily_loop_text(payload: dict[str, Any]) -> str:
         "Where to look next:",
         "- reports/approval_cadence_latest.txt    — batting order",
         "- reports/decision_briefs_latest.txt     — per-ticker context",
+        "- reports/trade_conviction_audit_latest.txt — per-ticket bull/bear/disagreement math case",
         "- reports/promotion_gap_latest.txt       — distance to lab gates",
         "- reports/threshold_sensitivity_latest.txt — gate calibration",
         "- reports/strategy_replay_latest.txt     — shadow-as-paper backtest",
@@ -894,6 +937,7 @@ def daily_loop_text(payload: dict[str, Any]) -> str:
         "- reports/hypothesis_lab_latest.txt      — generated + backtested hypotheses",
         "- reports/hypothesis_ledger_latest.txt   — hypothesis trajectory memory",
         "- reports/counterfactual_latest.txt      — historical policy replay (ranked)",
+        "- reports/conviction_research_latest.txt — giants, sleepers, winners, contradictions",
         "- reports/cycle_journal_latest.txt       — last cycle snapshot summary",
         "- reports/brain_console_latest.txt       — single-screen brain console (--save)",
         "- reports/model_command_center_latest.txt — onboarding digest",
