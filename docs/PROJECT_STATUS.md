@@ -10,7 +10,7 @@ The desk's "where are we right now" memo. Read this first.
 approved suffix, the live book is clear, capital can be reviewed manually with
 warnings, and all automated live trading remains locked.
 
-Latest readiness sweep: 2026-05-19 14:13 MT. Capital deployment readiness is
+Latest readiness sweep: 2026-05-19 17:35 MT. Capital deployment readiness is
 `manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
 `clean`; paper evidence is still the bottleneck with 30 closed scored outcomes
 remaining before any automation promotion. The new conviction v2 layer now
@@ -43,6 +43,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Risk gate audit | `manual-only` | 0 hard fails; promotion still blocked |
 | Tracker | synced | 143 sheet / 143 snapshot; 0 critical/advisory ticker issues |
 | Watchlist closed-loop | shipped | 5-min autorefresh, three-way reconciler |
+| Schwab options API | scaffolded | read-only option-chain adapter normalizes bid/ask, Greeks, liquidity, ATM straddle expected-move proxy; OAuth/token helper still next |
 | Falsification engine | shipped | sign-flip bootstrap on every claimed edge |
 | Evidence strength scalar | shipped | geometric mean over Wilson · expectancy · N · falsification |
 | Kelly sizing | shipped | bootstrap-conservative quarter-Kelly with global risk ceiling |
@@ -60,7 +61,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
 | Trade conviction audit | shipped | per-ticket math case (bull / bear / disagreements / falsification triggers / blow-up risks) with peer-reviewed citations; refuses to be a yes-man |
 | Master-trader principles | shipped | four operator-grade rules wired into the conviction auditor: PTJ R:R floor (bear < 1.5x, disagreement < 1.0x), Taleb steamroller bear on concave structures, Marks pendulum bear on rich IV + long premium, Klarman SIT-OUT advisory when nothing clears readiness 75 with classified edge; long-form synthesis in docs/MASTER_TRADERS.md, 14 new citations in THEORY_REFERENCES.md |
-| System map + cleanup | shipped | docs/SYSTEM_MAP.md slotted as the read-this-first doc; MODULE_INDEX now covers 97/97 modules (was 89/97); pre-migration legacy removed (briefing_job.py, run_morning_inferno.sh, root index.html / app.js / styles.css); OPERATING_MODEL frontend refs updated to point at frontend/modules/ |
+| System map + cleanup | shipped | docs/SYSTEM_MAP.md slotted as the read-this-first doc; MODULE_INDEX now covers 97/97 modules (was 89/97); obsolete root shims removed while root static dashboard files remain preserved for GitHub Pages; OPERATING_MODEL frontend refs updated to point at frontend/modules/ |
 | Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
 | Theory references | shipped | one place for primary literature tags used by the audit |
@@ -75,6 +76,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Is anything broken? | `reports/doctor_latest.txt` |
 | What matters right now? | `reports/model_command_center_latest.txt` |
 | What should a new model read first? | `reports/usage_optimizer_latest.txt` |
+| How is the system wired? | `docs/SYSTEM_MAP.md` |
 | What does the brain see right now? | `inferno_brain_console.py` |
 | Did today count as a good day? | `reports/daily_success_latest.txt` |
 | What is the live book? | `reports/live_position_review_latest.txt` |
@@ -98,6 +100,7 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Vendor gaps fail closed instead of aborting the refresh.
 - Sheet hydration self-heals broken `Setup Rec` / `Signal Trigger` cells.
 - The TOS lane stays read-only. Background export triggering is disabled; manual/supervised export remains available.
+- The Schwab lane is read-only market data. OAuth tokens stay ignored locally, and account/order endpoints are not part of the scaffold.
 - Watchlist intake now flows TOS → sheet → reconcile every 5 minutes.
 - Command-center reporting now starts with executive summary, math status, and canonical report map.
 - Usage optimizer now creates a compact read-first / do-not-paste handoff to reduce repeated context spend.

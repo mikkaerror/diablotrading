@@ -43,6 +43,7 @@ Safety            — authority, risk, secrets
 | `inferno_watchlist_reconciler.py` | **NEW** Three-way drift detector across TOS extract ∪ sheet ∪ tracker | every 5 min + on-demand |
 | `inferno_watchlist_autorefresh.py` | **NEW** 5-minute closed-loop coordinator: extract → (apply if delta) → reconcile → dawn refresh breadcrumb | every 5 min LaunchAgent |
 | `install_inferno_watchlist_autorefresh_service.py` | **NEW** LaunchAgent installer for the autorefresh service | operator-triggered |
+| `inferno_schwab_options.py` | **NEW** Read-only Schwab option-chain adapter for bid/ask, Greeks, liquidity, and expected-move enrichment | on-demand + future strike cycle |
 
 ## Monitoring (what is happening)
 

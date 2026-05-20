@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .env
 .env.inferno
+.env.schwab
 .envrc
 .venv
 env/
@@ -46,6 +47,7 @@ oauth*.json
 *.secret.json
 *.local.json
 cloud-secrets/
+.secrets/
 data/
 reports/
 docs/archive/

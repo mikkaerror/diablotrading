@@ -18,6 +18,8 @@ Use this workspace when Codex, Claude, or the human operator need one place to:
   - machine-readable command-center state
 - `../reports/model_command_center_latest.txt`
   - human-readable command-center memo
+- `../docs/SYSTEM_MAP.md`
+  - one-page architecture, safety stack, ownership map, and verify commands
 - `active_missions.json`
   - current mission queue
 - `model_notes.jsonl`
@@ -73,10 +75,21 @@ python3 inferno_model_command_center.py mission-update \
 1. Run `../run_inferno_central_command.sh` and `../run_inferno_usage_optimizer.sh`
 2. Read `../reports/usage_optimizer_latest.txt`
 3. Read `../reports/model_command_center_latest.txt`
-4. Claim or update a mission
-5. Make changes with tests and backups
-6. Append a note
-7. Rebuild central command and the usage optimizer
+4. Check `../docs/SYSTEM_MAP.md` if you are new to the architecture
+5. Claim or update a mission
+6. Make changes with tests and backups
+7. Append a note
+8. Rebuild central command and the usage optimizer
+
+## Sync Protocol
+
+- One owner per mission by default; mark a mission `shared` only when two models
+  truly need to touch the same lane.
+- Claude stabilizes broker/TOS export evidence. Codex consumes export artifacts,
+  hardens tests, docs, and command-center reporting.
+- If a model changes mission scope, safety rails, or handoff instructions, it
+  must append a note and refresh the generated handoff packets before stopping.
+- Generated artifacts are operational truth; durable docs explain intent.
 
 ## Specialization lanes
 

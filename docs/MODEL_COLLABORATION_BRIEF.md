@@ -63,8 +63,9 @@ Codex and Claude from spending context on stale chat history.
 1. `reports/usage_optimizer_latest.txt` — smallest safe read list and do-not-paste list.
 2. `reports/model_command_center_latest.txt` — current missions, notes, safety rails, next actions.
 3. `reports/central_command_latest.txt` — supervisor verdict and headline metrics.
-4. `docs/PROJECT_STATUS.md` — stable PM snapshot.
-5. `docs/MODEL_COLLABORATION_BRIEF.md` — mission, operating principle, safety rails.
+4. `docs/SYSTEM_MAP.md` — one-page architecture, ownership map, and safety stack.
+5. `docs/PROJECT_STATUS.md` — stable PM snapshot.
+6. `docs/MODEL_COLLABORATION_BRIEF.md` — mission, operating principle, safety rails.
 
 After those, use `docs/RUNBOOK.md`, `docs/MODEL_THEORY.md`,
 `docs/MODULE_INDEX.md`, and `docs/ENGINEERING_CONVENTIONS.md` only when the
@@ -76,8 +77,8 @@ task needs implementation depth.
 You are joining the Inferno Earnings Dashboard at <repo-root>.
 Start by running ./run_inferno_central_command.sh and ./run_inferno_usage_optimizer.sh.
 Then read reports/usage_optimizer_latest.txt, reports/model_command_center_latest.txt,
-reports/central_command_latest.txt, docs/PROJECT_STATUS.md, and
-docs/MODEL_COLLABORATION_BRIEF.md.
+reports/central_command_latest.txt, docs/SYSTEM_MAP.md, docs/PROJECT_STATUS.md,
+and docs/MODEL_COLLABORATION_BRIEF.md.
 Do not place trades. Do not open a new TOS instance. Only the already-open,
 locally configured approved live account is approved, and only for read-only
 automation. Paper evidence is the promotion gate. Preserve the health of the desk, keep the math

@@ -8,6 +8,7 @@ fail-closed interfaces.
 - thinkorswim desktop: supervised read-only surface and manual cockpit
 - configured approved live account: read-only oversight
 - native TOS export: useful when stable, not trusted as the only source
+- Schwab options API: read-only market-data scaffold, no account/order calls
 - broker submit authority: off
 
 ## Required Before Live Automation
@@ -46,9 +47,12 @@ come from broker-grade data or a dedicated market-data provider:
 
 ```bash
 ./run_inferno_broker_preview.sh
+python3 inferno_schwab_options.py AAPL NVDA --json
 ```
 
-This builds preview payloads from paper-staged tickets. It cannot submit orders.
+The broker preview builds payloads from paper-staged tickets. The Schwab
+options adapter enriches quote quality when configured. Neither command can
+submit orders.
 
 ## No-Go Rule
 

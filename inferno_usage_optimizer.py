@@ -42,12 +42,16 @@ READ_FIRST: tuple[dict[str, str], ...] = (
         "why": "short supervisor status and recommended next move",
     },
     {
-        "path": "docs/PROJECT_STATUS.md",
-        "why": "stable PM summary; update only when verdict changes",
+        "path": "docs/SYSTEM_MAP.md",
+        "why": "one-page architecture, ownership map, and safety stack",
     },
 )
 
 READ_IF_NEEDED: tuple[dict[str, str], ...] = (
+    {
+        "path": "docs/PROJECT_STATUS.md",
+        "why": "stable PM summary; update only when verdict changes",
+    },
     {
         "path": "docs/MODEL_COLLABORATION_BRIEF.md",
         "why": "mission, safety rails, division of labor",

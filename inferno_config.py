@@ -153,6 +153,23 @@ TOS_UI_ROUTE_STEP_DELAY_SECONDS = float(os.environ.get("TOS_UI_ROUTE_STEP_DELAY_
 TOS_UI_ROUTE_RECOVERY_DELAY_SECONDS = float(os.environ.get("TOS_UI_ROUTE_RECOVERY_DELAY_SECONDS", "8.0"))
 GCLOUD_BIN = os.environ.get("GCLOUD_BIN", str(LOCAL_GCLOUD_BIN)).strip()
 
+SCHWAB_API_BASE_URL = os.environ.get("SCHWAB_API_BASE_URL", "https://api.schwabapi.com").strip().rstrip("/")
+SCHWAB_AUTH_BASE_URL = os.environ.get("SCHWAB_AUTH_BASE_URL", "https://api.schwabapi.com/v1/oauth").strip().rstrip("/")
+SCHWAB_CLIENT_ID = os.environ.get("SCHWAB_CLIENT_ID", "").strip()
+SCHWAB_CLIENT_SECRET = os.environ.get("SCHWAB_CLIENT_SECRET", "").strip()
+SCHWAB_REDIRECT_URI = os.environ.get("SCHWAB_REDIRECT_URI", "https://127.0.0.1").strip()
+SCHWAB_TOKEN_FILE = Path(
+    os.environ.get("SCHWAB_TOKEN_FILE", str(ROOT / ".secrets" / "schwab_token.json"))
+).expanduser()
+SCHWAB_OPTIONS_ENABLED = os.environ.get("SCHWAB_OPTIONS_ENABLED", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+SCHWAB_OPTIONS_TIMEOUT_SECONDS = float(os.environ.get("SCHWAB_OPTIONS_TIMEOUT_SECONDS", "20"))
+SCHWAB_OPTIONS_SYMBOL_LIMIT = int(os.environ.get("SCHWAB_OPTIONS_SYMBOL_LIMIT", "12"))
+
 LABEL = "io.diablotrading.inferno-dawn-brief"
 WATCHDOG_LABEL = "io.diablotrading.inferno-watchdog"
 DOWNLOADS_WATCH_LABEL = "io.diablotrading.inferno-downloads-watch"

@@ -22,11 +22,13 @@ liveTradingAllowed: false
 1. Tracker data refreshes from Google Sheets and local market-data scripts.
 2. Scoring modules enrich the universe with readiness, conviction, risk, and
    evidence strength.
-3. Daily/ops pipelines generate reports, doctor checks, morning/pre-close
+3. Schwab option-chain data can enrich strike selection and quote quality when
+   the read-only OAuth lane is configured.
+4. Daily/ops pipelines generate reports, doctor checks, morning/pre-close
    briefs, and command-center artifacts.
-4. Paper and shadow lanes collect outcomes until strategy evidence earns more
+5. Paper and shadow lanes collect outcomes until strategy evidence earns more
    authority.
-5. Broker/TOS lanes remain read-only unless the operator gives explicit final
+6. Broker/TOS lanes remain read-only unless the operator gives explicit final
    confirmation for a specific action.
 
 ## Canonical Truth
@@ -45,6 +47,7 @@ Generated artifacts beat durable docs when they disagree.
 | Scenario learning | `reports/scenario_backtest_latest.txt` |
 | Live book posture | `reports/live_position_review_latest.txt` |
 | Capital readiness | `reports/capital_deployment_readiness_latest.txt` |
+| Schwab option chains | `reports/schwab_options_latest.txt` |
 
 ## Model Ownership
 
