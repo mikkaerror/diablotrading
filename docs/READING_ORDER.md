@@ -48,6 +48,7 @@ about to change code.
 ## The mission
 
 6. [**MISSION.md**](MISSION.md) — the operator's North Star. Honest expectations, four-phase journey, entry + exit framework, monthly milestones. Reread monthly.
+7. [**RESEARCH_ROADMAP.md**](RESEARCH_ROADMAP.md) — the three-phase research plan (post-trade learning → portfolio-level → consensus risk). Read before claiming a research mission.
 
 ## The day-to-day
 
