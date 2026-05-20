@@ -404,6 +404,73 @@ rather than a written passage.
   falsification triggers are the same posture, applied to options
   exits instead of futures entries.
 
+## Performance attribution, edge half-life, and slippage
+
+(Phase A research, see docs/PERFORMANCE_ATTRIBUTION.md and
+docs/RESEARCH_ROADMAP.md.)
+
+- **[BHB-1986]** Brinson, G., Hood, L., Beebower, G. (1986).
+  "Determinants of Portfolio Performance." *Financial Analysts Journal*
+  42(4): 39–44. — the foundational decomposition of active return into
+  allocation, selection, and interaction effects; forty-year industry
+  standard for attribution.
+- **[SHARPE-1966]** Sharpe, W. (1966). "Mutual Fund Performance."
+  *Journal of Business* 39(1) Part 2: 119–138. — the ratio that
+  defined risk-adjusted return; punishes upside and downside
+  symmetrically, which is wrong for asymmetric-payoff strategies.
+- **[SORTINO-1980]** Sortino, F., Van der Meer, R. (1980/1991). The
+  Sortino ratio: excess return over downside deviation only. The right
+  primary measure for an options desk where every ticket has explicit
+  max loss.
+- **[MARTIN-1989]** Martin, P., McCann, B. (1989). *The Investor's
+  Guide to Fidelity Funds.* — Ulcer Index: quadratic mean of drawdown
+  depth × duration; the right "investor stress" measure when long
+  shallow drawdowns matter more than a single bad day.
+- **[ECKHARDT-MW93]** Eckhardt, W. in Schwager, J. (1992). *The New
+  Market Wizards*. — "What feels good is often the wrong thing to do…
+  to win you have to act like the minority." The comfortable-win flag
+  exists because of this citation.
+- **[GRINOLD-1989]** Grinold, R. (1989). "The Fundamental Law of
+  Active Management." *Journal of Portfolio Management* 15(3): 30–37. —
+  `IR ≈ IC · √Breadth`. For our small slate, breadth is fixed; IC
+  decay is what matters.
+- **[GRINOLD-KAHN-2000]** Grinold, R., Kahn, R. (2000). *Active
+  Portfolio Management*, 2nd ed. McGraw-Hill. — the canonical text on
+  active management math.
+- **[ISRAEL-MOSKOWITZ-2013]** Israel, R., Moskowitz, T. (2013). "The
+  Role of Shorting, Firm Size, and Time on Market Anomalies."
+  *Journal of Financial Economics* 108(2): 275–301. — robustness of
+  momentum across periods; companion to the broader factor-decay
+  literature.
+- **[MCLEAN-PONTIFF-2016]** McLean, R., Pontiff, J. (2016). "Does
+  Academic Research Destroy Stock Return Predictability?" *Journal of
+  Finance* 71(1): 5–32. — published anomalies see Sharpe ratios drop
+  ~50% post-publication. Direct evidence that edges decay.
+- **[STEIN-2009]** Stein, J. (2009). "Presidential Address:
+  Sophisticated Investors and Market Efficiency." *Journal of Finance*
+  64(4): 1517–1548. — the crowding mechanism; why edges decay faster
+  once well-known.
+- **[ADAMS-MACKAY-2007]** Adams, R., MacKay, D. (2007). "Bayesian
+  Online Changepoint Detection." *arXiv:0710.3742*. — maintains a
+  probability distribution over "run length" since the last
+  change-point; more honest than binary CUSUM for per-rule regime
+  drift.
+- **[PAGE-1954]** Page, E. (1954). "Continuous Inspection Schemes."
+  *Biometrika* 41(1/2): 100–115. — the CUSUM origin; what we use
+  today in `inferno_regime_drift.py`.
+- **[ALMGREN-CHRISS-2000]** Almgren, R., Chriss, N. (2000). "Optimal
+  Execution of Portfolio Transactions." *Journal of Risk* 3(2): 5–39. —
+  the cost-vs-risk frontier framework; permanent vs temporary impact.
+- **[ROLL-1984]** Roll, R. (1984). "A Simple Implicit Measure of the
+  Effective Bid-Ask Spread in an Efficient Market." *Journal of
+  Finance* 39(4): 1127–1139. — estimator
+  `ŝ = 2·√(−Cov(ΔPₜ, ΔPₜ₋₁))`; gives an effective spread without a
+  quote feed.
+- **[HASBROUCK-1991]** Hasbrouck, J. (1991). "Measuring the
+  Information Content of Stock Trades." *Journal of Finance* 46(1):
+  179–207. — decomposes effective spread into realised spread plus
+  adverse selection; the canonical paper-to-live gap framework.
+
 ## Why this matters
 
 Every quantitative bear point and every falsification trigger in the
