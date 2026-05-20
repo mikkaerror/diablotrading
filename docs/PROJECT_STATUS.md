@@ -59,6 +59,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Slate normalizer | shipped | scale-invariant percentile ranks; absolute gates are no longer brittle |
 | Math config (audit surface) | shipped | one file pins seed / resample / threshold / verdict defaults for migration |
 | Trade conviction audit | shipped | per-ticket math case (bull / bear / disagreements / falsification triggers / blow-up risks) with peer-reviewed citations; refuses to be a yes-man |
+| Master-trader principles | shipped | four operator-grade rules wired into the conviction auditor: PTJ R:R floor (bear < 1.5x, disagreement < 1.0x), Taleb steamroller bear on concave structures, Marks pendulum bear on rich IV + long premium, Klarman SIT-OUT advisory when nothing clears readiness 75 with classified edge; long-form synthesis in docs/MASTER_TRADERS.md, 14 new citations in THEORY_REFERENCES.md |
 | Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
 | Theory references | shipped | one place for primary literature tags used by the audit |
