@@ -21,6 +21,7 @@ from inferno_config import (
     TOS_UNSAFE_AUTOMATION_PANELS,
     local_now,
 )
+from inferno_heartbeat import record_heartbeat
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 
@@ -859,6 +860,22 @@ def main() -> int:
         print(SESSION_PROBE_TEXT_FILE.read_text(encoding="utf-8"))
         return 0
     report = probe_tos_session()
+    if report.get("ok") and report.get("mainWindowPresent"):
+        heartbeat_status = "ok"
+    elif report.get("matchedProcessName") or report.get("visibleProcessNames"):
+        heartbeat_status = "warn"
+    else:
+        heartbeat_status = "inactive"
+    record_heartbeat(
+        "tos_session_probe",
+        status=heartbeat_status,
+        summary=report.get("summary") or report.get("message") or "thinkorswim probe completed",
+        detail={
+            "ok": bool(report.get("ok")),
+            "mainWindowPresent": bool(report.get("mainWindowPresent")),
+            "accountMode": report.get("accountMode"),
+        },
+    )
     print(session_probe_text(report))
     return 0 if report.get("ok") else 1
 

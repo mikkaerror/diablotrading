@@ -328,7 +328,6 @@ def save_heartbeat_report(payload: dict[str, Any]) -> None:
 def _default_expected_sources() -> list[str]:
     """The operator-curated list of subsystems we expect to be beating."""
     return [
-        "dawn_cycle",
         "ops_maintenance",
         "daily_loop",
         "watchdog",

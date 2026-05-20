@@ -33,6 +33,7 @@ from inferno_paper_exit_auditor import build_audit as build_paper_exit_audit, sa
 from inferno_paper_evidence_loop import build_audit as build_paper_evidence_loop_audit, save_audit as save_paper_evidence_loop_audit
 from inferno_paper_test_director import build_director as build_paper_test_director, save_director as save_paper_test_director
 from inferno_config import DEFAULT_SHEET_NAME, ROOT, default_backtest_root, local_now
+from inferno_heartbeat import record_heartbeat
 from inferno_data_readiness_audit import run_audit
 from inferno_downloads_watch import run_watch
 from inferno_io import atomic_write_json, atomic_write_text
@@ -706,6 +707,16 @@ def run_maintenance(
         ),
     }
     save_report(report)
+    record_heartbeat(
+        "ops_maintenance",
+        status="ok" if report.get("ok") else "fail",
+        summary="ops maintenance sweep complete" if report.get("ok") else "ops maintenance needs attention",
+        detail={
+            "paperStageable": (paper_test_director.get("counts") or {}).get("stageableNow"),
+            "researchCycle": research_cycle.get("status"),
+            "watchdogExit": watchdog_exit,
+        },
+    )
     return report
 
 

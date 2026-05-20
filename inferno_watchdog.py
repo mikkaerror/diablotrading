@@ -18,6 +18,7 @@ from inferno_config import (
     local_now,
     local_today,
 )
+from inferno_heartbeat import record_heartbeat
 from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_file, send_email, smtp_configured
 
 
@@ -228,6 +229,16 @@ def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], 
         "rescueResult": rescue_result,
     }
     atomic_write_json(WATCHDOG_STATUS_FILE, status_payload)
+    record_heartbeat(
+        "watchdog",
+        status="ok" if ok else "fail",
+        summary="watchdog check passed" if ok else "watchdog detected issues",
+        detail={
+            "reasonCount": len(reasons),
+            "rescueAttempted": bool(rescue_result),
+            "alertSentThisRun": alert_sent,
+        },
+    )
     return status_payload, 0 if ok else 1
 
 

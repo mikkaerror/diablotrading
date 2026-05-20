@@ -26,6 +26,8 @@ from inferno_threshold_sensitivity import (
     SENSITIVITY_TEXT_FILE,
     build_sensitivity,
     default_threshold_profiles,
+    format_distance_summary,
+    gate_distances,
     sweep_strategy,
     verdict_under_thresholds,
 )
@@ -86,6 +88,7 @@ class ThresholdSensitivityTests(unittest.TestCase):
         verdict = verdict_under_thresholds(strong, production)
         self.assertTrue(verdict["promotable"])
         self.assertEqual(verdict["blockers"], [])
+        self.assertEqual(verdict["distanceSummary"]["blockingGateCount"], 0)
 
     def test_monotonicity_strict_passes_implies_loose_passes(self) -> None:
         """If a strategy passes the production gate, it must pass every looser
@@ -125,6 +128,36 @@ class ThresholdSensitivityTests(unittest.TestCase):
         report = build_sensitivity(lab=lab)
         self.assertTrue(report["researchOnly"])
         self.assertFalse(report["promotable"])
+
+    def test_gate_distances_quantify_primary_gap(self) -> None:
+        strat = strategy_summary(
+            scored=12, win_lower=0.37, expectancy_lower=-0.02,
+            profit_factor=1.05, false_positive=0.7, drawdown=-8.0,
+        )
+        profile = next(p for p in default_threshold_profiles() if p["name"] == "production")
+        verdict = verdict_under_thresholds(strat, profile)
+
+        self.assertFalse(verdict["promotable"])
+        self.assertEqual(verdict["distanceSummary"]["primaryGapGate"], "sample-size")
+        self.assertEqual(verdict["distanceSummary"]["primaryGap"], 18)
+        self.assertEqual(verdict["distanceSummary"]["primaryGapUnit"], "trades")
+        self.assertTrue(any(row["gate"] == "profit-factor" and row["gap"] == 0.2 for row in verdict["gateDistances"]))
+        self.assertTrue(any(row["gate"] == "false-positive-rate" and row["kind"] == "warning" for row in verdict["gateDistances"]))
+
+    def test_gate_distances_treat_missing_metrics_as_blocking(self) -> None:
+        rows = gate_distances(strategy_summary(scored=20), default_threshold_profiles()[1])
+
+        self.assertTrue(any(row["gate"] == "expectancy-lower-bound" and row["gap"] is None for row in rows))
+        self.assertTrue(any(row["gate"] == "win-rate-lower-bound" and row["gap"] is None for row in rows))
+
+    def test_distance_summary_formats_missing_metrics_cleanly(self) -> None:
+        text = format_distance_summary({
+            "primaryGapGate": "expectancy-lower-bound",
+            "primaryGap": None,
+            "primaryGapUnit": "R",
+        })
+
+        self.assertEqual(text, "expectancy-lower-bound missing")
 
     def test_tightest_promoting_profile_is_strict_first(self) -> None:
         lab = {

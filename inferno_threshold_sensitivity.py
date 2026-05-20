@@ -99,6 +99,151 @@ def default_threshold_profiles() -> list[dict[str, Any]]:
     ]
 
 
+def number(value: Any, default: float | None = None) -> float | None:
+    """Coerce a loose metric into a float for gate-distance math."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def gate_distances(strategy: dict[str, Any], thresholds: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return pass/fail distance for every threshold in a profile.
+
+    The older report said only *why* a strategy failed. This function makes the
+    failure measurable: how many more scored trades, how much profit-factor
+    lift, how much lower-bound win-rate lift, etc. That keeps calibration work
+    boring and reviewable instead of vibes-based.
+    """
+    scored = int(strategy.get("scoredCount") or 0)
+    win_lower = number(strategy.get("winRateLowerBound"))
+    expectancy_lower = number((strategy.get("expectancyPerRiskConfidence") or {}).get("lower"))
+    profit_factor = number(strategy.get("profitFactor"))
+    drawdown = number(strategy.get("maxDrawdownRiskUnits"))
+    false_positive = number(strategy.get("falsePositiveRate"))
+
+    rows = [
+        {
+            "gate": "sample-size",
+            "kind": "blocker",
+            "current": scored,
+            "required": thresholds["minScored"],
+            "passes": scored >= thresholds["minScored"] and scored > 0,
+            "gap": max(0, thresholds["minScored"] - scored),
+            "unit": "trades",
+        },
+        {
+            "gate": "expectancy-lower-bound",
+            "kind": "blocker",
+            "current": expectancy_lower,
+            "required": thresholds["minExpectancyLowerBound"],
+            "passes": expectancy_lower is not None and expectancy_lower > thresholds["minExpectancyLowerBound"],
+            "gap": (
+                None
+                if expectancy_lower is None
+                else round(max(0.0, thresholds["minExpectancyLowerBound"] - expectancy_lower), 4)
+            ),
+            "unit": "R",
+        },
+        {
+            "gate": "win-rate-lower-bound",
+            "kind": "blocker",
+            "current": win_lower,
+            "required": thresholds["minWinRateLowerBound"],
+            "passes": win_lower is not None and win_lower >= thresholds["minWinRateLowerBound"],
+            "gap": (
+                None
+                if win_lower is None
+                else round(max(0.0, thresholds["minWinRateLowerBound"] - win_lower), 4)
+            ),
+            "unit": "probability",
+        },
+        {
+            "gate": "profit-factor",
+            "kind": "blocker",
+            "current": profit_factor,
+            "required": thresholds["minProfitFactor"],
+            "passes": profit_factor is not None and profit_factor >= thresholds["minProfitFactor"],
+            "gap": (
+                None
+                if profit_factor is None
+                else round(max(0.0, thresholds["minProfitFactor"] - profit_factor), 4)
+            ),
+            "unit": "ratio",
+        },
+        {
+            "gate": "drawdown-risk",
+            "kind": "blocker",
+            "current": drawdown,
+            "required": thresholds["maxDrawdownRiskUnits"],
+            "passes": drawdown is None or drawdown >= thresholds["maxDrawdownRiskUnits"],
+            "gap": (
+                0.0
+                if drawdown is None
+                else round(max(0.0, thresholds["maxDrawdownRiskUnits"] - drawdown), 4)
+            ),
+            "unit": "R",
+        },
+        {
+            "gate": "false-positive-rate",
+            "kind": "warning",
+            "current": false_positive,
+            "required": thresholds["maxFalsePositiveRate"],
+            "passes": false_positive is None or false_positive <= thresholds["maxFalsePositiveRate"],
+            "gap": (
+                0.0
+                if false_positive is None
+                else round(max(0.0, false_positive - thresholds["maxFalsePositiveRate"]), 4)
+            ),
+            "unit": "rate",
+        },
+    ]
+    return rows
+
+
+def blocker_distance_summary(distances: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compress gate distances into the most actionable failing blocker."""
+    blockers = [
+        row for row in distances
+        if row.get("kind") == "blocker" and not row.get("passes")
+    ]
+    if not blockers:
+        return {
+            "blockingGateCount": 0,
+            "primaryGapGate": None,
+            "primaryGap": None,
+            "primaryGapUnit": None,
+        }
+    # Missing metrics are more severe than numeric misses because there is no
+    # calibration decision to make yet; the evidence feed itself is incomplete.
+    blockers.sort(
+        key=lambda row: (
+            row.get("gap") is not None,
+            -float(row.get("gap") or 0.0),
+            str(row.get("gate")),
+        )
+    )
+    primary = blockers[0]
+    return {
+        "blockingGateCount": len(blockers),
+        "primaryGapGate": primary.get("gate"),
+        "primaryGap": primary.get("gap"),
+        "primaryGapUnit": primary.get("unit"),
+    }
+
+
+def format_distance_summary(summary: dict[str, Any]) -> str:
+    """Render the primary gate distance as operator-friendly text."""
+    gate = summary.get("primaryGapGate")
+    if not gate:
+        return "no blocking gap"
+    gap = summary.get("primaryGap")
+    unit = summary.get("primaryGapUnit")
+    if gap is None:
+        return f"{gate} missing"
+    return f"{gate} gap={gap} {unit}"
+
+
 def verdict_under_thresholds(strategy: dict[str, Any], thresholds: dict[str, Any]) -> dict[str, Any]:
     """Recompute a promotion verdict for one strategy using a custom threshold set."""
     scored = int(strategy.get("scoredCount") or 0)
@@ -124,11 +269,15 @@ def verdict_under_thresholds(strategy: dict[str, Any], thresholds: dict[str, Any
     warnings: list[str] = []
     if false_positive is not None and false_positive > thresholds["maxFalsePositiveRate"]:
         warnings.append(f"false-positive rate above {thresholds['maxFalsePositiveRate']}")
+    distances = gate_distances(strategy, thresholds)
+    distance_summary = blocker_distance_summary(distances)
 
     return {
         "promotable": not blockers,
         "blockers": blockers,
         "warnings": warnings,
+        "gateDistances": distances,
+        "distanceSummary": distance_summary,
     }
 
 
@@ -145,6 +294,8 @@ def sweep_strategy(strategy: dict[str, Any], profiles: list[dict[str, Any]]) -> 
                 "blockerCount": len(verdict["blockers"]),
                 "topBlocker": verdict["blockers"][0] if verdict["blockers"] else None,
                 "warnings": verdict["warnings"],
+                "distanceSummary": verdict["distanceSummary"],
+                "gateDistances": verdict["gateDistances"],
             }
         )
         if verdict["promotable"]:
@@ -252,7 +403,8 @@ def sensitivity_text(report: dict[str, Any]) -> str:
         for result in strat.get("results") or []:
             mark = "PASS" if result["promotable"] else "FAIL"
             top = result.get("topBlocker") or "-"
-            lines.append(f"  [{mark}] profile={result['profile']:<11} topBlocker={top}")
+            gap_text = format_distance_summary(result.get("distanceSummary") or {})
+            lines.append(f"  [{mark}] profile={result['profile']:<11} topBlocker={top} | {gap_text}")
 
     overall = report.get("overall")
     if overall:
@@ -260,7 +412,8 @@ def sensitivity_text(report: dict[str, Any]) -> str:
         for result in overall.get("results") or []:
             mark = "PASS" if result["promotable"] else "FAIL"
             top = result.get("topBlocker") or "-"
-            lines.append(f"  [{mark}] profile={result['profile']:<11} topBlocker={top}")
+            gap_text = format_distance_summary(result.get("distanceSummary") or {})
+            lines.append(f"  [{mark}] profile={result['profile']:<11} topBlocker={top} | {gap_text}")
 
     lines.extend([
         "",

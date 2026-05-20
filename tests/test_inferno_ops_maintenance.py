@@ -255,6 +255,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                         return_value=({"ok": True, "reasons": [], "generatedAt": "2026-05-06T07:10:00-10:00"}, 0),
                     )
                 )
+                heartbeat = stack.enter_context(patch.object(ops_maintenance, "record_heartbeat", return_value={}))
                 report = ops_maintenance.run_maintenance(
                     backtest_root=temp_root,
                     sheet_name="Earnings Tracker",
@@ -288,6 +289,8 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("scenarios 12", report_text_file.read_text(encoding="utf-8"))
+            heartbeat.assert_called_once()
+            self.assertEqual(heartbeat.call_args.args[0], "ops_maintenance")
 
     def test_advisory_failures_keep_cloud_noise_visible_without_blocking_core_desk(self) -> None:
         """Cloud refresh failures are advisory so local ops can still proceed."""

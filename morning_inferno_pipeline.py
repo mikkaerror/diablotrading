@@ -37,6 +37,7 @@ from inferno_config import (
     local_now,
 )
 from inferno_execution_clerk import build_execution_queue, save_execution_queue
+from inferno_heartbeat import record_heartbeat
 from inferno_io import append_text, atomic_write_json, atomic_write_text
 from server import (
     APPROVAL_QUEUE_FILE,
@@ -2179,6 +2180,20 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
             "formulaSync": json.loads(formula_result["stdout"]) if formula_result and formula_result.get("stdout") else None,
         },
     )
+    try:
+        record_heartbeat(
+            "dawn_cycle",
+            status="ok" if email_sent else "warn",
+            summary="morning pipeline completed" if email_sent else "morning pipeline completed without email",
+            detail={
+                "eligibleCount": len(payload["eligibleTickers"]),
+                "topTickers": payload["eligibleTickers"][:5],
+                "emailSent": email_sent,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        # Heartbeat is diagnostic only; it must never break the morning brief.
+        pass
 
 
 def build_paper_trade_entries(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2960,6 +2975,15 @@ def main() -> int:
                 ],
             },
         )
+        try:
+            record_heartbeat(
+                "dawn_cycle",
+                status="fail",
+                summary=f"morning pipeline failed: {exc}",
+                detail={"failureEmailSent": failure_email_sent},
+            )
+        except Exception:  # noqa: BLE001
+            pass
         print(f"Morning inferno pipeline failed: {exc}", file=sys.stderr)
         return 1
 
