@@ -4,10 +4,11 @@ How to walk into this project for the first time.
 
 ## Start With Live State
 
-Run the onboard digest first:
+Run the generated handoff packets first:
 
 ```bash
-python3 inferno_central_command.py onboard
+./run_inferno_central_command.sh onboard
+./run_inferno_usage_optimizer.sh
 ```
 
 Then run the one-screen console:
@@ -19,16 +20,30 @@ python3 inferno_brain_console.py
 Generated artifacts are the current trading-day truth. Durable docs explain
 why the system exists and how to change it safely.
 
+When context is tight, start with `reports/usage_optimizer_latest.txt`. It is
+the smallest safe read list for Codex, Claude, or any new model joining the
+desk.
+
+## The five-minute orientation
+
+Read this first. Everything else is depth.
+
+0. [**SYSTEM_MAP.md**](SYSTEM_MAP.md) — one page: architecture, trade lifecycle, safety stack, canonical artifact map. Read before anything else.
+
 ## The five-doc anchor (10 minutes)
 
 Read these in order. After them, you can write or operate without breaking
 the safety rails:
 
-1. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
-2. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
-3. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
-4. [**MODULE_INDEX.md**](MODULE_INDEX.md) — which module owns what behaviour.
-5. [**ENGINEERING_CONVENTIONS.md**](ENGINEERING_CONVENTIONS.md) — patterns every new module follows.
+1. `reports/usage_optimizer_latest.txt` — smallest safe read list and do-not-paste list.
+2. `reports/model_command_center_latest.txt` — current missions, notes, safety rails, next actions.
+3. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
+4. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
+5. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
+
+Use [**MODULE_INDEX.md**](MODULE_INDEX.md) and
+[**ENGINEERING_CONVENTIONS.md**](ENGINEERING_CONVENTIONS.md) when you are
+about to change code.
 
 ## The mission
 

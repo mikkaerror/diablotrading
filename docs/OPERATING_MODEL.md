@@ -82,9 +82,9 @@ Responsible for:
 
 Main files:
 
-- [index.html](index.html)
-- [app.js](app.js)
-- [styles.css](styles.css)
+- [frontend/app.js](../frontend/app.js)
+- [frontend/modules/](../frontend/modules/) — dataProcessor, state, sampleData, theme, ui, utils
+- served by `server.py` on `:8000`
 
 ## Process Flow
 

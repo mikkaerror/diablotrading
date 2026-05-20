@@ -53,6 +53,7 @@ Safety            — authority, risk, secrets
 | `inferno_daily_success.py` | Green/yellow/red scorecard over five safety + operational criteria | `reports/daily_success_latest.txt` |
 | `inferno_watchdog.py` | Continuous failure detector + alert dispatcher | `reports/watchdog_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials are leaking into artifacts | `data/inferno_secret_hygiene.json` |
+| `inferno_live_book_review_packet.py` | Compact "what exactly blocks new capital" packet over the live book | `reports/live_book_review_packet_latest.txt` |
 
 ## Decision (what to do today)
 
@@ -71,6 +72,9 @@ Safety            — authority, risk, secrets
 | `inferno_edge_research.py` | Score the shovel universe by lane and theme | `data/inferno_edge_research.json` |
 | `inferno_risk_policy.py` | Centralised risk caps + violation surfaces | `data/inferno_risk_policy.json` |
 | `inferno_exposure_analytics.py` | Concentration and setup-mix verdict | `data/inferno_exposure_analytics.json` |
+| `inferno_operator_briefing.py` | Daily "what do I trade today" memo — the operator-facing summary of approval-ready tickets | `reports/operator_briefing_latest.txt` |
+| `inferno_capital_deployment_readiness.py` | Manual-review capital readiness brief; sizes the desk against caps without touching the broker | `reports/capital_deployment_readiness_latest.txt` |
+| `inferno_capital_launch_check.py` | One-command capital preflight refreshing the read-only safety artifacts | `reports/capital_launch_check_latest.txt` |
 
 ## Breathing (is the system alive?)
 
@@ -123,6 +127,8 @@ Safety            — authority, risk, secrets
 | `inferno_model_command_center.py` | Cross-model coordination + onboarding digest | each daily loop |
 | `inferno_central_command.py` | Cross-subsystem coordination surface | as needed |
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
+| `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer | ~09:00 + ~15:30 weekdays |
+| `inferno_usage_optimizer.py` | Compact read-first / do-not-paste handoff packet for new model sessions | `reports/usage_optimizer_latest.txt` |
 | `run_inferno_paper_evidence_harvest.sh` | One-command paper evidence refresh across director/reducer/observations/reviews/backtest | market prep + after close |
 
 ## Observability (watch the brain)
@@ -175,6 +181,8 @@ Safety            — authority, risk, secrets
 |---|---|---|
 | `inferno_authority_controller.py` | Compute the desk's authority manifest from current evidence | writes `data/inferno_authority_manifest.json` |
 | `inferno_risk_policy.py` | Risk caps and policy enforcement | |
+| `inferno_risk_gate_audit.py` | Consolidated map of which risk gates are blocking promotion right now | `reports/risk_gate_audit_latest.txt` |
+| `inferno_blowup_guardrails.py` | Six named pre-trade ruin-prevention rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only | `reports/blowup_guardrails_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials leak into artifacts | |
 
 ## Conventions
