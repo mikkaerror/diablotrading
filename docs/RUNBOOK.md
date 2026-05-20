@@ -323,6 +323,7 @@ This is the simplest “do the backtest” command now. It rebuilds:
 - the research-only shadow replay
 - the hypothesis lab
 - the hypothesis ledger
+- the scenario observation ledger for underlying-move evidence
 - the scenario backtest scorecard for the current paper/shadow slate
 
 Use this when you want one fresh evidence picture before market prep or before
@@ -335,11 +336,24 @@ manually.
 ### Score today's scenario slate against closed evidence
 
 ```bash
+./run_inferno_paper_evidence_harvest.sh
+```
+
+Use this when you want the full paper-evidence pass: director, reducer,
+scenario observation capture, outcome review, paper evidence audit, exit audit,
+and scenario backtest.
+
+For narrow debugging:
+
+```bash
+./run_inferno_scenario_evidence.sh
 ./run_inferno_scenario_backtest.sh
 ```
 
 This writes:
 
+- [data/inferno_scenario_evidence.json](data/inferno_scenario_evidence.json)
+- [reports/scenario_evidence_latest.txt](reports/scenario_evidence_latest.txt)
 - [data/inferno_scenario_backtest.json](data/inferno_scenario_backtest.json)
 - [reports/scenario_backtest_latest.txt](reports/scenario_backtest_latest.txt)
 
@@ -347,6 +361,9 @@ This is the “what can today actually teach us?” layer. It compares the curre
 paper bottleneck reducer slate against closed paper and shadow outcomes by
 ticker, strategy family, and days-to-earnings window. It is research-only:
 `promotable=false`, `liveTradingAllowed=false`, and `brokerSubmitAllowed=false`.
+The scenario evidence step adds a separate underlying-move observation lane so
+the desk can learn from watched names before option fills close; those
+observations stay separate from option P/L evidence.
 
 ### Size the allocator for actual deployable cash
 

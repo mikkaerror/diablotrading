@@ -92,6 +92,52 @@ def closed_paper() -> dict:
     }
 
 
+def scenario_evidence() -> dict:
+    return {
+        "observations": [
+            {
+                "observationId": "o1",
+                "ticker": "MRVL",
+                "strategy": "LONG_STRADDLE",
+                "setupRec": "Straddle",
+                "dteBucket": "earnings-window",
+                "outcome": {
+                    "status": "closed",
+                    "observationScore": 3.4,
+                    "resultClass": "favorable",
+                    "underlyingReturnPct": -3.4,
+                },
+            },
+            {
+                "observationId": "o2",
+                "ticker": "THR",
+                "strategy": "LONG_STRADDLE",
+                "setupRec": "Straddle",
+                "dteBucket": "earnings-window",
+                "outcome": {
+                    "status": "closed",
+                    "observationScore": 2.7,
+                    "resultClass": "favorable",
+                    "underlyingReturnPct": 2.7,
+                },
+            },
+            {
+                "observationId": "o3",
+                "ticker": "AVGO",
+                "strategy": "LONG_STRADDLE",
+                "setupRec": "Straddle",
+                "dteBucket": "earnings-window",
+                "outcome": {
+                    "status": "closed",
+                    "observationScore": 2.3,
+                    "resultClass": "favorable",
+                    "underlyingReturnPct": -2.3,
+                },
+            },
+        ],
+    }
+
+
 class ScenarioBacktestTests(unittest.TestCase):
     """Scenario backtest should stay descriptive and authority-safe."""
 
@@ -111,6 +157,7 @@ class ScenarioBacktestTests(unittest.TestCase):
             reducer=sample_reducer(),
             paper_ledger=closed_paper(),
             shadow_ledger=closed_shadow(),
+            scenario_evidence=scenario_evidence(),
         )
 
         mod = payload["scorecards"][0]
@@ -124,17 +171,22 @@ class ScenarioBacktestTests(unittest.TestCase):
         self.assertEqual(mod["headlineStats"]["sampleCount"], 3)
         self.assertIn(mod["evidenceVerdict"], {"supportive", "mixed"})
         self.assertEqual(mrvl["evidenceVerdict"], "insufficient-data")
+        self.assertEqual(mrvl["observationEvidenceVerdict"], "supportive-observation")
+        self.assertEqual(payload["closedObservationCount"], 3)
+        self.assertEqual(payload["counts"]["observationVerdictCounts"]["supportive-observation"], 1)
 
     def test_text_report_renders_top_focus(self) -> None:
         payload = backtest.build_scenario_backtest(
             reducer=sample_reducer(),
             paper_ledger=closed_paper(),
             shadow_ledger=closed_shadow(),
+            scenario_evidence=scenario_evidence(),
         )
         rendered = backtest.scenario_backtest_text(payload)
 
         self.assertIn("Inferno Scenario Backtest", rendered)
         self.assertIn("Top focus scorecards", rendered)
+        self.assertIn("Scenario observation verdict counts", rendered)
         self.assertIn("MOD", rendered)
 
 

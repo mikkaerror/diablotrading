@@ -21,6 +21,7 @@ from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_bottleneck_reducer import PAPER_BOTTLENECK_REDUCER_FILE
 from inferno_paper_execution import PAPER_EXECUTION_LEDGER_FILE
+from inferno_scenario_evidence import SCENARIO_EVIDENCE_FILE
 from inferno_shadow_evidence import SHADOW_EVIDENCE_FILE
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
@@ -34,6 +35,10 @@ SUPPORTIVE_MEAN_R = 0.15
 CONTRADICTORY_MEAN_R = -0.15
 SUPPORTIVE_PROFIT_FACTOR = 1.20
 CONTRADICTORY_PROFIT_FACTOR = 0.80
+SUPPORTIVE_OBSERVATION_MEAN = 0.25
+CONTRADICTORY_OBSERVATION_MEAN = -0.25
+SUPPORTIVE_OBSERVATION_RATE = 0.60
+CONTRADICTORY_OBSERVATION_RATE = 0.50
 
 
 def text(value: Any) -> str:
@@ -154,6 +159,48 @@ def closed_evidence_records(
     return records
 
 
+def scenario_observation_record(entry: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize one closed scenario observation for separate research stats."""
+    outcome = entry.get("outcome") or {}
+    if text(outcome.get("status")).lower() != "closed":
+        return None
+    score = number(outcome.get("observationScore"))
+    if score is None:
+        return None
+    strategy = entry.get("strategy") or entry.get("setupRec")
+    return {
+        "source": "scenario-observation",
+        "ticker": norm(entry.get("ticker")),
+        "setupRec": text(entry.get("setupRec")),
+        "strategy": text(strategy),
+        "family": strategy_family(strategy),
+        "dteBucket": entry.get("dteBucket") or dte_bucket(entry.get("daysUntilEarnings")),
+        "observationScore": score,
+        "resultClass": text(outcome.get("resultClass")),
+        "underlyingReturnPct": number(outcome.get("underlyingReturnPct"), 0.0),
+        "reviewedAt": outcome.get("reviewedAt"),
+        "observationId": entry.get("observationId"),
+    }
+
+
+def closed_scenario_observation_records(
+    *,
+    scenario_evidence: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return closed scenario observations without mixing them into option P/L."""
+    scenario_evidence = (
+        scenario_evidence
+        if scenario_evidence is not None
+        else (load_json_file(SCENARIO_EVIDENCE_FILE) or {})
+    )
+    records: list[dict[str, Any]] = []
+    for item in scenario_evidence.get("observations") or []:
+        record = scenario_observation_record(item)
+        if record:
+            records.append(record)
+    return records
+
+
 def stats_block(samples: list[float]) -> dict[str, Any]:
     """Compute compact descriptive stats for a set of R-unit outcomes."""
     wins = [value for value in samples if value > 0]
@@ -191,8 +238,74 @@ def evidence_verdict(stats: dict[str, Any]) -> str:
     return "mixed"
 
 
+def observation_stats_block(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute descriptive stats for closed scenario observations.
+
+    These stats use underlying-move proxy scores, not option R units. They are
+    shown next to the option evidence verdict instead of replacing it.
+    """
+    scores = [number(record.get("observationScore"), 0.0) or 0.0 for record in records]
+    results = [text(record.get("resultClass")) for record in records]
+    favorable = sum(1 for result in results if result == "favorable")
+    unfavorable = sum(1 for result in results if result == "unfavorable")
+    neutral = sum(1 for result in results if result == "neutral")
+    mean_score = sum(scores) / len(scores) if scores else None
+    returns = [number(record.get("underlyingReturnPct"), 0.0) or 0.0 for record in records]
+    return {
+        "sampleCount": len(records),
+        "favorableCount": favorable,
+        "neutralCount": neutral,
+        "unfavorableCount": unfavorable,
+        "favorableRate": round(favorable / len(records), 4) if records else None,
+        "unfavorableRate": round(unfavorable / len(records), 4) if records else None,
+        "meanObservationScore": round(mean_score, 4) if mean_score is not None else None,
+        "avgUnderlyingReturnPct": round(sum(returns) / len(returns), 4) if returns else None,
+        "bestObservationScore": round(max(scores), 4) if scores else None,
+        "worstObservationScore": round(min(scores), 4) if scores else None,
+    }
+
+
+def observation_verdict(stats: dict[str, Any]) -> str:
+    """Classify scenario observations while preserving small-sample humility."""
+    sample_count = int(stats.get("sampleCount") or 0)
+    mean_score = number(stats.get("meanObservationScore"), 0.0) or 0.0
+    favorable_rate = number(stats.get("favorableRate"), 0.0) or 0.0
+    unfavorable_rate = number(stats.get("unfavorableRate"), 0.0) or 0.0
+    if sample_count < MIN_USEFUL_SAMPLE:
+        return "insufficient-observation-data"
+    if mean_score >= SUPPORTIVE_OBSERVATION_MEAN and favorable_rate >= SUPPORTIVE_OBSERVATION_RATE:
+        return "supportive-observation"
+    if mean_score <= CONTRADICTORY_OBSERVATION_MEAN or unfavorable_rate >= CONTRADICTORY_OBSERVATION_RATE:
+        return "contradictory-observation"
+    return "mixed-observation"
+
+
 def scenario_matches(scenario: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Return evidence matches from most specific to broadest."""
+    ticker = norm(scenario.get("ticker"))
+    family = strategy_family(scenario.get("strategy") or scenario.get("setupRec"))
+    bucket = dte_bucket(scenario.get("daysUntilEarnings"))
+    matches: dict[str, list[dict[str, Any]]] = {
+        "ticker": [],
+        "familyAndWindow": [],
+        "family": [],
+        "allClosed": list(records),
+    }
+    for record in records:
+        if record.get("ticker") == ticker:
+            matches["ticker"].append(record)
+        if record.get("family") == family and record.get("dteBucket") == bucket:
+            matches["familyAndWindow"].append(record)
+        if record.get("family") == family:
+            matches["family"].append(record)
+    return matches
+
+
+def observation_matches(
+    scenario: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Return closed observation matches from most specific to broadest."""
     ticker = norm(scenario.get("ticker"))
     family = strategy_family(scenario.get("strategy") or scenario.get("setupRec"))
     bucket = dte_bucket(scenario.get("daysUntilEarnings"))
@@ -227,7 +340,22 @@ def best_scope(match_stats: dict[str, dict[str, Any]]) -> str:
     return "none"
 
 
-def scenario_scorecard(scenario: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+def best_observation_scope(match_stats: dict[str, dict[str, Any]]) -> str:
+    """Pick the most useful observation scope without blessing unrelated names."""
+    for scope in ("ticker", "familyAndWindow", "family"):
+        if int(match_stats.get(scope, {}).get("sampleCount") or 0) >= MIN_USEFUL_SAMPLE:
+            return scope
+    for scope in ("ticker", "familyAndWindow", "family"):
+        if int(match_stats.get(scope, {}).get("sampleCount") or 0) > 0:
+            return scope
+    return "none"
+
+
+def scenario_scorecard(
+    scenario: dict[str, Any],
+    records: list[dict[str, Any]],
+    observation_records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build one scenario's backtest scorecard."""
     matches = scenario_matches(scenario, records)
     match_stats = {
@@ -237,6 +365,14 @@ def scenario_scorecard(scenario: dict[str, Any], records: list[dict[str, Any]]) 
     scope = best_scope(match_stats)
     headline_stats = match_stats.get(scope) or stats_block([])
     verdict = evidence_verdict(headline_stats)
+    observation_records = observation_records or []
+    obs_matches = observation_matches(scenario, observation_records)
+    obs_match_stats = {
+        scope_name: observation_stats_block(scoped_records)
+        for scope_name, scoped_records in obs_matches.items()
+    }
+    obs_scope = best_observation_scope(obs_match_stats)
+    obs_stats = obs_match_stats.get(obs_scope) or observation_stats_block([])
     return {
         "rank": scenario.get("rank"),
         "ticker": norm(scenario.get("ticker")),
@@ -253,6 +389,10 @@ def scenario_scorecard(scenario: dict[str, Any], records: list[dict[str, Any]]) 
         "evidenceVerdict": verdict,
         "headlineStats": headline_stats,
         "matchStats": match_stats,
+        "bestObservationScope": obs_scope,
+        "observationEvidenceVerdict": observation_verdict(obs_stats),
+        "observationHeadlineStats": obs_stats,
+        "observationMatchStats": obs_match_stats,
         "researchOnly": True,
         "liveTradingAllowed": False,
         "brokerSubmitAllowed": False,
@@ -262,12 +402,15 @@ def scenario_scorecard(scenario: dict[str, Any], records: list[dict[str, Any]]) 
 def group_summary(scorecards: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize scenario verdicts by evidence state and strategy family."""
     verdict_counts: dict[str, int] = defaultdict(int)
+    observation_verdict_counts: dict[str, int] = defaultdict(int)
     family_counts: dict[str, int] = defaultdict(int)
     for card in scorecards:
         verdict_counts[str(card.get("evidenceVerdict"))] += 1
+        observation_verdict_counts[str(card.get("observationEvidenceVerdict"))] += 1
         family_counts[str(card.get("family"))] += 1
     return {
         "verdictCounts": dict(sorted(verdict_counts.items())),
+        "observationVerdictCounts": dict(sorted(observation_verdict_counts.items())),
         "familyCounts": dict(sorted(family_counts.items())),
     }
 
@@ -277,12 +420,17 @@ def build_scenario_backtest(
     reducer: dict[str, Any] | None = None,
     paper_ledger: dict[str, Any] | None = None,
     shadow_ledger: dict[str, Any] | None = None,
+    scenario_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the research-only scenario backtest artifact."""
     reducer = reducer if reducer is not None else (load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
     scenarios = [item for item in reducer.get("scenarioSlate") or [] if isinstance(item, dict)]
     records = closed_evidence_records(paper_ledger=paper_ledger, shadow_ledger=shadow_ledger)
-    scorecards = [scenario_scorecard(scenario, records) for scenario in scenarios]
+    observation_records = closed_scenario_observation_records(scenario_evidence=scenario_evidence)
+    scorecards = [
+        scenario_scorecard(scenario, records, observation_records)
+        for scenario in scenarios
+    ]
     top_focus = scorecards[:5]
     summary = group_summary(scorecards)
     return {
@@ -296,9 +444,11 @@ def build_scenario_backtest(
         "sourceReducerGeneratedAt": reducer.get("generatedAt"),
         "scenarioCount": len(scorecards),
         "closedEvidenceCount": len(records),
+        "closedObservationCount": len(observation_records),
         "counts": {
             "scenarios": len(scorecards),
             "closedEvidence": len(records),
+            "closedObservations": len(observation_records),
             **summary,
         },
         "topFocus": top_focus,
@@ -321,19 +471,27 @@ def scenario_backtest_text(payload: dict[str, Any]) -> str:
         f"Stage: {payload.get('stage')}",
         f"Scenarios: {payload.get('scenarioCount', 0)}",
         f"Closed evidence records: {payload.get('closedEvidenceCount', 0)}",
+        f"Closed scenario observations: {payload.get('closedObservationCount', 0)}",
         f"Promotable from this artifact: {payload.get('promotable')}",
         "",
-        "Verdict counts:",
+        "Option evidence verdict counts:",
     ]
     for verdict, count in (counts.get("verdictCounts") or {}).items():
+        lines.append(f"- {verdict}: {count}")
+    lines.extend(["", "Scenario observation verdict counts:"])
+    for verdict, count in (counts.get("observationVerdictCounts") or {}).items():
         lines.append(f"- {verdict}: {count}")
     lines.extend(["", "Top focus scorecards:"])
     for card in payload.get("topFocus") or []:
         stats = card.get("headlineStats") or {}
+        obs_stats = card.get("observationHeadlineStats") or {}
         lines.append(
             f"- #{card.get('rank')} {card.get('ticker')} | {card.get('evidenceVerdict')} | "
             f"scope {card.get('bestEvidenceScope')} | N={stats.get('sampleCount')} | "
-            f"meanR={stats.get('meanR')} | PF={stats.get('profitFactor')}"
+            f"meanR={stats.get('meanR')} | PF={stats.get('profitFactor')} | "
+            f"obs={card.get('observationEvidenceVerdict')} "
+            f"({card.get('bestObservationScope')}, N={obs_stats.get('sampleCount')}, "
+            f"fav={obs_stats.get('favorableRate')})"
         )
     lines.extend(["", "Rules:"])
     for rule in payload.get("rules") or []:

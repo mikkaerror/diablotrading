@@ -42,6 +42,7 @@ CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readi
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
+SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
 SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 PAPER_EVIDENCE_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
@@ -105,6 +106,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "scenario-backtest",
         "question": "What can the current scenario slate honestly teach us from closed evidence?",
         "artifact": "reports/scenario_backtest_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "scenario-evidence",
+        "question": "Which daily slate observations have closed as underlying-move evidence?",
+        "artifact": "reports/scenario_evidence_latest.txt",
         "owner": "shared",
     },
     {
@@ -359,6 +366,7 @@ def build_executive_summary(
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
             f"scenarios={metrics.get('paperScenarioCount', 0)}; "
             f"scenario evidence={metrics.get('scenarioClosedEvidenceCount', 0)}; "
+            f"scenario observations={metrics.get('scenarioClosedObservationCount', 0)}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
             f"math={status_value(status.get('mathVerify') or {})}"
         ),
@@ -379,6 +387,7 @@ def build_command_center() -> dict[str, Any]:
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
     scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
@@ -415,6 +424,7 @@ def build_command_center() -> dict[str, Any]:
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
+        "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
         "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
@@ -439,7 +449,10 @@ def build_command_center() -> dict[str, Any]:
             for item in (paper_reducer.get("topFiveFocus") or [])
         ],
         "scenarioClosedEvidenceCount": scenario_backtest.get("closedEvidenceCount", 0),
+        "scenarioClosedObservationCount": scenario_backtest.get("closedObservationCount", 0),
+        "scenarioObservationLedgerCount": (scenario_evidence.get("counts") or {}).get("observations", 0),
         "scenarioBacktestVerdicts": (scenario_backtest.get("counts") or {}).get("verdictCounts") or {},
+        "scenarioObservationVerdicts": (scenario_backtest.get("counts") or {}).get("observationVerdictCounts") or {},
         "scenarioBacktestTopFocus": [
             item.get("ticker")
             for item in (scenario_backtest.get("topFocus") or [])
@@ -503,6 +516,8 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_dawn_cycle.sh",
             "./run_inferno_strike_cycle.sh",
             "./run_inferno_ops_maintenance.sh",
+            "./run_inferno_paper_evidence_harvest.sh",
+            "./run_inferno_scenario_evidence.sh",
             "./run_inferno_scenario_backtest.sh",
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
@@ -528,6 +543,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
+            str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
             str(ROOT / "reports/conviction_research_latest.txt"),
             str(ROOT / "reports/ops_maintenance_latest.txt"),
@@ -578,6 +594,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
+            f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
             f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
             f"- Math verify: {status_value(status.get('mathVerify') or {})}",
@@ -594,7 +611,10 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
             f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
             f"- Scenario backtest evidence: {metrics.get('scenarioClosedEvidenceCount', 0)}",
+            f"- Scenario observations closed: {metrics.get('scenarioClosedObservationCount', 0)}",
+            f"- Scenario observations tracked: {metrics.get('scenarioObservationLedgerCount', 0)}",
             f"- Scenario backtest verdicts: {json.dumps(metrics.get('scenarioBacktestVerdicts') or {})}",
+            f"- Scenario observation verdicts: {json.dumps(metrics.get('scenarioObservationVerdicts') or {})}",
             f"- Scenario backtest focus: {', '.join(metrics.get('scenarioBacktestTopFocus') or []) or 'none'}",
             f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
             f"- Auto live allowed: {metrics.get('autoLiveAllowed')}",

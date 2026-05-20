@@ -369,11 +369,13 @@ def research_cycle_status(report: dict) -> tuple[bool, str]:
     ok = fresh and verdict == "research-refreshed"
     scenario_count = scenario_backtest.get("scenarioCount", 0)
     scenario_evidence_count = scenario_backtest.get("closedEvidenceCount", 0)
+    scenario_observation_count = scenario_backtest.get("closedObservationCount", 0)
     detail = (
         f"{verdict} | shadow tracked={shadow.get('trackedCount', 0)} | "
         f"closed={shadow.get('closedCount', 0)} | "
         f"strategy={strategy.get('verdict') or '-'} ({strategy.get('scoredCount', 0)} scored) | "
-        f"scenarios={scenario_count} | scenario evidence={scenario_evidence_count}"
+        f"scenarios={scenario_count} | scenario evidence={scenario_evidence_count} | "
+        f"scenario observations={scenario_observation_count}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict})
     )

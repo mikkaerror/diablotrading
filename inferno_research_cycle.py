@@ -12,6 +12,7 @@ from inferno_hypothesis_ledger import build_ledger_report, save_ledger_report, u
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_performance_analytics import build_performance_analytics, save_performance_analytics
 from inferno_scenario_backtest import build_scenario_backtest, save_scenario_backtest
+from inferno_scenario_evidence import build_scenario_evidence, save_scenario_evidence
 from inferno_shadow_evidence import build_shadow_evidence, save_shadow_evidence
 from inferno_strategy_lab import build_strategy_lab, save_strategy_lab
 from inferno_strategy_replay import build_replay, save_replay
@@ -43,7 +44,10 @@ def build_research_cycle() -> dict[str, Any]:
     ledger_report = build_ledger_report(payload=ledger)
     save_ledger_report(ledger_report)
 
-    scenario_backtest = build_scenario_backtest()
+    scenario_evidence = build_scenario_evidence()
+    save_scenario_evidence(scenario_evidence)
+
+    scenario_backtest = build_scenario_backtest(scenario_evidence=scenario_evidence)
     save_scenario_backtest(scenario_backtest)
 
     overall = strategy_lab.get("overall") or {}
@@ -89,7 +93,9 @@ def build_research_cycle() -> dict[str, Any]:
             "stage": scenario_backtest.get("stage"),
             "scenarioCount": scenario_backtest.get("scenarioCount"),
             "closedEvidenceCount": scenario_backtest.get("closedEvidenceCount"),
+            "closedObservationCount": scenario_backtest.get("closedObservationCount"),
             "verdictCounts": scenario_counts.get("verdictCounts") or {},
+            "observationVerdictCounts": scenario_counts.get("observationVerdictCounts") or {},
             "topFocusTickers": [
                 item.get("ticker")
                 for item in (scenario_backtest.get("topFocus") or [])[:5]
@@ -101,7 +107,7 @@ def build_research_cycle() -> dict[str, Any]:
             "Use shadow replay as research context only; do not confuse it with promotable paper evidence.",
             "Keep filling the paper evidence loop until the real strategy lab exits insufficient-data.",
             "Review top hypotheses for filters worth testing in the next approval cycle.",
-            "Use scenario backtest scope labels to separate honest evidence from seductive but thin setups.",
+            "Use scenario evidence for underlying-move learning, but keep option evidence verdicts tied to paper/shadow option outcomes.",
         ],
     }
 
@@ -137,7 +143,9 @@ def research_cycle_text(report: dict[str, Any]) -> str:
         "Scenario backtest lane:",
         f"- scenarios: {(report.get('scenarioBacktest') or {}).get('scenarioCount')}",
         f"- closed evidence records: {(report.get('scenarioBacktest') or {}).get('closedEvidenceCount')}",
+        f"- closed scenario observations: {(report.get('scenarioBacktest') or {}).get('closedObservationCount')}",
         f"- verdicts: {json.dumps((report.get('scenarioBacktest') or {}).get('verdictCounts') or {})}",
+        f"- observation verdicts: {json.dumps((report.get('scenarioBacktest') or {}).get('observationVerdictCounts') or {})}",
         f"- top focus: {', '.join((report.get('scenarioBacktest') or {}).get('topFocusTickers') or []) or 'none'}",
         f"- promotable: {(report.get('scenarioBacktest') or {}).get('promotable')}",
         "",

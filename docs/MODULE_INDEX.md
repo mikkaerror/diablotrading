@@ -110,6 +110,7 @@ Safety            — authority, risk, secrets
 | `inferno_math_config.py` | **NEW** Audited target source of truth for math knobs — seeds, resample counts, thresholds, vocabulary | pure library, no artifact |
 | `inferno_performance_analytics.py` | Per-ticket performance with block-reason histogram | `data/inferno_performance_analytics.json` |
 | `inferno_research_cycle.py` | Periodic research roll-up across the thinking layer | `data/inferno_research_cycle.json` |
+| `inferno_scenario_evidence.py` | Research-only underlying-move observations for the daily scenario slate | `reports/scenario_evidence_latest.txt` |
 | `inferno_scenario_backtest.py` | Research-only scorecard comparing today's 10+ scenario slate against closed paper/shadow evidence | `reports/scenario_backtest_latest.txt` |
 | `inferno_outcome_reviewer.py` | Re-score closed paper outcomes against expectations | `data/inferno_outcome_reviewer.json` |
 | `inferno_shadow_evidence.py` | Shadow ledger of paper tickets and their outcomes | `data/inferno_shadow_evidence.json` |
@@ -122,6 +123,7 @@ Safety            — authority, risk, secrets
 | `inferno_model_command_center.py` | Cross-model coordination + onboarding digest | each daily loop |
 | `inferno_central_command.py` | Cross-subsystem coordination surface | as needed |
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
+| `run_inferno_paper_evidence_harvest.sh` | One-command paper evidence refresh across director/reducer/observations/reviews/backtest | market prep + after close |
 
 ## Observability (watch the brain)
 
@@ -150,6 +152,7 @@ Safety            — authority, risk, secrets
 |---|---|---|
 | `inferno_paper_test_director.py` | Coordinator for paper-staged tickets | `data/inferno_paper_test_director.json` |
 | `inferno_paper_bottleneck_reducer.py` | Builds a 10+ scenario paper/shadow evidence slate without widening authority | `data/inferno_paper_bottleneck_reducer.json` |
+| `inferno_scenario_evidence.py` | Tracks reducer names as non-tradable underlying observations | `data/inferno_scenario_evidence.json` |
 | `inferno_paper_evidence_loop.py` | Track paper outcomes from staging through close | `data/inferno_paper_evidence_loop.json` |
 | `inferno_paper_execution.py` | Stage paper orders (paperMoney only) | side-effects on paper ledger |
 | `inferno_paper_exit_auditor.py` | Audit open paper positions for stale exits | `data/inferno_paper_exit_auditor.json` |

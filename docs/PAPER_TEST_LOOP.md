@@ -4,26 +4,39 @@ The paper loop turns conviction into evidence without risking live capital.
 
 ## Daily Rehearsal
 
-1. Refresh the lane.
+1. Refresh the whole evidence lane when you want the boring one-command path.
+
+```bash
+./run_inferno_paper_evidence_harvest.sh
+```
+
+This chains the paper director, reducer, scenario evidence, outcome review,
+paper evidence audit, exit audit, and scenario backtest. Use the individual
+commands below when you need to debug a specific stage.
+
+2. Refresh the strike lane when the options plan itself needs rebuilding.
 
 ```bash
 ./run_inferno_strike_cycle.sh
 ```
 
-2. Read the paper state.
+3. Read the paper state.
 
 ```bash
 ./run_inferno_paper_test_director.sh
 ./run_inferno_paper_bottleneck_reducer.sh
+./run_inferno_scenario_evidence.sh
 ./run_inferno_paper_evidence_loop.sh
 ./run_inferno_paper_exit_auditor.sh
 ```
 
-3. Use the reducer for evidence throughput.
+4. Use the reducer for evidence throughput.
 
 ```bash
 cat reports/paper_bottleneck_reducer_latest.txt
+./run_inferno_scenario_evidence.sh
 ./run_inferno_scenario_backtest.sh
+cat reports/scenario_evidence_latest.txt
 cat reports/scenario_backtest_latest.txt
 ```
 
@@ -35,29 +48,34 @@ The scenario backtest then compares those names against closed paper/shadow
 evidence. Treat `insufficient-data` as a useful warning, not a failure: it means
 the setup can be tracked, but the desk has not earned confidence yet.
 
-4. Let approval-only paper setups auto-select when risk is clean.
+The scenario evidence lane is lighter than paper execution. It records the
+daily slate as underlying-move observations and closes them after the review
+horizon. Those observations help separate winners from noise, but they are not
+fills, option P/L, approvals, or broker authority.
+
+5. Let approval-only paper setups auto-select when risk is clean.
 
 `auto-paper-selected` means the model found a setup where the only remaining
 blocker is human approval. That is enough for simulated paper evidence, but it
 does not authorize a live order.
 
-5. Approve sparingly for live-style review.
+6. Approve sparingly for live-style review.
 
 ```bash
 python3 inferno_approval_queue.py approve TICKER
 ./run_inferno_strike_cycle.sh
 ```
 
-6. Stage only when the sandbox says the ticket is stageable.
+7. Stage only when the sandbox says the ticket is stageable.
 
-7. Log fills immediately.
+8. Log fills immediately.
 
 ```bash
 ./run_inferno_tos_fill_ingest.sh
 ./run_inferno_paper_evidence_loop.sh
 ```
 
-8. Close and score outcomes.
+9. Close and score outcomes.
 
 ```bash
 ./run_inferno_outcome_review.sh
@@ -75,11 +93,14 @@ python3 inferno_doctor.py
 - `scenario-slate-ready`: reducer produced the daily paper/shadow evidence slate.
 - `scenario-slate-thin`: reducer ran, but the tracker did not have enough clean
   non-Avoid rows to reach the scenario target.
+- `scenario-evidence-research-only`: daily slate observations are tracked as
+  underlying-move evidence only; they cannot promote live authority.
 
 ## Canonical Artifacts
 
 - [reports/paper_test_director_latest.txt](../reports/paper_test_director_latest.txt)
 - [reports/paper_bottleneck_reducer_latest.txt](../reports/paper_bottleneck_reducer_latest.txt)
+- [reports/scenario_evidence_latest.txt](../reports/scenario_evidence_latest.txt)
 - [reports/scenario_backtest_latest.txt](../reports/scenario_backtest_latest.txt)
 - [reports/paper_evidence_loop_latest.txt](../reports/paper_evidence_loop_latest.txt)
 - [reports/paper_exit_audit_latest.txt](../reports/paper_exit_audit_latest.txt)
