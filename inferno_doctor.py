@@ -24,7 +24,20 @@ from inferno_config import (
     WAKE_HOUR,
     WAKE_MINUTE,
 )
-from server import EXECUTION_QUEUE_FILE, LOG_FILE, OPS_STATUS_FILE, SNAPSHOT_FILE, WATCHDOG_STATUS_FILE, load_json_file, smtp_configured, smtp_settings
+from inferno_io import atomic_write_json, atomic_write_text
+from server import (
+    DATA_DIR,
+    EXECUTION_QUEUE_FILE,
+    LOG_FILE,
+    OPS_STATUS_FILE,
+    REPORTS_DIR,
+    SNAPSHOT_FILE,
+    WATCHDOG_STATUS_FILE,
+    ensure_dirs,
+    load_json_file,
+    smtp_configured,
+    smtp_settings,
+)
 
 
 SMTP_ENV_FILE = ROOT / ".env.smtp"
@@ -36,6 +49,13 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
+OUTCOME_ATTRIBUTION_FILE = ROOT / "data" / "inferno_outcome_attribution.json"
+RULE_EDGE_DECAY_FILE = ROOT / "data" / "inferno_rule_edge_decay.json"
+SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
+PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json"
+DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
+CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -64,6 +84,8 @@ SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
+DOCTOR_ARTIFACT_FILE = DATA_DIR / "inferno_doctor.json"
+DOCTOR_TEXT_FILE = REPORTS_DIR / "doctor_latest.txt"
 
 
 def load_env_file(path: Path) -> None:
@@ -468,6 +490,144 @@ def conviction_research_status(report: dict) -> tuple[bool, str]:
             {
                 "generatedAt": generated,
                 "scoredRows": scored_rows,
+                "researchOnly": report.get("researchOnly"),
+                "promotable": report.get("promotable"),
+            }
+        )
+    )
+    return ok, detail
+
+
+def _research_module_status(report: dict, ok_verdicts: set[str], label_keys: tuple[str, ...] = ("verdict",)) -> tuple[bool, str]:
+    """Shared freshness + research-only check for Phase A research modules.
+
+    Returns (ok, detail). Stale (>36h), promotable=True, or unknown verdict
+    each fail; otherwise pass with a one-line detail.
+    """
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    research_only = not bool(report.get("promotable"))
+    verdict = str(report.get("verdict") or "unknown")
+    ok = fresh and research_only and verdict in ok_verdicts
+    counts = report.get("counts") or {}
+    detail = (
+        f"{verdict} | counts={counts} | research-only={research_only}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "promotable": report.get("promotable"),
+            }
+        )
+    )
+    return ok, detail
+
+
+def outcome_attribution_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"attribution-ready", "awaiting-closed-outcomes"},
+    )
+
+
+def rule_edge_decay_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "awaiting-closed-outcomes",
+            "retire-candidates-present",
+            "healthy",
+        },
+    )
+
+
+def slippage_estimator_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"no-usable-tickets", "thin-anchors", "anchors-ready"},
+    )
+
+
+def portfolio_correlation_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "awaiting-outcomes",
+            "diversified",
+            "concentrated-by-drift",
+            "concentrated-by-intent",
+            "concentration-watch",
+            "thin-diversification",
+        },
+    )
+
+
+def drawdown_protocol_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "awaiting-closed-outcomes",
+            "normal-sizing",
+            "first-cut-advised",
+            "deep-cut-advised",
+            "no-new-positions-advised",
+            "full-stop-advised",
+        },
+    )
+
+
+def consensus_monitor_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "awaiting-data",
+            "uncrowded",
+            "normal",
+            "crowded-watch",
+            "consensus-extreme",
+        },
+    )
+
+
+def schwab_edge_signals_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the Schwab edge-signals bridge freshness and verdict.
+
+    A missing report or an unconfigured Schwab lane is a warning, not a hard
+    failure: the desk runs fine without Schwab. Stale reports (>36h) are a
+    warning so the operator notices when the bridge stops refreshing.
+    """
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    research_only = bool(report.get("researchOnly")) and not bool(report.get("promotable"))
+    verdict = str(report.get("verdict") or "unknown")
+    source_status = str(report.get("sourceStatus") or "unknown")
+    summary = report.get("summary") or {}
+    lane_counts = summary.get("laneCounts") or {}
+    actionable = int(lane_counts.get("tradable-research") or 0) + int(
+        lane_counts.get("calibration-watch") or 0
+    )
+    ok = fresh and research_only and verdict in {
+        "edge-actionable",
+        "watch-only",
+        "thin-data-only",
+        "schwab-not-configured",
+        "no-rows",
+        "no-source",
+    }
+    detail = (
+        f"{verdict} | source={source_status} | actionable={actionable} | "
+        f"research-only={research_only}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "sourceStatus": source_status,
                 "researchOnly": report.get("researchOnly"),
                 "promotable": report.get("promotable"),
             }
@@ -887,6 +1047,48 @@ def main() -> int:
     if not conviction_ok:
         warnings += 1
 
+    schwab_edge = load_json_file(SCHWAB_EDGE_SIGNALS_FILE) or {}
+    schwab_edge_ok, schwab_edge_detail = schwab_edge_signals_status(schwab_edge)
+    lines.append(summarize_status("Schwab edge signals", schwab_edge_ok, schwab_edge_detail))
+    if not schwab_edge_ok:
+        warnings += 1
+
+    attribution = load_json_file(OUTCOME_ATTRIBUTION_FILE) or {}
+    attribution_ok, attribution_detail = outcome_attribution_status(attribution)
+    lines.append(summarize_status("Outcome attribution", attribution_ok, attribution_detail))
+    if not attribution_ok:
+        warnings += 1
+
+    rule_decay = load_json_file(RULE_EDGE_DECAY_FILE) or {}
+    rule_decay_ok, rule_decay_detail = rule_edge_decay_status(rule_decay)
+    lines.append(summarize_status("Rule edge decay", rule_decay_ok, rule_decay_detail))
+    if not rule_decay_ok:
+        warnings += 1
+
+    slippage = load_json_file(SLIPPAGE_ESTIMATOR_FILE) or {}
+    slippage_ok, slippage_detail = slippage_estimator_status(slippage)
+    lines.append(summarize_status("Slippage estimator", slippage_ok, slippage_detail))
+    if not slippage_ok:
+        warnings += 1
+
+    portfolio_corr = load_json_file(PORTFOLIO_CORRELATION_FILE) or {}
+    portfolio_corr_ok, portfolio_corr_detail = portfolio_correlation_status(portfolio_corr)
+    lines.append(summarize_status("Portfolio correlation", portfolio_corr_ok, portfolio_corr_detail))
+    if not portfolio_corr_ok:
+        warnings += 1
+
+    drawdown = load_json_file(DRAWDOWN_PROTOCOL_FILE) or {}
+    drawdown_ok, drawdown_detail = drawdown_protocol_status(drawdown)
+    lines.append(summarize_status("Drawdown protocol", drawdown_ok, drawdown_detail))
+    if not drawdown_ok:
+        warnings += 1
+
+    consensus = load_json_file(CONSENSUS_MONITOR_FILE) or {}
+    consensus_ok, consensus_detail = consensus_monitor_status(consensus)
+    lines.append(summarize_status("Consensus monitor", consensus_ok, consensus_detail))
+    if not consensus_ok:
+        warnings += 1
+
     blowup_guardrails = load_json_file(BLOWUP_GUARDRAILS_FILE) or {}
     blowup_ok, blowup_detail = blowup_guardrails_status(blowup_guardrails)
     lines.append(summarize_status("Blow-up guardrails", blowup_ok, blowup_detail))
@@ -957,8 +1159,20 @@ def main() -> int:
     desktop_automation = load_json_file(DESKTOP_AUTOMATION_FILE) or {}
     desktop_today = in_current_service_cycle(str(desktop_automation.get("generatedAt", "")), now=now)
     desktop_verdict = str(desktop_automation.get("verdict") or "")
+    desktop_message = str(
+        desktop_automation.get("message")
+        or desktop_automation.get("blockReason")
+        or ""
+    )
+    desktop_tos_closed_low_power = (
+        desktop_today
+        and desktop_verdict == "blocked"
+        and not TOS_EXPORT_AUTOMATION_ENABLED
+        and "thinkorswim is not running" in desktop_message.lower()
+    )
     desktop_ok = (
         not desktop_automation
+        or desktop_tos_closed_low_power
         or (
             desktop_today
             and desktop_verdict in {"ready", "review", "scheduled-idle"}
@@ -966,6 +1180,8 @@ def main() -> int:
     )
     if not desktop_automation:
         desktop_detail = "not run yet"
+    elif desktop_tos_closed_low_power:
+        desktop_detail = "inactive-safe | thinkorswim closed low-power mode"
     elif desktop_today:
         desktop_detail = (
             f"{desktop_verdict} | {desktop_automation.get('message')}"
@@ -1255,7 +1471,20 @@ def main() -> int:
     else:
         lines.append(f"Desk status: {warnings} item(s) need attention")
 
-    print("\n".join(lines))
+    output = "\n".join(lines)
+    payload = {
+        "generatedAt": now.isoformat(),
+        "stage": "inferno-doctor",
+        "researchOnly": True,
+        "promotable": False,
+        "healthy": warnings == 0,
+        "warningCount": warnings,
+        "lines": lines,
+    }
+    ensure_dirs()
+    atomic_write_json(DOCTOR_ARTIFACT_FILE, payload)
+    atomic_write_text(DOCTOR_TEXT_FILE, output + "\n")
+    print(output)
     return 0 if warnings == 0 else 1
 
 

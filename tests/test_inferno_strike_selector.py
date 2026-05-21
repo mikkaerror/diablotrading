@@ -8,6 +8,9 @@ contract so any future change that accidentally widens the gate or flips the
 """
 
 import unittest
+import tempfile
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -16,7 +19,9 @@ from inferno_strike_selector import (
     SETUP_CONCENTRATION_DEMOTION_REASON,
     SETUP_CONCENTRATION_LIMIT,
     apply_setup_concentration_governor,
+    build_text_report,
     cap_aware_long_strangle_plan,
+    load_schwab_options_index,
     load_execution_queue,
     setup_share_counts,
 )
@@ -139,6 +144,72 @@ class SetupConcentrationGovernorTests(unittest.TestCase):
 
 class StrikeSelectorRedundancyTests(unittest.TestCase):
     """Verify strike-selector refresh and capped rehearsal helpers."""
+
+    def test_load_schwab_options_index_keys_latest_rows_by_symbol(self) -> None:
+        payload = {
+            "generatedAt": "2026-05-20T06:00:00-06:00",
+            "status": "fixture",
+            "researchOnly": True,
+            "rows": [
+                {"symbol": "NVDA", "quoteQualityScore": 88, "quoteQualityLabel": "institutional"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            schwab_file = Path(temp_dir) / "schwab.json"
+            schwab_file.write_text(json.dumps(payload), encoding="utf-8")
+            with patch("inferno_strike_selector.SCHWAB_OPTIONS_FILE", schwab_file):
+                indexed = load_schwab_options_index()
+
+        self.assertEqual(indexed["NVDA"]["quoteQualityScore"], 88)
+        self.assertEqual(indexed["NVDA"]["sourceGeneratedAt"], payload["generatedAt"])
+
+    def test_build_text_report_surfaces_schwab_quote_quality(self) -> None:
+        report = build_text_report(
+            {
+                "generatedAt": "2026-05-20T06:00:00-06:00",
+                "automationStage": "paper-strike-selection-only",
+                "liveTradingAllowed": False,
+                "okCount": 1,
+                "failedCount": 0,
+                "schwabOptionsEnrichedCount": 1,
+                "items": [
+                    {
+                        "ticker": "NVDA",
+                        "ok": True,
+                        "intentStatus": "approval-ready",
+                        "approvalStatus": "approved",
+                        "price": 100.0,
+                        "marketContext": {
+                            "rvol": 1.4,
+                            "trend": {"label": "Bullish"},
+                            "support": 95.0,
+                            "resistance": 115.0,
+                        },
+                        "schwabOptions": {
+                            "quoteQualityScore": 88,
+                            "quoteQualityLabel": "institutional",
+                            "atmImpliedMovePct": 0.074,
+                            "atmExpectedMoveBucket": "hot",
+                            "atmSpreadQuality": "tight",
+                            "atmLiquidityScore": 92,
+                        },
+                        "riskVerdict": {"blocks": []},
+                        "strikePlan": {
+                            "strategy": "CALL_DEBIT_SPREAD",
+                            "expiration": "2026-06-19",
+                            "estimatedDebit": 2.0,
+                            "estimatedMaxLoss": 200,
+                            "estimatedMaxProfit": 300,
+                            "legs": [],
+                        },
+                    }
+                ],
+            }
+        )
+
+        self.assertIn("Schwab option chains attached: 1", report)
+        self.assertIn("Schwab chain: 88/institutional", report)
+        self.assertIn("move 7.4% (hot)", report)
 
     def test_cap_aware_long_strangle_plan_fits_under_single_ticket_cap(self) -> None:
         calls = pd.DataFrame(

@@ -10,13 +10,19 @@ logic we rely on before any desktop automation is allowed to move.
 
 import unittest
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import patch
 
-from inferno_tos_export_bridge import applescript_keystroke, parse_shortcut
+from inferno_tos_export_bridge import (
+    applescript_keystroke,
+    build_applescript,
+    build_dump_account_applescript,
+    parse_shortcut,
+)
 from inferno_tos_export_bridge import run_export_bridge
 from inferno_config import local_now
 from inferno_tos_session_probe import summarize_session
-from inferno_tos_ui_route import monitor_account_statement_visible, preferred_center, route_to_account_statement
+from inferno_tos_ui_route import monitor_account_statement_visible, preferred_center, recover_tos_window, route_to_account_statement
 
 
 class ExportShortcutTests(unittest.TestCase):
@@ -43,6 +49,22 @@ class ExportShortcutTests(unittest.TestCase):
             applescript_keystroke("command+shift+e"),
             'keystroke "e" using {command down, shift down}',
         )
+
+    def test_export_applescript_attaches_only_to_running_tos(self) -> None:
+        """The export shortcut script must not launch or activate TOS by app path."""
+        script = build_applescript(Path("/Applications/thinkorswim.app"), "command+shift+e", 0.1, 0.2)
+        self.assertNotIn('tell application "/Applications/thinkorswim.app" to activate', script)
+        self.assertNotIn("open -a", script)
+        self.assertIn("no existing thinkorswim process found", script)
+        self.assertIn("application process targetProcessName", script)
+
+    def test_dump_account_applescript_attaches_only_to_running_tos(self) -> None:
+        """The Dump Account click script should fail closed unless the process exists."""
+        script = build_dump_account_applescript(Path("/Applications/thinkorswim.app"), "thinkorswim", 14, 82, 26, 0.2)
+        self.assertNotIn("to activate", script)
+        self.assertNotIn("open -a", script)
+        self.assertIn('exists application process "thinkorswim"', script)
+        self.assertIn("set frontmost to true", script)
 
     def test_monitor_account_statement_visible_accepts_statement_header_signal(self) -> None:
         """Statement header visibility should count as an Account Statement win."""
@@ -460,6 +482,47 @@ class UiRouteTests(unittest.TestCase):
         recover_mock.assert_called_once()
         screenshot_mock.assert_called_once()
         save_mock.assert_called_once()
+
+    @patch("inferno_tos_ui_route.time.sleep")
+    @patch(
+        "inferno_tos_ui_route.probe_tos_session",
+        return_value={"summary": "no visible thinkorswim window detected", "mainWindowPresent": False},
+    )
+    @patch("inferno_tos_ui_route.run_command")
+    def test_recover_tos_window_never_launches_tos(
+        self,
+        run_command_mock,
+        _probe_mock,
+        _sleep_mock,
+    ) -> None:
+        """Attach-only recovery must never call macOS open or any shell command."""
+        report = recover_tos_window()
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["returncode"], 1)
+        self.assertIn("reopen disabled", report["stderr"])
+        run_command_mock.assert_not_called()
+
+    @patch("inferno_tos_ui_route.time.sleep")
+    @patch(
+        "inferno_tos_ui_route.probe_tos_session",
+        return_value={
+            "summary": "main window live via thinkorswim | current panel Monitor/Account Statement | safety safe",
+            "mainWindowPresent": True,
+        },
+    )
+    @patch("inferno_tos_ui_route.run_command")
+    def test_recover_tos_window_can_attach_when_window_is_visible(
+        self,
+        run_command_mock,
+        _probe_mock,
+        _sleep_mock,
+    ) -> None:
+        """Attach-only recovery may pass when the existing window becomes visible."""
+        report = recover_tos_window()
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["returncode"], 0)
+        self.assertEqual(report["stderr"], "")
+        run_command_mock.assert_not_called()
 
     @patch("inferno_tos_ui_route.time.sleep")
     @patch("inferno_tos_ui_route.save_ui_route_report")

@@ -160,6 +160,14 @@ post correctly reproduces a numeric result we can re-derive.
   conviction map now rewards broad pillar agreement instead of one loud
   momentum/theme signal.
 
+- **[HOP17]** Hurst, B., Ooi, Y. H., & Pedersen, L. H. (2017).
+  *A Century of Evidence on Trend-Following Investing.* AQR Capital
+  Management working paper.
+  — long-horizon evidence that time-series trend following has produced
+  positive crisis-convex returns across asset classes. Operational
+  consequence: broad trend/regime agreement is a gating input, not a
+  standalone permission to chase.
+
 ## Quality and profitability
 
 - **[NM13]** Novy-Marx, R. (2013). *The Other Side of Value: The Gross
@@ -203,6 +211,48 @@ post correctly reproduces a numeric result we can re-derive.
   — leader-level monetisation check for the AI infrastructure boom. The
   desk uses it as context for the basket, not as permission to chase any
   single name without local evidence.
+
+## Hedge-fund taxonomy and external data sources
+
+- **[HFR-CLASS]** HFR. *Hedge Fund Strategy Classification System.*
+  — industry taxonomy for equity hedge, event-driven, macro, relative
+  value, and fund-of-funds strategy groupings. Operational consequence:
+  `docs/STRATEGY_REQUIREMENTS.md` maps the desk's playbook into these
+  durable buckets instead of inventing idiosyncratic labels.
+
+- **[SEC-HF]** U.S. Securities and Exchange Commission. *Investor
+  Bulletin: Hedge Funds.*
+  — official investor-risk framing: hedge funds may use leverage,
+  derivatives, concentrated positions, and illiquid securities, and may be
+  less transparent than registered funds. Operational consequence: the
+  desk keeps live authority off until evidence, auditability, and caps are
+  proven.
+
+- **[SEC-LEV]** U.S. Securities and Exchange Commission. *Investor
+  Bulletin: Leveraged and Inverse ETFs* and related investor education on
+  leverage and derivatives.
+  — leverage compounds both gains and losses, with path dependency and
+  volatility drag. Operational consequence: options are treated as
+  leveraged instruments with explicit max loss and written exits.
+
+- **[CFTC-COT]** Commodity Futures Trading Commission. *Commitments of
+  Traders Reports.*
+  — official positioning data across futures and options markets.
+  Operational consequence: future macro/crowdedness layers should use COT
+  data where it maps cleanly to index, rates, commodities, or volatility
+  exposures.
+
+- **[FINRA-SI]** FINRA. *Short Interest Reporting.*
+  — official U.S. short-interest reporting framework. Operational
+  consequence: future crowdedness/reflexivity work should treat short
+  interest and days-to-cover as structured inputs, not anecdotes.
+
+- **[SCHWAB-CHAIN]** Charles Schwab Trader API. *Market Data / Option
+  Chains endpoint.*
+  — broker-grade chain source for bid, ask, mark, volume, open interest,
+  implied volatility, Greeks, expirations, strikes, and underlying quote
+  context. Operational consequence: Schwab is the preferred options data
+  source now that OAuth is configured; TOS remains broker-reality evidence.
 
 ## Behavioural anchors
 

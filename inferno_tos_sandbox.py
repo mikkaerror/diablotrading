@@ -479,7 +479,7 @@ def build_tos_sandbox_session() -> dict[str, Any]:
         "watchlistTickets": watchlist[:MAX_STAGEABLE_TICKETS],
         "blockedTickets": blocked[:MAX_STAGEABLE_TICKETS],
         "sessionChecklist": [
-            "launch thinkorswim and verify the account selector is paperMoney, not live",
+            "manually open the existing thinkorswim app and verify the account selector is paperMoney, not live",
             "open only the tickets listed as stage-in-papermoney",
             "do not alter risk size outside the manifest",
             "do not route any ticket blocked by authority, approval, or intent status",

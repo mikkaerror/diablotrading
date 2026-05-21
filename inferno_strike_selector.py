@@ -12,6 +12,7 @@ import yfinance as yf
 
 from inferno_config import EXECUTION_QUEUE_LIMIT, MAX_SINGLE_TICKET_DOLLARS, ROOT, local_now
 from inferno_doctor import in_current_service_cycle
+from inferno_schwab_options import SCHWAB_OPTIONS_FILE
 from inferno_risk_policy import evaluate_strike_item
 from server import (
     APPROVAL_QUEUE_FILE,
@@ -85,6 +86,47 @@ def integer(value: Any, default: int = 0) -> int:
     except (TypeError, ValueError):
         return default
     return parsed
+
+
+def load_schwab_options_index() -> dict[str, dict[str, Any]]:
+    """Load the latest read-only Schwab option summary keyed by ticker.
+
+    The strike selector must remain useful before OAuth is configured, so this
+    helper treats missing/disabled Schwab artifacts as an empty enrichment layer
+    instead of an error. When present, the risk policy can use it to block ugly
+    chains or warn on fragile ones.
+    """
+    if not SCHWAB_OPTIONS_FILE.exists():
+        return {}
+    try:
+        report = json.loads(SCHWAB_OPTIONS_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    rows = report.get("rows") if isinstance(report, dict) else []
+    if not isinstance(rows, list):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get("symbol") or "").upper().strip()
+        if not symbol:
+            continue
+        indexed[symbol] = {
+            **row,
+            "sourceGeneratedAt": report.get("generatedAt"),
+            "sourceStatus": report.get("status"),
+            "researchOnly": report.get("researchOnly", True),
+        }
+    return indexed
+
+
+def schwab_options_for_intent(intent: dict[str, Any], index: dict[str, dict[str, Any]] | None) -> dict[str, Any] | None:
+    """Return Schwab option-chain enrichment for one execution intent."""
+    if not index:
+        return None
+    ticker = str(intent.get("ticker") or "").upper().strip()
+    return index.get(ticker)
 
 
 def load_execution_queue() -> dict[str, Any]:
@@ -463,11 +505,15 @@ def iron_condor_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFram
     }
 
 
-def build_strike_plan_for_intent(intent: dict[str, Any]) -> dict[str, Any]:
+def build_strike_plan_for_intent(
+    intent: dict[str, Any],
+    schwab_options_index: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     ticker = str(intent.get("ticker", "")).upper()
     setup = str(intent.get("setupRec", ""))
     market_context = intent.get("marketContext") or {}
     trend = (market_context.get("trend") or {}).get("label") or "Neutral"
+    schwab_options = schwab_options_for_intent(intent, schwab_options_index)
     base = {
         "ticker": ticker,
         "generatedAt": local_now().isoformat(),
@@ -490,6 +536,7 @@ def build_strike_plan_for_intent(intent: dict[str, Any]) -> dict[str, Any]:
             "distanceToSupportPct": market_context.get("distanceToSupportPct"),
             "distanceToResistancePct": market_context.get("distanceToResistancePct"),
         },
+        "schwabOptions": schwab_options,
     }
 
     try:
@@ -663,17 +710,29 @@ def apply_setup_concentration_governor(
     }
 
 
-def build_strike_plan_from_queue(queue: dict[str, Any], limit: int | None = None) -> dict[str, Any]:
+def build_strike_plan_from_queue(
+    queue: dict[str, Any],
+    limit: int | None = None,
+    schwab_options_index: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build a strike plan for an explicit queue without touching disk state."""
     items = queue.get("items", [])[: limit or MAX_DEFAULT_INTENTS]
-    plans = [build_strike_plan_for_intent(item) for item in items]
+    schwab_index = load_schwab_options_index() if schwab_options_index is None else schwab_options_index
+    plans = [build_strike_plan_for_intent(item, schwab_index) for item in items]
     generated_at = local_now().isoformat()
     plans, governor = annotate_strike_plans(plans, generated_at)
+    schwab_enriched_count = sum(1 for plan in plans if plan.get("schwabOptions"))
     return {
         "generatedAt": generated_at,
         "automationStage": AUTOMATION_STAGE,
         "brokerReady": False,
         "liveTradingAllowed": False,
+        "schwabOptionsEnrichedCount": schwab_enriched_count,
+        "schwabOptionsQualityLabels": {
+            plan.get("ticker"): (plan.get("schwabOptions") or {}).get("quoteQualityLabel")
+            for plan in plans
+            if plan.get("schwabOptions")
+        },
         "sourceExecutionQueueUpdatedAt": queue.get("updatedAt"),
         "count": len(plans),
         "okCount": sum(1 for plan in plans if plan.get("ok")),
@@ -708,6 +767,7 @@ def build_text_report(plan: dict[str, Any]) -> str:
         f"Stage: {plan.get('automationStage')}",
         f"Live trading allowed: {plan.get('liveTradingAllowed')}",
         f"Plans: {plan.get('okCount')} ok / {plan.get('failedCount')} failed",
+        f"Schwab option chains attached: {plan.get('schwabOptionsEnrichedCount', 0)}",
         "",
     ]
 
@@ -740,6 +800,17 @@ def build_text_report(plan: dict[str, Any]) -> str:
             f"  Confirmation: RVOL {context.get('rvol', 'N/A')}x | {trend} | "
             f"S {context.get('support', 'N/A')} / R {context.get('resistance', 'N/A')}"
         )
+        schwab_options = item.get("schwabOptions") or {}
+        if schwab_options:
+            move = schwab_options.get("atmImpliedMovePct")
+            move_text = f"{move * 100:.1f}%" if isinstance(move, (int, float)) else "N/A"
+            lines.append(
+                f"  Schwab chain: {schwab_options.get('quoteQualityScore')}/"
+                f"{schwab_options.get('quoteQualityLabel')} | "
+                f"move {move_text} ({schwab_options.get('atmExpectedMoveBucket')}) | "
+                f"spread {schwab_options.get('atmSpreadQuality')} | "
+                f"liq {schwab_options.get('atmLiquidityScore')}"
+            )
         for leg in legs:
             lines.append(
                 f"  {leg.get('instruction')} {leg.get('putCall')} {leg.get('strike')} "

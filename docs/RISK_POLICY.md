@@ -29,6 +29,8 @@ The central policy lives in:
 - debit-spread reward/risk
 - missing executable-looking quotes
 - liquidity warnings from the strike selector
+- attached Schwab option-chain quote quality, including wide ATM spreads, thin
+  liquidity, missing ATM pairs, missing underlying price, and incomplete Greeks
 - unexpected live-trading flags
 
 `inferno_risk_gate_audit.py` checks desk-level readiness:
@@ -61,7 +63,8 @@ deliberate desk decision, not a panic-click during market hours.
 2. Execution clerk stages only names with allowed setup types.
 3. Approval queue forces a human yes/no decision.
 4. Strike selector builds contract-level tickets after options markets open.
-5. Risk policy adds a formal verdict.
+5. Risk policy adds a formal verdict, using Schwab option-chain data when it is
+   attached but not requiring Schwab OAuth when it is absent.
 6. Paper execution ledger records staged, blocked, and rejected tickets.
 7. Outcome review measures whether the rules deserve more authority.
 

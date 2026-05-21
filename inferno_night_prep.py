@@ -19,6 +19,8 @@ Checks (each maps to one fixed name so the artifact stays stable):
 - ``recent_daily_loop``       — Daily loop artifact is fresh
 - ``authority_pinned``        — Authority manifest still paper-evidence-only
 - ``tos_chain_known``         — TOS export chain artifact exists
+- ``schwab_options_source``   — Schwab option-chain source posture is known
+- ``tos_capture_posture``     — TOS read-only capture posture is known
 - ``cycle_journal_healthy``   — Cycle journal has at least one entry
 - ``watchlist_slot_ready``    — Input slot for tomorrow's tickers exists or is creatable
 - ``narration_log_healthy``   — Brain narration log exists and has rows
@@ -44,7 +46,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from inferno_config import local_now
+from inferno_config import LABEL, local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
@@ -56,13 +58,15 @@ NIGHT_PREP_STAGE = "night-prep-observation-only"
 # Watchlist input slot tomorrow's ingest reads from. Created lazily, so the
 # absence of this file is a WARN (we can create it), not a FAIL.
 WATCHLIST_INPUT_FILE = DATA_DIR / "inferno_watchlist_input.json"
+SCHWAB_OPTIONS_FILE = DATA_DIR / "inferno_schwab_options.json"
+TOS_STABILITY_FILE = DATA_DIR / "inferno_tos_export_stability.json"
 
 # Artifact freshness window — anything older than this is flagged stale.
 ARTIFACT_STALE_HOURS = 26.0
 
 # LaunchAgent labels we expect to be loaded for tomorrow morning's fires.
 EXPECTED_LAUNCH_AGENTS = (
-    ("dawn_cycle_agent", "io.diablotrading.inferno-dawn-cycle"),
+    ("dawn_cycle_agent", LABEL),
     ("daily_loop_agent", "io.diablotrading.inferno-daily-loop"),
     ("watchdog_agent", "io.diablotrading.inferno-watchdog"),
     ("ops_maintenance_agent", "io.diablotrading.inferno-ops-maintenance"),
@@ -190,6 +194,161 @@ def _authority_check(now: datetime) -> dict[str, Any]:
         "authority_pinned",
         f"level={level} brokerSubmit={broker} liveTrading={live}",
     )
+
+
+def _read_json_artifact(path: Path) -> dict[str, Any] | None:
+    """Read a JSON artifact, returning ``None`` when it is absent or invalid."""
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _schwab_options_source_check(now: datetime) -> dict[str, Any]:
+    """Summarize whether the read-only Schwab options lane is usable tonight.
+
+    Schwab is the active preferred options quote source now that OAuth/token
+    setup is live, but it is still read-only and optional for overnight math. A
+    missing artifact should not block the existing tracker/yfinance/TOS layers
+    from producing the morning brief. It does, however, deserve a clear WARN so
+    we do not pretend quote-quality enforcement is fresh when the tape is stale.
+    """
+    payload = _read_json_artifact(SCHWAB_OPTIONS_FILE)
+    if payload is None:
+        return _warn(
+            "schwab_options_source",
+            "Schwab options artifact missing or unreadable",
+            remediation=(
+                "Refresh the read-only Schwab options lane with: "
+                "SCHWAB_OPTIONS_ENABLED=1 python3 inferno_schwab_options.py AAPL NVDA AVGO"
+            ),
+        )
+
+    status = str(payload.get("status") or "unknown")
+    configured = bool(payload.get("configured"))
+    rows = payload.get("rows") or []
+    errors = payload.get("errors") or []
+    quality_scores = [
+        row.get("quoteQualityScore")
+        for row in rows
+        if isinstance(row.get("quoteQualityScore"), (int, float))
+    ]
+    avg_quality = (
+        round(sum(float(score) for score in quality_scores) / len(quality_scores), 1)
+        if quality_scores
+        else None
+    )
+
+    if rows and status in {"ok", "partial-error", "fixture"}:
+        detail = (
+            f"status={status} configured={configured} rows={len(rows)} "
+            f"avgQuality={avg_quality if avg_quality is not None else 'n/a'}"
+        )
+        if status == "fixture":
+            return _warn(
+                "schwab_options_source",
+                detail + " (fixture data)",
+                remediation="Replace fixture data with live Schwab OAuth chain pulls before relying on quotes.",
+            )
+        if errors:
+            return _warn(
+                "schwab_options_source",
+                detail + f" errors={len(errors)}",
+                remediation="Review reports/schwab_options_latest.txt for symbols that failed.",
+            )
+        return _pass("schwab_options_source", detail)
+
+    if status in {"disabled", "not-configured", "no-symbols"}:
+        return _warn(
+            "schwab_options_source",
+            f"status={status} configured={configured} rows={len(rows)}",
+            remediation=(
+                "Schwab is configured as the preferred read-only options feed. "
+                "Refresh OAuth/token setup or run the daily Schwab ops script."
+            ),
+        )
+
+    return _warn(
+        "schwab_options_source",
+        f"status={status} configured={configured} rows={len(rows)} errors={len(errors)}",
+        remediation="Run the Schwab adapter and inspect the latest options report.",
+    )
+
+
+def _tos_capture_posture_check(now: datetime) -> dict[str, Any]:
+    """Summarize whether the already-open TOS window is capture-ready.
+
+    This is intentionally not a launch/open check. The user controls when TOS is
+    opened because TOS is heavy and should not be spawned by overnight math. The
+    check simply reads the stability artifact and tells us whether the broker
+    evidence lane is ready, safely inactive, or needs manual attention.
+    """
+    payload = _read_json_artifact(TOS_STABILITY_FILE)
+    if payload is None:
+        return _warn(
+            "tos_capture_posture",
+            "TOS stability artifact missing or unreadable",
+            remediation=(
+                "When TOS is open tonight, run: "
+                "python3 inferno_tos_export_stability.py --attempts 5"
+            ),
+        )
+
+    verdict = str(payload.get("verdict") or "unknown")
+    dominant = str(payload.get("dominantFailMode") or "unknown")
+    ok_count = payload.get("okCount")
+    attempts = payload.get("attempts")
+
+    if verdict in {"stable-ready", "transient-recovered"}:
+        return _pass(
+            "tos_capture_posture",
+            f"verdict={verdict} ok={ok_count}/{attempts} mode={dominant}",
+        )
+
+    if verdict == "inactive-safe":
+        return _pass(
+            "tos_capture_posture",
+            (
+                f"verdict={verdict} mode={dominant}; overnight math can run, "
+                "broker capture is not armed until you manually open TOS"
+            ),
+        )
+
+    return _warn(
+        "tos_capture_posture",
+        f"verdict={verdict} ok={ok_count}/{attempts} mode={dominant}",
+        remediation=(
+            "Do not force-open TOS. If broker evidence is needed tonight, open "
+            "the existing TOS app manually, switch to Monitor > Account Statement, "
+            "then rerun the stability verifier."
+        ),
+    )
+
+
+def _data_source_posture(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a compact source-authority map for operator dashboards."""
+    by_name = {check.get("name"): check for check in checks}
+    schwab = by_name.get("schwab_options_source") or {}
+    tos = by_name.get("tos_capture_posture") or {}
+    return {
+        "primaryOptionsFeed": "Schwab API",
+        "brokerRealityFeed": "thinkorswim export/read-only account statement",
+        "trackerFeed": "Google Earnings Tracker",
+        "fallbackResearchFeed": "yfinance/local artifacts",
+        "schwabOptionsReady": schwab.get("status") == "pass",
+        "tosCaptureReady": (
+            tos.get("status") == "pass"
+            and "broker capture is not armed" not in str(tos.get("detail") or "")
+        ),
+        "overnightMathReady": True,
+        "notes": [
+            "Schwab API is the preferred read-only options feed; stale artifacts warn, not block.",
+            "TOS closed is safe for math; open it manually only for broker capture.",
+            "No layer is allowed to submit live orders from this diagnostic.",
+        ],
+    }
 
 
 def _tos_chain_known_check(now: datetime) -> dict[str, Any]:
@@ -331,6 +490,8 @@ def build_night_prep(
 
     checks.append(_authority_check(now))
     checks.append(_tos_chain_known_check(now))
+    checks.append(_schwab_options_source_check(now))
+    checks.append(_tos_capture_posture_check(now))
     checks.append(_cycle_journal_check(now))
     checks.append(_watchlist_slot_check(now))
     checks.append(_narration_log_check(now))
@@ -374,6 +535,7 @@ def build_night_prep(
         "failCount": fail_count,
         "checkCount": len(checks),
         "checks": checks,
+        "dataSourcePosture": _data_source_posture(checks),
         "watchlistInputFile": str(WATCHLIST_INPUT_FILE),
         "staleAfterHours": ARTIFACT_STALE_HOURS,
         "reminders": [
@@ -404,8 +566,19 @@ def night_prep_text(payload: dict[str, Any]) -> str:
         f"Watchlist input slot: {payload.get('watchlistInputFile')}",
         f"Stale-after threshold: {payload.get('staleAfterHours')}h",
         "",
-        "Checks:",
+        "Data source posture:",
     ]
+    posture = payload.get("dataSourcePosture") or {}
+    lines.extend([
+        f"- Primary options feed: {posture.get('primaryOptionsFeed')}",
+        f"- Broker reality feed: {posture.get('brokerRealityFeed')}",
+        f"- Tracker feed: {posture.get('trackerFeed')}",
+        f"- Schwab options ready: {posture.get('schwabOptionsReady')}",
+        f"- TOS capture ready: {posture.get('tosCaptureReady')}",
+        f"- Overnight math ready: {posture.get('overnightMathReady')}",
+        "",
+        "Checks:",
+    ])
     for check in payload.get("checks") or []:
         marker = {"pass": "PASS", "warn": "WARN", "fail": "FAIL"}.get(
             check.get("status"), "?"

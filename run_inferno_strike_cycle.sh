@@ -23,6 +23,14 @@ while (( $# )); do
 done
 
 set +e
+python3 inferno_schwab_daily_ops.py --quiet
+schwab_status=$?
+set -e
+if [[ "$schwab_status" -ne 0 ]]; then
+  echo "Warning: Schwab daily ops refresh did not complete; strike selector will use latest saved chain data." >&2
+fi
+
+set +e
 python3 inferno_strike_selector.py build --record-ledger "${selector_args[@]}"
 selector_status=$?
 set -e

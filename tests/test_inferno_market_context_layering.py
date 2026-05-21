@@ -132,9 +132,76 @@ class InfernoMarketContextLayeringTests(unittest.TestCase):
                 ],
             },
         }
-        verdict = evaluate_strike_item(item, strike_plan_generated_at="2026-04-30T06:10:00-06:00", ledger_items=[])
+        verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
         self.assertFalse(verdict.passed)
         self.assertIn("bullish call spread is too close to resistance", verdict.blocks)
+
+    def test_risk_policy_blocks_bad_schwab_chain_when_attached(self) -> None:
+        item = {
+            "ticker": "NVDA",
+            "ok": True,
+            "liveTradingAllowed": False,
+            "marketContext": {
+                "rvol": 1.2,
+                "trend": {"label": "Bullish", "tone": "hot"},
+                "distanceToResistancePct": 7.0,
+                "distanceToSupportPct": 5.0,
+            },
+            "schwabOptions": {
+                "quoteQualityScore": 42,
+                "quoteQualityLabel": "poor",
+                "qualityFlags": ["wide-atm-spread", "incomplete-greeks"],
+                "atmSpreadQuality": "untradeable",
+                "atmLiquidityScore": 40,
+                "atmExpectedMoveBucket": "inferno",
+            },
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "estimatedMaxLoss": 220,
+                "estimatedMaxProfit": 240,
+                "estimatedDebit": 2.2,
+                "legs": [
+                    {"instruction": "BUY_TO_OPEN", "symbol": "TESTC1", "ask": 2.5, "bid": 2.3},
+                    {"instruction": "SELL_TO_OPEN", "symbol": "TESTC2", "ask": 1.0, "bid": 0.8},
+                ],
+            },
+        }
+
+        verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
+
+        self.assertFalse(verdict.passed)
+        self.assertIn("Schwab option chain quality block: wide-atm-spread", verdict.blocks)
+        self.assertIn("Schwab quote quality 42/poor is below paper threshold", verdict.blocks)
+        self.assertIn("Schwab option chain has incomplete Greeks", verdict.warnings)
+        self.assertTrue(verdict.metrics["schwabOptions"]["attached"])
+
+    def test_risk_policy_warns_but_does_not_require_missing_schwab_chain(self) -> None:
+        item = {
+            "ticker": "NVDA",
+            "ok": True,
+            "liveTradingAllowed": False,
+            "marketContext": {
+                "rvol": 1.2,
+                "trend": {"label": "Bullish", "tone": "hot"},
+                "distanceToResistancePct": 7.0,
+                "distanceToSupportPct": 5.0,
+            },
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "estimatedMaxLoss": 220,
+                "estimatedMaxProfit": 240,
+                "estimatedDebit": 2.2,
+                "legs": [
+                    {"instruction": "BUY_TO_OPEN", "symbol": "TESTC1", "ask": 2.5, "bid": 2.3},
+                    {"instruction": "SELL_TO_OPEN", "symbol": "TESTC2", "ask": 1.0, "bid": 0.8},
+                ],
+            },
+        }
+
+        verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
+
+        self.assertTrue(verdict.passed)
+        self.assertFalse(verdict.metrics["schwabOptions"]["attached"])
 
     def test_clean_chain_tolerates_missing_quote_columns(self) -> None:
         frame = pd.DataFrame(

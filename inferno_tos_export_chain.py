@@ -117,8 +117,8 @@ REMEDIATION: dict[str, str] = {
     ),
     "ui-route-dry-run": (
         "The UI route coordinates may have drifted. Check the latest "
-        "tos_ui_route_latest report and rerun with --allow-recovery if you "
-        "are at the keyboard."
+        "tos_ui_route_latest report. The route is attach-only and will not "
+        "launch or reopen thinkorswim."
     ),
     "shortcut-valid": (
         "TOS_EXPORT_SHORTCUT didn't parse. Use a string like "

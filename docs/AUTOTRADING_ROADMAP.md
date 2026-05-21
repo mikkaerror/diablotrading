@@ -33,10 +33,11 @@ The bot may only gain authority when the desk can prove:
    - Creates broker-neutral order previews. It cannot send orders.
 
 5. `Read-Only Broker API`
-   - Status: starting
-   - First lane is Schwab option-chain market data only: quotes, chains,
-     liquidity, Greeks, and expected-move checks.
-   - Account, order, and fill reads remain future work behind OAuth hardening.
+   - Status: active for Schwab option-chain market data
+   - Current lane is quotes, chains, liquidity, Greeks, and expected-move
+     checks via the ignored local OAuth token vault.
+   - Account, order, and fill endpoints remain out of scope until a separate
+     approval, sandbox, and authority review.
 
 6. `Human-Approved Live Orders`
    - Status: future
@@ -56,6 +57,7 @@ produces enough scored outcomes, live automation stays off.
 ```bash
 ./run_inferno_strike_cycle.sh
 python3 inferno_schwab_options.py AAPL NVDA --json
+./run_inferno_schwab_daily_ops.sh
 python3 inferno_paper_execution.py status
 python3 inferno_strategy_lab.py status
 ./run_inferno_broker_preview.sh

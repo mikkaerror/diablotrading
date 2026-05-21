@@ -8,7 +8,7 @@ fail-closed interfaces.
 - thinkorswim desktop: supervised read-only surface and manual cockpit
 - configured approved live account: read-only oversight
 - native TOS export: useful when stable, not trusted as the only source
-- Schwab options API: read-only market-data scaffold, no account/order calls
+- Schwab options API: active read-only market-data lane, no account/order calls
 - broker submit authority: off
 
 ## Required Before Live Automation

@@ -175,7 +175,7 @@ spread from the autocovariance of close-to-close returns:
 
 This is useful for the underlying. For options, where bid-ask is wider and
 quote feeds are unreliable for the back of the chain, the right primary
-source is the Schwab option-chain API (which Codex scaffolded in
+source is the Schwab option-chain API (implemented in
 `inferno_schwab_options.py`). When Schwab quotes are not available, fall
 back to a strategy-family-specific spread heuristic:
 

@@ -9,6 +9,9 @@ Build an automated earnings/options research desk that can refresh data, score
 setups, collect paper evidence, and brief the operator without granting live
 trading authority prematurely.
 
+The concise command brief lives in [`MISSION_CONTROL.md`](MISSION_CONTROL.md).
+Use this file for architecture; use Mission Control for purpose and strategy.
+
 The current authority state is intentionally conservative:
 
 ```text
@@ -22,8 +25,8 @@ liveTradingAllowed: false
 1. Tracker data refreshes from Google Sheets and local market-data scripts.
 2. Scoring modules enrich the universe with readiness, conviction, risk, and
    evidence strength.
-3. Schwab option-chain data can enrich strike selection and quote quality when
-   the read-only OAuth lane is configured.
+3. Schwab option-chain data is the primary read-only option quote-quality tape
+   when the local OAuth token is healthy.
 4. Daily/ops pipelines generate reports, doctor checks, morning/pre-close
    briefs, and command-center artifacts.
 5. Paper and shadow lanes collect outcomes until strategy evidence earns more
@@ -48,6 +51,7 @@ Generated artifacts beat durable docs when they disagree.
 | Live book posture | `reports/live_position_review_latest.txt` |
 | Capital readiness | `reports/capital_deployment_readiness_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
+| Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
 
 ## Model Ownership
 

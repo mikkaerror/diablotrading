@@ -40,6 +40,11 @@ class InfernoActionPulseTests(unittest.TestCase):
                     }
                 },
                 "dailyLoop": {"decideTodayTickers": ["NVDA"]},
+                "schwabDailyOps": {
+                    "available": True,
+                    "laneCounts": {"tradable-research": 1, "avoid-chain": 1},
+                    "summaryLines": ["NVDA: tradable-research | Q 86/institutional | spread tight | liq 100 | move 5.90%"],
+                },
                 "decisionSummary": ["GDS hard-blocks-new-capital"],
                 "warningSummary": ["Live position review has 1 fragile holding."],
                 "operatorCommands": ["./run_inferno_capital_launch_check.sh --deployable-cash 1000"],
@@ -49,6 +54,8 @@ class InfernoActionPulseTests(unittest.TestCase):
 
         self.assertIn("Auto live trading allowed: False", rendered)
         self.assertIn("Max options risk: $250.00", rendered)
+        self.assertIn("Schwab options tape", rendered)
+        self.assertIn("NVDA: tradable-research", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
 
 

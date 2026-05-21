@@ -6,6 +6,16 @@ This module is intentionally narrow: it can normalize Schwab option-chain
 payloads and, when locally configured, fetch market-data chains. It cannot read
 accounts, build orders, preview orders, or submit trades. The first Schwab lane
 is quote quality, strike selection, and evidence collection only.
+
+Companion docs:
+  * docs/SCHWAB_OPTIONS_API.md          — adapter plan, OAuth posture, fields.
+  * docs/SCHWAB_EDGE_OPPORTUNITIES.md   — how the desk capitalizes on this
+                                          data: four-tier edge framework,
+                                          refresh cadence, anti-goals, and
+                                          the Phase 2-4 build backlog.
+
+Bridge module ``inferno_schwab_edge_signals.py`` converts the per-row chain
+summary this adapter emits into operator-facing tier-classified signals.
 """
 
 import argparse
@@ -53,6 +63,96 @@ def pct(value: float | None) -> float | None:
     if value is None:
         return None
     return round(value, 4)
+
+
+def rounded(value: float | None, digits: int = 4) -> float | None:
+    """Round optional floats while preserving missing API values."""
+    if value is None:
+        return None
+    return round(value, digits)
+
+
+def mean_number(values: list[float | int | None]) -> float | None:
+    """Return the mean of present numeric values or ``None`` when empty."""
+    present = [float(value) for value in values if value is not None]
+    if not present:
+        return None
+    return round(sum(present) / len(present), 4)
+
+
+def normalized_iv(value: float | None) -> float | None:
+    """Normalize Schwab IV/volatility into decimal form.
+
+    Schwab-style option payloads commonly express volatility as ``35.0`` for
+    35%. Some fixtures/vendors may already use ``0.35``. Keeping one decimal
+    convention avoids accidental 100x blowups in expected-move math.
+    """
+    if value is None:
+        return None
+    return round(value / 100.0, 6) if value > 3 else round(value, 6)
+
+
+def liquidity_bucket(score: int | float | None) -> str:
+    """Classify a contract or ATM pair into a trading-quality liquidity bucket."""
+    value = number(score, 0) or 0
+    if value >= 85:
+        return "elite"
+    if value >= 70:
+        return "tradable"
+    if value >= 50:
+        return "watch"
+    if value > 0:
+        return "thin"
+    return "missing"
+
+
+def spread_quality(spread_pct: float | None) -> str:
+    """Classify bid/ask spread friction in plain desk language."""
+    if spread_pct is None:
+        return "unknown"
+    if spread_pct <= 0.05:
+        return "tight"
+    if spread_pct <= 0.10:
+        return "acceptable"
+    if spread_pct <= 0.20:
+        return "workable"
+    if spread_pct <= 0.35:
+        return "wide"
+    return "untradeable"
+
+
+def expected_move_bucket(implied_move_pct: float | None) -> str:
+    """Classify how aggressive the ATM straddle-implied move is."""
+    if implied_move_pct is None:
+        return "unknown"
+    if implied_move_pct < 0.03:
+        return "quiet"
+    if implied_move_pct < 0.06:
+        return "normal"
+    if implied_move_pct < 0.10:
+        return "hot"
+    return "inferno"
+
+
+def contract_has_greeks(contract: dict[str, Any]) -> bool:
+    """Return whether a normalized contract has enough Greeks for analysis."""
+    return all(contract.get(field) is not None for field in ("delta", "gamma", "theta", "vega"))
+
+
+def contract_quality_flags(contract: dict[str, Any]) -> list[str]:
+    """Return conservative per-contract warnings used by chain summaries."""
+    flags: list[str] = []
+    if not contract.get("mid"):
+        flags.append("missing-mid")
+    if contract.get("spreadPct") is None:
+        flags.append("missing-spread")
+    elif (contract.get("spreadPct") or 0) > 0.35:
+        flags.append("wide-spread")
+    if (contract.get("openInterest") or 0) <= 0 and (contract.get("volume") or 0) <= 0:
+        flags.append("no-visible-interest")
+    if not contract_has_greeks(contract):
+        flags.append("missing-greeks")
+    return flags
 
 
 def load_schwab_access_token(token_file: Path | None = None) -> str | None:
@@ -245,6 +345,194 @@ def nearest_atm_pair(contracts: list[dict[str, Any]], underlying_price: float | 
     return None
 
 
+def contract_digest(contract: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact contract shape for ranking cards and reports."""
+    return {
+        "symbol": contract.get("symbol"),
+        "putCall": contract.get("putCall"),
+        "expirationDate": contract.get("expirationDate"),
+        "daysToExpiration": contract.get("daysToExpiration"),
+        "strikePrice": contract.get("strikePrice"),
+        "mid": contract.get("mid"),
+        "spreadPct": contract.get("spreadPct"),
+        "liquidityScore": contract.get("liquidityScore"),
+        "liquidityBucket": liquidity_bucket(contract.get("liquidityScore")),
+        "delta": contract.get("delta"),
+        "volatility": contract.get("volatility"),
+        "openInterest": contract.get("openInterest"),
+        "volume": contract.get("volume"),
+        "qualityFlags": contract_quality_flags(contract),
+    }
+
+
+def top_liquid_contracts(contracts: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
+    """Rank the most usable contracts without flooding downstream artifacts.
+
+    This intentionally favors liquidity first, then real activity. It is not a
+    trade selector; it is a quote-quality shortlist for future strike logic.
+    """
+    ranked = sorted(
+        contracts,
+        key=lambda contract: (
+            contract.get("liquidityScore") or 0,
+            contract.get("volume") or 0,
+            contract.get("openInterest") or 0,
+            -(contract.get("spreadPct") or 9),
+        ),
+        reverse=True,
+    )
+    return [contract_digest(contract) for contract in ranked[:limit]]
+
+
+def side_stats(contracts: list[dict[str, Any]], side: str) -> dict[str, Any]:
+    """Summarize one side of the chain so call/put quality can diverge."""
+    side_contracts = [contract for contract in contracts if contract.get("putCall") == side]
+    liquid = [contract for contract in side_contracts if (contract.get("liquidityScore") or 0) >= 70]
+    return {
+        "count": len(side_contracts),
+        "liquidCount": len(liquid),
+        "avgSpreadPct": mean_number([contract.get("spreadPct") for contract in side_contracts]),
+        "avgLiquidityScore": mean_number([contract.get("liquidityScore") for contract in side_contracts]),
+        "avgImpliedVolatility": mean_number(
+            [normalized_iv(contract.get("volatility")) for contract in side_contracts]
+        ),
+        "greeksCompletenessPct": pct(
+            len([contract for contract in side_contracts if contract_has_greeks(contract)]) / len(side_contracts)
+        )
+        if side_contracts
+        else None,
+    }
+
+
+def atm_metrics(atm_pair: dict[str, Any] | None, underlying_price: float | None) -> dict[str, Any]:
+    """Compute the ATM straddle quality and expected-move fields.
+
+    The ATM straddle is the cleanest first-pass proxy for what the option market
+    is charging for an earnings move. We keep it descriptive here; strategy
+    modules can later decide whether that premium is worth buying or selling.
+    """
+    if not atm_pair:
+        return {
+            "atmStrike": None,
+            "atmExpiration": None,
+            "atmStraddleMid": None,
+            "atmExpectedMoveDollar": None,
+            "atmImpliedMovePct": None,
+            "atmExpectedMoveBucket": "unknown",
+            "atmBreakEvenLower": None,
+            "atmBreakEvenUpper": None,
+            "atmSpreadPct": None,
+            "atmSpreadQuality": "unknown",
+            "atmLiquidityScore": None,
+            "atmLiquidityBucket": "missing",
+            "atmImpliedVolatility": None,
+            "atmNetDelta": None,
+            "atmNetTheta": None,
+            "atmNetVega": None,
+        }
+
+    call = atm_pair["call"]
+    put = atm_pair["put"]
+    straddle_mid = round((call.get("mid") or 0) + (put.get("mid") or 0), 4)
+    implied_move_pct = pct(straddle_mid / underlying_price) if underlying_price else None
+    strike = call.get("strikePrice")
+    atm_spread_pct = mean_number([call.get("spreadPct"), put.get("spreadPct")])
+    liquidity_score = min(call.get("liquidityScore") or 0, put.get("liquidityScore") or 0)
+
+    return {
+        "atmStrike": strike,
+        "atmExpiration": call.get("expirationDate"),
+        "atmStraddleMid": straddle_mid,
+        "atmExpectedMoveDollar": straddle_mid,
+        "atmImpliedMovePct": implied_move_pct,
+        "atmExpectedMoveBucket": expected_move_bucket(implied_move_pct),
+        "atmBreakEvenLower": rounded((underlying_price - straddle_mid) if underlying_price else None),
+        "atmBreakEvenUpper": rounded((underlying_price + straddle_mid) if underlying_price else None),
+        "atmSpreadPct": atm_spread_pct,
+        "atmSpreadQuality": spread_quality(atm_spread_pct),
+        "atmLiquidityScore": liquidity_score,
+        "atmLiquidityBucket": liquidity_bucket(liquidity_score),
+        "atmImpliedVolatility": mean_number(
+            [normalized_iv(call.get("volatility")), normalized_iv(put.get("volatility"))]
+        ),
+        # Long straddles are roughly delta-neutral at entry; drift here warns us
+        # when the "ATM" pair is not actually centered.
+        "atmNetDelta": mean_number([call.get("delta"), put.get("delta")]),
+        "atmNetTheta": mean_number([call.get("theta"), put.get("theta")]),
+        "atmNetVega": mean_number([call.get("vega"), put.get("vega")]),
+    }
+
+
+def chain_quality_score(
+    *,
+    contract_count: int,
+    liquid_count: int,
+    atm_liquidity_score: int | None,
+    atm_spread_pct: float | None,
+    greeks_completeness_pct: float | None,
+) -> int:
+    """Score the chain's usefulness for the desk from 0 to 100.
+
+    This is deliberately not a bullish/bearish score. It only asks whether the
+    options market is clean enough to rely on for strike selection.
+    """
+    if contract_count <= 0:
+        return 0
+
+    liquid_ratio = liquid_count / contract_count
+    depth_score = min(contract_count / 120.0, 1.0) * 15
+    liquid_score = min(liquid_ratio, 1.0) * 25
+    atm_score = ((atm_liquidity_score or 0) / 100.0) * 35
+    greek_score = (greeks_completeness_pct or 0) * 10
+    if atm_spread_pct is None:
+        spread_score = 0
+    else:
+        # The spread score fades linearly to zero at 35% spread; beyond that,
+        # slippage is too ugly for an options desk to trust.
+        spread_score = max(0.0, 1.0 - min(atm_spread_pct, 0.35) / 0.35) * 15
+    return int(round(depth_score + liquid_score + atm_score + greek_score + spread_score))
+
+
+def quote_quality_label(score: int) -> str:
+    """Convert a numeric chain-quality score into an operator label."""
+    if score >= 85:
+        return "institutional"
+    if score >= 70:
+        return "usable"
+    if score >= 50:
+        return "fragile"
+    if score > 0:
+        return "poor"
+    return "unusable"
+
+
+def chain_quality_flags(
+    *,
+    underlying_price: float | None,
+    contract_count: int,
+    liquid_count: int,
+    atm: dict[str, Any],
+    greeks_completeness_pct: float | None,
+) -> list[str]:
+    """Build fail-closed warnings for Schwab option-chain consumers."""
+    flags: list[str] = []
+    if underlying_price is None:
+        flags.append("missing-underlying-price")
+    if contract_count <= 0:
+        flags.append("empty-chain")
+    if liquid_count <= 0:
+        flags.append("no-liquid-contracts")
+    if not atm.get("atmStrike"):
+        flags.append("missing-atm-pair")
+    if (atm.get("atmSpreadPct") or 0) > 0.35:
+        flags.append("wide-atm-spread")
+    if (atm.get("atmLiquidityScore") or 0) < 70:
+        flags.append("thin-atm-liquidity")
+    if greeks_completeness_pct is not None and greeks_completeness_pct < 0.80:
+        flags.append("incomplete-greeks")
+    return flags
+
+
 def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     """Create the compact option-chain summary consumed by the desk."""
     underlying_price = number(
@@ -254,35 +542,46 @@ def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     )
     contracts = [normalize_contract(raw) for raw in flatten_contracts(chain)]
     atm_pair = nearest_atm_pair(contracts, underlying_price)
-
-    straddle_mid = None
-    implied_move_pct = None
-    atm_strike = None
-    atm_expiration = None
-    atm_liquidity = None
-    if atm_pair:
-        call = atm_pair["call"]
-        put = atm_pair["put"]
-        straddle_mid = round((call.get("mid") or 0) + (put.get("mid") or 0), 4)
-        atm_strike = call.get("strikePrice")
-        atm_expiration = call.get("expirationDate")
-        atm_liquidity = min(call.get("liquidityScore") or 0, put.get("liquidityScore") or 0)
-        if underlying_price:
-            # Earnings expected move proxy: ATM straddle mid divided by spot.
-            implied_move_pct = pct(straddle_mid / underlying_price)
-
     liquid_contracts = [c for c in contracts if (c.get("liquidityScore") or 0) >= 70]
+    liquid_ratio = pct(len(liquid_contracts) / len(contracts)) if contracts else None
+    greek_complete = [contract for contract in contracts if contract_has_greeks(contract)]
+    greeks_completeness_pct = pct(len(greek_complete) / len(contracts)) if contracts else None
+    avg_spread_pct = mean_number([contract.get("spreadPct") for contract in contracts])
+    liquid_avg_spread_pct = mean_number([contract.get("spreadPct") for contract in liquid_contracts])
+    atm = atm_metrics(atm_pair, underlying_price)
+    quality_score = chain_quality_score(
+        contract_count=len(contracts),
+        liquid_count=len(liquid_contracts),
+        atm_liquidity_score=atm.get("atmLiquidityScore"),
+        atm_spread_pct=atm.get("atmSpreadPct"),
+        greeks_completeness_pct=greeks_completeness_pct,
+    )
+    quality_flags = chain_quality_flags(
+        underlying_price=underlying_price,
+        contract_count=len(contracts),
+        liquid_count=len(liquid_contracts),
+        atm=atm,
+        greeks_completeness_pct=greeks_completeness_pct,
+    )
     return {
         "symbol": symbol.upper().strip(),
         "status": "ok" if contracts else "empty-chain",
         "underlyingPrice": underlying_price,
         "contractCount": len(contracts),
         "liquidContractCount": len(liquid_contracts),
-        "atmExpiration": atm_expiration,
-        "atmStrike": atm_strike,
-        "atmStraddleMid": straddle_mid,
-        "atmImpliedMovePct": implied_move_pct,
-        "atmLiquidityScore": atm_liquidity,
+        "liquidContractRatio": liquid_ratio,
+        "avgSpreadPct": avg_spread_pct,
+        "liquidAvgSpreadPct": liquid_avg_spread_pct,
+        "greeksCompletenessPct": greeks_completeness_pct,
+        "quoteQualityScore": quality_score,
+        "quoteQualityLabel": quote_quality_label(quality_score),
+        "qualityFlags": quality_flags,
+        "sideStats": {
+            "CALL": side_stats(contracts, "CALL"),
+            "PUT": side_stats(contracts, "PUT"),
+        },
+        "topLiquidContracts": top_liquid_contracts(contracts),
+        **atm,
         "contracts": contracts,
     }
 
@@ -368,8 +667,20 @@ def render_report(report: dict[str, Any]) -> str:
                 f"- {row.get('symbol')}: contracts={row.get('contractCount')} "
                 f"liquid={row.get('liquidContractCount')} ATM={row.get('atmStrike')} "
                 f"exp={row.get('atmExpiration')} straddle={row.get('atmStraddleMid')} "
-                f"move={move_text} liq={row.get('atmLiquidityScore')}"
+                f"move={move_text} liq={row.get('atmLiquidityScore')} "
+                f"quality={row.get('quoteQualityScore')}/{row.get('quoteQualityLabel')} "
+                f"spread={row.get('atmSpreadQuality')}"
             )
+            if row.get("qualityFlags"):
+                lines.append(f"  flags: {', '.join(row.get('qualityFlags') or [])}")
+            top_contracts = row.get("topLiquidContracts") or []
+            if top_contracts:
+                preview = ", ".join(
+                    f"{item.get('putCall')} {item.get('strikePrice')} "
+                    f"L{item.get('liquidityScore')}"
+                    for item in top_contracts[:3]
+                )
+                lines.append(f"  top contracts: {preview}")
     else:
         lines.append("No chain rows captured.")
     if report.get("errors"):

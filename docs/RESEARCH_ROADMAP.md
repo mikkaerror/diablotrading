@@ -32,6 +32,14 @@ Build them in this order because:
 - **C is the highest intellectual leverage and the lowest operational
   leverage** at the desk's current size. Earned last.
 
+A separate research track — Schwab live-data edge — runs **alongside** these
+three phases, not as a substitute. See
+[`SCHWAB_EDGE_OPPORTUNITIES.md`](SCHWAB_EDGE_OPPORTUNITIES.md) for the tiered
+build plan (vol calibration → cross-instrument vol → positioning overlay).
+The two tracks compose: post-trade learning tells the desk what it learned from
+its last ticket; Schwab calibration tells the desk what the options market
+expects on its universe right now.
+
 ## Authority constraints (do not change)
 
 Every phase below ships as research-only, diagnostic-only, promotable=False.
@@ -115,7 +123,7 @@ Three new modules, all research-only:
 
 ## Phase B — Portfolio-level layer
 
-Status: **pending.**
+Status: **shipped.**
 
 ### What this is
 
@@ -139,23 +147,23 @@ the capacity limit per strategy is.
 ### Documentation deliverables
 
 - `docs/PORTFOLIO_CONSTRUCTION.md` — Holy Grail synthesis, correlation math,
-  why diversification by count is a lie without correlation control.
-- `docs/DRAWDOWN_PROTOCOL.md` — explicit thresholds and behaviour at each
-  drawdown level; drawdown-state-aware sizing.
+  drawdown ladder, capacity framing, and why diversification by count is a lie
+  without correlation control.
 - `docs/MATH.md` §25 — Correlation math, equal risk contribution.
 - `docs/MATH.md` §26 — Drawdown math (max DD, duration, Calmar, ulcer).
 
 ### Code deliverables
 
-- `inferno_strategy_correlation.py` — pairwise correlation matrix across
-  strategy families using closed paper outcomes, with bootstrap CIs.
-  Artifact: `reports/strategy_correlation_latest.txt`.
+- `inferno_portfolio_correlation.py` — Herfindahl effective bet count,
+  per-family / per-direction / per-DTE concentration counts, and pairwise PnL
+  correlation when enough shared closed outcomes exist. Artifact:
+  `reports/portfolio_correlation_latest.txt`.
 - `inferno_drawdown_protocol.py` — drawdown-state-aware behaviour modifier.
   Reads daily PnL from outcome attribution, computes current drawdown state,
   emits diagnostic recommendations (e.g. "below -5% — reduce size 50%",
   "below -10% — halt new tickets, audit existing"). Diagnostic-only; the
   operator decides whether to act.
-- `inferno_capacity_estimator.py` (optional, depending on data volume).
+- `inferno_capacity_estimator.py` (optional future module, depending on data volume).
 
 ### Wiring
 
@@ -174,7 +182,7 @@ the capacity limit per strategy is.
 
 ## Phase C — Consensus / crowdedness layer
 
-Status: **pending.**
+Status: **shipped.**
 
 ### What this is
 
@@ -196,20 +204,20 @@ lowest operational leverage today because we already filter conservatively.
 
 ### Documentation deliverables
 
-- `docs/CONSENSUS_RISK.md` — what makes a trade "crowded", how to measure
-  it, when to fade.
+- `docs/CONSENSUS_AND_CROWDEDNESS.md` — what makes a trade "crowded", how to
+  measure it, when to fade, and which Phase C signals are deliberately not
+  built yet.
 - `docs/THEORY_REFERENCES.md` — new tags (CoT positioning, Stein09-crowded,
   Soros-reflexivity expansion).
 
 ### Code deliverables
 
-- `inferno_crowdedness.py` — multi-signal consensus score. Inputs: short
-  interest, options open interest (Schwab when available), put-call skew,
-  institutional flow direction. Output: 0–1 crowdedness score with explicit
-  driver list. Artifact: `reports/crowdedness_latest.txt`.
-- Wire into the conviction auditor as a new bear bullet
-  ("crowded-trade reflexivity risk") when the score crosses a configured
-  threshold.
+- `inferno_consensus_monitor.py` — research-only v1 consensus monitor. Inputs:
+  Schwab edge bridge and portfolio-correlation artifact. Outputs side-skew
+  lean, own-side concentration, and family-pair fusion. Artifact:
+  `reports/consensus_monitor_latest.txt`.
+- Future wiring into the conviction auditor remains gated behind more closed
+  evidence and stable thresholds.
 
 ### Success criteria
 

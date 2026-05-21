@@ -83,8 +83,8 @@ def verify_export_bridge(require_enabled: bool = False, *, allow_recovery: bool 
 
     By default this verifier is observation-only. Background services should
     not change broker UI state just because a window is hidden, minimized, or
-    sitting on another macOS Space. Recovery actions are therefore opt-in and
-    reserved for explicit operator runs.
+    sitting on another macOS Space. Recovery actions are therefore opt-in,
+    attach-only, and never launch a new thinkorswim instance.
     """
     ensure_dirs()
     report: dict[str, Any] = {
@@ -210,7 +210,7 @@ def verify_export_bridge(require_enabled: bool = False, *, allow_recovery: bool 
         recovered = recover_tos_window()
         report["sessionRecovery"].append(
             {
-                "step": "recover-window",
+                "step": "attach-only-recover-window",
                 "ok": bool(recovered.get("ok")),
                 "detail": recovered.get("sessionSummary") or recovered.get("stderr") or "window recovery attempted",
             }
@@ -419,7 +419,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-recovery",
         action="store_true",
-        help="Allow an explicit operator run to bring thinkorswim frontmost or reopen its main window",
+        help="Allow an explicit operator run to bring an existing thinkorswim process frontmost; never reopens it",
     )
     return parser.parse_args()
 

@@ -4,7 +4,11 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-05-19.
+Last updated: 2026-05-20.
+
+For the one-page purpose and strategy brief, start with
+[`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
+not the mission statement.
 
 ## Layer overview
 
@@ -43,13 +47,14 @@ Safety            — authority, risk, secrets
 | `inferno_watchlist_reconciler.py` | **NEW** Three-way drift detector across TOS extract ∪ sheet ∪ tracker | every 5 min + on-demand |
 | `inferno_watchlist_autorefresh.py` | **NEW** 5-minute closed-loop coordinator: extract → (apply if delta) → reconcile → dawn refresh breadcrumb | every 5 min LaunchAgent |
 | `install_inferno_watchlist_autorefresh_service.py` | **NEW** LaunchAgent installer for the autorefresh service | operator-triggered |
+| `inferno_schwab_oauth.py` | Local read-only Schwab OAuth helper: auth URL, token exchange, refresh, ignored vault status | operator-triggered + daily ops refresh |
 | `inferno_schwab_options.py` | **NEW** Read-only Schwab option-chain adapter for bid/ask, Greeks, liquidity, and expected-move enrichment | on-demand + future strike cycle |
 
 ## Monitoring (what is happening)
 
 | Module | Purpose | Artifact |
 |---|---|---|
-| `inferno_doctor.py` | End-to-end desk health check; every subsystem PASS/FAIL | `reports/doctor_latest.txt` |
+| `inferno_doctor.py` | End-to-end desk health check; every subsystem PASS/FAIL | `data/inferno_doctor.json`, `reports/doctor_latest.txt` |
 | `inferno_ops_maintenance.py` | Hourly sweep: tracker / staleness governor / broker preview refresh | `reports/ops_maintenance_latest.txt` |
 | `inferno_daily_success.py` | Green/yellow/red scorecard over five safety + operational criteria | `reports/daily_success_latest.txt` |
 | `inferno_watchdog.py` | Continuous failure detector + alert dispatcher | `reports/watchdog_latest.txt` |
@@ -68,6 +73,7 @@ Safety            — authority, risk, secrets
 | `inferno_approval_queue.py` | Operator approve/reject/expire commands | `data/inferno_approval_queue.json` |
 | `inferno_approval_inbox.py` | Pending-ticket inbox view | `reports/approval_inbox_latest.txt` |
 | `inferno_approval_dispatch.py` | Route approved tickets to the staging lanes | side-effects on staging |
+| `inferno_schwab_daily_ops.py` | Refresh and classify Schwab option-chain tape for daily decisions | `reports/schwab_daily_ops_latest.txt` |
 | `inferno_strike_selector.py` | Choose strikes for approved tickets, with concentration governor | `data/inferno_strike_plan.json` |
 | `inferno_capital_allocator.py` | Allocate paper capital across approved tickets | `data/inferno_capital_allocation.json` |
 | `inferno_edge_research.py` | Score the shovel universe by lane and theme | `data/inferno_edge_research.json` |
@@ -85,7 +91,7 @@ Safety            — authority, risk, secrets
 | `inferno_tos_export_stability.py` | Verifier with retry-and-backoff + fail-mode classifier | `data/inferno_tos_export_stability.json` |
 | `inferno_tos_export_chain.py` | **NEW** 11-step end-to-end TOS export diagnostic with first-failure attribution | `data/inferno_tos_export_chain.json` |
 | `inferno_skills_audit.py` | Stale-skill auditor across every inferno_*.py module | `reports/skills_audit_latest.txt` |
-| `inferno_night_prep.py` | **NEW** Bedside check that every layer is ready for tomorrow morning | `reports/night_prep_latest.txt` |
+| `inferno_night_prep.py` | **NEW** Bedside check that every layer is ready for tomorrow morning, now including Schwab/TOS source posture | `reports/night_prep_latest.txt` |
 | `inferno_housekeeping.py` | Prune stale artifacts after they exceed retention | side-effects on `data/` |
 
 ## Thinking (math, hypotheses, proof)
@@ -112,6 +118,13 @@ Safety            — authority, risk, secrets
 | `inferno_paper_bootstrap.py` | Seeds paper ledger at relaxed gating so promotion math can earn Phase 2 | `reports/paper_bootstrap_latest.txt` |
 | `inferno_slate_normalizer.py` | Scale-invariant percentile ranks; fixes the broken absolute-threshold gates | `reports/slate_normalized_latest.txt` |
 | `inferno_conviction_research.py` | Research-only whole-universe map of giants, sleepers, near-term winners, and contradictions | `reports/conviction_research_latest.txt` |
+| `inferno_outcome_attribution.py` | Research-only Brinson-style decomposition of closed paper/shadow outcomes | `reports/outcome_attribution_latest.txt` |
+| `inferno_rule_edge_decay.py` | Research-only Wilson + half-life monitor for conviction-audit rule bullets | `reports/rule_edge_decay_latest.txt` |
+| `inferno_slippage_estimator.py` | Research-only quoted/effective spread and family slippage anchor table | `reports/slippage_estimator_latest.txt` |
+| `inferno_portfolio_correlation.py` | Research-only effective bet count, concentration, and pairwise outcome correlation monitor | `reports/portfolio_correlation_latest.txt` |
+| `inferno_drawdown_protocol.py` | Research-only drawdown-state sizing ladder and recovery discipline monitor | `reports/drawdown_protocol_latest.txt` |
+| `inferno_consensus_monitor.py` | Research-only crowdedness monitor over Schwab skew, own-side lean, and family-pair fusion | `reports/consensus_monitor_latest.txt` |
+| `inferno_schwab_edge_signals.py` | Research-only bridge from Schwab option-chain data to tiered operator signal lanes | `reports/schwab_edge_signals_latest.txt` |
 | `inferno_math_config.py` | **NEW** Audited target source of truth for math knobs — seeds, resample counts, thresholds, vocabulary | pure library, no artifact |
 | `inferno_performance_analytics.py` | Per-ticket performance with block-reason histogram | `data/inferno_performance_analytics.json` |
 | `inferno_research_cycle.py` | Periodic research roll-up across the thinking layer | `data/inferno_research_cycle.json` |

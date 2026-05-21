@@ -198,6 +198,72 @@ def market_context_guards(item: dict[str, Any]) -> tuple[list[str], list[str], d
     }
 
 
+def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[str], dict[str, Any]]:
+    """Apply read-only Schwab option-chain quality gates when available.
+
+    Missing Schwab data is not a blocker because OAuth may not be configured yet.
+    Attached Schwab data, however, is treated as higher-confidence quote
+    evidence than generic vendor chains, so ugly quote-quality flags can block a
+    paper ticket before it pollutes the evidence loop.
+    """
+    schwab_options = item.get("schwabOptions")
+    if not isinstance(schwab_options, dict) or not schwab_options:
+        return [], [], {"attached": False}
+
+    score = number(schwab_options.get("quoteQualityScore"), 0)
+    label = str(schwab_options.get("quoteQualityLabel") or "unknown")
+    flags = [str(flag) for flag in (schwab_options.get("qualityFlags") or [])]
+    atm_spread_quality = str(schwab_options.get("atmSpreadQuality") or "unknown")
+    atm_bucket = str(schwab_options.get("atmExpectedMoveBucket") or "unknown")
+    atm_liquidity = number(schwab_options.get("atmLiquidityScore"), 0)
+    spread_pct = number(schwab_options.get("atmSpreadPct"), 0)
+
+    blocks: list[str] = []
+    warnings: list[str] = []
+
+    hard_flags = {
+        "empty-chain",
+        "missing-underlying-price",
+        "missing-atm-pair",
+        "no-liquid-contracts",
+        "wide-atm-spread",
+    }
+    for flag in flags:
+        if flag in hard_flags:
+            blocks.append(f"Schwab option chain quality block: {flag}")
+        elif flag == "incomplete-greeks":
+            warnings.append("Schwab option chain has incomplete Greeks")
+        else:
+            warnings.append(f"Schwab option chain warning: {flag}")
+
+    if score and score < 50:
+        blocks.append(f"Schwab quote quality {score:.0f}/{label} is below paper threshold")
+    elif 50 <= score < 70:
+        warnings.append(f"Schwab quote quality is fragile at {score:.0f}/{label}")
+    if atm_spread_quality in {"wide", "untradeable"}:
+        blocks.append(f"Schwab ATM spread is {atm_spread_quality}")
+    if atm_liquidity and atm_liquidity < 50:
+        blocks.append(f"Schwab ATM liquidity score {atm_liquidity:.0f} is too thin")
+    elif 50 <= atm_liquidity < 70:
+        warnings.append(f"Schwab ATM liquidity score {atm_liquidity:.0f} needs manual review")
+    if atm_bucket == "inferno":
+        warnings.append("Schwab ATM implied move is inferno-hot; size and exit discipline matter")
+
+    return blocks, warnings, {
+        "attached": True,
+        "sourceGeneratedAt": schwab_options.get("sourceGeneratedAt"),
+        "sourceStatus": schwab_options.get("sourceStatus"),
+        "quoteQualityScore": score,
+        "quoteQualityLabel": label,
+        "qualityFlags": flags,
+        "atmSpreadPct": spread_pct,
+        "atmSpreadQuality": atm_spread_quality,
+        "atmLiquidityScore": atm_liquidity,
+        "atmExpectedMoveBucket": atm_bucket,
+        "atmImpliedMovePct": schwab_options.get("atmImpliedMovePct"),
+    }
+
+
 def evaluate_strike_item(
     item: dict[str, Any],
     *,
@@ -219,6 +285,7 @@ def evaluate_strike_item(
     open_items = open_paper_items(ledger_items)
     plan = strategy_plan(item)
     context_blocks, context_warnings, context_metrics = market_context_guards(item)
+    schwab_blocks, schwab_warnings, schwab_metrics = schwab_option_quality_guards(item)
 
     if not item.get("ok"):
         blocks.append(str(item.get("reason") or "strike plan failed"))
@@ -238,6 +305,7 @@ def evaluate_strike_item(
         blocks.append(f"reward/risk {rr:.2f} is below debit-spread floor {MIN_DEBIT_SPREAD_REWARD_RISK:.2f}")
     blocks.extend(visible_quote_blocks(item))
     blocks.extend(plan.get("liquidityNotes") or [])
+    blocks.extend(schwab_blocks)
 
     if item.get("liveTradingAllowed"):
         blocks.append("unexpected liveTradingAllowed flag detected")
@@ -246,6 +314,7 @@ def evaluate_strike_item(
 
     blocks.extend(context_blocks)
     warnings.extend(context_warnings)
+    warnings.extend(schwab_warnings)
 
     metrics = {
         "ticker": ticker,
@@ -260,5 +329,6 @@ def evaluate_strike_item(
         "debitSpreadRewardRisk": rr,
         "minDebitSpreadRewardRisk": MIN_DEBIT_SPREAD_REWARD_RISK,
         "marketContext": context_metrics,
+        "schwabOptions": schwab_metrics,
     }
     return RiskVerdict(passed=not blocks, blocks=blocks, warnings=warnings, metrics=metrics)

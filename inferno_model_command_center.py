@@ -50,6 +50,13 @@ STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
+SCHWAB_EDGE_SIGNALS_FILE = DATA_DIR / "inferno_schwab_edge_signals.json"
+OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
+RULE_EDGE_DECAY_FILE = DATA_DIR / "inferno_rule_edge_decay.json"
+SLIPPAGE_ESTIMATOR_FILE = DATA_DIR / "inferno_slippage_estimator.json"
+PORTFOLIO_CORRELATION_FILE = DATA_DIR / "inferno_portfolio_correlation.json"
+DRAWDOWN_PROTOCOL_FILE = DATA_DIR / "inferno_drawdown_protocol.json"
+CONSENSUS_MONITOR_FILE = DATA_DIR / "inferno_consensus_monitor.json"
 MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
 
 
@@ -139,6 +146,48 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "codex",
     },
     {
+        "lane": "schwab-edge",
+        "question": "Which Schwab tickers are capitalize-now vs thin-data today?",
+        "artifact": "reports/schwab_edge_signals_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "outcome-attribution",
+        "question": "What did we actually learn from each closed outcome?",
+        "artifact": "reports/outcome_attribution_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "rule-edge-decay",
+        "question": "Which conviction-audit rules are still earning their place?",
+        "artifact": "reports/rule_edge_decay_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "slippage-estimator",
+        "question": "How much edge do we lose to the spread by strategy family?",
+        "artifact": "reports/slippage_estimator_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "portfolio-correlation",
+        "question": "Are our active tickets actually independent bets?",
+        "artifact": "reports/portfolio_correlation_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "drawdown-protocol",
+        "question": "What's the desk's current drawdown and recommended sizing regime?",
+        "artifact": "reports/drawdown_protocol_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "consensus-monitor",
+        "question": "Are we contrarian today, or in the crowded trade?",
+        "artifact": "reports/consensus_monitor_latest.txt",
+        "owner": "shared",
+    },
+    {
         "lane": "briefing",
         "question": "What did the morning desk say?",
         "artifact": "reports/morning_brief_latest.txt",
@@ -207,10 +256,31 @@ def load_notes(limit: int | None = None) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
         if isinstance(payload, dict):
-            notes.append(payload)
+            notes.append(normalize_note(payload))
     if limit is not None:
         return notes[-limit:]
     return notes
+
+
+def normalize_note(note: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Codex and Claude note schemas for clean command-center display."""
+    normalized = dict(note)
+    normalized["createdAt"] = text(note.get("createdAt") or note.get("ts") or note.get("timestamp"))
+    normalized["author"] = text(note.get("author") or note.get("model") or "unknown")
+    title = text(note.get("title"))
+    if not title:
+        summary = text(note.get("summary"))
+        kind = text(note.get("kind"))
+        # Claude handoff notes often use "kind" plus a long summary instead of
+        # the Codex title field; prefer the summary so the command memo stays
+        # useful instead of showing generic labels like "Ship".
+        if summary:
+            first_sentence = summary.split(". ", 1)[0]
+            title = first_sentence[:93] + "..." if len(first_sentence) > 96 else first_sentence
+        else:
+            title = kind.replace("-", " ").title()
+    normalized["title"] = title or "Untitled note"
+    return normalized
 
 
 def append_note(
@@ -432,6 +502,13 @@ def build_command_center() -> dict[str, Any]:
         "shadowEvidence": artifact_summary(SHADOW_EVIDENCE_FILE, keys=("verdict", "generatedAt", "message")),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
+        "schwabEdgeSignals": artifact_summary(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
+        "outcomeAttribution": artifact_summary(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "ruleEdgeDecay": artifact_summary(RULE_EDGE_DECAY_FILE, keys=("stage", "verdict", "generatedAt", "promotable")),
+        "slippageEstimator": artifact_summary(SLIPPAGE_ESTIMATOR_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "portfolioCorrelation": artifact_summary(PORTFOLIO_CORRELATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "drawdownProtocol": artifact_summary(DRAWDOWN_PROTOCOL_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "consensusMonitor": artifact_summary(CONSENSUS_MONITOR_FILE, keys=("stage", "verdict", "generatedAt", "consensusCount", "researchOnly", "promotable")),
         "mathVerify": artifact_summary(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
     }
     headline_metrics = {

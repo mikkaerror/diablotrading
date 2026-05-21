@@ -94,8 +94,9 @@ With the exact strikes, debit/credit, and quantity from the broker preview.
 - Place a **limit order** at the mid (or slightly worse if mid is illiquid).
 - Set a stop or alert at your max-loss threshold.
 
-The desk does not click submit. The desk does not have a Schwab API key.
-The desk does not have permission to enter live orders. **You do.**
+The desk does not click submit. The Schwab API lane is read-only market data,
+not order entry. The desk does not have permission to enter live orders.
+**You do.**
 
 ### Write the exit before you click submit
 

@@ -213,8 +213,9 @@ but automation remains locked and warnings must be accepted explicitly.
 ```
 
 The action pulse is the easy-access tactical email. It refreshes the read-only
-ops loop, builds the daily-loop digest, builds the capital launch check, and
-sends a short operator memo. It cannot submit orders or change authority.
+Schwab options tape when configured, refreshes the read-only ops loop, builds
+the daily-loop digest, builds the capital launch check, and sends a short
+operator memo. It cannot submit orders or change authority.
 
 Install the weekday schedule:
 
@@ -227,6 +228,23 @@ Default local times:
 
 - `07:05` Mountain: open watch, after the dawn refresh and before market open
 - `13:30` Mountain: pre-close watch, before the equity close
+
+### Refresh Schwab option-chain tape
+
+```bash
+./run_inferno_schwab_daily_ops.sh
+```
+
+This refreshes the local Schwab OAuth token when possible, pulls read-only
+option chains for the active execution/approval/watchlist slate, classifies
+each chain into `tradable-research`, `paper-ready`, `manual-review`, or
+`avoid-chain`, and writes:
+
+- [data/inferno_schwab_daily_ops.json](data/inferno_schwab_daily_ops.json)
+- [reports/schwab_daily_ops_latest.txt](reports/schwab_daily_ops_latest.txt)
+
+Use it before strike selection if you want the latest broker-grade spread,
+liquidity, IV, Greek, and expected-move checks.
 
 To inspect the paper execution ledger without rebuilding:
 
@@ -922,7 +940,7 @@ in `docs/archive/WATCHLIST_INGEST_PLAN.md` for archeology.
 python3 "<repo-root>/inferno_night_prep.py"
 ```
 
-The night-prep diagnostic walks twelve checkpoints and reports a
+The night-prep diagnostic walks fourteen checkpoints and reports a
 top-line `readyForMorning` boolean:
 
 - LaunchAgents loaded for dawn cycle, daily loop, watchdog, ops
@@ -930,14 +948,29 @@ top-line `readyForMorning` boolean:
 - Doctor, ops maintenance, and daily loop artifacts are fresh enough
 - Authority manifest still pinned to `paper-evidence-only`
 - TOS export chain artifact exists and reports its verdict
+- Schwab options source posture is known
+- TOS read-only capture posture is known
 - Cycle journal has at least one entry
 - Watchlist input slot exists or is creatable
 - Brain narration log has rows
+
+It also emits a `dataSourcePosture` block:
+
+- `schwabOptionsReady` tells us whether broker-grade option-chain data is
+  currently enriching strike selection.
+- `tosCaptureReady` tells us whether the already-open TOS window is ready for
+  read-only broker capture.
+- `overnightMathReady` can still be true when TOS is closed. That is the
+  intended low-power posture; open TOS manually only when broker evidence is
+  required.
 
 Verdict ladder: `ready` (every check passes), `warming` (some warnings
 but nothing fatal), `blocked` (at least one hard failure). The brain
 console surfaces this verdict in the BREATHING line so you don't have
 to re-run the diagnostic to see it.
+
+See `docs/OVERNIGHT_DATA_PLAN.md` for the before-bed Schwab/TOS source
+authority checklist.
 
 ### Diagnose the native TOS export path end-to-end
 

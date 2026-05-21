@@ -1,49 +1,63 @@
 # Project Status
 
-Last updated: 2026-05-19.
+Last updated: 2026-05-20.
 
 The desk's "where are we right now" memo. Read this first.
 
+For the shortest durable command brief, start with
+`docs/MISSION_CONTROL.md`.
+
 ## Verdict
 
-**Healthy manual-only desk.** Live account sync is healthy for the configured
-approved suffix, the live book is clear, capital can be reviewed manually with
-warnings, and all automated live trading remains locked.
+**Healthy read-only desk; fresh capital blocked.** Live account sync is healthy
+for the configured approved suffix, the tracker now includes the current live
+positions, and all automated live trading remains locked. Fresh capital should
+not be deployed until the fragile live-book review items are cleared.
 
-Latest readiness sweep: 2026-05-19 17:35 MT. Capital deployment readiness is
-`manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
-`clean`; paper evidence is still the bottleneck with 30 closed scored outcomes
-remaining before any automation promotion. The new conviction v2 layer now
-adds best-balanced rankings, and the paper lane can auto-select approval-only
-setups for simulated paper evidence while keeping live orders locked.
+Latest readiness sweep: 2026-05-21 00:23 MT. Capital launch is `blocked`; risk
+gates are `blocked`; math verification is `clean`; Schwab options data is live
+as the primary read-only option quote tape; paper evidence is still the
+bottleneck with 30 closed scored outcomes remaining before any automation
+promotion. The live book has four matched positions in the approved account:
+TE, IREN, HIVE, and CLSK.
 
 `reports/model_command_center_latest.txt` is now the PM landing page. If this
 doc disagrees with that artifact, the command-center artifact wins.
 
 ## Priorities (in order)
 
-1. Capital deployment readiness: review operator-entered cash manually, keep live submit OFF.
-2. Live account lane: read-only, scoped to the configured approved suffix.
-3. Paper evidence: run the 12-scenario reducer, then score the top-five focus names.
-4. Tracker sync: clean, fail-closed on vendor gaps.
-5. Morning brief + ops maintenance: fresh, no silent failures.
-6. Docs + artifacts: easy for the next model to inherit.
+1. Strategy requirements: keep objectives, gates, data authority, and evidence standards aligned in `docs/STRATEGY_REQUIREMENTS.md`.
+2. Mission clarity: keep the one-page command brief in `docs/MISSION_CONTROL.md` sharper than the rest of the docs.
+3. Capital deployment readiness: review operator-entered cash manually, keep live submit OFF.
+4. Schwab option tape: keep OAuth refresh, chain quality, and strike/risk integration green.
+5. Live account lane: read-only, scoped to the configured approved suffix.
+6. Paper evidence: run the 12-scenario reducer, then score the top-five focus names.
+7. Tracker sync: clean, fail-closed on vendor gaps.
+8. Morning brief + ops maintenance: fresh, no silent failures.
+9. Docs + artifacts: easy for the next model to inherit.
 
 ## Current state
 
 | Lane | State | Notes |
 |---|---|---|
 | Command center | current | executive summary + canonical report map |
+| Mission control | shipped | one-page mission, strategy thesis, data authority, decision ladder, boundaries, and next build priorities |
+| Strategy requirements | shipped | hedge-fund-style charter mapping objectives, data requirements, strategy families, gates, metrics, and promotion standards |
 | Usage optimizer | shipped | low-context handoff packet for Codex/Claude sessions |
 | Desk health | healthy | doctor green; paper lane still needs evidence volume |
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
 | Live account sync | healthy | matched configured approved suffix |
-| Live book | clear, read-only | 0 positions · 0 fragile · 0 hard blockers |
-| Capital deployment | `manual-ready-with-warnings` | operator-entered cash basis; manual review only |
-| Risk gate audit | `manual-only` | 0 hard fails; promotion still blocked |
-| Tracker | synced | 143 sheet / 143 snapshot; 0 critical/advisory ticker issues |
+| Live book | review, read-only | 4 matched positions · TE constructive · IREN/HIVE review · CLSK fragile |
+| Capital deployment | `blocked` | fresh capital blocked until fragile live-book items are reviewed |
+| Risk gate audit | `blocked` | 5/12 pass in launch check; promotion still blocked |
+| Tracker | synced | 146 sheet / 146 snapshot; HIVE, TE, CLSK appended; IREN already existed; 0 critical/advisory ticker issues |
 | Watchlist closed-loop | shipped | 5-min autorefresh, three-way reconciler |
-| Schwab options API | scaffolded | read-only option-chain adapter normalizes bid/ask, Greeks, liquidity, ATM straddle expected-move proxy; OAuth/token helper still next |
+| Schwab options API | active, read-only | OAuth helper and token refresh are live; the option-chain adapter adds quote-quality score/label, liquidity buckets, spread friction, Greek completeness, ATM straddle expected-move proxy, fail-closed quality flags, and strike-selector/risk-policy enforcement when attached; no account/order endpoints |
+| Schwab daily ops tape | active | `inferno_schwab_daily_ops.py` refreshes tokens when possible, pulls the active slate, classifies chains into `tradable-research` / `paper-ready` / `manual-review` / `avoid-chain`, and feeds the action pulse + strike cycle |
+| Schwab edge signals | shipped | bridge module `inferno_schwab_edge_signals.py` reads the chain adapter output and emits per-ticker tier-classified lanes (`tradable-research` / `calibration-watch` / `thin-data` / `no-chain`) plus a cross-sectional regime read (IV bucket distribution, expected-move buckets, call/put skew lean); wired into command center reporting map and doctor freshness; 21 contract tests; framework documented in `docs/SCHWAB_EDGE_OPPORTUNITIES.md` (honest framing of retail options edge, four-tier metric hierarchy, refresh cadence, anti-goals, Phase 2-4 build backlog) |
+| Research Roadmap Phase A | shipped | post-trade learning layer complete: `inferno_outcome_attribution.py` (Brinson decomposition + Eckhardt comfortable-win flag, 12 tests), `inferno_rule_edge_decay.py` (Wilson lower bound + exponential half-life on per-bullet citation tags, 26 tests), `inferno_slippage_estimator.py` (Roll/Hasbrouck spread math + per-strategy-family anchor table; live data shows Long Straddle median spread 12% / median slip 5% on 81 tickets, Vertical Debit 22% / 76% on 75 tickets — 100 flagged tickets surfacing real execution-gap signal, 29 tests); all three wired into model command center, doctor freshness, and PROJECT_STATUS; theory live in `docs/PERFORMANCE_ATTRIBUTION.md` |
+| Research Roadmap Phase B | shipped | portfolio-level layer complete: `inferno_portfolio_correlation.py` (Markowitz/Dalio/Grinold math — pairwise PnL correlation, Herfindahl effective bet count, per-family/per-direction/per-DTE concentration, adverse-scenario overlap; live data immediately surfaced a real finding — 119 active tickets across only 2 families means effective bet count is 2.0, not 119; verdict `concentrated-by-drift`, 18 tests), `inferno_drawdown_protocol.py` (Ulysses-contract sizing ladder, Ulcer Index/Calmar/time-to-recovery math, research-only advisory only; 29 tests); both wired into command center and doctor freshness; theory + sizing ladder + capacity discussion in `docs/PORTFOLIO_CONSTRUCTION.md` |
+| Research Roadmap Phase C | shipped | consensus / crowdedness layer complete: `inferno_consensus_monitor.py` reads Schwab edge bridge + portfolio correlation artifact and emits a five-tier verdict (`uncrowded` / `normal` / `crowded-watch` / `consensus-extreme` / `awaiting-data`) from three v1 signals — side-skew lean, own-side direction concentration, family-pair fusion (ρ≥0.70); live data surfaces `own-side-concentration: long-vol-heavy (62/119)` as the desk's current crowdedness lean; verdict today is `normal` (1 of 3 signals leaning); 19 tests; wired into command center and doctor; theory in `docs/CONSENSUS_AND_CROWDEDNESS.md` (Stein-2009, Brunnermeier-Nagel-2004, Lou-Polk-2013, Khandani-Lo-2007); Phase C explicitly lists "not built yet" so the next session knows the path to /movers, sector-ETF vol, VIX term structure, news sentiment |
 | Falsification engine | shipped | sign-flip bootstrap on every claimed edge |
 | Evidence strength scalar | shipped | geometric mean over Wilson · expectancy · N · falsification |
 | Kelly sizing | shipped | bootstrap-conservative quarter-Kelly with global risk ceiling |
@@ -67,7 +81,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Theory references | shipped | one place for primary literature tags used by the audit |
 | Scenario backtest | shipped | daily 10+ scenario slate now compares against closed paper/shadow evidence by ticker, strategy family, and DTE window |
 | Scenario evidence | shipped | daily 10+ slate now records research-only underlying observations so the backtest can learn before fills close |
-| Paper evidence | auto-paper evidence lane | 1 auto-selected paper setup staged; 30 closed scored outcomes still needed |
+| Paper evidence | evidence-building | latest sweep found 0 stageable / 0 auto-paper tickets; 12 shadow scenarios refreshed; 30 closed scored outcomes still needed |
 
 ## Live truth lives in artifacts, not docs
 
@@ -76,7 +90,9 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Is anything broken? | `reports/doctor_latest.txt` |
 | What matters right now? | `reports/model_command_center_latest.txt` |
 | What should a new model read first? | `reports/usage_optimizer_latest.txt` |
+| What is the shortest durable mission brief? | `docs/MISSION_CONTROL.md` |
 | How is the system wired? | `docs/SYSTEM_MAP.md` |
+| What strategy requirements govern the desk? | `docs/STRATEGY_REQUIREMENTS.md` |
 | What does the brain see right now? | `inferno_brain_console.py` |
 | Did today count as a good day? | `reports/daily_success_latest.txt` |
 | What is the live book? | `reports/live_position_review_latest.txt` |
@@ -87,6 +103,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | What 10+ scenarios should we track? | `reports/paper_bottleneck_reducer_latest.txt` |
 | What did the scenario observations teach us? | `reports/scenario_evidence_latest.txt` |
 | What can today's scenario slate honestly teach us? | `reports/scenario_backtest_latest.txt` |
+| What does Schwab say about option tradability? | `reports/schwab_daily_ops_latest.txt` |
 | Do the formulas still check out? | `reports/math_verify_latest.txt` |
 | What's the math case for each ready trade? | `reports/trade_conviction_audit_latest.txt` |
 | Which blow-up patterns is today's slate brushing against? | `reports/blowup_guardrails_latest.txt` |
@@ -100,7 +117,7 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Vendor gaps fail closed instead of aborting the refresh.
 - Sheet hydration self-heals broken `Setup Rec` / `Signal Trigger` cells.
 - The TOS lane stays read-only. Background export triggering is disabled; manual/supervised export remains available.
-- The Schwab lane is read-only market data. OAuth tokens stay ignored locally, and account/order endpoints are not part of the scaffold.
+- The Schwab lane is read-only market data. OAuth tokens stay ignored locally, token refresh is automated, and account/order endpoints are not part of the desk.
 - Watchlist intake now flows TOS → sheet → reconcile every 5 minutes.
 - Command-center reporting now starts with executive summary, math status, and canonical report map.
 - Usage optimizer now creates a compact read-first / do-not-paste handoff to reduce repeated context spend.
@@ -108,15 +125,17 @@ If this doc disagrees with those artifacts, the artifacts win.
 ## What still needs work
 
 - Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios, scenario observations capture underlying moves, scenario backtest labels thin evidence explicitly, and approval-only names can become paper-only auto selections when all risk gates pass.
+- Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
-- Capital deployment: manual review only; no automated submission.
+- Capital deployment: blocked until CLSK and other fragile live-book warnings are reviewed; no automated submission.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Treat deployable cash as manual-review capital only; no live automation.
-2. Run the command center, capital readiness, and risk gate audit before sizing any ticket.
+1. Treat deployable cash as blocked until CLSK is reviewed and the launch check clears; no live automation.
+2. Run the command center, capital readiness, Schwab daily ops tape, and risk
+   gate audit before sizing any ticket.
 3. Let the paper loop accumulate. Use the reducer's top-five focus list for
    review, use scenario evidence to capture underlying movement, then use
    scenario backtest to decide what the full 12-scenario slate can and cannot

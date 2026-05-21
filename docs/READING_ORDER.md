@@ -28,18 +28,20 @@ desk.
 
 Read this first. Everything else is depth.
 
-0. [**SYSTEM_MAP.md**](SYSTEM_MAP.md) — one page: architecture, trade lifecycle, safety stack, canonical artifact map. Read before anything else.
+0. [**MISSION_CONTROL.md**](MISSION_CONTROL.md) — one page: mission, strategy thesis, data authority, decision ladder, hard boundaries, and next build priorities.
+1. [**SYSTEM_MAP.md**](SYSTEM_MAP.md) — one page: architecture, trade lifecycle, safety stack, canonical artifact map.
 
-## The five-doc anchor (10 minutes)
+## The core anchor (10 minutes)
 
 Read these in order. After them, you can write or operate without breaking
 the safety rails:
 
 1. `reports/usage_optimizer_latest.txt` — smallest safe read list and do-not-paste list.
 2. `reports/model_command_center_latest.txt` — current missions, notes, safety rails, next actions.
-3. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
-4. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
-5. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
+3. [**MISSION_CONTROL.md**](MISSION_CONTROL.md) — durable command brief.
+4. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
+5. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — model split, collaboration rules, safety rails.
+6. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
 
 Use [**MODULE_INDEX.md**](MODULE_INDEX.md) and
 [**ENGINEERING_CONVENTIONS.md**](ENGINEERING_CONVENTIONS.md) when you are
@@ -47,47 +49,55 @@ about to change code.
 
 ## The mission
 
-6. [**MISSION.md**](MISSION.md) — the operator's North Star. Honest expectations, four-phase journey, entry + exit framework, monthly milestones. Reread monthly.
-7. [**RESEARCH_ROADMAP.md**](RESEARCH_ROADMAP.md) — the three-phase research plan (post-trade learning → portfolio-level → consensus risk). Read before claiming a research mission.
+7. [**MISSION.md**](MISSION.md) — the operator's North Star. Honest expectations, four-phase journey, entry + exit framework, monthly milestones. Reread monthly.
+8. [**STRATEGY_REQUIREMENTS.md**](STRATEGY_REQUIREMENTS.md) — strategy families, required data, objective function, gates, and metrics.
+9. [**RESEARCH_ROADMAP.md**](RESEARCH_ROADMAP.md) — the three-phase research plan (post-trade learning → portfolio-level → consensus risk). Read before claiming a research mission.
+9a. [**PORTFOLIO_CONSTRUCTION.md**](PORTFOLIO_CONSTRUCTION.md) — correlation, drawdown, capacity, and sizing discipline.
+9b. [**CONSENSUS_AND_CROWDEDNESS.md**](CONSENSUS_AND_CROWDEDNESS.md) — crowdedness, reflexivity, and what the desk still refuses to infer.
 
 ## The day-to-day
 
-7. [**TRADING_DAY_CHECKLIST.md**](TRADING_DAY_CHECKLIST.md) — the seven-step flow from morning brief to filled order, with exit rules baked in.
-8. [**DAILY_BRIEFING_SETUP.md**](DAILY_BRIEFING_SETUP.md) — get the operator briefing in your inbox at 6:10 AM.
+10. [**TRADING_DAY_CHECKLIST.md**](TRADING_DAY_CHECKLIST.md) — the seven-step flow from morning brief to filled order, with exit rules baked in.
+11. [**DAILY_BRIEFING_SETUP.md**](DAILY_BRIEFING_SETUP.md) — get the operator briefing in your inbox at 6:10 AM.
 
 ## Touch the math
 
-9. [**MATH.md**](MATH.md) — every probability and statistical primitive the desk uses, with formulas, edge cases, and worked examples. Required reading before changing any math module.
+12. [**MATH.md**](MATH.md) — every probability and statistical primitive the desk uses, with formulas, edge cases, and worked examples. Required reading before changing any math module.
 
 ## Operate the desk (add ~50 minutes)
 
-10. [**RUNBOOK.md**](RUNBOOK.md) — every CLI command, the day-to-day reference.
-11. [**OPERATING_MODEL.md**](OPERATING_MODEL.md) — how decisions flow from evidence to action.
-12. [**CHECKLISTS.md**](CHECKLISTS.md) — daily, weekly, pre-trade.
-13. [**RISK_POLICY.md**](RISK_POLICY.md) — hard caps no automation may exceed.
+13. [**RUNBOOK.md**](RUNBOOK.md) — every CLI command, the day-to-day reference.
+14. [**OPERATING_MODEL.md**](OPERATING_MODEL.md) — how decisions flow from evidence to action.
+15. [**CHECKLISTS.md**](CHECKLISTS.md) — daily, weekly, pre-trade.
+16. [**RISK_POLICY.md**](RISK_POLICY.md) — hard caps no automation may exceed.
 
 ## Touch execution
 
-14. [**EXECUTION_MODEL.md**](EXECUTION_MODEL.md) — order flow from approval to broker preview.
-15. [**PAPER_TEST_LOOP.md**](PAPER_TEST_LOOP.md) — paper-evidence promotion gate.
-16. [**BROKER_AUTOMATION_REQUIREMENTS.md**](BROKER_AUTOMATION_REQUIREMENTS.md) — what must be true before live submit.
-17. [**AUTOTRADING_ROADMAP.md**](AUTOTRADING_ROADMAP.md) — long-term path to broker-assisted execution.
+17. [**EXECUTION_MODEL.md**](EXECUTION_MODEL.md) — order flow from approval to broker preview.
+18. [**PAPER_TEST_LOOP.md**](PAPER_TEST_LOOP.md) — paper-evidence promotion gate.
+19. [**BROKER_AUTOMATION_REQUIREMENTS.md**](BROKER_AUTOMATION_REQUIREMENTS.md) — what must be true before live submit.
+20. [**AUTOTRADING_ROADMAP.md**](AUTOTRADING_ROADMAP.md) — long-term path to broker-assisted execution.
 
 ## Touch thinkorswim
 
-18. [**THINKORSWIM_AUTOMATION.md**](THINKORSWIM_AUTOMATION.md) — AppleScript / accessibility automation.
-19. [**THINKORSWIM_SANDBOX.md**](THINKORSWIM_SANDBOX.md) — paperMoney mode and sandbox isolation.
+21. [**THINKORSWIM_AUTOMATION.md**](THINKORSWIM_AUTOMATION.md) — AppleScript / accessibility automation.
+22. [**THINKORSWIM_SANDBOX.md**](THINKORSWIM_SANDBOX.md) — paperMoney mode and sandbox isolation.
 
 ## Touch cloud automation
 
-20. [**CLOUD_AUTOMATION.md**](CLOUD_AUTOMATION.md) — Cloud Run scheduler topology.
+23. [**CLOUD_AUTOMATION.md**](CLOUD_AUTOMATION.md) — Cloud Run scheduler topology.
+
+## Touch Schwab live data
+
+23a. [**SCHWAB_OPTIONS_API.md**](SCHWAB_OPTIONS_API.md) — read-only chain adapter plan, OAuth posture, and quote-quality contract.
+23b. [**SCHWAB_EDGE_OPPORTUNITIES.md**](SCHWAB_EDGE_OPPORTUNITIES.md) — honest framing of retail options edge, tiered metric hierarchy, refresh cadence, anti-goals, and proposed Phase 2-4 module backlog.
 
 ## Research and playbooks
 
-21. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
-22. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
-23. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
-24. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
+24. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
+25. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
+26. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
+27. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
 
 ## Authoritative ordering
 

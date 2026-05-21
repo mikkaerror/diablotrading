@@ -10,6 +10,7 @@ from unittest.mock import patch
 import inferno_schwab_options as schwab
 
 
+ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_CHAIN = {
     "symbol": "AAPL",
     "underlyingPrice": 200.0,
@@ -90,6 +91,45 @@ class SchwabOptionsTests(unittest.TestCase):
         self.assertEqual(summary["atmStraddleMid"], 17.0)
         self.assertEqual(summary["atmImpliedMovePct"], 0.085)
         self.assertEqual(summary["atmLiquidityScore"], 94)
+        self.assertEqual(summary["atmExpectedMoveDollar"], 17.0)
+        self.assertEqual(summary["atmExpectedMoveBucket"], "hot")
+        self.assertEqual(summary["atmSpreadQuality"], "tight")
+        self.assertEqual(summary["atmLiquidityBucket"], "elite")
+        self.assertEqual(summary["atmImpliedVolatility"], 0.355)
+        self.assertEqual(summary["atmBreakEvenLower"], 183.0)
+        self.assertEqual(summary["atmBreakEvenUpper"], 217.0)
+        self.assertEqual(summary["quoteQualityScore"], 82)
+        self.assertEqual(summary["quoteQualityLabel"], "usable")
+        self.assertEqual(summary["qualityFlags"], [])
+        self.assertEqual(summary["liquidContractRatio"], 1.0)
+        self.assertEqual(summary["greeksCompletenessPct"], 1.0)
+        self.assertEqual(len(summary["topLiquidContracts"]), 2)
+        self.assertEqual(summary["sideStats"]["CALL"]["liquidCount"], 1)
+        self.assertEqual(summary["sideStats"]["PUT"]["avgImpliedVolatility"], 0.36)
+
+    def test_quality_flags_warn_on_unusable_chain(self) -> None:
+        chain = {
+            "symbol": "ZZZ",
+            "underlyingPrice": 10.0,
+            "callExpDateMap": {
+                "2026-06-19:30": {
+                    "10.0": [{"symbol": "ZZZC", "putCall": "CALL", "bid": 0.1, "ask": 0.6, "strikePrice": 10}]
+                }
+            },
+            "putExpDateMap": {
+                "2026-06-19:30": {
+                    "10.0": [{"symbol": "ZZZP", "putCall": "PUT", "bid": 0.1, "ask": 0.7, "strikePrice": 10}]
+                }
+            },
+        }
+
+        summary = schwab.summarize_chain("ZZZ", chain)
+
+        self.assertIn("wide-atm-spread", summary["qualityFlags"])
+        self.assertIn("thin-atm-liquidity", summary["qualityFlags"])
+        self.assertIn("incomplete-greeks", summary["qualityFlags"])
+        self.assertEqual(summary["atmSpreadQuality"], "untradeable")
+        self.assertEqual(summary["quoteQualityLabel"], "poor")
 
     def test_disabled_report_fails_closed_without_network(self) -> None:
         with patch.object(schwab, "SCHWAB_OPTIONS_ENABLED", False):
@@ -107,6 +147,13 @@ class SchwabOptionsTests(unittest.TestCase):
         self.assertEqual(report["status"], "fixture")
         self.assertEqual(report["rows"][0]["symbol"], "AAPL")
         self.assertEqual(report["rows"][0]["atmImpliedMovePct"], 0.085)
+
+    def test_load_fixture_supports_documented_sample_file(self) -> None:
+        fixtures = schwab.load_fixture(ROOT / "tests" / "fixtures" / "schwab_chain_sample.json")
+        report = schwab.build_report(["AAPL"], fixture_payloads=fixtures)
+
+        self.assertEqual(report["rows"][0]["quoteQualityLabel"], "usable")
+        self.assertEqual(report["rows"][0]["atmExpectedMoveBucket"], "hot")
 
     def test_token_loader_reads_ignored_vault_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

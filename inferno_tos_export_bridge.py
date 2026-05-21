@@ -222,21 +222,37 @@ def applescript_keystroke(shortcut: str) -> str:
     raise ValueError(f"unsupported shortcut key: {key}")
 
 
+def existing_process_selector_lines() -> list[str]:
+    """Build AppleScript lines that attach only to an existing TOS process.
+
+    `tell application ... to activate` can reopen thinkorswim when macOS does
+    not see a live window. This selector refuses that path: if none of the
+    known process names exists, the export fails closed instead of launching a
+    fresh TOS instance.
+    """
+    lines = ['  set targetProcessName to ""']
+    for candidate in TOS_PROCESS_CANDIDATES:
+        lines.append(
+            f'  if targetProcessName is "" and exists application process "{candidate}" then set targetProcessName to "{candidate}"'
+        )
+    lines.append('  if targetProcessName is "" then error "no existing thinkorswim process found"')
+    return lines
+
+
 def build_applescript(app_path: Path, shortcut: str, pre_delay: float, post_delay: float) -> str:
-    """Build the guarded AppleScript that activates thinkorswim and fires the export shortcut."""
-    allowed_processes = "{" + ", ".join(f'"{candidate}"' for candidate in TOS_PROCESS_CANDIDATES) + "}"
+    """Build guarded AppleScript that fires the export shortcut attach-only."""
     keystroke_line = applescript_keystroke(shortcut)
     return "\n".join(
         [
-            f'tell application "{app_path}" to activate',
-            f"delay {pre_delay}",
             'tell application "System Events"',
-            f"  set allowedFrontApps to {allowed_processes}",
-            '  set frontApp to name of first application process whose frontmost is true',
-            '  if allowedFrontApps does not contain frontApp then error "frontmost app is " & frontApp',
+            *existing_process_selector_lines(),
+            "  tell application process targetProcessName",
+            "    set frontmost to true",
+            "  end tell",
+            f"  delay {pre_delay}",
             '  try',
-            '    set frontWindowName to name of window 1 of application process frontApp',
-            f'    if frontWindowName is not "" and frontWindowName does not contain "{TOS_MAIN_WINDOW_TOKEN}" then error "front window is " & frontWindowName',
+            "    set frontWindowName to name of window 1 of application process targetProcessName",
+            f'    if frontWindowName is not "" and frontWindowName does not contain "{TOS_MAIN_WINDOW_TOKEN}" and frontWindowName does not contain "Paper@thinkorswim" then error "front window is " & frontWindowName',
             '  end try',
             f"  {keystroke_line}",
             "end tell",
@@ -262,9 +278,10 @@ def build_dump_account_applescript(
     """
     return "\n".join(
         [
-            f'tell application "{app_path}" to activate',
             'tell application "System Events"',
+            f'  if not (exists application process "{process_name}") then error "existing thinkorswim process not found"',
             f'  tell application process "{process_name}"',
+            "    set frontmost to true",
             f"    click UI element {button_index} of UI element {monitor_group_index} of UI element {split_group_index} of window 1",
             "  end tell",
             "end tell",

@@ -16,18 +16,25 @@ python3 inferno_doctor.py
 If generated artifacts disagree with durable docs, the artifacts win for the
 current trading day.
 
-## The Five-Doc Anchor
+## Mission-Control First
+
+If you only read one durable doc, read:
+
+- [`MISSION_CONTROL.md`](MISSION_CONTROL.md) — mission, strategy thesis, data authority, decision ladder, hard boundaries, and next build priorities.
+
+## The Core Anchor
 
 Read these first. Together they define the desk:
 
+- [`MISSION_CONTROL.md`](MISSION_CONTROL.md) — the shortest honest operating brief.
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — current state, priorities, saved truth, and next moves.
-- [`MODEL_COLLABORATION_BRIEF.md`](MODEL_COLLABORATION_BRIEF.md) — mission, operating principle, safety rails.
+- [`MODEL_COLLABORATION_BRIEF.md`](MODEL_COLLABORATION_BRIEF.md) — model split, collaboration rules, safety rails.
 - [`MODEL_THEORY.md`](MODEL_THEORY.md) — how the desk thinks.
 - [`MODULE_INDEX.md`](MODULE_INDEX.md) — which module owns what.
-- [`ENGINEERING_CONVENTIONS.md`](ENGINEERING_CONVENTIONS.md) — the patterns every new module follows.
 
 ## Mission
 
+- [`MISSION_CONTROL.md`](MISSION_CONTROL.md) — the one-page command brief.
 - [`MISSION.md`](MISSION.md) — the honest North Star: compound survival, four phases, entry + exit framework, milestones, ambitious compounding without ruin.
 
 ## Operator One-Pagers

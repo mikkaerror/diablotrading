@@ -6,12 +6,13 @@ This module is the desk's bridge between a healthy thinkorswim session and the
 future export-only automation lane. It does not place orders. It only performs
 the minimum safe UI travel we currently trust:
 
-1. Bring thinkorswim frontmost.
+1. Attach to the already-running thinkorswim process.
 2. Route to the safe `Monitor` workspace.
 3. Route to the `Account Statement` subpanel.
 
 Every step is verified after the click so the desk can fail closed when the
 window disappears, the session is stranded, or the UI lands somewhere unsafe.
+This module never launches a new thinkorswim instance.
 """
 
 import argparse
@@ -23,7 +24,6 @@ from typing import Any
 
 from inferno_config import (
     TOS_ACCOUNT_STATEMENT_TAB_POINT,
-    TOS_APP_PATH,
     TOS_MONITOR_TAB_CANDIDATES,
     TOS_MONITOR_TAB_POINT,
     TOS_UI_ROUTE_RECOVERY_DELAY_SECONDS,
@@ -99,16 +99,21 @@ return ""
 
 
 def recover_tos_window() -> dict[str, Any]:
-    """Attempt a gentle thinkorswim window recovery without touching trading UI."""
-    open_result = run_command("open", "-a", str(TOS_APP_PATH))
+    """Fail closed instead of launching or reopening thinkorswim.
+
+    Older versions used `open -a` here as a convenience recovery path. That was
+    too easy to trigger from another automation lane, so recovery is now
+    attach-only: the operator can reveal the existing window manually, and the
+    desk will sync once the probe sees it.
+    """
     time.sleep(TOS_UI_ROUTE_RECOVERY_DELAY_SECONDS)
     session = probe_tos_session()
     ok = bool(session.get("mainWindowPresent"))
     return {
         "ok": ok,
-        "stdout": text(open_result.stdout),
-        "stderr": text(open_result.stderr),
-        "returncode": open_result.returncode,
+        "stdout": "",
+        "stderr": "" if ok else "TOS reopen disabled by attach-only policy",
+        "returncode": 0 if ok else 1,
         "sessionSummary": session.get("summary"),
     }
 
@@ -294,7 +299,7 @@ def route_to_account_statement(*, dry_run: bool = False, allow_recovery: bool = 
         recovery = recover_tos_window()
         report["steps"].append({"name": "recover-window", **recovery})
         if not recovery.get("ok"):
-            report["message"] = "thinkorswim main window is not visible; recovery did not restore it"
+            report["message"] = "thinkorswim main window is not visible; attach-only recovery will not reopen it"
             report["status"] = "no-window"
             report["screenshot"] = capture_route_screenshot()
             save_ui_route_report(report)
@@ -308,7 +313,7 @@ def route_to_account_statement(*, dry_run: bool = False, allow_recovery: bool = 
             "mainWindowPresent": initial.get("mainWindowPresent"),
         }
     elif not initial.get("mainWindowPresent"):
-        report["message"] = "thinkorswim main window is not visible; route stayed fail-closed without reopening the app"
+        report["message"] = "thinkorswim main window is not visible; route stayed attach-only and fail-closed"
         report["status"] = "no-window"
         report["screenshot"] = capture_route_screenshot()
         save_ui_route_report(report)
@@ -468,7 +473,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-recovery",
         action="store_true",
-        help="Allow an explicit operator run to reopen the thinkorswim window if it is missing",
+        help="Allow an explicit operator run to retry attach-only recovery; never reopens thinkorswim",
     )
     return parser.parse_args()
 

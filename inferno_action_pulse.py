@@ -26,12 +26,22 @@ from inferno_config import DEFAULT_SHEET_NAME, default_backtest_root, local_now,
 from inferno_daily_loop import build_daily_loop, save_daily_loop
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_ops_maintenance import run_maintenance
-from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_file, smtp_configured, smtp_settings
+from server import (
+    DATA_DIR,
+    REPORTS_DIR,
+    SMTP_ENV_FILE,
+    ensure_dirs,
+    load_env_file,
+    load_json_file,
+    smtp_configured,
+    smtp_settings,
+)
 
 
 ACTION_PULSE_FILE = DATA_DIR / "inferno_action_pulse.json"
 ACTION_PULSE_TEXT_FILE = REPORTS_DIR / "action_pulse_latest.txt"
 ACTION_PULSE_STATE_FILE = DATA_DIR / "inferno_action_pulse_state.json"
+SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
 
 PHASE_LABELS = {
     "open": "Open Watch",
@@ -124,6 +134,34 @@ def summarize_warnings(launch: dict[str, Any]) -> list[str]:
     return [text(item) for item in warnings[:8] if text(item)] or ["No blockers or warnings were reported."]
 
 
+def summarize_schwab_daily_ops(report: dict[str, Any]) -> dict[str, Any]:
+    """Compress the Schwab options tape for twice-daily operator emails."""
+    rows = report.get("rows") or []
+    tradable = [row.get("symbol") for row in rows if row.get("lane") == "tradable-research"]
+    paper_ready = [row.get("symbol") for row in rows if row.get("lane") == "paper-ready"]
+    avoid = [row.get("symbol") for row in rows if row.get("lane") == "avoid-chain"]
+    lines = []
+    for row in rows[:6]:
+        move = row.get("atmImpliedMovePct")
+        move_text = f"{number(move) * 100:.2f}%" if move is not None else "-"
+        lines.append(
+            f"{row.get('symbol')}: {row.get('lane')} | "
+            f"Q {number(row.get('quoteQualityScore')):.0f}/{text(row.get('quoteQualityLabel'), 'unknown')} | "
+            f"spread {text(row.get('atmSpreadQuality'), 'unknown')} | "
+            f"liq {number(row.get('atmLiquidityScore')):.0f} | move {move_text}"
+        )
+    return {
+        "available": bool(report),
+        "generatedAt": report.get("generatedAt"),
+        "sourceStatus": report.get("sourceStatus"),
+        "laneCounts": report.get("laneCounts") or {},
+        "tradableResearch": [ticker for ticker in tradable if ticker],
+        "paperReady": [ticker for ticker in paper_ready if ticker],
+        "avoidChain": [ticker for ticker in avoid if ticker],
+        "summaryLines": lines,
+    }
+
+
 def build_action_pulse(
     *,
     phase: str,
@@ -150,6 +188,7 @@ def build_action_pulse(
         deployable_cash=deployable_cash,
         refresh_live_sync=refresh_live_sync,
     )
+    schwab_daily_ops = summarize_schwab_daily_ops(load_json_file(SCHWAB_DAILY_OPS_FILE) or {})
     cash_arg = command_cash_arg(deployable_cash)
 
     payload = {
@@ -173,9 +212,11 @@ def build_action_pulse(
             "narrative": daily_loop.get("narrative"),
         },
         "capitalLaunch": launch,
+        "schwabDailyOps": schwab_daily_ops,
         "decisionSummary": summarize_decisions(launch),
         "warningSummary": summarize_warnings(launch),
         "operatorCommands": [
+            "./run_inferno_schwab_daily_ops.sh",
             f'./run_inferno_action_pulse.sh --phase manual --deployable-cash {cash_arg} --send --force-send',
             f'./run_inferno_capital_launch_check.sh --deployable-cash {cash_arg}',
             f'./run_inferno_strike_cycle.sh --deployable-cash {cash_arg}',
@@ -222,6 +263,20 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     ]
     decide = daily.get("decideTodayTickers") or []
     lines.extend([f"- {ticker}" for ticker in decide] or ["- none"])
+    schwab = payload.get("schwabDailyOps") or {}
+    lines.extend(["", "Schwab options tape"])
+    if schwab.get("available"):
+        counts = schwab.get("laneCounts") or {}
+        lines.append(
+            "- Lanes: "
+            f"tradable={counts.get('tradable-research', 0)} | "
+            f"paper={counts.get('paper-ready', 0)} | "
+            f"manual={counts.get('manual-review', 0)} | "
+            f"avoid={counts.get('avoid-chain', 0)}"
+        )
+        lines.extend(f"- {item}" for item in schwab.get("summaryLines") or ["No Schwab rows summarized."])
+    else:
+        lines.append("- No Schwab daily ops report yet. Run ./run_inferno_schwab_daily_ops.sh.")
     lines.extend(["", "Human decisions"])
     lines.extend(f"- {item}" for item in payload.get("decisionSummary") or [])
     lines.extend(["", "Warnings / blockers"])

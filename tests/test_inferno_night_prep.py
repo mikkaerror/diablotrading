@@ -46,6 +46,8 @@ class NightPrepTests(unittest.TestCase):
             mock.patch.object(np, "NIGHT_PREP_ARTIFACT_FILE", self.data_dir / "inferno_night_prep.json"),
             mock.patch.object(np, "NIGHT_PREP_TEXT_FILE", self.reports_dir / "night_prep_latest.txt"),
             mock.patch.object(np, "WATCHLIST_INPUT_FILE", self.data_dir / "inferno_watchlist_input.json"),
+            mock.patch.object(np, "SCHWAB_OPTIONS_FILE", self.data_dir / "inferno_schwab_options.json"),
+            mock.patch.object(np, "TOS_STABILITY_FILE", self.data_dir / "inferno_tos_export_stability.json"),
             mock.patch.object(np, "EXPECTED_FRESH_ARTIFACTS", (
                 ("recent_doctor", self.data_dir / "inferno_doctor.json"),
                 ("recent_ops_maintenance", self.data_dir / "inferno_ops_maintenance.json"),
@@ -88,6 +90,25 @@ class NightPrepTests(unittest.TestCase):
         (self.data_dir / "inferno_tos_export_chain.json").write_text(
             json.dumps({"verdict": "ready"}), encoding="utf-8"
         )
+        # Schwab/TOS source posture artifacts are present and clean.
+        (self.data_dir / "inferno_schwab_options.json").write_text(
+            json.dumps({
+                "status": "ok",
+                "configured": True,
+                "rows": [{"symbol": "NVDA", "quoteQualityScore": 88}],
+                "errors": [],
+            }),
+            encoding="utf-8",
+        )
+        (self.data_dir / "inferno_tos_export_stability.json").write_text(
+            json.dumps({
+                "verdict": "stable-ready",
+                "dominantFailMode": "ok-ready-live-readonly",
+                "okCount": 3,
+                "attempts": 3,
+            }),
+            encoding="utf-8",
+        )
         # Narration log has one row.
         (self.data_dir / "inferno_brain_narrations.jsonl").write_text(
             '{"at":"2026-05-11T22:00:00","verdict":"green"}\n', encoding="utf-8"
@@ -109,6 +130,8 @@ class NightPrepTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "ready")
         self.assertTrue(payload["readyForMorning"])
         self.assertEqual(payload["failCount"], 0)
+        self.assertTrue(payload["dataSourcePosture"]["schwabOptionsReady"])
+        self.assertTrue(payload["dataSourcePosture"]["tosCaptureReady"])
 
     def test_agent_not_loaded_yields_blocked(self) -> None:
         self._seed_happy_path()
@@ -156,12 +179,43 @@ class NightPrepTests(unittest.TestCase):
         self.assertEqual(slot["status"], "warn")
         self.assertTrue(payload["readyForMorning"])
 
+    def test_pending_schwab_is_warn_not_fail(self) -> None:
+        self._seed_happy_path()
+        (self.data_dir / "inferno_schwab_options.json").write_text(
+            json.dumps({"status": "not-configured", "configured": False, "rows": []}),
+            encoding="utf-8",
+        )
+        payload = np.build_night_prep(launchctl=self._all_agents_loaded)
+        schwab = next(c for c in payload["checks"] if c["name"] == "schwab_options_source")
+        self.assertEqual(schwab["status"], "warn")
+        self.assertTrue(payload["readyForMorning"])
+        self.assertFalse(payload["dataSourcePosture"]["schwabOptionsReady"])
+
+    def test_tos_inactive_safe_keeps_overnight_math_ready(self) -> None:
+        self._seed_happy_path()
+        (self.data_dir / "inferno_tos_export_stability.json").write_text(
+            json.dumps({
+                "verdict": "inactive-safe",
+                "dominantFailMode": "tos-closed-low-power",
+                "okCount": 0,
+                "attempts": 3,
+            }),
+            encoding="utf-8",
+        )
+        payload = np.build_night_prep(launchctl=self._all_agents_loaded)
+        tos = next(c for c in payload["checks"] if c["name"] == "tos_capture_posture")
+        self.assertEqual(tos["status"], "pass")
+        self.assertTrue(payload["readyForMorning"])
+        self.assertFalse(payload["dataSourcePosture"]["tosCaptureReady"])
+        self.assertTrue(payload["dataSourcePosture"]["overnightMathReady"])
+
     def test_text_renderer_includes_each_section(self) -> None:
         self._seed_happy_path()
         payload = np.build_night_prep(launchctl=self._all_agents_loaded)
         rendered = np.night_prep_text(payload)
         self.assertIn("Night Prep", rendered)
         self.assertIn("Verdict:", rendered)
+        self.assertIn("Data source posture:", rendered)
         self.assertIn("Checks:", rendered)
         self.assertIn("Reminders:", rendered)
 
