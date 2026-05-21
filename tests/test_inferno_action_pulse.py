@@ -64,6 +64,19 @@ class InfernoActionPulseTests(unittest.TestCase):
                     "laneCounts": {"tradable-research": 1, "avoid-chain": 1},
                     "summaryLines": ["NVDA: tradable-research | Q 86/institutional | spread tight | liq 100 | move 5.90%"],
                 },
+                "paperEvidence": {
+                    "available": True,
+                    "brokerSubmitAllowed": False,
+                    "counts": {
+                        "scenarios": 12,
+                        "executablePaper": 0,
+                        "approvalNeeded": 0,
+                        "shadowOnly": 12,
+                    },
+                    "summaryLines": [
+                        "MOD: SHADOW | shadow-scenario | score 73.59 | Track MOD as shadow evidence only.",
+                    ],
+                },
                 "decisionSummary": ["GDS hard-blocks-new-capital"],
                 "warningSummary": ["Live position review has 1 fragile holding."],
                 "operatorCommands": ["./run_inferno_capital_launch_check.sh --deployable-cash 1000"],
@@ -80,6 +93,10 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("Max options risk: $250.00", rendered)
         self.assertIn("Schwab options tape", rendered)
         self.assertIn("NVDA: tradable-research", rendered)
+        self.assertIn("Paper evidence queue", rendered)
+        self.assertIn("scenarios=12", rendered)
+        self.assertIn("MOD: SHADOW", rendered)
+        self.assertIn("only executablePaper=true may be staged", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
 

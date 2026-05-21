@@ -26,6 +26,8 @@ from inferno_config import DEFAULT_SHEET_NAME, default_backtest_root, local_now,
 from inferno_daily_loop import build_daily_loop, save_daily_loop
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_ops_maintenance import run_maintenance
+from inferno_paper_bottleneck_reducer import build_reducer as build_paper_bottleneck_reducer
+from inferno_paper_bottleneck_reducer import save_reducer as save_paper_bottleneck_reducer
 from inferno_reporting_summary import (
     build_freshness_panel,
     build_tos_visibility_summary,
@@ -169,6 +171,59 @@ def summarize_schwab_daily_ops(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def summarize_paper_evidence(report: dict[str, Any]) -> dict[str, Any]:
+    """Compress the paper/shadow evidence slate for action-pulse emails.
+
+    This is intentionally descriptive. A shadow scenario can teach us about
+    timing, direction, and volatility, but it is never a broker ticket and never
+    promotion evidence by itself.
+    """
+    if not report:
+        return {
+            "available": False,
+            "summaryLines": ["No paper bottleneck reducer report yet."],
+        }
+    counts = report.get("counts") or {}
+    summary_lines: list[str] = []
+    for item in (report.get("topFiveFocus") or [])[:5]:
+        tag = "PAPER" if item.get("executableInPaperMoney") else "SHADOW"
+        summary_lines.append(
+            f"{item.get('ticker')}: {tag} | {item.get('evidenceLane')} | "
+            f"score {number(item.get('scenarioScore')):.2f} | {text(item.get('reducerAction'))}"
+        )
+    if not summary_lines:
+        summary_lines.append("No paper/shadow scenarios summarized.")
+    return {
+        "available": True,
+        "generatedAt": report.get("generatedAt"),
+        "verdict": report.get("verdict"),
+        "diagnosticOnly": bool(report.get("diagnosticOnly", True)),
+        "liveTradingAllowed": bool(report.get("liveTradingAllowed")),
+        "brokerSubmitAllowed": bool(report.get("brokerSubmitAllowed")),
+        "counts": counts,
+        "summaryLines": summary_lines,
+        "topFocusTickers": [
+            text(item.get("ticker"))
+            for item in (report.get("topFiveFocus") or [])[:5]
+            if text(item.get("ticker"))
+        ],
+    }
+
+
+def refresh_paper_evidence_summary() -> dict[str, Any]:
+    """Refresh and summarize the paper bottleneck reducer without broker access."""
+    try:
+        report = build_paper_bottleneck_reducer()
+        save_paper_bottleneck_reducer(report)
+    except Exception as exc:  # noqa: BLE001 - pulse should degrade, not disappear
+        return {
+            "available": False,
+            "error": str(exc),
+            "summaryLines": [f"Paper evidence reducer refresh failed: {exc}"],
+        }
+    return summarize_paper_evidence(report)
+
+
 def build_action_pulse(
     *,
     phase: str,
@@ -197,6 +252,7 @@ def build_action_pulse(
         refresh_live_sync=refresh_live_sync,
     )
     schwab_daily_ops = summarize_schwab_daily_ops(load_json_file(SCHWAB_DAILY_OPS_FILE) or {})
+    paper_evidence = refresh_paper_evidence_summary()
     freshness_panel = build_freshness_panel()
     for row in freshness_panel.get("rows") or []:
         if row.get("label") == "action pulse":
@@ -226,6 +282,7 @@ def build_action_pulse(
         },
         "capitalLaunch": launch,
         "schwabDailyOps": schwab_daily_ops,
+        "paperEvidence": paper_evidence,
         "freshnessPanel": freshness_panel,
         "tosVisibility": tos_visibility,
         "decisionSummary": summarize_decisions(launch),
@@ -304,6 +361,24 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         lines.extend(f"- {item}" for item in schwab.get("summaryLines") or ["No Schwab rows summarized."])
     else:
         lines.append("- No Schwab daily ops report yet. Run ./run_inferno_schwab_daily_ops.sh.")
+    paper_evidence = payload.get("paperEvidence") or {}
+    lines.extend(["", "Paper evidence queue"])
+    if paper_evidence.get("available"):
+        counts = paper_evidence.get("counts") or {}
+        lines.append(
+            "- Slate: "
+            f"scenarios={counts.get('scenarios', 0)} | "
+            f"paper={counts.get('executablePaper', 0)} | "
+            f"approval={counts.get('approvalNeeded', 0)} | "
+            f"shadow={counts.get('shadowOnly', 0)}"
+        )
+        lines.append(
+            "- Permission: paper/shadow tracking only; "
+            f"broker submit={paper_evidence.get('brokerSubmitAllowed', False)}"
+        )
+        lines.extend(f"- {item}" for item in paper_evidence.get("summaryLines") or [])
+    else:
+        lines.extend(f"- {item}" for item in paper_evidence.get("summaryLines") or ["No paper evidence slate available."])
     lines.extend(["", "Human decisions"])
     lines.extend(f"- {item}" for item in payload.get("decisionSummary") or [])
     lines.extend(["", "Warnings / blockers"])
@@ -318,6 +393,7 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
             f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
             f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
             "- Broker submit: False",
+            "- Paper rule: only executablePaper=true may be staged in paperMoney; shadow scenarios are watch-only.",
             f"- Rule: {payload.get('operatorRule')}",
             "",
             "Operator commands",
