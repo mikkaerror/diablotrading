@@ -92,6 +92,16 @@ REGIME_DRIFT_FILE = DATA_DIR / "inferno_regime_drift.json"
 BAYESIAN_FILE = DATA_DIR / "inferno_bayesian_winrate.json"
 SLATE_NORMALIZED_FILE = DATA_DIR / "inferno_slate_normalized.json"
 
+# Phase A/B/C research-only inputs (see docs/RESEARCH_ROADMAP.md).
+# Each is loaded read-only and only used to *add* bullets to the audit.
+# Missing artifacts are silent no-ops — they never block the audit.
+OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
+RULE_EDGE_DECAY_FILE = DATA_DIR / "inferno_rule_edge_decay.json"
+SLIPPAGE_ESTIMATOR_FILE = DATA_DIR / "inferno_slippage_estimator.json"
+PORTFOLIO_CORRELATION_FILE = DATA_DIR / "inferno_portfolio_correlation.json"
+DRAWDOWN_PROTOCOL_FILE = DATA_DIR / "inferno_drawdown_protocol.json"
+CONSENSUS_MONITOR_FILE = DATA_DIR / "inferno_consensus_monitor.json"
+
 CONVICTION_AUDIT_FILE = DATA_DIR / "inferno_trade_conviction_audit.json"
 CONVICTION_AUDIT_TEXT_FILE = REPORTS_DIR / "trade_conviction_audit_latest.txt"
 
@@ -170,6 +180,25 @@ CITES = {
     "MUNGER-PCA05": "Munger, Poor Charlie's Almanack (Kaufman ed., 2005) — invert always invert; mandatory bear is the desk's daily inversion",
     "BUFFETT-BRK": "Buffett, Berkshire Hathaway letters — circle of competence; risk comes from not knowing what you're doing",
     "TURTLE-D83": "Dennis, Turtle training material (1983; Faith 2007) — system discipline beats discretionary willpower; pre-commit exits",
+    # Phase A — post-trade learning (see docs/PERFORMANCE_ATTRIBUTION.md)
+    "BHB-1986": "Brinson, Hood & Beebower (1986) — allocation vs selection attribution; Eckhardt comfortable-win flag",
+    "ECKHARDT-MW93": "Eckhardt in The New Market Wizards (Schwager 1993) — comfortable wins are the wrong lesson; markets do not pay for what is hard",
+    "ROLL-1984": "Roll (1984) — effective-spread proxy; the realised cost of a fill is bigger than the quoted spread",
+    "HASBROUCK-1991": "Hasbrouck (1991) — adverse selection decomposition; spread tax compounds across the slate",
+    "ALMGREN-CHRISS-2000": "Almgren & Chriss (2000) — optimal-execution framing; for retail size, temporary cost dominates",
+    "MCLEAN-PONTIFF-2016": "McLean & Pontiff (2016) — post-publication factor decay; rule-edge half-life is real",
+    "ADAMS-MACKAY-2007": "Adams & MacKay (2007) — Bayesian online change-point detection; cleaner than CUSUM for rule decay",
+    # Phase B — portfolio construction (see docs/PORTFOLIO_CONSTRUCTION.md)
+    "MARKOWITZ-1952": "Markowitz (1952) — portfolio variance with correlation cross-term; correlated positions do not diversify",
+    "DALIO-HOLY-GRAIL": "Dalio Holy Grail — 15 uncorrelated streams ≈ 4× Sharpe; the effective bet count is the honest count, not the headcount",
+    "GRINOLD-1989": "Grinold (1989) — Fundamental Law: IR ≈ IC · √Breadth; breadth must be *independent* bets",
+    "YOUNG-1991": "Young (1991) — Calmar ratio; drawdown management is a pre-commit conversation",
+    "MARTIN-1989": "Martin (1989) — Ulcer Index; depth × duration of drawdown is what stresses the operator",
+    # Phase C — consensus / crowdedness (see docs/CONSENSUS_AND_CROWDEDNESS.md)
+    "STEIN-2009": "Stein (2009) — limits of arbitrage when crowded; the trade smart money agrees with is the trade to size smaller",
+    "LOU-POLK-2013": "Lou & Polk (2013) — comomentum; rising within-family correlation is a crowdedness warning, not a strength tell",
+    "BRUNNERMEIER-NAGEL-2004": "Brunnermeier & Nagel (2004) — riding the bubble; crowdedness can persist before reversing, so pre-commit the exit",
+    "KHANDANI-LO-2007": "Khandani & Lo (2007) — August 2007 quant unwind; positions sized so they don't need exit at adverse moments are the only ones worth holding",
 }
 
 
@@ -775,12 +804,193 @@ def _collect_blowup_risks(ticket: dict[str, Any], brief: dict[str, Any]) -> list
     return out
 
 
+def _ticket_family(structure: str) -> str:
+    """Map a ticket's structure string to the Phase A/B family taxonomy.
+
+    Mirrors the buckets in inferno_outcome_attribution and
+    inferno_portfolio_correlation so cross-module references line up.
+    """
+    name = (structure or "").strip().lower().replace("_", " ")
+    if not name:
+        return "Unknown"
+    if "straddle" in name:
+        return "Long Straddle"
+    if "strangle" in name:
+        return "Long Strangle"
+    if "iron condor" in name:
+        return "Iron Condor"
+    if "butterfly" in name:
+        return "Butterfly"
+    if "calendar" in name or "diagonal" in name:
+        return "Calendar / Diagonal"
+    if "credit" in name:
+        return "Credit Spread"
+    if "debit" in name or ("vertical" in name and "call" in name) or ("vertical" in name and "put" in name):
+        return "Vertical Debit"
+    if "vertical" in name:
+        return "Vertical"
+    return "Unknown"
+
+
+def _ticket_direction(structure: str) -> str:
+    """Map structure to the Phase C direction taxonomy."""
+    family = _ticket_family(structure)
+    if family in {"Long Straddle", "Long Strangle", "Calendar / Diagonal"}:
+        return "long-vol"
+    if family in {"Iron Condor", "Credit Spread"}:
+        return "short-vol"
+    if family in {"Vertical Debit", "Vertical"}:
+        return "long-equity"
+    if family == "Butterfly":
+        return "neutral"
+    return "unknown"
+
+
+def _collect_phase_signals(
+    ticket: dict[str, Any],
+    *,
+    phase: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Produce Phase A/B/C bullets for one ticket.
+
+    ``phase`` is a dict with optional keys ``outcomeAttribution``,
+    ``ruleEdgeDecay``, ``slippage``, ``correlation``, ``drawdown``,
+    ``consensus``. Each missing or empty artifact silently produces no
+    bullets — the wiring is purely additive.
+
+    Returns ``{"bear": [...], "disagreements": [...]}``. Sizing-flavor
+    signals (drawdown advisory) become disagreements; thesis-flavor
+    signals become bear bullets. Both keep their citation tags inline.
+    """
+    bear: list[str] = []
+    disagreements: list[str] = []
+
+    structure = str(ticket.get("structure") or "")
+    family = _ticket_family(structure)
+    direction = _ticket_direction(structure)
+
+    # ── Phase A — outcome attribution: Eckhardt comfortable-win flag ──
+    attribution = phase.get("outcomeAttribution") or {}
+    comfortable_wins = attribution.get("comfortableWins") or []
+    if comfortable_wins:
+        # If any prior comfortable-win was in this same family, surface it.
+        fam_hits = [
+            f for f in comfortable_wins
+            if str(f.get("family") or "") == family
+        ]
+        if fam_hits:
+            bear.append(
+                f"prior closed evidence flagged {len(fam_hits)} comfortable-win "
+                f"trade(s) in the {family} family — winners that sat in the "
+                f"slate's dominant family at high readiness. The Eckhardt rule "
+                f"says the comfortable trade is usually the wrong lesson; the "
+                f"bull case must stand without the consensus tailwind "
+                f"{_cite('ECKHARDT-MW93')} {_cite('BHB-1986')}"
+            )
+
+    # ── Phase A — rule edge decay: any rule cited by this audit decayed? ──
+    decay = phase.get("ruleEdgeDecay") or {}
+    retire_candidates = decay.get("retireCandidates") or []
+    if retire_candidates:
+        # v1: simply name retire candidates the operator should know about.
+        # A future iteration can cross-check the actual citation tags that
+        # this audit will fire on this ticket.
+        tag_list = ", ".join(
+            f"{r.get('tag')} ({r.get('side')}, Wilson L {r.get('wilsonLower')})"
+            for r in retire_candidates[:3]
+        )
+        bear.append(
+            f"rule-edge decay flagged retire candidate(s) in closed evidence: "
+            f"{tag_list}. Wilson lower bound on per-rule hit rate < 0.50 means "
+            f"the rule is not statistically better than a coin flip on the "
+            f"available sample {_cite('MCLEAN-PONTIFF-2016')} "
+            f"{_cite('ADAMS-MACKAY-2007')}"
+        )
+
+    # ── Phase A — slippage anchor for this ticket's family ──
+    slippage = phase.get("slippage") or {}
+    family_anchors = (slippage.get("familyAnchors") or {})
+    anchor = family_anchors.get(family) or {}
+    med_slip = _safe_float(anchor.get("medianEntrySlipPct"))
+    med_spread = _safe_float(anchor.get("medianAvgLegSpreadPct"))
+    if anchor.get("verdict") == "anchored" and med_slip is not None and med_slip >= 0.10:
+        bear.append(
+            f"slippage anchor for the {family} family: median entry slip "
+            f"{med_slip * 100:.1f}% (median leg spread "
+            f"{med_spread * 100:.1f}%) across {anchor.get('ticketCount')} prior "
+            f"tickets. Bake that fill cost into the R:R before sizing — the "
+            f"thesis must clear the spread tax {_cite('ROLL-1984')} "
+            f"{_cite('HASBROUCK-1991')} {_cite('ALMGREN-CHRISS-2000')}"
+        )
+
+    # ── Phase B — portfolio correlation: am I adding to the dominant family? ──
+    correlation = phase.get("correlation") or {}
+    slate_conc = correlation.get("slateConcentration") or {}
+    by_family = slate_conc.get("byFamily") or {}
+    headcount = int(slate_conc.get("headcount") or 0)
+    eff_bet = _safe_float(slate_conc.get("effectiveBetCount")) or 0.0
+    if headcount > 0:
+        family_share = (by_family.get(family) or 0) / headcount
+        if family_share >= 0.40:
+            bear.append(
+                f"slate is already {family_share * 100:.0f}% in {family} "
+                f"({by_family.get(family)}/{headcount} tickets); effective bet "
+                f"count is {eff_bet:.1f}. Adding this ticket grows correlated "
+                f"exposure — fifteen well-researched theses do not constitute "
+                f"fifteen bets {_cite('MARKOWITZ-1952')} "
+                f"{_cite('DALIO-HOLY-GRAIL')} {_cite('GRINOLD-1989')}"
+            )
+
+    # ── Phase B — drawdown protocol: sizing-advisory ≠ normal ──
+    drawdown = phase.get("drawdown") or {}
+    sizing = drawdown.get("sizingAdvisory") or {}
+    regime = str(sizing.get("regime") or "")
+    multiplier = _safe_float(sizing.get("multiplier"))
+    current_dd = _safe_float((drawdown.get("metrics") or {}).get("currentDrawdown"))
+    if regime and regime not in {"normal", ""} and multiplier is not None:
+        disagreements.append(
+            f"drawdown protocol regime '{regime}' (current DD "
+            f"{(current_dd or 0) * 100:.1f}%): pre-committed sizing multiplier "
+            f"is {multiplier}. This is a sizing disagreement, not a thesis "
+            f"disagreement — the trade may be right while the size must be cut "
+            f"{_cite('YOUNG-1991')} {_cite('MARTIN-1989')}"
+        )
+
+    # ── Phase C — consensus / crowdedness ──
+    consensus = phase.get("consensus") or {}
+    verdict = str(consensus.get("verdict") or "")
+    signals = consensus.get("signals") or []
+    own_side = next(
+        (s for s in signals if str(s.get("signal")) == "own-side-concentration"),
+        {},
+    )
+    dominant_direction = str(own_side.get("dominantDirection") or "")
+    if verdict in {"crowded-watch", "consensus-extreme"}:
+        same_direction = dominant_direction == direction and dominant_direction != ""
+        bear.append(
+            f"consensus monitor verdict '{verdict}'"
+            + (
+                f" with own-side concentration in {dominant_direction} "
+                f"(this ticket is {direction}, " + ("same direction)" if same_direction else "different direction)")
+                if dominant_direction
+                else ""
+            )
+            + f". Crowdedness predicts exit liquidity, not direction — "
+            f"the trade where smart money agrees with you is the trade to "
+            f"size smaller, not larger {_cite('STEIN-2009')} "
+            f"{_cite('LOU-POLK-2013')} {_cite('KHANDANI-LO-2007')}"
+        )
+
+    return {"bear": bear, "disagreements": disagreements}
+
+
 def _audit_ticket(
     ticket: dict[str, Any],
     *,
     brief: dict[str, Any],
     evidence: dict[str, Any],
     devils: dict[str, Any],
+    phase: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Produce one ticket's audit block."""
     bull = _collect_bull(ticket, brief)
@@ -789,6 +999,12 @@ def _audit_ticket(
     triggers = _falsification_triggers(ticket, brief)
     soe = _state_of_evidence(evidence, devils)
     blowup_risks = _collect_blowup_risks(ticket, brief)
+
+    # Additive Phase A/B/C signals. Missing artifacts produce no bullets,
+    # so legacy callers and tests continue to see the same output.
+    phase_bullets = _collect_phase_signals(ticket, phase=phase or {})
+    bear = bear + phase_bullets["bear"]
+    disagreements = disagreements + phase_bullets["disagreements"]
 
     # Conviction tag: passes gates, but math case is honest
     if disagreements or len(bear) > len(bull):
@@ -882,6 +1098,12 @@ def build_conviction_audit(
     devils: dict[str, Any] | None = None,
     vol_premium: dict[str, Any] | None = None,
     regime: dict[str, Any] | None = None,
+    outcome_attribution: dict[str, Any] | None = None,
+    rule_edge_decay: dict[str, Any] | None = None,
+    slippage: dict[str, Any] | None = None,
+    correlation: dict[str, Any] | None = None,
+    drawdown: dict[str, Any] | None = None,
+    consensus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the per-ticket conviction audit payload."""
     if briefing is None:
@@ -899,6 +1121,31 @@ def build_conviction_audit(
     vol_premium = vol_premium if vol_premium is not None else _load_artifact(VOL_PREMIUM_FILE)
     regime = regime if regime is not None else _load_artifact(REGIME_DRIFT_FILE)
 
+    # Phase A/B/C signals — research-only, additive bullets only.
+    outcome_attribution = (
+        outcome_attribution if outcome_attribution is not None
+        else _load_artifact(OUTCOME_ATTRIBUTION_FILE)
+    )
+    rule_edge_decay = (
+        rule_edge_decay if rule_edge_decay is not None
+        else _load_artifact(RULE_EDGE_DECAY_FILE)
+    )
+    slippage = slippage if slippage is not None else _load_artifact(SLIPPAGE_ESTIMATOR_FILE)
+    correlation = (
+        correlation if correlation is not None
+        else _load_artifact(PORTFOLIO_CORRELATION_FILE)
+    )
+    drawdown = drawdown if drawdown is not None else _load_artifact(DRAWDOWN_PROTOCOL_FILE)
+    consensus = consensus if consensus is not None else _load_artifact(CONSENSUS_MONITOR_FILE)
+    phase_payload = {
+        "outcomeAttribution": outcome_attribution,
+        "ruleEdgeDecay": rule_edge_decay,
+        "slippage": slippage,
+        "correlation": correlation,
+        "drawdown": drawdown,
+        "consensus": consensus,
+    }
+
     tickets = _briefing_tickets(briefing)
     by_ticker_brief = _brief_index(decision_briefs)
 
@@ -911,6 +1158,7 @@ def build_conviction_audit(
             brief=brief,
             evidence=evidence,
             devils=devils,
+            phase=phase_payload,
         ))
 
     # Klarman — sit-out advisory. See docs/MASTER_TRADERS.md §7.
@@ -940,6 +1188,12 @@ def build_conviction_audit(
         "devilsAdvocateVerdict": devils.get("verdict"),
         "volPremiumVerdict": vol_premium.get("verdict"),
         "regimeDriftVerdict": regime.get("verdict"),
+        "outcomeAttributionVerdict": outcome_attribution.get("verdict"),
+        "ruleEdgeDecayVerdict": rule_edge_decay.get("verdict"),
+        "slippageVerdict": slippage.get("verdict"),
+        "correlationVerdict": correlation.get("verdict"),
+        "drawdownVerdict": drawdown.get("verdict"),
+        "consensusVerdict": consensus.get("verdict"),
         "auditCount": len(audits),
         "audits": audits,
         "sitOutAdvisory": sit_out_payload,
