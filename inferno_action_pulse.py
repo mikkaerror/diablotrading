@@ -26,6 +26,13 @@ from inferno_config import DEFAULT_SHEET_NAME, default_backtest_root, local_now,
 from inferno_daily_loop import build_daily_loop, save_daily_loop
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_ops_maintenance import run_maintenance
+from inferno_reporting_summary import (
+    build_freshness_panel,
+    build_tos_visibility_summary,
+    render_freshness_lines,
+    render_tos_visibility_line,
+    sanitize_tos_language,
+)
 from server import (
     DATA_DIR,
     REPORTS_DIR,
@@ -172,6 +179,7 @@ def build_action_pulse(
     """Build the action pulse payload and supporting reports."""
     ensure_dirs()
     load_env_file(SMTP_ENV_FILE)
+    generated_at = local_now().isoformat()
 
     maintenance: dict[str, Any] | None = None
     if not skip_maintenance:
@@ -189,10 +197,15 @@ def build_action_pulse(
         refresh_live_sync=refresh_live_sync,
     )
     schwab_daily_ops = summarize_schwab_daily_ops(load_json_file(SCHWAB_DAILY_OPS_FILE) or {})
+    freshness_panel = build_freshness_panel()
+    for row in freshness_panel.get("rows") or []:
+        if row.get("label") == "action pulse":
+            row.update({"generatedAt": generated_at, "ageHours": 0.0, "status": "fresh"})
+    tos_visibility = build_tos_visibility_summary()
     cash_arg = command_cash_arg(deployable_cash)
 
     payload = {
-        "generatedAt": local_now().isoformat(),
+        "generatedAt": generated_at,
         "stage": "action-pulse",
         "phase": phase,
         "phaseLabel": phase_label(phase),
@@ -213,6 +226,8 @@ def build_action_pulse(
         },
         "capitalLaunch": launch,
         "schwabDailyOps": schwab_daily_ops,
+        "freshnessPanel": freshness_panel,
+        "tosVisibility": tos_visibility,
         "decisionSummary": summarize_decisions(launch),
         "warningSummary": summarize_warnings(launch),
         "operatorCommands": [
@@ -240,19 +255,31 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     launch = payload.get("capitalLaunch") or {}
     guardrails = ((launch.get("capitalReadiness") or {}).get("guardrails") or {})
     daily = payload.get("dailyLoop") or {}
+    freshness = payload.get("freshnessPanel") or {}
+    tos_visibility = payload.get("tosVisibility") or {}
     lines = [
         "Inferno Action Pulse",
         "=" * 21,
-        f"Generated: {payload.get('generatedAt')}",
-        f"Phase: {payload.get('phaseLabel')}",
-        f"Verdict: {payload.get('verdict')}",
-        f"Message: {payload.get('message')}",
         "",
-        "Safety locks",
-        f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
-        f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
+        "What changed",
+        f"- Generated: {payload.get('generatedAt')}",
+        f"- Phase: {payload.get('phaseLabel')}",
+        f"- Verdict: {payload.get('verdict')}",
+        f"- Message: {payload.get('message')}",
+        f"- TOS: {render_tos_visibility_line(tos_visibility)}",
         "",
-        "Capital guardrails",
+        "Freshness panel",
+    ]
+    lines.extend(f"- {item}" for item in render_freshness_lines(freshness))
+    lines.extend(
+        [
+            "",
+            "What matters today",
+            "",
+            "Capital guardrails",
+        ]
+    )
+    lines.extend([
         f"- Deployable cash: ${number(payload.get('deployableCash')):,.2f}",
         f"- Max options risk: ${number(guardrails.get('maxOptionsRisk')):,.2f}",
         f"- Max starter ticket: ${number(guardrails.get('maxStarterTicket')):,.2f}",
@@ -260,7 +287,7 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         f"- Reserve cash: ${number(guardrails.get('reserveCash')):,.2f}",
         "",
         "Act-now queue",
-    ]
+    ])
     decide = daily.get("decideTodayTickers") or []
     lines.extend([f"- {ticker}" for ticker in decide] or ["- none"])
     schwab = payload.get("schwabDailyOps") or {}
@@ -281,12 +308,22 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in payload.get("decisionSummary") or [])
     lines.extend(["", "Warnings / blockers"])
     lines.extend(f"- {item}" for item in payload.get("warningSummary") or [])
-    narrative = text(daily.get("narrative"))
+    narrative = sanitize_tos_language(daily.get("narrative"), tos_visibility)
     if narrative:
         lines.extend(["", "Desk narrative", narrative])
-    lines.extend(["", "Operator commands"])
+    lines.extend(
+        [
+            "",
+            "What action is allowed",
+            f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
+            f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
+            "- Broker submit: False",
+            f"- Rule: {payload.get('operatorRule')}",
+            "",
+            "Operator commands",
+        ]
+    )
     lines.extend(f"- {item}" for item in payload.get("operatorCommands") or [])
-    lines.extend(["", f"Rule: {payload.get('operatorRule')}"])
     return "\n".join(lines).rstrip() + "\n"
 
 

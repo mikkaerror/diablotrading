@@ -39,7 +39,26 @@ class InfernoActionPulseTests(unittest.TestCase):
                         }
                     }
                 },
-                "dailyLoop": {"decideTodayTickers": ["NVDA"]},
+                "dailyLoop": {
+                    "decideTodayTickers": ["NVDA"],
+                    "narrative": (
+                        "TOS is intentionally closed for low-performance mode; open it only "
+                        "for supervised export or manual order staging."
+                    ),
+                },
+                "tosVisibility": {
+                    "message": "TOS is running, but no main window is visible to the attach-only probe.",
+                },
+                "freshnessPanel": {
+                    "rows": [
+                        {
+                            "label": "tracker snapshot",
+                            "status": "fresh",
+                            "generatedAt": "2026-05-15T06:00:00-06:00",
+                            "ageHours": 1.0,
+                        }
+                    ]
+                },
                 "schwabDailyOps": {
                     "available": True,
                     "laneCounts": {"tradable-research": 1, "avoid-chain": 1},
@@ -52,11 +71,17 @@ class InfernoActionPulseTests(unittest.TestCase):
             }
         )
 
+        self.assertIn("What changed", rendered)
+        self.assertIn("What matters today", rendered)
+        self.assertIn("What action is allowed", rendered)
+        self.assertIn("TOS is running, but no main window is visible", rendered)
+        self.assertIn("tracker snapshot: fresh", rendered)
         self.assertIn("Auto live trading allowed: False", rendered)
         self.assertIn("Max options risk: $250.00", rendered)
         self.assertIn("Schwab options tape", rendered)
         self.assertIn("NVDA: tradable-research", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
+        self.assertNotIn("TOS is intentionally closed", rendered)
 
 
 if __name__ == "__main__":

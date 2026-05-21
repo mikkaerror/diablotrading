@@ -22,6 +22,12 @@ from typing import Any
 
 from inferno_config import ROOT, TOS_ALLOWED_ACCOUNT_SUFFIXES, local_now
 from inferno_io import append_text, atomic_write_json, atomic_write_text
+from inferno_reporting_summary import (
+    build_freshness_panel,
+    build_tos_visibility_summary,
+    render_freshness_lines,
+    render_tos_visibility_line,
+)
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -469,6 +475,8 @@ def build_command_center() -> dict[str, Any]:
 
     missions = load_active_missions()
     notes = load_notes(limit=12)
+    freshness_panel = build_freshness_panel()
+    tos_visibility = build_tos_visibility_summary()
 
     live_counts = live_review.get("counts") or {}
     live_packet_counts = live_book_packet.get("counts") or {}
@@ -581,6 +589,8 @@ def build_command_center() -> dict[str, Any]:
         ],
         "systemStatus": system_status,
         "headlineMetrics": headline_metrics,
+        "freshnessPanel": freshness_panel,
+        "tosVisibility": tos_visibility,
         "executiveSummary": build_executive_summary(
             status=system_status,
             metrics=headline_metrics,
@@ -657,6 +667,11 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
 
     lines.extend(["", "Executive summary:"])
     for item in payload.get("executiveSummary") or []:
+        lines.append(f"- {item}")
+
+    lines.extend(["", "Freshness panel:"])
+    lines.append(f"- TOS: {render_tos_visibility_line(payload.get('tosVisibility') or {})}")
+    for item in render_freshness_lines(payload.get("freshnessPanel") or {}):
         lines.append(f"- {item}")
 
     lines.extend(
@@ -778,6 +793,13 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
     ]
     for rail in safety_rails:
         lines.append(f"- {rail}")
+    lines.extend([
+        "",
+        "Freshness / attach status:",
+        f"- TOS: {render_tos_visibility_line(payload.get('tosVisibility') or {})}",
+    ])
+    for item in render_freshness_lines(payload.get("freshnessPanel") or {})[:5]:
+        lines.append(f"- {item}")
     lines.extend([
         "",
         "Current verdict (one line each):",

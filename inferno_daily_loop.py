@@ -67,6 +67,7 @@ from inferno_paper_bottleneck_reducer import build_reducer, save_reducer
 from inferno_slate_normalizer import build_normalized, save_normalized
 from inferno_daily_success import build_daily_success, save_daily_success
 from inferno_decision_brief import build_decision_briefs, save_decision_briefs
+from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
 from inferno_trade_conviction_audit import (
     build_conviction_audit,
     save_conviction_audit,
@@ -813,10 +814,7 @@ def compose_narrative(
         living.append("TOS export path recovered after a transient probe blip.")
     elif stability_verdict == "inactive-safe":
         if stability_dominant == "tos-closed-low-power":
-            living.append(
-                "TOS is intentionally closed for low-performance mode; open it only "
-                "for supervised export or manual order staging."
-            )
+            living.append(render_tos_visibility_line(build_tos_visibility_summary()))
         else:
             living.append("TOS export automation is intentionally disabled.")
     else:

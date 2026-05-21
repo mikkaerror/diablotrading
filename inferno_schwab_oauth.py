@@ -19,6 +19,7 @@ import argparse
 import base64
 import json
 import os
+import ssl
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,6 +36,21 @@ DEFAULT_AUTH_BASE_URL = "https://api.schwabapi.com/v1/oauth"
 DEFAULT_API_BASE_URL = "https://api.schwabapi.com"
 DEFAULT_REDIRECT_URI = "https://127.0.0.1"
 DEFAULT_TOKEN_FILE = ROOT / ".secrets" / "schwab_token.json"
+
+
+def https_context() -> ssl.SSLContext:
+    """Return a certificate-validating HTTPS context for Schwab requests.
+
+    Some local Python installs on macOS do not know where the system CA bundle
+    lives. When the Backtest venv includes certifi, use its maintained CA file
+    rather than disabling verification.
+    """
+    try:
+        import certifi  # type: ignore[import-not-found]
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        return ssl.create_default_context()
 
 
 def parse_env_file(path: Path = ENV_FILE) -> dict[str, str]:
@@ -157,7 +173,7 @@ def request_token(config: dict[str, Any], form: dict[str, str]) -> dict[str, Any
         },
         method="POST",
     )
-    with urlopen(request, timeout=30) as response:
+    with urlopen(request, timeout=30, context=https_context()) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

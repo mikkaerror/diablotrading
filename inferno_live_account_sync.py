@@ -20,6 +20,11 @@ import json
 from typing import Any
 
 from inferno_config import TOS_ALLOWED_ACCOUNT_SUFFIXES, TOS_ALLOW_LIVE_READONLY, local_now
+from inferno_reporting_summary import (
+    build_tos_visibility_summary,
+    normalize_tos_fallback_message,
+    render_tos_visibility_line,
+)
 from inferno_tos_account_statement_scraper import ACCOUNT_STATEMENT_FILE, ACCOUNT_STATEMENT_LAST_GOOD_FILE, scrape_account_statement
 from inferno_tos_session_probe import probe_tos_session
 from server import DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
@@ -193,6 +198,7 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
 
     statement = load_statement(refresh=refresh_statement)
     session_probe = probe_tos_session()
+    tos_visibility = build_tos_visibility_summary()
     raw_statement_mode = text(statement.get("accountMode")).lower()
     raw_session_mode = text(session_probe.get("accountMode")).lower()
     statement_mode = raw_statement_mode if raw_statement_mode not in {"", "unknown"} else raw_session_mode
@@ -213,6 +219,7 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
         "statementGeneratedAt": statement.get("generatedAt"),
         "statementOk": statement.get("ok"),
         "statementRefreshFallback": statement.get("_refreshFallback"),
+        "tosVisibility": tos_visibility,
         "accountMode": statement_mode or statement.get("accountMode"),
         "allowedLiveReadonly": TOS_ALLOW_LIVE_READONLY,
         "allowedSuffixes": list(TOS_ALLOWED_ACCOUNT_SUFFIXES),
@@ -299,7 +306,9 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
         report["message"] = f"live holdings synced for approved account suffix {matched_suffix}"
 
     if report.get("statementRefreshFallback"):
-        report["nextActions"].append(f"Fresh scrape fallback used: {report.get('statementRefreshFallback')}.")
+        fallback = normalize_tos_fallback_message(report.get("statementRefreshFallback"), tos_visibility)
+        report["statementRefreshFallback"] = fallback
+        report["nextActions"].append(f"Attach-only fallback used: {fallback}.")
 
     save_live_account_sync(report)
     return report
@@ -320,7 +329,8 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
         f"Visible suffixes: {', '.join(report.get('accountSuffixCandidates') or []) or '-'}",
         f"Net liq: {report.get('netLiquidatingValue') or '-'}",
         f"Total cash: {report.get('totalCash') or '-'}",
-        f"Refresh fallback: {report.get('statementRefreshFallback') or '-'}",
+        f"TOS visibility: {render_tos_visibility_line(report.get('tosVisibility') or {})}",
+        f"Attach-only fallback: {report.get('statementRefreshFallback') or '-'}",
         f"Positions: {counts.get('positions', 0)}",
         f"Tracker matched: {counts.get('matchedPositions', 0)}",
         f"Unmatched: {counts.get('unmatchedPositions', 0)}",

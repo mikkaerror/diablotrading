@@ -4,6 +4,30 @@ This is the "what do I do when something feels off?" guide for the desk.
 
 ## Daily Defaults
 
+### Next-week operating workflow
+
+Use this order when the desk needs to be boring, repeatable, and ready before
+the open:
+
+```bash
+./run_inferno_reporting_preflight.sh
+./run_inferno_dawn_cycle.sh
+./run_inferno_schwab_daily_ops.sh
+./run_inferno_live_account_sync.sh
+./run_inferno_live_position_review.sh
+./run_inferno_risk_gate_audit.sh
+./run_inferno_model_command_center.sh
+./run_inferno_action_pulse.sh --phase manual --deployable-cash 1050 --send --force-send
+```
+
+Operator flow:
+
+- Open thinkorswim manually only when a fresh broker capture is needed.
+- If TOS is already open, reveal that existing window. Do not open another instance.
+- Run reporting preflight before trusting or forcing a brief.
+- Read the morning/open/pre-close emails in three sections: `What changed`, `What matters today`, and `What action is allowed`.
+- Any real-money order still requires explicit human confirmation before final submission.
+
 ### Start the local dashboard
 
 ```bash
@@ -57,11 +81,18 @@ TOS_BACKGROUND_EXPORT_ALLOWED=0
 Leave that value at `0` for normal operation. Manual/supervised export remains
 available when the operator explicitly runs the export bridge.
 
-### Low-performance broker-closed mode
+### Attach-only broker visibility mode
 
 It is safe to leave thinkorswim closed during normal research, tracker updates,
 daily-loop checks, paper-evidence generation, and email brief delivery. The desk
-now treats a missing TOS window as `inactive-safe` when both of these are true:
+now separates three states:
+
+- `visible`: the existing TOS window is visible to the attach-only probe.
+- `running-not-visible`: TOS is running, but the current Space/window is hidden from the probe.
+- `not-running`: TOS is closed or unavailable and must be opened manually only if broker capture is needed.
+
+Background automation must never open a new TOS instance. These flags should
+remain conservative for normal operation:
 
 ```bash
 TOS_EXPORT_AUTOMATION_ENABLED=0

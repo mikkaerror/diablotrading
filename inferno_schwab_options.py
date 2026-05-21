@@ -20,6 +20,7 @@ summary this adapter emits into operator-facing tier-classified signals.
 
 import argparse
 import json
+import ssl
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,16 @@ SCHWAB_OPTIONS_FILE = DATA_DIR / "inferno_schwab_options.json"
 SCHWAB_OPTIONS_TEXT_FILE = REPORTS_DIR / "schwab_options_latest.txt"
 SCHWAB_OPTIONS_STAGE = "schwab-options-read-only"
 CHAIN_ENDPOINT = "/marketdata/v1/chains"
+
+
+def https_context() -> ssl.SSLContext:
+    """Return a certificate-validating HTTPS context for Schwab API calls."""
+    try:
+        import certifi  # type: ignore[import-not-found]
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        return ssl.create_default_context()
 
 
 def number(value: Any, default: float | None = None) -> float | None:
@@ -210,7 +221,7 @@ def fetch_option_chain(
             "Accept": "application/json",
         },
     )
-    with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310 - configured Schwab HTTPS URL
+    with urlopen(request, timeout=timeout_seconds, context=https_context()) as response:  # noqa: S310 - configured Schwab HTTPS URL
         return json.loads(response.read().decode("utf-8"))
 
 

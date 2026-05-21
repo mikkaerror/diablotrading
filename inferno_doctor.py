@@ -25,6 +25,7 @@ from inferno_config import (
     WAKE_MINUTE,
 )
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
 from server import (
     DATA_DIR,
     EXECUTION_QUEUE_FILE,
@@ -1157,6 +1158,7 @@ def main() -> int:
         warnings += 1
 
     desktop_automation = load_json_file(DESKTOP_AUTOMATION_FILE) or {}
+    tos_visibility = build_tos_visibility_summary()
     desktop_today = in_current_service_cycle(str(desktop_automation.get("generatedAt", "")), now=now)
     desktop_verdict = str(desktop_automation.get("verdict") or "")
     desktop_message = str(
@@ -1181,7 +1183,7 @@ def main() -> int:
     if not desktop_automation:
         desktop_detail = "not run yet"
     elif desktop_tos_closed_low_power:
-        desktop_detail = "inactive-safe | thinkorswim closed low-power mode"
+        desktop_detail = f"attach-only safe | {render_tos_visibility_line(tos_visibility)}"
     elif desktop_today:
         desktop_detail = (
             f"{desktop_verdict} | {desktop_automation.get('message')}"
@@ -1203,12 +1205,24 @@ def main() -> int:
         stability_verdict = export_stability.get("verdict") or "unknown"
         stability_dominant = export_stability.get("dominantFailMode") or "n/a"
         stability_today = in_current_service_cycle(str(export_stability.get("generatedAt", "")), now=now)
+        stability_attach_only_safe = (
+            stability_today
+            and not TOS_EXPORT_AUTOMATION_ENABLED
+            and stability_verdict == "blocked"
+            and stability_dominant in {"account-not-authorized", "panel-unsafe", "window-missing"}
+        )
         stability_ok = stability_today and stability_verdict in {
             "stable-ready",
             "transient-recovered",
             "inactive-safe",
-        }
-        stability_detail = f"{stability_verdict} | dominant {stability_dominant}"
+        } or stability_attach_only_safe
+        if stability_attach_only_safe:
+            stability_detail = (
+                f"attach-only safe | dominant {stability_dominant} | "
+                "export remains blocked until the approved account/window is visible"
+            )
+        else:
+            stability_detail = f"{stability_verdict} | dominant {stability_dominant}"
         lines.append(summarize_status("TOS export stability", stability_ok, stability_detail))
         if not stability_ok:
             warnings += 1

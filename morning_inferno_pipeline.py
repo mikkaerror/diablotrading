@@ -39,6 +39,12 @@ from inferno_config import (
 from inferno_execution_clerk import build_execution_queue, save_execution_queue
 from inferno_heartbeat import record_heartbeat
 from inferno_io import append_text, atomic_write_json, atomic_write_text
+from inferno_reporting_summary import (
+    build_freshness_panel,
+    build_tos_visibility_summary,
+    render_freshness_lines,
+    render_tos_visibility_line,
+)
 from server import (
     APPROVAL_QUEUE_FILE,
     BRIEF_TEXT_FILE,
@@ -2388,6 +2394,13 @@ def build_risk_desk_addendum(payload: dict[str, Any]) -> str:
                 f"Automation authority: {decision.get('authorityLevel')} | "
                 f"live submit {decision.get('brokerSubmitAllowed')}"
             )
+
+    freshness_panel = build_freshness_panel()
+    tos_visibility = build_tos_visibility_summary()
+    lines.append("Next-week operating status:")
+    lines.append(f"TOS: {render_tos_visibility_line(tos_visibility)}")
+    lines.extend(render_freshness_lines(freshness_panel))
+    lines.append("Allowed action: research, alerts, paper evidence, and manually confirmed orders only; broker submit remains False.")
 
     downloads_manager = payload.get("downloadsManager")
     if downloads_manager:
