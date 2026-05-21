@@ -164,6 +164,18 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
+                        "refresh_paper_bottleneck_reducer",
+                        return_value={
+                            "ok": True,
+                            "status": "scenario-slate-ready",
+                            "counts": {"scenarios": 12, "executablePaper": 0, "shadowOnly": 12},
+                            "topFocusTickers": ["MOD", "MRVL"],
+                        },
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
                         "refresh_paper_evidence_loop",
                         return_value={"ok": True, "status": "approval-bottleneck", "counts": {"plannedFillRows": 0, "openFillRows": 0, "remainingForPromotion": 30}},
                     )
@@ -268,6 +280,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["cloudExecutionAudit"]["status"], "healthy")
             self.assertEqual(saved["advisories"], [])
             self.assertEqual(saved["paperTestDirector"]["status"], "approval-bottleneck")
+            self.assertEqual(saved["paperBottleneckReducer"]["status"], "scenario-slate-ready")
             self.assertEqual(saved["paperEvidenceLoop"]["status"], "approval-bottleneck")
             self.assertEqual(saved["brokerPreview"]["status"], "preview-built")
             self.assertTrue(saved["brokerPreview"]["previewOnly"])
@@ -282,6 +295,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["researchCycle"]["scenarioCount"], 12)
             self.assertIn("Cloud control plane: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper test director: approval-bottleneck", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Paper bottleneck reducer: scenario-slate-ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Broker preview: preview-built", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Stale approval governor: no-action", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Approval inbox: idle", report_text_file.read_text(encoding="utf-8"))

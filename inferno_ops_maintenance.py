@@ -29,6 +29,8 @@ from inferno_approval_queue import (
 )
 from inferno_broker_preview import build_broker_preview, save_broker_preview
 from inferno_cloud_execution_auditor import build_audit as build_cloud_execution_audit
+from inferno_paper_bottleneck_reducer import build_reducer as build_paper_bottleneck_reducer
+from inferno_paper_bottleneck_reducer import save_reducer as save_paper_bottleneck_reducer
 from inferno_paper_exit_auditor import build_audit as build_paper_exit_audit, save_audit as save_paper_exit_audit
 from inferno_paper_evidence_loop import build_audit as build_paper_evidence_loop_audit, save_audit as save_paper_evidence_loop_audit
 from inferno_paper_test_director import build_director as build_paper_test_director, save_director as save_paper_test_director
@@ -222,6 +224,31 @@ def refresh_paper_evidence_loop() -> dict[str, Any]:
         "status": str(report.get("verdict") or "unknown"),
         "generatedAt": report.get("generatedAt"),
         "counts": report.get("counts") or {},
+    }
+
+
+def refresh_paper_bottleneck_reducer() -> dict[str, Any]:
+    """Rebuild the high-throughput paper/shadow scenario slate."""
+    try:
+        report = build_paper_bottleneck_reducer()
+        save_paper_bottleneck_reducer(report)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "refresh-failed",
+            "error": str(exc),
+        }
+    counts = report.get("counts") or {}
+    return {
+        "ok": True,
+        "status": str(report.get("verdict") or "unknown"),
+        "generatedAt": report.get("generatedAt"),
+        "counts": counts,
+        "topFocusTickers": [
+            item.get("ticker")
+            for item in (report.get("topFiveFocus") or [])[:5]
+            if item.get("ticker")
+        ],
     }
 
 
@@ -528,6 +555,15 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"open {counts.get('openFillRows', 0)} | "
             f"remaining {counts.get('remainingForPromotion', 0)}"
         )
+    paper_bottleneck = report.get("paperBottleneckReducer") or {}
+    if paper_bottleneck:
+        counts = paper_bottleneck.get("counts") or {}
+        lines.append(
+            f"Paper bottleneck reducer: {paper_bottleneck.get('status')} | "
+            f"scenarios {counts.get('scenarios', 0)} | "
+            f"paper {counts.get('executablePaper', 0)} | "
+            f"shadow {counts.get('shadowOnly', 0)}"
+        )
     paper_exit = report.get("paperExitAudit") or {}
     if paper_exit:
         counts = paper_exit.get("counts") or {}
@@ -640,6 +676,7 @@ def run_maintenance(
     cloud_control_plane = refresh_cloud_control_plane(region=cloud_region)
     cloud_execution_audit = refresh_cloud_execution_audit(region=cloud_region)
     paper_test_director = refresh_paper_test_director()
+    paper_bottleneck_reducer = refresh_paper_bottleneck_reducer()
     paper_evidence_loop = refresh_paper_evidence_loop()
     paper_exit_audit = refresh_paper_exit_audit()
     broker_preview = refresh_broker_preview()
@@ -678,6 +715,7 @@ def run_maintenance(
         "cloudExecutionAudit": cloud_execution_audit,
         "advisories": advisories,
         "paperTestDirector": paper_test_director,
+        "paperBottleneckReducer": paper_bottleneck_reducer,
         "paperEvidenceLoop": paper_evidence_loop,
         "paperExitAudit": paper_exit_audit,
         "brokerPreview": broker_preview,
@@ -693,6 +731,7 @@ def run_maintenance(
             ticker_audit.get("ok")
             and bool(data_audit.get("dailyPrepReady"))
             and bool(paper_test_director.get("ok"))
+            and bool(paper_bottleneck_reducer.get("ok"))
             and bool(paper_evidence_loop.get("ok"))
             and bool(paper_exit_audit.get("ok"))
             and bool(broker_preview.get("ok"))
@@ -713,6 +752,7 @@ def run_maintenance(
         summary="ops maintenance sweep complete" if report.get("ok") else "ops maintenance needs attention",
         detail={
             "paperStageable": (paper_test_director.get("counts") or {}).get("stageableNow"),
+            "paperScenarios": (paper_bottleneck_reducer.get("counts") or {}).get("scenarios"),
             "researchCycle": research_cycle.get("status"),
             "watchdogExit": watchdog_exit,
         },
