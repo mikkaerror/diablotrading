@@ -160,13 +160,33 @@ class VisibleQuoteBlockTests(unittest.TestCase):
         blocks = visible_quote_blocks(
             {"strikePlan": {"legs": [{"instruction": "BUY_TO_OPEN", "symbol": "X", "ask": 0}]}}
         )
-        self.assertTrue(any("no visible ask" in b for b in blocks))
+        self.assertTrue(any("below visible-market floor" in b for b in blocks))
 
     def test_sell_leg_without_bid_blocks(self):
         blocks = visible_quote_blocks(
             {"strikePlan": {"legs": [{"instruction": "SELL_TO_OPEN", "symbol": "X", "bid": 0}]}}
         )
-        self.assertTrue(any("no visible bid" in b for b in blocks))
+        self.assertTrue(any("below visible-market floor" in b for b in blocks))
+
+    def test_sell_leg_with_nickel_bid_blocks(self):
+        """Phase A investigation case: bid=$0.05 is not a real market."""
+        blocks = visible_quote_blocks(
+            {"strikePlan": {"legs": [{"instruction": "SELL_TO_OPEN", "symbol": "THR_C_75", "bid": 0.05, "ask": 2.60}]}}
+        )
+        self.assertTrue(any("below visible-market floor" in b for b in blocks))
+
+    def test_sell_leg_with_dime_bid_passes(self):
+        """Bid exactly at the floor ($0.10) passes — the floor is strict."""
+        blocks = visible_quote_blocks(
+            {"strikePlan": {"legs": [{"instruction": "SELL_TO_OPEN", "symbol": "X", "bid": 0.10, "ask": 0.20}]}}
+        )
+        self.assertEqual(blocks, [])
+
+    def test_buy_leg_with_nickel_ask_blocks(self):
+        blocks = visible_quote_blocks(
+            {"strikePlan": {"legs": [{"instruction": "BUY_TO_OPEN", "symbol": "X", "ask": 0.08}]}}
+        )
+        self.assertTrue(any("below visible-market floor" in b for b in blocks))
 
     def test_clean_legs_no_blocks(self):
         blocks = visible_quote_blocks(

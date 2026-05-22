@@ -9,9 +9,11 @@ Pinned invariants:
   - Entry slippage = entryLimit - Σ d_i · m_i, denominator |Σ d_i · m_i|.
   - Family verdict is 'thin' below MIN_TICKETS_PER_FAMILY, 'anchored' at/above.
   - Flags: wide-leg-spread when any leg spreadPct > WIDE_SPREAD_FLAG_PCT;
-    high-entry-slippage when |entrySlipPct| > HIGH_ENTRY_SLIP_FLAG_PCT.
+    high-limit-cushion when |limitCushionPct| > HIGH_LIMIT_CUSHION_PCT.
   - Empty-input case returns a clean 'no-usable-tickets' verdict.
-  - Citations include ROLL-1984 and HASBROUCK-1991.
+  - Citations include ROLL-1984 (quoted-spread proxy). The Hasbrouck/
+    Almgren-Chriss decompositions are deliberately NOT cited because
+    realized slippage requires closed-outcome fills (not yet populated).
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from __future__ import annotations
 import unittest
 
 from inferno_slippage_estimator import (
-    HIGH_ENTRY_SLIP_FLAG_PCT,
+    HIGH_LIMIT_CUSHION_PCT,
     MIN_TICKETS_PER_FAMILY,
     SLIPPAGE_STAGE,
     WIDE_SPREAD_FLAG_PCT,
@@ -118,9 +120,9 @@ class EntrySlippageTests(unittest.TestCase):
         slip = _ticket_entry_slippage(ticket)
         self.assertTrue(slip["usable"])
         self.assertAlmostEqual(slip["sumLegMidNet"], 0.60, places=6)
-        self.assertAlmostEqual(slip["entrySlippage"], 0.10, places=6)
-        self.assertAlmostEqual(slip["entrySlipPct"], 0.10 / 0.60, places=4)
-        self.assertIn("high-entry-slippage", slip["flags"])
+        self.assertAlmostEqual(slip["limitCushion"], 0.10, places=6)
+        self.assertAlmostEqual(slip["limitCushionPct"], 0.10 / 0.60, places=4)
+        self.assertIn("high-limit-cushion", slip["flags"])
 
     def test_unusable_when_leg_missing_bid(self):
         ticket = {
@@ -168,7 +170,7 @@ class FamilyAnchorTests(unittest.TestCase):
         return {
             "usable": True,
             "avgLegSpreadPct": spread_pct,
-            "entrySlipPct": slip_pct,
+            "limitCushionPct": slip_pct,
             "flags": flags or [],
         }
 
@@ -188,8 +190,8 @@ class FamilyAnchorTests(unittest.TestCase):
         ]
         anchor = _family_anchor(rows)
         self.assertEqual(anchor["medianAvgLegSpreadPct"], 0.10)
-        self.assertEqual(anchor["medianEntrySlipPct"], 0.20)
-        self.assertEqual(anchor["maxEntrySlipPct"], 0.30)
+        self.assertEqual(anchor["medianLimitCushionPct"], 0.20)
+        self.assertEqual(anchor["maxLimitCushionPct"], 0.30)
 
 
 class ComputeSlippageTableTests(unittest.TestCase):
@@ -229,7 +231,12 @@ class BuildAndRenderTests(unittest.TestCase):
             {"no-usable-tickets", "thin-anchors", "anchors-ready"},
         )
         self.assertIn("ROLL-1984", payload["citations"])
-        self.assertIn("HASBROUCK-1991", payload["citations"])
+        # HASBROUCK-1991 + ALMGREN-CHRISS-2000 are deliberately NOT cited
+        # in v1 — they describe realized fill cost, which requires closed
+        # outcomes. v1 measures the strike selector's worst-case-fill
+        # cushion, not realized slippage.
+        self.assertNotIn("HASBROUCK-1991", payload["citations"])
+        self.assertNotIn("ALMGREN-CHRISS-2000", payload["citations"])
         # thresholds exposed
         self.assertEqual(
             payload["thresholds"]["minTicketsPerFamily"], MIN_TICKETS_PER_FAMILY

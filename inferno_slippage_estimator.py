@@ -1,48 +1,57 @@
 from __future__ import annotations
 
-"""Inferno Slippage Estimator — execution-gap math for closed/staged tickets.
+"""Inferno Slippage Estimator — quoted-spread math + limit-pricing cushion.
 
 What it does:
-    Reads the paper-execution and shadow-evidence ledgers, computes
-    quoted-spread + effective-spread metrics per ticket and per strategy
-    family, and produces a research-only slippage anchor table. The
-    anchor table is what later modules (capital readiness, conviction
-    audit, risk policy) can use to penalize a thesis whose advertised
-    edge would not survive its own family's average fill friction.
+    Reads the paper-execution and shadow-evidence ledgers and computes
+    two distinct things per ticket and per strategy family:
+
+      1. QUOTED LEG SPREADS (Roll 1984 effective-spread proxy). Real
+         per-leg spread / mid measurements from the chain at strike-plan
+         time. These reflect the option market itself.
+
+      2. LIMIT-PRICING CUSHION. The gap between the strike selector's
+         worst-case fill (entryLimit = sum of asks paid + bids received)
+         and the theoretical mid-fill (sum of d_i · leg_mid_i). The
+         strike selector deliberately quotes the limit at the worst-case
+         fill so a limit order will cross the spread on every leg; the
+         cushion is the conservatism baked into that policy. It is NOT
+         realized slippage — that would require closed-outcome fill data,
+         which doesn't exist on this desk yet.
 
 What it does NOT do:
     - Touch the broker, the live book, or the approval queue.
     - Adjust any sizing rule, gate, or authority field.
     - Promote any strategy. Research-only, diagnostic-only.
+    - Measure realized slippage (post-trade vs pre-trade marks). That
+      requires outcome.exitValue + exit-side mids, neither of which is
+      populated yet. The Hasbrouck (1991) decomposition lights up only
+      when closed fills exist.
 
 Strict contract: research-only, diagnostic-only, promotable=False.
 
 ## The math (see docs/PERFORMANCE_ATTRIBUTION.md §3)
 
-Per leg, with bid B, ask A, mid M = (A+B)/2, fill price F, instruction
-direction d ∈ {+1 buy, −1 sell}:
+Per leg, with bid B, ask A, mid M = (A+B)/2:
 
     quoted_spread          = A − B
     quoted_spread_pct      = (A − B) / M               (Roll 1984 proxy)
-    effective_half_spread  = d · (F − M)               (Hasbrouck 1991)
-    effective_spread_pct   = 2 · |F − M| / M
 
-For a multi-leg ticket with leg mids m_i and per-leg directions d_i and a
-single net entryLimit L, we decompose:
+For a multi-leg ticket with leg mids m_i, per-leg directions d_i (+1 buy,
+−1 sell), and the strike-selector-supplied net entryLimit L:
 
-    sum_leg_mid_net  = Σ d_i · m_i
-    entry_slippage   = L − sum_leg_mid_net             (debit positive)
-    entry_slip_pct   = entry_slippage / |sum_leg_mid_net|
+    sum_leg_mid_net  = Σ d_i · m_i             (theoretical mid-fill cost)
+    limit_cushion    = L − sum_leg_mid_net     (worst-case − mid)
+    limit_cushion_pct = limit_cushion / |sum_leg_mid_net|
 
-When exit data is present (outcome.exitValue), the analogous exit
-slippage uses the leg mids captured on the ticket at exit; v1 reuses
-entry leg mids as the best available proxy and explicitly tags the
-result so callers do not over-trust it.
+A cushion of zero means the limit equals the mid (no spread crossed).
+A cushion of 100% means the limit is 2× the mid (the strike selector
+expects to pay through the spread on both legs).
 
-Almgren-Chriss (2000) optimal-execution framing is the long-run anchor:
-the *temporary* cost (eaten today) versus the *permanent* cost (price
-impact). For a $500-ticket book this distinction collapses — we live
-entirely in temporary cost territory.
+NOTE: This v1 metric was originally labeled "entry slippage" — that name
+was retired in the 2026-05 investigation that surfaced FTNT/ACMR-style
+guaranteed-loss vertical-debit plans. The math is unchanged; the framing
+is honest about what it actually measures.
 
 CLI::
 
@@ -76,7 +85,7 @@ SLIPPAGE_STAGE = "slippage-estimator-research-only"
 
 MIN_TICKETS_PER_FAMILY = 10        # below this, anchor verdict is "thin"
 WIDE_SPREAD_FLAG_PCT = 0.25        # quoted_spread_pct above this is flagged
-HIGH_ENTRY_SLIP_FLAG_PCT = 0.10    # entry slippage above 10% of net is flagged
+HIGH_LIMIT_CUSHION_PCT = 0.10      # limit-pricing cushion above 10% of net is flagged
 
 
 # ───────────────────────── helpers ──────────────────────────────────────
@@ -209,22 +218,26 @@ def _ticket_entry_slippage(ticket: dict[str, Any]) -> dict[str, Any]:
     # convention varies. We treat |sum_signed_mid| as the denominator so
     # the percentage stays interpretable in both directions.
     denom = abs(sum_signed_mid) if sum_signed_mid != 0 else None
-    entry_slip = round(entry_limit - sum_signed_mid, 6)
-    entry_slip_pct = round(entry_slip / denom, 6) if denom else None
+    limit_cushion = round(entry_limit - sum_signed_mid, 6)
+    limit_cushion_pct = round(limit_cushion / denom, 6) if denom else None
 
     flags: list[str] = []
     if spread_pcts and max(spread_pcts) > WIDE_SPREAD_FLAG_PCT:
         flags.append("wide-leg-spread")
-    if entry_slip_pct is not None and abs(entry_slip_pct) > HIGH_ENTRY_SLIP_FLAG_PCT:
-        flags.append("high-entry-slippage")
+    if limit_cushion_pct is not None and abs(limit_cushion_pct) > HIGH_LIMIT_CUSHION_PCT:
+        flags.append("high-limit-cushion")
 
     return {
         "usable": True,
         "legs": leg_reads,
         "sumLegMidNet": round(sum_signed_mid, 6),
         "entryLimit": entry_limit,
-        "entrySlippage": entry_slip,
-        "entrySlipPct": entry_slip_pct,
+        # NOTE: limitCushion = entryLimit − Σ d_i · leg_mid_i. This is the
+        # strike selector's worst-case-fill conservatism, NOT realized
+        # slippage. Realized slippage would compare to actual fills, which
+        # don't exist on this desk yet.
+        "limitCushion": limit_cushion,
+        "limitCushionPct": limit_cushion_pct,
         "maxLegSpreadPct": round(max(spread_pcts), 6) if spread_pcts else None,
         "avgLegSpreadPct": (
             round(sum(spread_pcts) / len(spread_pcts), 6) if spread_pcts else None
@@ -255,21 +268,21 @@ def _load_tickets() -> list[dict[str, Any]]:
 
 
 def _family_anchor(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute the slippage anchor for one strategy family."""
+    """Compute the anchor (quoted spread + limit cushion) for one family."""
     n = len(rows)
     spread_pcts = [r["avgLegSpreadPct"] for r in rows if r.get("avgLegSpreadPct") is not None]
-    entry_slip_pcts = [
-        abs(r["entrySlipPct"]) for r in rows if r.get("entrySlipPct") is not None
+    cushion_pcts = [
+        abs(r["limitCushionPct"]) for r in rows if r.get("limitCushionPct") is not None
     ]
     verdict = "thin" if n < MIN_TICKETS_PER_FAMILY else "anchored"
     return {
         "ticketCount": n,
         "medianAvgLegSpreadPct": round(median(spread_pcts), 6) if spread_pcts else None,
-        "medianEntrySlipPct": (
-            round(median(entry_slip_pcts), 6) if entry_slip_pcts else None
+        "medianLimitCushionPct": (
+            round(median(cushion_pcts), 6) if cushion_pcts else None
         ),
-        "maxEntrySlipPct": (
-            round(max(entry_slip_pcts), 6) if entry_slip_pcts else None
+        "maxLimitCushionPct": (
+            round(max(cushion_pcts), 6) if cushion_pcts else None
         ),
         "flaggedCount": sum(1 for r in rows if r.get("flags")),
         "verdict": verdict,
@@ -338,7 +351,7 @@ def build_slippage_estimator(now: Any | None = None) -> dict[str, Any]:
         "thresholds": {
             "minTicketsPerFamily": MIN_TICKETS_PER_FAMILY,
             "wideSpreadFlagPct": WIDE_SPREAD_FLAG_PCT,
-            "highEntrySlipFlagPct": HIGH_ENTRY_SLIP_FLAG_PCT,
+            "highLimitCushionPct": HIGH_LIMIT_CUSHION_PCT,
         },
         "familyAnchors": table["familyAnchors"],
         "flaggedTickets": [
@@ -346,24 +359,29 @@ def build_slippage_estimator(now: Any | None = None) -> dict[str, Any]:
                 "ticketId": r["ticketId"],
                 "ticker": r["ticker"],
                 "family": r["family"],
-                "entrySlipPct": r.get("entrySlipPct"),
+                "limitCushionPct": r.get("limitCushionPct"),
                 "maxLegSpreadPct": r.get("maxLegSpreadPct"),
                 "flags": r.get("flags"),
             }
             for r in flagged[:20]
         ],
         "reminders": [
-            "Slippage anchors are research-only; broker submit stays OFF.",
-            "Wide quoted spreads + high entry slippage are warnings, not "
-            "blocks. The risk policy still owns the go/no-go on any ticket.",
-            "v1 uses entry leg mids only; exit-side decomposition lights "
-            "up when outcome.exitValue and exit-side mids are recorded.",
+            "Anchors are research-only; broker submit stays OFF.",
+            "Quoted leg spreads are Roll-1984 territory and real. The "
+            "'limit cushion' is the strike selector's worst-case-fill "
+            "conservatism — NOT realized slippage. Don't read it as a "
+            "Hasbrouck adverse-selection cost.",
+            "Realized slippage requires closed-outcome fills "
+            "(outcome.exitValue). Until those exist, the Hasbrouck-1991 "
+            "and Almgren-Chriss-2000 decompositions stay dormant.",
+            "High limit-cushion on a family means the strike selector "
+            "expects to cross the spread on every leg in that family. "
+            "On wide-spread legs this can produce limits that exceed the "
+            "spread's maximum payoff — see the FTNT/ACMR cases in the "
+            "2026-05 investigation.",
         ],
         "citations": [
             "ROLL-1984",
-            "HASBROUCK-1991",
-            "ALMGREN-CHRISS-2000",
-            "KYLE-1985",
         ],
     }
     return payload
@@ -395,11 +413,11 @@ def slippage_estimator_text(payload: dict[str, Any]) -> str:
     lines.append("")
     anchors = payload.get("familyAnchors") or {}
     if anchors:
-        lines.append("STRATEGY-FAMILY SLIPPAGE ANCHORS")
-        lines.append("---------------------------------")
+        lines.append("STRATEGY-FAMILY ANCHORS (quoted spread + limit cushion)")
+        lines.append("--------------------------------------------------------")
         lines.append(
             f"{'family':<22} {'n':>4} {'medSpread%':>11} "
-            f"{'medSlip%':>10} {'maxSlip%':>10} {'flag':>5} {'verdict':<10}"
+            f"{'medCushion%':>12} {'maxCushion%':>12} {'flag':>5} {'verdict':<10}"
         )
         for fam in sorted(anchors.keys()):
             a = anchors[fam]
@@ -408,8 +426,8 @@ def slippage_estimator_text(payload: dict[str, Any]) -> str:
             lines.append(
                 f"{fam[:22]:<22} {a['ticketCount']:>4} "
                 f"{_pct(a['medianAvgLegSpreadPct']):>11} "
-                f"{_pct(a['medianEntrySlipPct']):>10} "
-                f"{_pct(a['maxEntrySlipPct']):>10} "
+                f"{_pct(a['medianLimitCushionPct']):>12} "
+                f"{_pct(a['maxLimitCushionPct']):>12} "
                 f"{a['flaggedCount']:>5} "
                 f"{a['verdict']:<10}"
             )
@@ -421,7 +439,7 @@ def slippage_estimator_text(payload: dict[str, Any]) -> str:
         for r in flagged:
             lines.append(
                 f"- {r.get('ticker')} ({r.get('family')}): "
-                f"slip={r.get('entrySlipPct')}  "
+                f"cushion={r.get('limitCushionPct')}  "
                 f"maxLegSpread={r.get('maxLegSpreadPct')}  "
                 f"flags={','.join(r.get('flags') or [])}"
             )

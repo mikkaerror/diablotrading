@@ -314,6 +314,9 @@ def build_liquidity_notes(legs: list[OptionLeg]) -> list[str]:
     return notes
 
 
+VERTICAL_DEBIT_MAX_WIDTH_RATIO = 0.95  # debit > 0.95 × width = guaranteed loss on fill
+
+
 def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame) -> dict[str, Any] | None:
     price = number(intent.get("price"))
     long_call_row = nearest_row(buyable(calls), price)
@@ -327,6 +330,13 @@ def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFr
     short_leg = to_leg(short_call_row, "SELL_TO_OPEN", "CALL", expiration)
     debit = max(0.0, long_leg.ask - short_leg.bid)
     width = max(0.0, short_leg.strike - long_leg.strike)
+    # Refuse plans where the worst-case fill (ask of long − bid of short)
+    # exceeds 95% of the strike width. At debit > width the spread guarantees
+    # a loss even on a perfect win; at debit > 0.95×width R:R is < 0.05 and
+    # the trade is dominated by slippage. This catches the FTNT/ACMR-style
+    # case where illiquid leg spreads stack into a guaranteed-loss plan.
+    if width > 0 and debit > width * VERTICAL_DEBIT_MAX_WIDTH_RATIO:
+        return None
     max_profit = max(0.0, width - debit)
     legs = [long_leg, short_leg]
 

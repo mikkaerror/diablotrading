@@ -7,8 +7,11 @@ Pinned invariants:
     bullet with the ECKHARDT-MW93 + BHB-1986 citations.
   - Rule edge decay: retire-candidate(s) present add a bear bullet with
     the MCLEAN-PONTIFF-2016 + ADAMS-MACKAY-2007 citations.
-  - Slippage: anchored family with median slip ≥ 10% adds a bear bullet
-    with ROLL-1984 + HASBROUCK-1991 citations.
+  - Slippage anchor: anchored family with median limit-cushion ≥ 10%
+    adds a bear bullet with the ROLL-1984 citation (quoted spread proxy).
+    The bullet describes the strike selector's worst-case-fill conservatism,
+    NOT realized slippage. HASBROUCK-1991 / ALMGREN-CHRISS-2000 are
+    intentionally absent from this bullet.
   - Portfolio correlation: family share ≥ 40% adds a bear bullet with
     MARKOWITZ-1952 + DALIO-HOLY-GRAIL + GRINOLD-1989 citations.
   - Drawdown protocol: non-normal sizing regime adds a *disagreement*
@@ -227,17 +230,23 @@ class SlippageBulletTests(unittest.TestCase):
                     "verdict": "anchored",
                     "ticketCount": 50,
                     "medianAvgLegSpreadPct": 0.20,
-                    "medianEntrySlipPct": 0.35,
-                    "maxEntrySlipPct": 2.0,
+                    "medianLimitCushionPct": 0.35,
+                    "maxLimitCushionPct": 2.0,
                     "flaggedCount": 30,
                 }
             },
         }
         report = _build(slippage=slippage)
         bear = _bear(report)
-        self.assertIn("slippage anchor", bear.lower())
+        # bullet text was retitled in the 2026-05 investigation —
+        # "family anchor" + "limit-pricing cushion" replaced "slippage anchor"
+        self.assertIn("family anchor", bear.lower())
+        self.assertIn("limit-pricing cushion", bear.lower())
         self.assertIn("ROLL-1984", bear)
-        self.assertIn("HASBROUCK-1991", bear)
+        # HASBROUCK + ALMGREN-CHRISS removed from this bullet — they describe
+        # realized cost which v1 does not measure.
+        self.assertNotIn("HASBROUCK-1991", bear)
+        self.assertNotIn("ALMGREN-CHRISS-2000", bear)
 
     def test_low_slip_does_not_fire(self):
         slippage = {
@@ -247,7 +256,7 @@ class SlippageBulletTests(unittest.TestCase):
                     "verdict": "anchored",
                     "ticketCount": 50,
                     "medianAvgLegSpreadPct": 0.05,
-                    "medianEntrySlipPct": 0.02,
+                    "medianLimitCushionPct": 0.02,
                 }
             },
         }
@@ -261,7 +270,7 @@ class SlippageBulletTests(unittest.TestCase):
                 "Vertical Debit": {
                     "verdict": "thin",
                     "ticketCount": 5,
-                    "medianEntrySlipPct": 0.50,
+                    "medianLimitCushionPct": 0.50,
                 }
             },
         }
@@ -391,7 +400,7 @@ class StackedSignalsTests(unittest.TestCase):
                         "verdict": "anchored",
                         "ticketCount": 50,
                         "medianAvgLegSpreadPct": 0.18,
-                        "medianEntrySlipPct": 0.42,
+                        "medianLimitCushionPct": 0.42,
                     }
                 }
             },

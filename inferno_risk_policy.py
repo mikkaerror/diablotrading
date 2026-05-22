@@ -136,20 +136,35 @@ def debit_spread_reward_risk(item: dict[str, Any]) -> float | None:
     return round(profit / loss, 4)
 
 
+VISIBLE_QUOTE_MIN_PRICE = 0.10  # bids/asks below this are not real markets
+
+
 def visible_quote_blocks(item: dict[str, Any]) -> list[str]:
     """Require executable-looking quotes on every option leg.
 
-    Buy legs need an ask. Sell legs need a bid. This keeps the system from
-    turning ghost quotes into fake conviction.
+    Buy legs need an ask ≥ $0.10. Sell legs need a bid ≥ $0.10. The dollar
+    floor catches cases where the option market has effectively walked away
+    (e.g., bid of $0.05 on an illiquid OTM strike) — those quotes look
+    "visible" but are not real markets. The Phase A slippage investigation
+    surfaced THR-style cases where bid=$0.05 was feeding through to wildly
+    conservative debit estimates via the worst-case ask-minus-bid formula.
     """
     blocks: list[str] = []
     for leg in strategy_plan(item).get("legs", []):
         instruction = str(leg.get("instruction", "")).upper()
         symbol = leg.get("symbol") or "UNKNOWN"
-        if instruction.startswith("BUY") and number(leg.get("ask")) <= 0:
-            blocks.append(f"{symbol} buy leg has no visible ask")
-        if instruction.startswith("SELL") and number(leg.get("bid")) <= 0:
-            blocks.append(f"{symbol} sell leg has no visible bid")
+        ask = number(leg.get("ask"))
+        bid = number(leg.get("bid"))
+        if instruction.startswith("BUY") and ask < VISIBLE_QUOTE_MIN_PRICE:
+            blocks.append(
+                f"{symbol} buy leg ask {ask:.2f} below visible-market floor "
+                f"${VISIBLE_QUOTE_MIN_PRICE:.2f}"
+            )
+        if instruction.startswith("SELL") and bid < VISIBLE_QUOTE_MIN_PRICE:
+            blocks.append(
+                f"{symbol} sell leg bid {bid:.2f} below visible-market floor "
+                f"${VISIBLE_QUOTE_MIN_PRICE:.2f}"
+            )
     return blocks
 
 

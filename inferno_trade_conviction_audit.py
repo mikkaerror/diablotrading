@@ -907,20 +907,22 @@ def _collect_phase_signals(
             f"{_cite('ADAMS-MACKAY-2007')}"
         )
 
-    # ── Phase A — slippage anchor for this ticket's family ──
+    # ── Phase A — limit-pricing cushion + quoted spread for this family ──
     slippage = phase.get("slippage") or {}
     family_anchors = (slippage.get("familyAnchors") or {})
     anchor = family_anchors.get(family) or {}
-    med_slip = _safe_float(anchor.get("medianEntrySlipPct"))
+    med_cushion = _safe_float(anchor.get("medianLimitCushionPct"))
     med_spread = _safe_float(anchor.get("medianAvgLegSpreadPct"))
-    if anchor.get("verdict") == "anchored" and med_slip is not None and med_slip >= 0.10:
+    if anchor.get("verdict") == "anchored" and med_cushion is not None and med_cushion >= 0.10:
         bear.append(
-            f"slippage anchor for the {family} family: median entry slip "
-            f"{med_slip * 100:.1f}% (median leg spread "
-            f"{med_spread * 100:.1f}%) across {anchor.get('ticketCount')} prior "
-            f"tickets. Bake that fill cost into the R:R before sizing — the "
-            f"thesis must clear the spread tax {_cite('ROLL-1984')} "
-            f"{_cite('HASBROUCK-1991')} {_cite('ALMGREN-CHRISS-2000')}"
+            f"family anchor for {family}: median quoted-leg spread "
+            f"{med_spread * 100:.1f}% (Roll-1984 effective spread proxy) "
+            f"and median limit-pricing cushion {med_cushion * 100:.1f}% "
+            f"across {anchor.get('ticketCount')} prior tickets. The cushion "
+            f"is the strike selector's worst-case-fill conservatism — limit "
+            f"orders in this family expect to cross the spread on every leg. "
+            f"Check whether the thesis still clears its R:R when the fill "
+            f"happens at limit rather than mid {_cite('ROLL-1984')}"
         )
 
     # ── Phase B — portfolio correlation: am I adding to the dominant family? ──
