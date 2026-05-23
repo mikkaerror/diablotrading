@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for guarded thinkorswim export verification."""
 
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,6 +12,21 @@ from inferno_tos_export_verifier import main, verify_export_bridge
 
 class TOSExportVerifierTests(unittest.TestCase):
     """Verify the export verifier stays safe around hidden-window states."""
+
+    def setUp(self) -> None:
+        """Patch TOS_APP_PATH so the verifier's `app_path.exists()` guard
+        does not early-exit on test hosts where thinkorswim is not at
+        the default location. The repo root always exists; the
+        production contract (refuse to drive UI without an installed
+        TOS) is preserved -- we just hand the guard a path that's there.
+        """
+        existing_path = Path(__file__).resolve().parent.parent
+        self._app_path_patch = patch(
+            "inferno_tos_export_verifier.TOS_APP_PATH",
+            existing_path,
+        )
+        self._app_path_patch.start()
+        self.addCleanup(self._app_path_patch.stop)
 
     @patch("inferno_tos_export_verifier.save_export_verifier_report")
     @patch(

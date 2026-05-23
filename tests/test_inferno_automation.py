@@ -29,13 +29,31 @@ class ExportShortcutTests(unittest.TestCase):
     """Verify keyboard shortcut parsing stays deterministic."""
 
     def setUp(self) -> None:
-        """Keep export-bridge tests independent from the operator's local mode."""
+        """Keep export-bridge tests independent from the operator's local mode.
+
+        We patch both the automation enabled flag and the app path. The
+        path patch points at the repo root (which always exists) so the
+        production `app_path.exists()` guard inside `run_export_bridge`
+        does not early-exit on test hosts that don't have thinkorswim
+        installed at the default location. The guard's contract is
+        preserved -- tests are simply handing it a path that's actually
+        there, not removing the check.
+        """
         self._export_enabled_patch = patch(
             "inferno_tos_export_bridge.TOS_EXPORT_AUTOMATION_ENABLED",
             True,
         )
         self._export_enabled_patch.start()
         self.addCleanup(self._export_enabled_patch.stop)
+
+        # Path(__file__).resolve().parent is tests/, .parent.parent is repo root.
+        existing_path = Path(__file__).resolve().parent.parent
+        self._app_path_patch = patch(
+            "inferno_tos_export_bridge.TOS_APP_PATH",
+            existing_path,
+        )
+        self._app_path_patch.start()
+        self.addCleanup(self._app_path_patch.stop)
 
     def test_parse_shortcut_keeps_key_and_modifiers(self) -> None:
         """A standard command-shift shortcut should parse cleanly."""
