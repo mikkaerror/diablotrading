@@ -4,7 +4,7 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-05-20.
+Last updated: 2026-05-24.
 
 For the one-page purpose and strategy brief, start with
 [`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
@@ -60,6 +60,8 @@ Safety            — authority, risk, secrets
 | `inferno_watchdog.py` | Continuous failure detector + alert dispatcher | `reports/watchdog_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials are leaking into artifacts | `data/inferno_secret_hygiene.json` |
 | `inferno_live_book_review_packet.py` | Compact "what exactly blocks new capital" packet over the live book | `reports/live_book_review_packet_latest.txt` |
+| `inferno_reporting_preflight.py` | Read-only freshness/SMTP/Schwab/TOS attach-state check before any brief is sent or trusted | `data/inferno_reporting_preflight.json`, `reports/reporting_preflight_latest.txt` |
+| `inferno_reporting_summary.py` | Shared read-only reporting language used by morning brief, action pulses, live sync, and command center | importable helpers (no artifact) |
 
 ## Decision (what to do today)
 
