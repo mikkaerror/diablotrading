@@ -166,13 +166,20 @@ def paper_status_for_item(
     item: dict[str, Any],
     strike_plan_generated_at: str | None = None,
     ledger: dict[str, Any] | None = None,
-) -> tuple[str, list[str], dict[str, Any]]:
+) -> tuple[str, list[str], dict[str, Any], str]:
     """Classify a strike ticket without allowing unsafe tickets to pass.
 
     `paper-staged` means the idea is eligible for simulated tracking only. It
     still does not mean live trading is allowed. Liquidity, size, stale-data, or
     failed strike construction fail closed. Human approval can be bypassed only
     in the paper lane when it is the sole blocker.
+
+    Returns a 4-tuple of (status, blockReasons, riskVerdictDict,
+    paperAutoBlockReason). The last element is the specific reason the
+    auto-paper gate refused (or "ok" if it allowed the ticket through, or
+    "not-evaluated" when the strike plan itself failed and auto-paper was
+    never consulted). It is diagnostic only -- the desk needs to see why
+    auto-paper isn't firing on tickets that otherwise look clean.
     """
     reasons: list[str] = []
     risk_verdict = evaluate_strike_item(
@@ -183,12 +190,14 @@ def paper_status_for_item(
     if not item.get("ok"):
         reasons.append(str(item.get("reason") or "strike plan failed"))
         reasons.extend(reason for reason in risk_verdict.blocks if reason not in reasons)
-        return "paper-rejected", reasons, risk_verdict.as_dict()
+        return "paper-rejected", reasons, risk_verdict.as_dict(), "not-evaluated"
 
     strike_plan = item.get("strikePlan") or {}
     liquidity_notes = strike_plan.get("liquidityNotes") or []
     intent_blocks = list(item.get("intentBlocks") or [])
-    paper_auto_selected = paper_auto_selection_applies(item, risk_verdict, liquidity_notes, intent_blocks)
+    paper_auto_selected, auto_block_reason = paper_auto_selection_decision(
+        item, risk_verdict, liquidity_notes, intent_blocks
+    )
     if item.get("intentStatus") != "approval-ready":
         blocks = intent_blocks or ["execution intent is not approval-ready"]
         reasons.extend(non_approval_reasons(blocks) if paper_auto_selected else blocks)
@@ -199,8 +208,46 @@ def paper_status_for_item(
     reasons.extend(reason for reason in risk_verdict.blocks if reason not in reasons)
 
     if reasons:
-        return "paper-blocked", reasons, risk_verdict.as_dict()
-    return "paper-staged", [], risk_verdict.as_dict()
+        return "paper-blocked", reasons, risk_verdict.as_dict(), auto_block_reason
+    return "paper-staged", [], risk_verdict.as_dict(), auto_block_reason
+
+
+def paper_auto_selection_decision(
+    item: dict[str, Any],
+    risk_verdict: Any,
+    liquidity_notes: list[Any],
+    intent_blocks: list[Any],
+) -> tuple[bool, str]:
+    """Return (eligible, reason) for whether a pending ticket may auto-stage.
+
+    The reason is a stable short string identifying which gate decided.
+    ``"ok"`` means the ticket cleared every condition; any other string is
+    the specific block reason. This is the diagnostic surface for the
+    auto-paper path -- if it keeps refusing tickets that look clean, the
+    reason field will tell the operator why.
+    """
+    if not AUTO_PAPER_SELECTION_ENABLED:
+        return False, "auto-paper-disabled-globally"
+    approval_status = item.get("approvalStatus")
+    if approval_status in {"approved", "rejected"}:
+        return False, f"approval-status-is-{approval_status}"
+    if not item.get("ok"):
+        return False, "item-not-ok"
+    if not getattr(risk_verdict, "passed", False):
+        return False, "risk-verdict-failed"
+    intent_non_approval = non_approval_reasons(intent_blocks)
+    if intent_non_approval:
+        return False, f"intent-has-non-approval-block: {intent_non_approval[0]}"
+    liquidity_non_approval = non_approval_reasons(liquidity_notes)
+    if liquidity_non_approval:
+        return False, f"liquidity-has-non-approval-note: {liquidity_non_approval[0]}"
+    intent_status = item.get("intentStatus")
+    if intent_status not in {"approval-ready", "blocked"}:
+        return False, f"intent-status-not-eligible: {intent_status!r}"
+    # Legacy strike plans did not carry `intentBlocks`; risk/liquidity gates are
+    # still enforced, so a pending blocked intent can be paper-staged only when
+    # nothing except approval remains visible.
+    return True, "ok"
 
 
 def paper_auto_selection_applies(
@@ -211,24 +258,11 @@ def paper_auto_selection_applies(
 ) -> bool:
     """Return True when a pending ticket may become paper evidence automatically.
 
-    The function deliberately permits only approval-only friction to fall away.
-    It never changes live-trading flags, never touches broker submission, and
-    still blocks if the risk policy finds any non-approval issue.
+    Thin backward-compatibility shim over ``paper_auto_selection_decision``.
+    Prefer the decision variant in new code so the reason is captured.
     """
-    if not AUTO_PAPER_SELECTION_ENABLED:
-        return False
-    if item.get("approvalStatus") in {"approved", "rejected"}:
-        return False
-    if not item.get("ok"):
-        return False
-    if not getattr(risk_verdict, "passed", False):
-        return False
-    if non_approval_reasons(intent_blocks) or non_approval_reasons(liquidity_notes):
-        return False
-    # Legacy strike plans did not carry `intentBlocks`; risk/liquidity gates are
-    # still enforced, so a pending blocked intent can be paper-staged only when
-    # nothing except approval remains visible.
-    return item.get("intentStatus") in {"approval-ready", "blocked"}
+    eligible, _ = paper_auto_selection_decision(item, risk_verdict, liquidity_notes, intent_blocks)
+    return eligible
 
 
 def build_ledger_entry(
@@ -242,7 +276,9 @@ def build_ledger_entry(
     legs = strike_plan.get("legs") or []
     leg_symbols = [leg.get("symbol") for leg in legs]
     cost_type, cost = strategy_cost(strike_plan)
-    status, block_reasons, risk_verdict = paper_status_for_item(item, strike_plan_generated_at, ledger)
+    status, block_reasons, risk_verdict, paper_auto_block_reason = paper_status_for_item(
+        item, strike_plan_generated_at, ledger
+    )
     ticket_id = ticket_hash(
         [
             now.date().isoformat(),
@@ -269,6 +305,7 @@ def build_ledger_entry(
         "paperOnly": True,
         "liveTradingAllowed": False,
         "paperAutoSelected": bool(status == "paper-staged" and item.get("approvalStatus") != "approved"),
+        "paperAutoBlockReason": paper_auto_block_reason,
         "intentStatus": item.get("intentStatus"),
         "approvalStatus": item.get("approvalStatus"),
         "riskVerdict": risk_verdict,

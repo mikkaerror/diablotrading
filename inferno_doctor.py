@@ -57,6 +57,7 @@ SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
 PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
+PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -593,6 +594,23 @@ def consensus_monitor_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def paper_velocity_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the paper-velocity tracker freshness and verdict.
+
+    Every published verdict is a valid research outcome; the doctor only
+    checks that the artifact is present and freshly computed.
+    """
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "stalled",
+            "slow",
+            "on-track",
+            "promotion-ready",
+        },
+    )
+
+
 def schwab_edge_signals_status(report: dict) -> tuple[bool, str]:
     """Evaluate the Schwab edge-signals bridge freshness and verdict.
 
@@ -1088,6 +1106,12 @@ def main() -> int:
     consensus_ok, consensus_detail = consensus_monitor_status(consensus)
     lines.append(summarize_status("Consensus monitor", consensus_ok, consensus_detail))
     if not consensus_ok:
+        warnings += 1
+
+    paper_velocity = load_json_file(PAPER_VELOCITY_FILE) or {}
+    paper_velocity_ok, paper_velocity_detail = paper_velocity_status(paper_velocity)
+    lines.append(summarize_status("Paper velocity", paper_velocity_ok, paper_velocity_detail))
+    if not paper_velocity_ok:
         warnings += 1
 
     blowup_guardrails = load_json_file(BLOWUP_GUARDRAILS_FILE) or {}

@@ -31,7 +31,7 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
             },
         }
 
-        status, reasons, verdict = paper_execution.paper_status_for_item(
+        status, reasons, verdict, auto_block_reason = paper_execution.paper_status_for_item(
             item,
             strike_plan_generated_at=paper_execution.local_now().isoformat(),
             ledger={"items": []},
@@ -40,6 +40,7 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(status, "paper-staged")
         self.assertEqual(reasons, [])
         self.assertTrue(verdict["passed"])
+        self.assertEqual(auto_block_reason, "ok")
 
     def test_rehearsal_variant_item_only_appears_for_size_cap_blocks(self) -> None:
         item = {
@@ -80,6 +81,105 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         }
 
         self.assertIsNone(paper_execution.rehearsal_variant_item(item))
+
+
+class _FakeVerdict:
+    """Minimal stand-in for a risk verdict in auto-paper unit tests."""
+
+    def __init__(self, passed: bool = True) -> None:
+        self.passed = passed
+
+
+class PaperAutoSelectionDecisionTests(unittest.TestCase):
+    """Pin the diagnostic reasons emitted by ``paper_auto_selection_decision``.
+
+    These tests document why the auto-paper gate refuses a ticket so the
+    operator can read the ``paperAutoBlockReason`` field on a ledger entry
+    and immediately know which condition tripped.
+    """
+
+    def _clean_item(self, **overrides: object) -> dict[str, object]:
+        item = {
+            "ok": True,
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+        }
+        item.update(overrides)
+        return item
+
+    def test_eligible_path_returns_ok(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(), _FakeVerdict(passed=True), [], []
+        )
+        self.assertTrue(eligible)
+        self.assertEqual(reason, "ok")
+
+    def test_approved_status_blocks_with_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(approvalStatus="approved"), _FakeVerdict(True), [], []
+        )
+        self.assertFalse(eligible)
+        self.assertIn("approval-status-is-approved", reason)
+
+    def test_item_not_ok_blocks_with_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(ok=False), _FakeVerdict(True), [], []
+        )
+        self.assertFalse(eligible)
+        self.assertEqual(reason, "item-not-ok")
+
+    def test_failed_risk_verdict_blocks_with_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(), _FakeVerdict(passed=False), [], []
+        )
+        self.assertFalse(eligible)
+        self.assertEqual(reason, "risk-verdict-failed")
+
+    def test_intent_non_approval_block_surfaces_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(),
+            _FakeVerdict(True),
+            [],
+            ["wide bid-ask spread"],
+        )
+        self.assertFalse(eligible)
+        self.assertIn("intent-has-non-approval-block", reason)
+        self.assertIn("wide bid-ask spread", reason)
+
+    def test_liquidity_non_approval_block_surfaces_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(),
+            _FakeVerdict(True),
+            ["open interest too thin"],
+            [],
+        )
+        self.assertFalse(eligible)
+        self.assertIn("liquidity-has-non-approval-note", reason)
+        self.assertIn("open interest too thin", reason)
+
+    def test_ineligible_intent_status_blocks_with_reason(self) -> None:
+        eligible, reason = paper_execution.paper_auto_selection_decision(
+            self._clean_item(intentStatus="needs-refresh"),
+            _FakeVerdict(True),
+            [],
+            [],
+        )
+        self.assertFalse(eligible)
+        self.assertIn("intent-status-not-eligible", reason)
+        self.assertIn("needs-refresh", reason)
+
+    def test_applies_shim_still_returns_bool(self) -> None:
+        """The legacy ``paper_auto_selection_applies`` boolean API still works."""
+        self.assertTrue(
+            paper_execution.paper_auto_selection_applies(
+                self._clean_item(), _FakeVerdict(True), [], []
+            )
+        )
+        self.assertFalse(
+            paper_execution.paper_auto_selection_applies(
+                self._clean_item(ok=False), _FakeVerdict(True), [], []
+            )
+        )
 
 
 if __name__ == "__main__":

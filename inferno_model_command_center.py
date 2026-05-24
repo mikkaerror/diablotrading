@@ -63,6 +63,7 @@ SLIPPAGE_ESTIMATOR_FILE = DATA_DIR / "inferno_slippage_estimator.json"
 PORTFOLIO_CORRELATION_FILE = DATA_DIR / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = DATA_DIR / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = DATA_DIR / "inferno_consensus_monitor.json"
+PAPER_VELOCITY_FILE = DATA_DIR / "inferno_paper_velocity.json"
 MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
 
 
@@ -191,6 +192,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "consensus-monitor",
         "question": "Are we contrarian today, or in the crowded trade?",
         "artifact": "reports/consensus_monitor_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "paper-velocity",
+        "question": "Are we closing paper outcomes fast enough to clear the 30-gate?",
+        "artifact": "reports/paper_velocity_latest.txt",
         "owner": "shared",
     },
     {
@@ -517,6 +524,7 @@ def build_command_center() -> dict[str, Any]:
         "portfolioCorrelation": artifact_summary(PORTFOLIO_CORRELATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "drawdownProtocol": artifact_summary(DRAWDOWN_PROTOCOL_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "consensusMonitor": artifact_summary(CONSENSUS_MONITOR_FILE, keys=("stage", "verdict", "generatedAt", "consensusCount", "researchOnly", "promotable")),
+        "paperVelocity": artifact_summary(PAPER_VELOCITY_FILE, keys=("stage", "verdict", "generatedAt", "totalTickets", "researchOnly", "promotable")),
         "mathVerify": artifact_summary(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
     }
     headline_metrics = {
@@ -610,7 +618,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
             "./run_inferno_usage_optimizer.sh",
-            f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --send --force-send",
+            f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
             f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
