@@ -80,7 +80,7 @@ The desk should assume every signal is guilty until evidence proves otherwise.
 |---|---|---|
 | Universe and tracker columns | Google Earnings Tracker | Strategy source of truth |
 | Options chain and quote quality | Schwab API | Primary read-only option market-data source |
-| Broker cash, positions, fills | Already-open TOS account statement export | Broker reality check only |
+| Broker cash, positions, fills | Schwab account API for cash/positions; supervised TOS/fill export for fills | Broker reality check only |
 | Prices, ATR, RVOL, support/resistance | Market context layer and tracker scripts | Setup and timing evidence |
 | Outcomes | Paper/shadow/live ledgers | Promotion evidence |
 

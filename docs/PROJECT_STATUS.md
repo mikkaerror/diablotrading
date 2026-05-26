@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-24.
+Last updated: 2026-05-25.
 
 The desk's "where are we right now" memo. Read this first.
 
@@ -9,10 +9,11 @@ For the shortest durable command brief, start with
 
 ## Verdict
 
-**Healthy read-only desk; fresh capital blocked.** Live account sync is healthy
-for the configured approved suffix, the tracker now includes the current live
-positions, and all automated live trading remains locked. Fresh capital should
-not be deployed until the fragile live-book review items are cleared.
+**Healthy read-only desk; fresh capital blocked.** Live account sync now uses
+Schwab account API as broker truth for the configured approved suffix, the
+tracker includes the current live positions, and all automated live trading
+remains locked. Fresh capital should not be deployed until the fragile live-book
+review items are cleared.
 
 Latest readiness sweep: 2026-05-21 00:23 MT. Capital launch is `blocked`; risk
 gates are `blocked`; math verification is `clean`; Schwab options data is live
@@ -46,13 +47,14 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Usage optimizer | shipped | low-context handoff packet for Codex/Claude sessions |
 | Desk health | healthy | doctor green; paper lane still needs evidence volume |
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
-| Live account sync | healthy | matched configured approved suffix |
+| Live account sync | healthy | matched configured approved suffix; source is Schwab account API |
 | Live book | review, read-only | 4 matched positions · TE constructive · IREN/HIVE review · CLSK fragile |
 | Capital deployment | `blocked` | fresh capital blocked until fragile live-book items are reviewed |
 | Risk gate audit | `blocked` | 5/12 pass in launch check; promotion still blocked |
 | Tracker | synced | 146 sheet / 146 snapshot; HIVE, TE, CLSK appended; IREN already existed; 0 critical/advisory ticker issues |
 | Watchlist closed-loop | shipped | 5-min autorefresh, three-way reconciler |
-| Schwab options API | active, read-only | OAuth helper and token refresh are live; the option-chain adapter adds quote-quality score/label, liquidity buckets, spread friction, Greek completeness, ATM straddle expected-move proxy, fail-closed quality flags, and strike-selector/risk-policy enforcement when attached; no account/order endpoints |
+| Schwab account API | active, read-only | `inferno_schwab_account_sync.py` refreshes approved-account balances/positions, redacts raw account numbers, persists holdings only for the configured suffix, and feeds live account sync without requiring TOS; no order endpoints |
+| Schwab options API | active, read-only | OAuth helper and token refresh are live; the option-chain adapter adds quote-quality score/label, liquidity buckets, spread friction, Greek completeness, ATM straddle expected-move proxy, fail-closed quality flags, and strike-selector/risk-policy enforcement when attached; no order endpoints |
 | Schwab daily ops tape | active | `inferno_schwab_daily_ops.py` refreshes tokens when possible, pulls the active slate, classifies chains into `tradable-research` / `paper-ready` / `manual-review` / `avoid-chain`, and feeds the action pulse + strike cycle |
 | Schwab edge signals | shipped | bridge module `inferno_schwab_edge_signals.py` reads the chain adapter output and emits per-ticker tier-classified lanes (`tradable-research` / `calibration-watch` / `thin-data` / `no-chain`) plus a cross-sectional regime read (IV bucket distribution, expected-move buckets, call/put skew lean); wired into command center reporting map and doctor freshness; 21 contract tests; framework documented in `docs/SCHWAB_EDGE_OPPORTUNITIES.md` (honest framing of retail options edge, four-tier metric hierarchy, refresh cadence, anti-goals, Phase 2-4 build backlog) |
 | Research Roadmap Phase A | shipped | post-trade learning layer complete: `inferno_outcome_attribution.py` (Brinson decomposition + Eckhardt comfortable-win flag, 12 tests), `inferno_rule_edge_decay.py` (Wilson lower bound + exponential half-life on per-bullet citation tags, 26 tests), `inferno_slippage_estimator.py` (Roll spread math + per-strategy-family **limit-pricing cushion** anchor table — measures the strike selector's worst-case-fill conservatism, not realized slippage; honest framing in module docstring; 29 tests); all three wired into model command center, doctor freshness, and PROJECT_STATUS; theory live in `docs/PERFORMANCE_ATTRIBUTION.md` |
@@ -117,7 +119,9 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Vendor gaps fail closed instead of aborting the refresh.
 - Sheet hydration self-heals broken `Setup Rec` / `Signal Trigger` cells.
 - The TOS lane stays read-only. Background export triggering is disabled; manual/supervised export remains available.
-- The Schwab lane is read-only market data. OAuth tokens stay ignored locally, token refresh is automated, and account/order endpoints are not part of the desk.
+- The Schwab lanes are read-only. OAuth tokens stay ignored locally, token
+  refresh is automated, account reads are limited to approved-suffix sync, and
+  order endpoints are not part of the desk.
 - Watchlist intake now flows TOS → sheet → reconcile every 5 minutes.
 - Command-center reporting now starts with executive summary, math status, and canonical report map.
 - Usage optimizer now creates a compact read-first / do-not-paste handoff to reduce repeated context spend.

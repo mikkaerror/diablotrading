@@ -18,9 +18,9 @@
   {
     "id": "mission-5fb99c1b",
     "createdAt": "2026-05-10T15:10:09.071822-06:00",
-    "updatedAt": "2026-05-18T22:05:35.687950-06:00",
+    "updatedAt": "2026-05-26T08:49:45.993342-06:00",
     "title": "Stabilize native TOS export evidence path",
-    "body": "Claude owns thinkorswim native export stabilization and broker UI evidence collection. Codex consumes exported artifacts and tests downstream logic. Do not open a new TOS instance, change authority, or place trades.",
+    "body": "Claude owns thinkorswim native export stabilization only for UI-only evidence that Schwab cannot supply. Codex has made the six OHLCV-derived custom metrics (RVOL, Pv52H, MOM, ATR%, Strength, SUP/RES) Schwab-independent via price history plus the anti-confirmation theory audit. Do not duplicate those with TOS CSV except as visual cross-check. Do not open a new TOS instance, change authority, or place trades.",
     "owner": "claude",
     "status": "in-progress",
     "priority": "high",

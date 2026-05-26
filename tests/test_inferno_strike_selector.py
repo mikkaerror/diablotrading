@@ -21,6 +21,9 @@ from inferno_strike_selector import (
     apply_setup_concentration_governor,
     build_text_report,
     cap_aware_long_strangle_plan,
+    effective_intent_for_pricing,
+    put_credit_spread_plan,
+    strategy_alternative_gate,
     load_schwab_options_index,
     load_execution_queue,
     setup_share_counts,
@@ -163,6 +166,26 @@ class StrikeSelectorRedundancyTests(unittest.TestCase):
         self.assertEqual(indexed["NVDA"]["quoteQualityScore"], 88)
         self.assertEqual(indexed["NVDA"]["sourceGeneratedAt"], payload["generatedAt"])
 
+    def test_effective_intent_prefers_schwab_underlying_for_strikes(self) -> None:
+        adjusted = effective_intent_for_pricing(
+            {
+                "ticker": "DELL",
+                "price": 243.37,
+                "marketContext": {
+                    "support": 200.84,
+                    "resistance": 298.32,
+                    "trend": {"label": "Bullish"},
+                },
+            },
+            {"underlyingPrice": 295.19},
+        )
+
+        self.assertEqual(adjusted["sourcePrice"], 243.37)
+        self.assertEqual(adjusted["price"], 295.19)
+        self.assertEqual(adjusted["underlyingPriceSource"], "schwab-options-underlying")
+        self.assertAlmostEqual(adjusted["marketContext"]["distanceToSupportPct"], 31.9625)
+        self.assertAlmostEqual(adjusted["marketContext"]["distanceToResistancePct"], 1.0603)
+
     def test_build_text_report_surfaces_schwab_quote_quality(self) -> None:
         report = build_text_report(
             {
@@ -179,6 +202,8 @@ class StrikeSelectorRedundancyTests(unittest.TestCase):
                         "intentStatus": "approval-ready",
                         "approvalStatus": "approved",
                         "price": 100.0,
+                        "sourcePrice": 94.0,
+                        "underlyingPriceSource": "schwab-options-underlying",
                         "marketContext": {
                             "rvol": 1.4,
                             "trend": {"label": "Bullish"},
@@ -208,6 +233,7 @@ class StrikeSelectorRedundancyTests(unittest.TestCase):
         )
 
         self.assertIn("Schwab option chains attached: 1", report)
+        self.assertIn("source $94.00", report)
         self.assertIn("Schwab chain: 88/institutional", report)
         self.assertIn("move 7.4% (hot)", report)
 
@@ -236,6 +262,66 @@ class StrikeSelectorRedundancyTests(unittest.TestCase):
         self.assertEqual(variant["strategy"], "LONG_STRANGLE")
         self.assertTrue(variant["paperVariantOnly"])
         self.assertLessEqual(float(variant["estimatedMaxLoss"]), 500.0)
+
+    def test_put_credit_spread_carries_short_premium_greeks(self) -> None:
+        puts = pd.DataFrame(
+            [
+                {"strike": 38.0, "bid": 1.40, "ask": 1.55, "lastPrice": 1.45, "volume": 200, "openInterest": 1800, "contractSymbol": "PLP38", "impliedVolatility": 0.65},
+                {"strike": 36.0, "bid": 0.55, "ask": 0.65, "lastPrice": 0.60, "volume": 140, "openInterest": 1200, "contractSymbol": "PLP36", "impliedVolatility": 0.64},
+            ]
+        )
+        intent = {
+            "ticker": "PL",
+            "price": 40.0,
+            "ivRank": 65.0,
+            "atrPercent": 5.0,
+            "marketContext": {
+                "trend": {"label": "Bullish"},
+                "support": 37.5,
+                "rvol": 1.05,
+                "atrExpansion": 0.2,
+                "distanceToSupportPct": 9.0,
+                "distanceToResistancePct": 12.0,
+            },
+        }
+
+        plan = put_credit_spread_plan(intent, "2026-06-19", puts)
+
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["strategy"], "PUT_CREDIT_SPREAD")
+        self.assertGreater(plan["estimatedCredit"], 0)
+        greeks = plan["greekSummary"]
+        self.assertGreater(greeks["netTheta"], 0)
+        self.assertLess(greeks["netVega"], 0)
+        self.assertTrue(greeks["greeksComplete"])
+        allowed, reason = strategy_alternative_gate(intent, "PUT_CREDIT_SPREAD", plan)
+        self.assertTrue(allowed, reason)
+
+    def test_put_credit_alternative_rejects_cheap_iv(self) -> None:
+        plan = {
+            "strategy": "PUT_CREDIT_SPREAD",
+            "greekSummary": {
+                "greeksComplete": True,
+                "netDelta": 0.25,
+                "netTheta": 0.03,
+                "netVega": -0.02,
+            },
+        }
+        intent = {
+            "ivRank": 30.0,
+            "marketContext": {
+                "trend": {"label": "Bullish"},
+                "rvol": 1.0,
+                "atrExpansion": 0.1,
+                "distanceToSupportPct": 10.0,
+                "distanceToResistancePct": 12.0,
+            },
+        }
+
+        allowed, reason = strategy_alternative_gate(intent, "PUT_CREDIT_SPREAD", plan)
+
+        self.assertFalse(allowed)
+        self.assertIn("not rich enough", reason)
 
     def test_load_execution_queue_rebuilds_when_cached_queue_is_empty(self) -> None:
         snapshot = {"reviewQueueTickers": ["THR", "GDS"]}

@@ -3,8 +3,9 @@ from __future__ import annotations
 """Regression tests for the twice-daily action pulse."""
 
 import unittest
+from unittest.mock import patch
 
-from inferno_action_pulse import render_action_pulse, sent_key, subject_for_pulse
+from inferno_action_pulse import build_action_pulse, render_action_pulse, sent_key, subject_for_pulse
 
 
 class InfernoActionPulseTests(unittest.TestCase):
@@ -24,6 +25,7 @@ class InfernoActionPulseTests(unittest.TestCase):
             {
                 "generatedAt": "2026-05-15T07:05:00-06:00",
                 "phaseLabel": "Open Watch",
+                "fastMode": True,
                 "verdict": "blocked",
                 "message": "Do not deploy fresh capital.",
                 "manualDeploymentAllowed": False,
@@ -85,6 +87,7 @@ class InfernoActionPulseTests(unittest.TestCase):
         )
 
         self.assertIn("What changed", rendered)
+        self.assertIn("Fast mode: True", rendered)
         self.assertIn("What matters today", rendered)
         self.assertIn("What action is allowed", rendered)
         self.assertIn("TOS is running, but no main window is visible", rendered)
@@ -99,6 +102,43 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("only executablePaper=true may be staged", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
+
+    @patch("inferno_action_pulse.save_action_pulse")
+    @patch("inferno_action_pulse.build_tos_visibility_summary", return_value={"message": "TOS visibility skipped in test."})
+    @patch("inferno_action_pulse.build_freshness_panel", return_value={"rows": []})
+    @patch("inferno_action_pulse.build_capital_launch_check")
+    @patch("inferno_action_pulse.build_daily_loop")
+    @patch("inferno_action_pulse.run_maintenance")
+    @patch("inferno_action_pulse.load_json_file")
+    def test_fast_mode_uses_saved_heavy_artifacts(
+        self,
+        load_json_mock,
+        run_maintenance_mock,
+        build_daily_loop_mock,
+        build_launch_mock,
+        _freshness_mock,
+        _tos_mock,
+        _save_mock,
+    ) -> None:
+        load_json_mock.side_effect = [
+            {"deskVerdict": "saved", "decideTodayTickers": ["TE"], "narrative": "saved loop"},
+            {"rows": [], "laneCounts": {}},
+            {"counts": {"scenarios": 1, "executablePaper": 0, "approvalNeeded": 0, "shadowOnly": 1}},
+        ]
+        build_launch_mock.return_value = {
+            "verdict": "blocked",
+            "message": "blocked",
+            "manualDeploymentAllowed": False,
+            "capitalReadiness": {"guardrails": {}},
+        }
+
+        payload = build_action_pulse(phase="manual", deployable_cash=1050, fast=True)
+
+        run_maintenance_mock.assert_not_called()
+        build_daily_loop_mock.assert_not_called()
+        self.assertTrue(payload["fastMode"])
+        self.assertEqual(payload["dailyLoop"]["deskVerdict"], "saved")
+        self.assertIn("--fast", payload["operatorCommands"][1])
 
 
 if __name__ == "__main__":

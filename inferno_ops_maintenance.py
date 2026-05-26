@@ -43,6 +43,7 @@ from inferno_live_account_sync import build_live_account_sync
 from inferno_live_position_review import build_live_position_review
 from inferno_model_command_center import build_command_center
 from inferno_research_cycle import build_research_cycle, save_research_cycle
+from inferno_schwab_account_sync import build_schwab_account_sync, save_schwab_account_sync
 from inferno_ticker_universe_audit import build_ticker_universe_audit_from_sheet
 from inferno_watchdog import run_watchdog_check
 from morning_inferno_pipeline import append_log
@@ -382,15 +383,11 @@ def refresh_broker_preview() -> dict[str, Any]:
     }
 
 
-def refresh_live_account_sync() -> dict[str, Any]:
-    """Refresh the live-account sync artifact from the latest statement packet.
-
-    This maintenance path stays read-only. It refreshes the visible Account
-    Statement pane first so the desk does not quietly drift on stale broker
-    packets when the TOS window is already available.
-    """
+def refresh_schwab_account_sync() -> dict[str, Any]:
+    """Refresh the Schwab read-only account packet before live-book review."""
     try:
-        report = build_live_account_sync(refresh_statement=True)
+        report = build_schwab_account_sync()
+        save_schwab_account_sync(report)
     except Exception as exc:  # noqa: BLE001
         return {
             "ok": False,
@@ -403,6 +400,31 @@ def refresh_live_account_sync() -> dict[str, Any]:
         "generatedAt": report.get("generatedAt"),
         "counts": report.get("counts") or {},
         "matchedSuffix": report.get("matchedSuffix"),
+        "readOnly": bool(report.get("brokerReadOnly")),
+    }
+
+
+def refresh_live_account_sync() -> dict[str, Any]:
+    """Refresh the live-account sync artifact from Schwab, with TOS fallback.
+
+    This maintenance path stays read-only. Schwab is preferred for automation
+    because it does not depend on the desktop window being visible.
+    """
+    try:
+        report = build_live_account_sync(refresh_schwab=True, refresh_statement=False)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "refresh-failed",
+            "error": str(exc),
+        }
+    return {
+        "ok": bool(report.get("ok")),
+        "status": str(report.get("verdict") or "unknown"),
+        "generatedAt": report.get("generatedAt"),
+        "counts": report.get("counts") or {},
+        "matchedSuffix": report.get("matchedSuffix"),
+        "accountDataSource": report.get("accountDataSource"),
     }
 
 
@@ -604,6 +626,15 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"sent {approval_dispatch.get('sentCount', 0)} | "
             f"skipped {approval_dispatch.get('skippedCount', 0)}"
         )
+    schwab_account_sync = report.get("schwabAccountSync") or {}
+    if schwab_account_sync:
+        counts = schwab_account_sync.get("counts") or {}
+        lines.append(
+            f"Schwab account sync: {schwab_account_sync.get('status')} | "
+            f"positions {counts.get('positions', 0)} | "
+            f"approved {counts.get('approvedAccounts', 0)}/{counts.get('accounts', 0)} | "
+            f"suffix {schwab_account_sync.get('matchedSuffix') or '-'}"
+        )
     live_account_sync = report.get("liveAccountSync") or {}
     if live_account_sync:
         counts = live_account_sync.get("counts") or {}
@@ -611,7 +642,8 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"Live account sync: {live_account_sync.get('status')} | "
             f"positions {counts.get('positions', 0)} | "
             f"matched {counts.get('matchedPositions', 0)} | "
-            f"suffix {live_account_sync.get('matchedSuffix') or '-'}"
+            f"suffix {live_account_sync.get('matchedSuffix') or '-'} | "
+            f"source {live_account_sync.get('accountDataSource') or '-'}"
         )
     live_position_review = report.get("livePositionReview") or {}
     if live_position_review:
@@ -683,6 +715,7 @@ def run_maintenance(
     stale_approvals = refresh_stale_approval_governor()
     approval_inbox = refresh_approval_inbox()
     approval_dispatch = refresh_approval_dispatch()
+    schwab_account_sync = refresh_schwab_account_sync()
     live_account_sync = refresh_live_account_sync()
     live_position_review = refresh_live_position_review()
     model_command_center = refresh_model_command_center()
@@ -722,6 +755,7 @@ def run_maintenance(
         "staleApprovalGovernor": stale_approvals,
         "approvalInbox": approval_inbox,
         "approvalDispatch": approval_dispatch,
+        "schwabAccountSync": schwab_account_sync,
         "liveAccountSync": live_account_sync,
         "livePositionReview": live_position_review,
         "modelCommandCenter": model_command_center,

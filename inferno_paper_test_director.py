@@ -24,6 +24,7 @@ from inferno_strike_selector import (
     build_strike_plan,
     build_strike_plan_from_queue,
     effective_paper_rehearsal_item,
+    effective_strategy_alternative_item,
     save_strike_plan,
 )
 from server import APPROVAL_QUEUE_FILE, DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
@@ -190,7 +191,7 @@ def classify_candidate(
     """Classify one strike candidate into an actionable paper-test cohort."""
     execution_item = execution_item or {}
     sandbox_ticket = sandbox_ticket or {}
-    effective_item = effective_paper_rehearsal_item(strike_item) or strike_item
+    effective_item = effective_paper_rehearsal_item(strike_item) or effective_strategy_alternative_item(strike_item) or strike_item
 
     ticker = str(strike_item.get("ticker", "")).upper()
     strike_plan = effective_item.get("strikePlan") or {}
@@ -635,6 +636,19 @@ def rehearsal_strike_plan_text(plan: dict[str, Any]) -> str:
             f"  {strike_plan.get('strategy')} | max loss {strike_plan.get('estimatedMaxLoss')} | "
             f"approval {item.get('approvalStatus')}"
         )
+        greeks = strike_plan.get("greekSummary") or {}
+        if greeks:
+            lines.append(
+                f"  greeks: delta {greeks.get('netDelta')} | theta {greeks.get('netTheta')} | "
+                f"vega {greeks.get('netVega')} | {greeks.get('volPosture')}"
+            )
+        alternatives = item.get("strategyAlternatives") or []
+        for alternative in alternatives[:2]:
+            verdict = alternative.get("riskVerdict") or {}
+            lines.append(
+                f"  alt {alternative.get('strategy')} | max loss {alternative.get('estimatedMaxLoss')} | "
+                f"risk {'pass' if verdict.get('passed') else 'block'}"
+            )
         blocks = (item.get("riskVerdict") or {}).get("blocks") or []
         if blocks:
             lines.append(f"  blocks: {'; '.join(blocks[:4])}")

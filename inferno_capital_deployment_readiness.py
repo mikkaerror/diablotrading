@@ -119,6 +119,8 @@ def infer_cash_from_live_sync(live_sync: dict[str, Any]) -> float:
     """Infer deployable cash from the live sync artifact when possible."""
     return number(
         first_present(
+            live_sync.get("totalCash"),
+            live_sync.get("cashAvailableForTrading"),
             live_sync.get("stockBuyingPower"),
             live_sync.get("buyingPower"),
             live_sync.get("availableFundsForTrading"),
@@ -178,6 +180,8 @@ def evaluate_readiness(
     artifacts: dict[str, dict[str, Any]],
     allocator: dict[str, Any],
     deployment_date: str,
+    *,
+    deployable_cash_source: str = "operator-argument",
 ) -> dict[str, Any]:
     """Evaluate tomorrow's manual deployment readiness from desk artifacts."""
     blockers: list[str] = []
@@ -320,6 +324,7 @@ def evaluate_readiness(
         "liveAccountScopeRequired": approved_account_scope(),
         "authorityLevel": authority_level,
         "guardrails": guardrails,
+        "deployableCashSource": deployable_cash_source,
         "blockers": blockers,
         "warnings": warnings,
         "nextActions": next_actions,
@@ -343,6 +348,7 @@ def render_readiness_text(readiness: dict[str, Any]) -> str:
         "",
         "Capital guardrails",
         f"- Deployable cash: ${number(guardrails.get('deployableCash')):,.2f}",
+        f"- Deployable cash source: {text(readiness.get('deployableCashSource'), 'operator-argument')}",
         f"- Max options risk: ${number(guardrails.get('maxOptionsRisk')):,.2f}",
         f"- Max starter ticket: ${number(guardrails.get('maxStarterTicket')):,.2f}",
         f"- Max long-term buy: ${number(guardrails.get('maxLongTermBuy')):,.2f}",
@@ -376,12 +382,26 @@ def build_capital_deployment_readiness(
     ensure_dirs()
     deployment_date = for_date or (local_now().date() + timedelta(days=1)).isoformat()
 
+    artifacts = load_artifacts()
+    deployable_cash_source = "operator-argument"
+    if deployable_cash is None:
+        live_cash = infer_cash_from_live_sync(artifacts.get("liveSync") or {})
+        if live_cash > 0:
+            deployable_cash = live_cash
+            deployable_cash_source = "live-account-sync"
+        else:
+            deployable_cash_source = "allocator-default"
+
     allocator = build_capital_allocator(deployable_cash_dollars=deployable_cash)
     save_capital_allocator(allocator)
 
-    artifacts = load_artifacts()
     artifacts["allocator"] = allocator
-    readiness = evaluate_readiness(artifacts, allocator, deployment_date)
+    readiness = evaluate_readiness(
+        artifacts,
+        allocator,
+        deployment_date,
+        deployable_cash_source=deployable_cash_source,
+    )
     atomic_write_json(CAPITAL_DEPLOYMENT_READINESS_FILE, readiness)
     atomic_write_text(CAPITAL_DEPLOYMENT_READINESS_TEXT_FILE, render_readiness_text(readiness))
     return readiness

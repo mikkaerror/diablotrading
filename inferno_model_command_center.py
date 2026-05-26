@@ -44,12 +44,20 @@ OPS_MAINTENANCE_FILE = DATA_DIR / "inferno_ops_maintenance.json"
 LIVE_POSITION_REVIEW_FILE = DATA_DIR / "inferno_live_position_review.json"
 LIVE_BOOK_REVIEW_PACKET_FILE = DATA_DIR / "inferno_live_book_review_packet.json"
 LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
+SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
+SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
+SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
 SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
+SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
+EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
+STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
+STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
+STRATEGY_SHADOW_COMPARISON_FILE = DATA_DIR / "inferno_strategy_shadow_comparison.json"
 PAPER_EVIDENCE_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
@@ -64,7 +72,11 @@ PORTFOLIO_CORRELATION_FILE = DATA_DIR / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = DATA_DIR / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = DATA_DIR / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = DATA_DIR / "inferno_paper_velocity.json"
+CAPITAL_SCALING_FILE = DATA_DIR / "inferno_capital_scaling.json"
 MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
+TOS_FORMULA_AUDIT_FILE = DATA_DIR / "inferno_tos_formula_audit.json"
+TOS_CUSTOM_METRICS_FILE = DATA_DIR / "inferno_tos_custom_metrics.json"
+TOS_METRIC_THEORY_AUDIT_FILE = DATA_DIR / "inferno_tos_metric_theory_audit.json"
 
 
 REPORTING_MAP: tuple[dict[str, str], ...] = (
@@ -105,6 +117,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "codex",
     },
     {
+        "lane": "schwab-account",
+        "question": "What does the Schwab account API say about cash and positions?",
+        "artifact": "reports/schwab_account_sync_latest.txt",
+        "owner": "codex",
+    },
+    {
         "lane": "paper",
         "question": "What paper evidence is next?",
         "artifact": "reports/paper_test_director_latest.txt",
@@ -129,9 +147,69 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "shared",
     },
     {
+        "lane": "score-calibration",
+        "question": "Do readiness/scenario scores behave like useful ranks?",
+        "artifact": "reports/score_calibration_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "expected-move",
+        "question": "Did long-vol realised moves clear their debit-implied hurdle?",
+        "artifact": "reports/expected_move_ledger_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "strategy-alternatives",
+        "question": "Which non-call defined-risk structure beats pressured long vol?",
+        "artifact": "reports/strategy_alternative_scorer_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "strategy-alternative-pricing",
+        "question": "Did the preferred alternatives price cleanly and pass paper risk?",
+        "artifact": "reports/strategy_alternative_pricing_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "strategy-shadow-comparison",
+        "question": "Which passing alternatives should be watched against long-vol and put-credit without staging?",
+        "artifact": "reports/strategy_shadow_comparison_latest.txt",
+        "owner": "shared",
+    },
+    {
         "lane": "math",
         "question": "Do the formulas still check out?",
         "artifact": "reports/math_verify_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tos-formulas",
+        "question": "Do the TOS-style RVOL, trend, level, momentum, and strength mirrors match the tracker?",
+        "artifact": "reports/tos_formula_audit_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tos-custom-metrics",
+        "question": "Have the user-authored ThinkScript metrics and latest TOS values been captured?",
+        "artifact": "reports/tos_custom_metrics_latest.txt",
+        "owner": "operator+codex",
+    },
+    {
+        "lane": "tos-metric-theory",
+        "question": "Are the custom metrics actually useful evidence, or are they just confirming the thesis?",
+        "artifact": "reports/tos_metric_theory_audit_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "schwab-price-history",
+        "question": "Can Schwab daily candles feed the OHLCV-derived TOS metrics?",
+        "artifact": "reports/schwab_price_history_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "schwab-tos-metrics-sync",
+        "question": "Were the visible TOS custom metrics regenerated from Schwab price history?",
+        "artifact": "reports/schwab_tos_metrics_sync_latest.txt",
         "owner": "codex",
     },
     {
@@ -198,6 +276,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper-velocity",
         "question": "Are we closing paper outcomes fast enough to clear the 30-gate?",
         "artifact": "reports/paper_velocity_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "capital-scaling",
+        "question": "Is the per-ticket cap correctly sized for current NLV, or do we need to ack a new formula state?",
+        "artifact": "reports/capital_scaling_latest.txt",
         "owner": "shared",
     },
     {
@@ -450,6 +534,11 @@ def build_executive_summary(
             f"scenarios={metrics.get('paperScenarioCount', 0)}; "
             f"scenario evidence={metrics.get('scenarioClosedEvidenceCount', 0)}; "
             f"scenario observations={metrics.get('scenarioClosedObservationCount', 0)}; "
+            f"calibration={metrics.get('scoreCalibrationVerdict')}; "
+            f"expected move={metrics.get('expectedMoveVerdict')}; "
+            f"alternatives={metrics.get('strategyAlternativeVerdict')}; "
+            f"alt pricing={metrics.get('strategyAlternativePricingVerdict')}; "
+            f"shadow compare={metrics.get('strategyShadowComparisonVerdict')}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
             f"math={status_value(status.get('mathVerify') or {})}"
         ),
@@ -466,12 +555,18 @@ def build_command_center() -> dict[str, Any]:
     live_review = load_json_file(LIVE_POSITION_REVIEW_FILE) or {}
     live_book_packet = load_json_file(LIVE_BOOK_REVIEW_PACKET_FILE) or {}
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
     scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
+    score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
+    expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
+    strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
+    strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
+    strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
@@ -479,6 +574,11 @@ def build_command_center() -> dict[str, Any]:
     edge = load_json_file(EDGE_RESEARCH_FILE) or {}
     conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
     math_verify = load_json_file(MATH_VERIFY_FILE) or {}
+    tos_formula_audit = load_json_file(TOS_FORMULA_AUDIT_FILE) or {}
+    tos_custom_metrics = load_json_file(TOS_CUSTOM_METRICS_FILE) or {}
+    tos_metric_theory = load_json_file(TOS_METRIC_THEORY_AUDIT_FILE) or {}
+    schwab_price_history = load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {}
+    schwab_tos_metrics_sync = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
 
     missions = load_active_missions()
     notes = load_notes(limit=12)
@@ -503,6 +603,7 @@ def build_command_center() -> dict[str, Any]:
         "deployPreflight": artifact_summary(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),
         "opsMaintenance": artifact_summary(OPS_MAINTENANCE_FILE, keys=("ok", "generatedAt")),
         "liveAccountSync": artifact_summary(LIVE_ACCOUNT_SYNC_FILE, keys=("verdict", "message", "generatedAt", "matchedSuffix")),
+        "schwabAccountSync": artifact_summary(SCHWAB_ACCOUNT_SYNC_FILE, keys=("stage", "verdict", "message", "generatedAt", "matchedSuffix", "brokerReadOnly", "orderEndpointsAllowed")),
         "livePositionReview": artifact_summary(LIVE_POSITION_REVIEW_FILE, keys=("verdict", "message", "generatedAt")),
         "liveBookReviewPacket": artifact_summary(LIVE_BOOK_REVIEW_PACKET_FILE, keys=("verdict", "generatedAt", "capitalReadinessVerdict", "manualDeploymentAllowed", "autoLiveAllowed")),
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
@@ -511,6 +612,11 @@ def build_command_center() -> dict[str, Any]:
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
         "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
         "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
+        "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyAlternativePricing": artifact_summary(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyShadowComparison": artifact_summary(STRATEGY_SHADOW_COMPARISON_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),
@@ -525,9 +631,29 @@ def build_command_center() -> dict[str, Any]:
         "drawdownProtocol": artifact_summary(DRAWDOWN_PROTOCOL_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "consensusMonitor": artifact_summary(CONSENSUS_MONITOR_FILE, keys=("stage", "verdict", "generatedAt", "consensusCount", "researchOnly", "promotable")),
         "paperVelocity": artifact_summary(PAPER_VELOCITY_FILE, keys=("stage", "verdict", "generatedAt", "totalTickets", "researchOnly", "promotable")),
+        "capitalScaling": artifact_summary(CAPITAL_SCALING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "mathVerify": artifact_summary(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
+        "tosFormulaAudit": artifact_summary(TOS_FORMULA_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "formulaVersion", "checked", "flagCounts")),
+        "tosCustomMetrics": artifact_summary(TOS_CUSTOM_METRICS_FILE, keys=("stage", "verdict", "generatedAt", "registryMetricCount", "missingFormulaMetrics")),
+        "tosMetricTheoryAudit": artifact_summary(TOS_METRIC_THEORY_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "checked", "postureCounts")),
+        "schwabPriceHistory": artifact_summary(SCHWAB_PRICE_HISTORY_FILE, keys=("stage", "status", "generatedAt", "configured", "symbolCount")),
+        "schwabTosMetricsSync": artifact_summary(SCHWAB_TOS_METRICS_SYNC_FILE, keys=("stage", "sourceStatus", "generatedAt", "customMetricsVerdict", "metricValueCount")),
     }
+    strategy_alt_pricing_ranked = sorted(
+        [item for item in strategy_alt_pricing.get("items") or [] if isinstance(item, dict)],
+        key=lambda item: (
+            not bool(item.get("combinedPassed", (item.get("riskVerdict") or {}).get("passed"))),
+            not bool(item.get("optimizerPassed")),
+            not bool(item.get("fallbackVariant")),
+            number(item.get("candidateStrategyRank"), 99),
+            str(item.get("ticker") or ""),
+        ),
+    )
     headline_metrics = {
+        "accountDataSource": live_sync.get("accountDataSource"),
+        "accountNetLiquidatingValue": live_sync.get("netLiquidatingValue") or schwab_account_sync.get("netLiquidatingValue"),
+        "accountTotalCash": live_sync.get("totalCash") or schwab_account_sync.get("totalCash"),
+        "schwabAccountVerdict": schwab_account_sync.get("verdict"),
         "liveSupported": live_counts.get("supported", 0),
         "liveReview": live_counts.get("review", 0),
         "liveFragile": live_counts.get("fragile", 0),
@@ -549,6 +675,64 @@ def build_command_center() -> dict[str, Any]:
         "scenarioBacktestTopFocus": [
             item.get("ticker")
             for item in (scenario_backtest.get("topFocus") or [])
+        ],
+        "scoreCalibrationVerdict": score_calibration.get("verdict"),
+        "scoreCalibrationClosedObservations": (score_calibration.get("counts") or {}).get("closedScenarioObservations"),
+        "scoreCalibrationScenarioScoreRows": (score_calibration.get("counts") or {}).get("scenarioScoreRows"),
+        "expectedMoveVerdict": expected_move.get("verdict"),
+        "expectedMoveClosedLongVol": (expected_move.get("counts") or {}).get("closedLongVolRecords"),
+        "expectedMoveCurrentLongVol": (expected_move.get("counts") or {}).get("currentLongVolCandidates"),
+        "expectedMoveBeatRate": (expected_move.get("overall") or {}).get("beatRate"),
+        "expectedMoveHurdleCounts": expected_move.get("currentHurdleCounts") or {},
+        "expectedMoveTopPressure": [
+            {
+                "ticker": item.get("ticker"),
+                "hurdle": item.get("premiumHurdleLabel"),
+                "atrMultiple": item.get("requiredMoveAtrMultiple"),
+                "pressureScore": item.get("rankPressureScore"),
+            }
+            for item in (expected_move.get("currentPressureCandidates") or [])[:5]
+        ],
+        "strategyAlternativeVerdict": strategy_alternatives.get("verdict"),
+        "strategyAlternativeRecommendations": (strategy_alternatives.get("counts") or {}).get("recommendations") or {},
+        "strategyAlternativeVerdicts": (strategy_alternatives.get("counts") or {}).get("verdicts") or {},
+        "strategyAlternativeTop": [
+            {
+                "ticker": item.get("ticker"),
+                "recommend": (item.get("recommendation") or {}).get("strategy"),
+                "verdict": (item.get("recommendation") or {}).get("verdict"),
+            }
+            for item in (strategy_alternatives.get("scorecards") or [])[:5]
+        ],
+        "strategyAlternativePricingVerdict": strategy_alt_pricing.get("verdict"),
+        "strategyAlternativePricingCounts": strategy_alt_pricing.get("counts") or {},
+        "strategyAlternativePricedTop": [
+            {
+                "ticker": item.get("ticker"),
+                "strategy": ((item.get("strikePlan") or {}).get("strategy") or item.get("recommendedStrategy")),
+                "status": item.get("status"),
+                "combinedPassed": item.get("combinedPassed", (item.get("riskVerdict") or {}).get("passed")),
+                "optimizerPassed": item.get("optimizerPassed"),
+                "fallbackVariant": item.get("fallbackVariant"),
+                "rank": item.get("candidateStrategyRank"),
+                "ladderRows": item.get("putCreditLadderRows") or len(item.get("putCreditLadder") or []),
+                "supportSafeRows": item.get("putCreditSupportSafeRows") or len(item.get("putCreditSupportSafeLadder") or []),
+                "condorRows": item.get("ironCondorLadderRows") or len(item.get("ironCondorLadder") or []),
+                "rangeSafeRows": item.get("ironCondorRangeSafeRows") or len(item.get("ironCondorRangeSafeLadder") or []),
+            }
+            for item in strategy_alt_pricing_ranked[:5]
+        ],
+        "strategyShadowComparisonVerdict": strategy_shadow_comparison.get("verdict"),
+        "strategyShadowComparisonCounts": strategy_shadow_comparison.get("counts") or {},
+        "strategyShadowComparisonTop": [
+            {
+                "ticker": item.get("ticker"),
+                "strategy": ((item.get("bestPassingVariant") or {}).get("strategy")),
+                "expiration": (((item.get("bestPassingVariant") or {}).get("plan") or {}).get("expiration")),
+                "credit": (((item.get("bestPassingVariant") or {}).get("plan") or {}).get("estimatedCredit")),
+                "maxLoss": (((item.get("bestPassingVariant") or {}).get("plan") or {}).get("estimatedMaxLoss")),
+            }
+            for item in (strategy_shadow_comparison.get("register") or [])[:5]
         ],
         "paperRemainingForPromotion": loop_counts.get("remainingForPromotion", 0),
         "capitalDeploymentVerdict": capital_readiness.get("verdict"),
@@ -580,6 +764,22 @@ def build_command_center() -> dict[str, Any]:
         "mathVerifyVerdict": math_verify.get("verdict"),
         "mathViolations": math_verify.get("totalViolations"),
         "mathMissingArtifacts": math_verify.get("missingArtifacts"),
+        "tosFormulaAuditVerdict": tos_formula_audit.get("verdict"),
+        "tosFormulaAuditChecked": tos_formula_audit.get("checked"),
+        "tosFormulaFlagCounts": tos_formula_audit.get("flagCounts") or {},
+        "tosCustomMetricsVerdict": tos_custom_metrics.get("verdict"),
+        "tosCustomMetricsSourceProvider": ((tos_custom_metrics.get("values") or {}).get("sourceProvider")),
+        "tosCustomMetricValues": ((tos_custom_metrics.get("values") or {}).get("metricValueCount")),
+        "tosCustomMetricTickers": ((tos_custom_metrics.get("values") or {}).get("tickerCount")),
+        "tosCustomMetricMissingFormulas": tos_custom_metrics.get("missingFormulaMetrics") or [],
+        "tosMetricTheoryVerdict": tos_metric_theory.get("verdict"),
+        "tosMetricTheoryPostures": tos_metric_theory.get("postureCounts") or {},
+        "tosMetricTheoryRedundancy": ((tos_metric_theory.get("redundancy") or {}).get("highCorrelationPairs") or [])[:5],
+        "schwabPriceHistoryStatus": schwab_price_history.get("status"),
+        "schwabPriceHistoryConfigured": schwab_price_history.get("configured"),
+        "schwabPriceHistoryRows": len(schwab_price_history.get("rows") or []),
+        "schwabTosMetricsSyncStatus": schwab_tos_metrics_sync.get("sourceStatus"),
+        "schwabTosMetricsMetricValues": schwab_tos_metrics_sync.get("metricValueCount"),
     }
 
     payload = {
@@ -614,6 +814,16 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_paper_evidence_harvest.sh",
             "./run_inferno_scenario_evidence.sh",
             "./run_inferno_scenario_backtest.sh",
+            "./run_inferno_score_calibration.sh",
+            "./run_inferno_expected_move_ledger.sh",
+            "./run_inferno_tos_formula_audit.sh --limit 20",
+            "./run_inferno_tos_custom_metrics.sh --init-registry",
+            "./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12",
+            "./run_inferno_tos_metric_theory_audit.sh --limit 12",
+            "./run_inferno_strategy_alternative_scorer.sh",
+            "./run_inferno_strategy_alternative_pricing.sh --limit 4 --variants-per-ticker 2",
+            "./run_inferno_strategy_shadow_comparison.sh",
+            "./run_inferno_schwab_account_sync.sh",
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
@@ -640,6 +850,17 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
             str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
+            str(ROOT / "reports/score_calibration_latest.txt"),
+            str(ROOT / "reports/expected_move_ledger_latest.txt"),
+            str(ROOT / "reports/strategy_alternative_scorer_latest.txt"),
+            str(ROOT / "reports/strategy_alternative_pricing_latest.txt"),
+            str(ROOT / "reports/strategy_shadow_comparison_latest.txt"),
+            str(ROOT / "reports/tos_formula_audit_latest.txt"),
+            str(ROOT / "reports/tos_custom_metrics_latest.txt"),
+            str(ROOT / "reports/tos_metric_theory_audit_latest.txt"),
+            str(ROOT / "reports/schwab_price_history_latest.txt"),
+            str(ROOT / "reports/schwab_tos_metrics_sync_latest.txt"),
+            str(ROOT / "reports/schwab_account_sync_latest.txt"),
             str(ROOT / "reports/conviction_research_latest.txt"),
             str(ROOT / "reports/ops_maintenance_latest.txt"),
             str(ROOT / "reports/live_position_review_latest.txt"),
@@ -688,6 +909,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             "System status:",
             f"- Deploy preflight: {status_value(status.get('deployPreflight') or {})}",
             f"- Live account sync: {status_value(status.get('liveAccountSync') or {})}",
+            f"- Schwab account sync: {status_value(status.get('schwabAccountSync') or {})}",
             f"- Live position review: {status_value(status.get('livePositionReview') or {})}",
             f"- Live book review packet: {status_value(status.get('liveBookReviewPacket') or {})}",
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
@@ -696,11 +918,21 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
             f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
+            f"- Score calibration: {status_value(status.get('scoreCalibration') or {})}",
+            f"- Expected move ledger: {status_value(status.get('expectedMoveLedger') or {})}",
+            f"- Strategy alternative scorer: {status_value(status.get('strategyAlternativeScorer') or {})}",
+            f"- Strategy alternative pricing: {status_value(status.get('strategyAlternativePricing') or {})}",
+            f"- Strategy shadow comparison: {status_value(status.get('strategyShadowComparison') or {})}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
             f"- Math verify: {status_value(status.get('mathVerify') or {})}",
+            f"- TOS formula audit: {status_value(status.get('tosFormulaAudit') or {})}",
+            f"- TOS custom metrics: {status_value(status.get('tosCustomMetrics') or {})}",
             f"- Conviction research: {status_value(status.get('convictionResearch') or {}, key='stage')}",
             "",
             "Headline metrics:",
+            f"- Account source: {metrics.get('accountDataSource') or '-'}",
+            f"- Account NLV: {metrics.get('accountNetLiquidatingValue') or '-'}",
+            f"- Account cash: {metrics.get('accountTotalCash') or '-'}",
             f"- Live supported: {metrics.get('liveSupported', 0)}",
             f"- Live fragile: {metrics.get('liveFragile', 0)}",
             f"- Live hard blockers: {metrics.get('liveBookHardBlockers', 0)}",
@@ -716,10 +948,35 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Scenario backtest verdicts: {json.dumps(metrics.get('scenarioBacktestVerdicts') or {})}",
             f"- Scenario observation verdicts: {json.dumps(metrics.get('scenarioObservationVerdicts') or {})}",
             f"- Scenario backtest focus: {', '.join(metrics.get('scenarioBacktestTopFocus') or []) or 'none'}",
+            f"- Score calibration: {metrics.get('scoreCalibrationVerdict')} | "
+            f"closed observations {metrics.get('scoreCalibrationClosedObservations')} | "
+            f"score rows {metrics.get('scoreCalibrationScenarioScoreRows')}",
+            f"- Expected move ledger: {metrics.get('expectedMoveVerdict')} | "
+            f"closed long-vol {metrics.get('expectedMoveClosedLongVol')} | "
+            f"current long-vol {metrics.get('expectedMoveCurrentLongVol')} | "
+            f"beat rate {metrics.get('expectedMoveBeatRate')}",
+            f"- Expected move hurdle counts: {json.dumps(metrics.get('expectedMoveHurdleCounts') or {})}",
+            f"- Expected move top pressure: {json.dumps(metrics.get('expectedMoveTopPressure') or [])}",
+            f"- Strategy alternatives: {metrics.get('strategyAlternativeVerdict')} | "
+            f"recommendations {json.dumps(metrics.get('strategyAlternativeRecommendations') or {})}",
+            f"- Strategy alternative top: {json.dumps(metrics.get('strategyAlternativeTop') or [])}",
+            f"- Strategy alternative pricing: {metrics.get('strategyAlternativePricingVerdict')} | "
+            f"counts {json.dumps(metrics.get('strategyAlternativePricingCounts') or {})}",
+            f"- Strategy alternative priced top: {json.dumps(metrics.get('strategyAlternativePricedTop') or [])}",
+            f"- Strategy shadow comparison: {metrics.get('strategyShadowComparisonVerdict')} | "
+            f"counts {json.dumps(metrics.get('strategyShadowComparisonCounts') or {})}",
+            f"- Strategy shadow comparison top: {json.dumps(metrics.get('strategyShadowComparisonTop') or [])}",
             f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
             f"- Auto live allowed: {metrics.get('autoLiveAllowed')}",
             f"- Risk gate hard fails: {metrics.get('riskGateHardFails')}",
             f"- Math violations: {metrics.get('mathViolations')}",
+            f"- TOS formula audit: {metrics.get('tosFormulaAuditVerdict')} | "
+            f"checked {metrics.get('tosFormulaAuditChecked')} | "
+            f"flags {json.dumps(metrics.get('tosFormulaFlagCounts') or {})}",
+            f"- TOS custom metrics: {metrics.get('tosCustomMetricsVerdict')} | "
+            f"values {metrics.get('tosCustomMetricValues')} | "
+            f"tickers {metrics.get('tosCustomMetricTickers')} | "
+            f"missing formulas {json.dumps(metrics.get('tosCustomMetricMissingFormulas') or [])}",
             f"- Conviction giants: {', '.join(metrics.get('convictionBehemoths') or []) or 'none'}",
             f"- Conviction sleepers: {', '.join(metrics.get('convictionSleepers') or []) or 'none'}",
             f"- Conviction near-term: {', '.join(metrics.get('convictionNearTermWinners') or []) or 'none'}",

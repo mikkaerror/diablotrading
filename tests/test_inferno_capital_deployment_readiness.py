@@ -109,6 +109,7 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
             )
 
         self.assertEqual(result["verdict"], "manual-ready-with-warnings")
+        self.assertEqual(result["deployableCashSource"], "operator-argument")
         self.assertTrue(result["manualDeploymentAllowed"])
         self.assertFalse(result["autoLiveAllowed"])
         self.assertTrue(self.files["CAPITAL_DEPLOYMENT_READINESS_FILE"].exists())
@@ -125,6 +126,15 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
         self.assertEqual(result["verdict"], "not-ready")
         self.assertFalse(result["manualDeploymentAllowed"])
         self.assertIn("Authority manifest allows live", "\n".join(result["blockers"]))
+
+    def test_uses_live_sync_cash_when_operator_cash_is_omitted(self):
+        self.write_base_artifacts()
+        with self._stack_patches():
+            result = readiness.build_capital_deployment_readiness(
+                for_date="2026-05-15",
+            )
+
+        self.assertEqual(result["deployableCashSource"], "live-account-sync")
 
     def _stack_patches(self):
         stack = ExitStack()

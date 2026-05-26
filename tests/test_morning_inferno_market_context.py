@@ -8,7 +8,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from morning_inferno_pipeline import build_market_context, compute_market_context_from_history, sync_market_context_columns
+from morning_inferno_pipeline import (
+    build_market_context,
+    compute_market_context_from_history,
+    read_sheet_rows_from_table,
+    sync_market_context_columns,
+)
 
 
 class MorningInfernoMarketContextTests(unittest.TestCase):
@@ -65,6 +70,76 @@ class MorningInfernoMarketContextTests(unittest.TestCase):
         self.assertAlmostEqual(context["resistance"], 108.25, places=2)
         self.assertAlmostEqual(context["distanceToSupportPct"], 5.5, places=2)
         self.assertAlmostEqual(context["distanceToResistancePct"], 8.25, places=2)
+
+    def test_read_sheet_rows_attaches_captured_tos_custom_metrics(self) -> None:
+        headers = [
+            "Ticker",
+            "ATR%",
+            "IV Rank",
+            "Next Earnings",
+            "Price",
+            "Days until earnings",
+            "Setup Rec",
+            '"Urgency"',
+            "Signal Trigger",
+            "Confidence (3 MAX)",
+            "IV Rank Change (5-day delta)",
+            "ATR% Z-Score",
+            "20 Day ATR",
+            "REC 1-13",
+            "Rec2",
+            "Value Score",
+            "Momentum Score",
+            "Squeeze Score",
+            "Ready Score",
+            "Priority",
+            "$RVOL",
+            "Trend",
+            "Support",
+            "Resistance",
+            "% To Support",
+            "% To Resistance",
+        ]
+        raw_rows = [
+            [
+                "NVDA",
+                "4.0",
+                "52",
+                "",
+                "100",
+                "10",
+                "Straddle",
+                "Watchlist",
+                "TRUE",
+                "2",
+                "0.12",
+                "0.8",
+                "3.5",
+                "N/A",
+                "N/A",
+                "1.0",
+                "0.12",
+                "0.0",
+                "1.0",
+                "2.12",
+                "1.42",
+                "Bullish",
+                "94.5",
+                "108.25",
+                "5.5",
+                "8.25",
+            ]
+        ]
+
+        with patch(
+            "morning_inferno_pipeline.load_custom_metrics_by_ticker",
+            return_value={"NVDA": {"tos_strength": {"value": 81.5}}},
+        ):
+            rows = read_sheet_rows_from_table(headers, raw_rows)
+
+        self.assertEqual(rows[0]["tosCustomMetrics"]["tos_strength"]["value"], 81.5)
+        self.assertEqual(rows[0]["tosCustomSignalSummary"]["strength"], 81.5)
+        self.assertEqual(rows[0]["marketContext"]["tosCustomMetricSourceStatus"], "captured")
 
     def test_sync_market_context_columns_writes_data_rows_without_header_overflow(self) -> None:
         class FakeSheet:

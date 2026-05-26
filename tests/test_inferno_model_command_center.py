@@ -67,7 +67,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (data_dir / "inferno_live_account_sync.json").write_text(
-                json.dumps({"generatedAt": "2026-05-10T10:02:00-06:00", "verdict": "healthy", "message": "", "matchedSuffix": "1234"}),
+                json.dumps({"generatedAt": "2026-05-10T10:02:00-06:00", "verdict": "healthy", "message": "", "matchedSuffix": "1234", "accountDataSource": "schwab-account-api", "netLiquidatingValue": 1000.0, "totalCash": 200.0}),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_schwab_account_sync.json").write_text(
+                json.dumps({"generatedAt": "2026-05-10T10:01:30-06:00", "stage": "schwab-account-sync-read-only", "verdict": "healthy", "message": "", "matchedSuffix": "1234", "brokerReadOnly": True, "orderEndpointsAllowed": False, "netLiquidatingValue": 1000.0, "totalCash": 200.0}),
                 encoding="utf-8",
             )
             (data_dir / "inferno_live_position_review.json").write_text(
@@ -222,6 +226,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("LIVE_POSITION_REVIEW_FILE", data_dir / "inferno_live_position_review.json"),
                 ("LIVE_BOOK_REVIEW_PACKET_FILE", data_dir / "inferno_live_book_review_packet.json"),
                 ("LIVE_ACCOUNT_SYNC_FILE", data_dir / "inferno_live_account_sync.json"),
+                ("SCHWAB_ACCOUNT_SYNC_FILE", data_dir / "inferno_schwab_account_sync.json"),
                 ("CAPITAL_DEPLOYMENT_READINESS_FILE", data_dir / "inferno_capital_deployment_readiness.json"),
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
@@ -263,6 +268,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["mathViolations"], 0)
             self.assertEqual(payload["systemStatus"]["mathVerify"]["verdict"], "clean")
             self.assertEqual(payload["systemStatus"]["strategyLab"]["verdict"], "insufficient-data")
+            self.assertEqual(payload["systemStatus"]["schwabAccountSync"]["verdict"], "healthy")
+            self.assertEqual(payload["headlineMetrics"]["accountDataSource"], "schwab-account-api")
+            self.assertEqual(payload["headlineMetrics"]["accountNetLiquidatingValue"], 1000.0)
             self.assertTrue(payload["executiveSummary"][0].startswith("Capital:"))
             self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
@@ -274,6 +282,8 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             text_report = (reports_dir / "model_command_center_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Inferno Model Command Center", text_report)
             self.assertIn("Deploy preflight: ready-for-pilot", text_report)
+            self.assertIn("Schwab account sync: healthy", text_report)
+            self.assertIn("Account source: schwab-account-api", text_report)
             self.assertIn("Live book review packet: blocked", text_report)
             self.assertIn("Capital deployment readiness: manual-ready-with-warnings", text_report)
             self.assertIn("Risk gate audit: blocked", text_report)

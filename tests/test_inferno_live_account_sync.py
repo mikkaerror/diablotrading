@@ -68,7 +68,7 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         }
         mock_load_json_file.side_effect = [statement, None, snapshot]
 
-        report = build_live_account_sync(refresh_statement=False)
+        report = build_live_account_sync(refresh_statement=False, prefer_schwab=False)
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["verdict"], "healthy")
@@ -111,7 +111,7 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         snapshot = {"rows": []}
         mock_load_json_file.side_effect = [statement, None, snapshot]
 
-        report = build_live_account_sync(refresh_statement=False)
+        report = build_live_account_sync(refresh_statement=False, prefer_schwab=False)
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["verdict"], "attention")
@@ -142,7 +142,7 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         snapshot = {"rows": []}
         mock_load_json_file.side_effect = [statement, None, snapshot]
 
-        report = build_live_account_sync(refresh_statement=False)
+        report = build_live_account_sync(refresh_statement=False, prefer_schwab=False)
 
         self.assertFalse(report["ok"])
         self.assertEqual(report["verdict"], "blocked")
@@ -180,11 +180,58 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         snapshot = {"rows": []}
         mock_load_json_file.side_effect = [statement, None, snapshot]
 
-        report = build_live_account_sync(refresh_statement=False)
+        report = build_live_account_sync(refresh_statement=False, prefer_schwab=False)
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["accountMode"], "live")
         self.assertEqual(report["matchedSuffix"], "1234")
+
+    @patch("inferno_live_account_sync.TOS_ALLOW_LIVE_READONLY", True)
+    @patch("inferno_live_account_sync.TOS_ALLOWED_ACCOUNT_SUFFIXES", ("1234",))
+    @patch("inferno_live_account_sync.probe_tos_session")
+    @patch("inferno_live_account_sync.save_live_account_sync")
+    @patch("inferno_live_account_sync.load_schwab_account_report")
+    @patch("inferno_live_account_sync.load_json_file")
+    def test_build_live_account_sync_prefers_schwab_account_api_without_tos_probe(
+        self,
+        mock_load_json_file,
+        mock_load_schwab_account_report,
+        _mock_save_live_account_sync,
+        mock_probe_tos_session,
+    ) -> None:
+        schwab_report = {
+            "ok": True,
+            "verdict": "healthy",
+            "message": "Schwab account data synced",
+            "generatedAt": "2026-05-25T12:00:00-06:00",
+            "accountMode": "live",
+            "accountSuffixCandidates": ["1234"],
+            "netLiquidatingValue": 1000.0,
+            "totalCash": 200.0,
+            "positions": [
+                {
+                    "symbol": "IREN",
+                    "description": "IREN LTD",
+                    "qty": 4,
+                    "mark": 55.0,
+                    "markValue": 220.0,
+                    "derivedTradePrice": 10.0,
+                    "plOpen": 20.0,
+                    "plPercent": 50.0,
+                }
+            ],
+        }
+        snapshot = {"rows": [{"ticker": "IREN", "priority": 7, "readyScore": 3, "marketContext": {}}]}
+        mock_load_schwab_account_report.return_value = schwab_report
+        mock_load_json_file.return_value = snapshot
+
+        report = build_live_account_sync(refresh_schwab=False, prefer_schwab=True)
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["accountDataSource"], "schwab-account-api")
+        self.assertFalse(report["tosRequiredForAccountSync"])
+        self.assertEqual(report["counts"]["matchedPositions"], 1)
+        mock_probe_tos_session.assert_not_called()
 
     @patch("inferno_live_account_sync.scrape_account_statement")
     @patch("inferno_live_account_sync.load_json_file")

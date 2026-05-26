@@ -15,6 +15,8 @@ never silently regress** while broker submit stays OFF:
   - Schwab "hard" quality flags (empty-chain, wide-atm-spread, etc.) → block.
   - Schwab quote-quality < 50 → block; 50-69 → warn only.
   - Debit-spread R:R below MIN_DEBIT_SPREAD_REWARD_RISK → block.
+  - Credit-spread credit/risk below MIN_CREDIT_SPREAD_CREDIT_RISK → block.
+  - Intent price vs Schwab underlying drift above the configured floor → block.
   - A clean ticket with all the above satisfied → passes.
 
 These tests are *read-only* against the policy module. They do not mutate
@@ -30,16 +32,20 @@ from inferno_config import (
     MAX_OPEN_PAPER_TICKETS,
     MAX_SINGLE_TICKET_DOLLARS,
     MAX_STRIKE_PLAN_AGE_MINUTES,
+    MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT,
+    MIN_CREDIT_SPREAD_CREDIT_RISK,
     MIN_DEBIT_SPREAD_REWARD_RISK,
     local_now,
 )
 from inferno_risk_policy import (
     RiskVerdict,
+    credit_spread_credit_risk,
     debit_spread_reward_risk,
     evaluate_strike_item,
     max_loss_dollars,
     same_ticker_open,
     schwab_option_quality_guards,
+    underlying_source_drift,
     visible_quote_blocks,
 )
 
@@ -101,6 +107,19 @@ class RiskVerdictTests(unittest.TestCase):
         self.assertEqual(d["metrics"]["k"], 1)
 
 
+class UnderlyingSourceDriftTests(unittest.TestCase):
+    def test_source_drift_measures_schwab_underlying_gap(self):
+        drift = underlying_source_drift(
+            {
+                "sourcePrice": 100.0,
+                "price": 106.0,
+                "schwabOptions": {"underlyingPrice": 106.0},
+            }
+        )
+        self.assertEqual(drift["underlyingSourceDriftPct"], 6.0)
+        self.assertEqual(drift["maxUnderlyingSourceDivergencePct"], MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT)
+
+
 class MaxLossTests(unittest.TestCase):
     def test_explicit_max_loss_wins(self):
         self.assertEqual(
@@ -136,6 +155,23 @@ class DebitSpreadRewardRiskTests(unittest.TestCase):
 
     def test_missing_debit_returns_none(self):
         self.assertIsNone(debit_spread_reward_risk({"strikePlan": {}}))
+
+
+class CreditSpreadCreditRiskTests(unittest.TestCase):
+    def test_below_floor(self):
+        item = {"strikePlan": {"estimatedCredit": 0.25, "estimatedMaxLoss": 200.0}}
+        cr = credit_spread_credit_risk(item)
+        self.assertIsNotNone(cr)
+        self.assertLess(cr, MIN_CREDIT_SPREAD_CREDIT_RISK)
+
+    def test_above_floor(self):
+        item = {"strikePlan": {"estimatedCredit": 0.75, "estimatedMaxLoss": 250.0}}
+        cr = credit_spread_credit_risk(item)
+        self.assertIsNotNone(cr)
+        self.assertGreaterEqual(cr, MIN_CREDIT_SPREAD_CREDIT_RISK)
+
+    def test_missing_credit_returns_none(self):
+        self.assertIsNone(credit_spread_credit_risk({"strikePlan": {}}))
 
 
 class SameTickerOpenTests(unittest.TestCase):
@@ -373,6 +409,50 @@ class EvaluateStrikeItemTests(unittest.TestCase):
         self.assertFalse(v.passed)
         self.assertTrue(any("reward/risk" in b for b in v.blocks))
 
+    def test_low_credit_risk_blocks(self):
+        item = _clean_item()
+        item["strikePlan"] = {
+            "strategy": "PUT_CREDIT_SPREAD",
+            "estimatedCredit": 0.20,
+            "estimatedMaxLoss": 300.0,
+            "estimatedMaxProfit": 20.0,
+            "legs": [
+                {"instruction": "SELL_TO_OPEN", "symbol": "AAA_P_95", "bid": 0.70, "ask": 0.80},
+                {"instruction": "BUY_TO_OPEN", "symbol": "AAA_P_90", "bid": 0.45, "ask": 0.50},
+            ],
+            "liquidityNotes": [],
+        }
+        item["marketContext"]["distanceToSupportPct"] = 8.0
+        v = evaluate_strike_item(
+            item,
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=[],
+        )
+        self.assertFalse(v.passed)
+        self.assertTrue(any("credit/risk" in b for b in v.blocks))
+
+    def test_schwab_underlying_drift_blocks_stale_context(self):
+        item = _clean_item(
+            sourcePrice=100.0,
+            price=106.0,
+            schwabOptions={
+                "underlyingPrice": 106.0,
+                "qualityFlags": [],
+                "quoteQualityScore": 90,
+                "quoteQualityLabel": "institutional",
+                "atmSpreadQuality": "tight",
+                "atmLiquidityScore": 90,
+            },
+        )
+        v = evaluate_strike_item(
+            item,
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=[],
+        )
+        self.assertFalse(v.passed)
+        self.assertTrue(any("diverges from Schwab underlying" in b for b in v.blocks))
+        self.assertEqual(v.metrics["underlyingSourceDriftPct"], 6.0)
+
     def test_schwab_quality_attachment_blocks(self):
         item = _clean_item()
         item["schwabOptions"] = {
@@ -410,6 +490,8 @@ class EvaluateStrikeItemTests(unittest.TestCase):
         self.assertEqual(v.metrics["maxDailyTicketDollars"], MAX_DAILY_TICKET_DOLLARS)
         self.assertEqual(v.metrics["maxOpenPaperTickets"], MAX_OPEN_PAPER_TICKETS)
         self.assertEqual(v.metrics["minDebitSpreadRewardRisk"], MIN_DEBIT_SPREAD_REWARD_RISK)
+        self.assertEqual(v.metrics["minCreditSpreadCreditRisk"], MIN_CREDIT_SPREAD_CREDIT_RISK)
+        self.assertEqual(v.metrics["maxUnderlyingSourceDivergencePct"], MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT)
 
 
 if __name__ == "__main__":

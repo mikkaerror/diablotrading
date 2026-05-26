@@ -8,8 +8,8 @@ quiet, then use thinkorswim only when the operator intentionally opens it.
 
 | Layer | Primary use | Authority | Notes |
 |---|---|---|---|
-| Schwab API | Options chains, bid/ask, Greeks, IV, open interest, expected move | Primary options market data | Read-only market-data lane. OAuth/token refresh is local and ignored. No account or order endpoints. |
-| thinkorswim | Account statement, cash, positions, fills, watchlist/export evidence | Broker reality check | Must use the already-open app. Scripts should not launch new TOS windows. |
+| Schwab API | Options chains, bid/ask, Greeks, IV, open interest, expected move, approved-account balances and positions | Primary options market data plus account truth | Read-only lanes. OAuth/token refresh is local and ignored. Account sync persists only the approved suffix. No order endpoints. |
+| thinkorswim | Visual review, manual trading, fills/watchlist/export evidence | Manual cockpit and supervised fallback | Must use the already-open app. Scripts should not launch new TOS windows. |
 | Google Earnings Tracker | Universe, earnings timing, model scores, setup bias | Strategy source of truth | Morning jobs update and read this before briefs. |
 | Local/yfinance artifacts | Fallback research and backtests | Fallback only | Useful when Schwab is unavailable; not preferred for final option quote quality. |
 
@@ -66,7 +66,9 @@ quiet, then use thinkorswim only when the operator intentionally opens it.
 ## Safety Contract
 
 - No live submit from the overnight diagnostics.
-- No broker account/order endpoints from the Schwab adapter or daily ops tape.
+- No broker order endpoints from the Schwab adapters or daily ops tape.
+- Schwab account reads are allowed only for the approved suffix and remain
+  read-only.
 - No new TOS instance opened by background jobs.
 - Broker capture is useful evidence, not permission to trade.
 - Final live orders still require explicit operator approval.

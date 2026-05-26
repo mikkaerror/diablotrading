@@ -39,6 +39,15 @@ from inferno_config import (
 from inferno_execution_clerk import build_execution_queue, save_execution_queue
 from inferno_heartbeat import record_heartbeat
 from inferno_io import append_text, atomic_write_json, atomic_write_text
+from inferno_tos_formula_math import (
+    build_market_context_from_history as formula_market_context_from_history,
+    build_market_context_from_row as formula_market_context_from_row,
+    relative_volume_proxy as formula_relative_volume_proxy,
+    support_resistance_proxy_from_row as formula_support_resistance_proxy_from_row,
+    trend_descriptor_from_row as formula_trend_descriptor_from_row,
+    trend_tone_from_label as formula_trend_tone_from_label,
+)
+from inferno_tos_custom_metrics import load_custom_metrics_by_ticker, summarize_custom_metrics
 from inferno_reporting_summary import (
     build_freshness_panel,
     build_tos_visibility_summary,
@@ -502,6 +511,7 @@ def enrich_row(row: dict[str, Any]) -> dict[str, Any]:
     row["longTermScore"] = calculate_long_term_score(row)
     row["accumulationBias"] = build_accumulation_bias(row["longTermScore"])
     row["discountReasons"] = accumulation_reasons(row)
+    row["tosCustomSignalSummary"] = summarize_custom_metrics(row.get("tosCustomMetrics"))
     row["marketContext"] = build_market_context(row)
     return row
 
@@ -916,53 +926,19 @@ def compute_atr_percent_zscore_value(symbol: str, lookback: int = 20) -> str | f
 
 
 def trend_tone_from_label(label: str) -> str:
-    lowered = str(label or "").strip().lower()
-    if lowered in {"bullish", "uptrend"}:
-        return "hot"
-    if lowered in {"bearish", "downtrend"}:
-        return "cold"
-    return "wild"
+    return formula_trend_tone_from_label(label)
 
 
 def relative_volume_proxy(row: dict[str, Any]) -> float:
-    proxy = (
-        1
-        + clamp(float(row.get("atrZScore") or 0.0), -2, 3) * 0.22
-        + clamp(float(row.get("momentumScore") or 0.0), 0, 2.5) * 0.18
-        + (0.22 if row.get("signalTrigger") else 0)
-        + (0.12 if "urgent" in str(row.get("urgency") or "").lower() else 0)
-    )
-    return round(clamp(proxy, 0.55, 3.6), 2)
+    return formula_relative_volume_proxy(row)
 
 
 def build_trend_descriptor(row: dict[str, Any]) -> dict[str, str]:
-    explicit_label = str(row.get("trend") or "").strip()
-    if explicit_label:
-        return {"label": explicit_label, "tone": trend_tone_from_label(explicit_label)}
-
-    setup_rec = str(row.get("setupRec") or "").lower()
-    momentum_score = float(row.get("momentumScore") or 0.0)
-    value_score = float(row.get("valueScore") or 0.0)
-    if "avoid" in setup_rec:
-        return {"label": "Bearish", "tone": "cold"}
-    if momentum_score >= 1.1 and row.get("signalTrigger"):
-        return {"label": "Bullish", "tone": "hot"}
-    if value_score >= 1.0 and momentum_score <= 0.45:
-        return {"label": "Basing", "tone": "wild"}
-    if momentum_score >= 0.55:
-        return {"label": "Uptrend", "tone": "hot"}
-    return {"label": "Neutral", "tone": "wild"}
+    return formula_trend_descriptor_from_row(row)
 
 
 def build_support_resistance_proxy(row: dict[str, Any]) -> dict[str, float]:
-    price = float(row.get("price") or 0.0)
-    atr_from_percent = price * (float(row.get("atrPercent") or 0.0) / 100)
-    range_width = max(float(row.get("atr20Day") or 0.0), atr_from_percent, price * 0.02)
-    return {
-        "support": round(max(0.0, price - range_width), 2),
-        "resistance": round(price + range_width, 2),
-        "rangeWidth": round(range_width, 2),
-    }
+    return formula_support_resistance_proxy_from_row(row)
 
 
 def compute_market_context_from_history(
@@ -972,75 +948,12 @@ def compute_market_context_from_history(
     atr_z_score: float | None = None,
     iv_rank_change: float | None = None,
 ) -> dict[str, Any]:
-    close = pd.to_numeric(history["Close"], errors="coerce").dropna()
-    high = pd.to_numeric(history["High"], errors="coerce").dropna()
-    low = pd.to_numeric(history["Low"], errors="coerce").dropna()
-    volume = pd.to_numeric(history["Volume"], errors="coerce").dropna()
-    if close.empty or high.empty or low.empty:
-        raise RuntimeError("insufficient price history for market context")
-
-    resolved_price = float(price) if price is not None and price > 0 else float(close.iloc[-1])
-    if resolved_price <= 0:
-        resolved_price = float(close.iloc[-1])
-
-    rvol_value: float | str = "N/A"
-    if len(volume) >= 6:
-        trailing_volume = volume.tail(21) if len(volume) >= 21 else volume
-        baseline = trailing_volume.iloc[:-1] if len(trailing_volume) > 1 else trailing_volume
-        average_volume = float(baseline.mean()) if not baseline.empty else 0.0
-        if average_volume > 0:
-            rvol_value = round(float(trailing_volume.iloc[-1]) / average_volume, 2)
-
-    sma20 = close.rolling(window=20).mean()
-    sma50 = close.rolling(window=50).mean()
-    latest_sma20 = float(sma20.dropna().iloc[-1]) if not sma20.dropna().empty else float(close.tail(20).mean())
-    latest_sma50 = float(sma50.dropna().iloc[-1]) if not sma50.dropna().empty else latest_sma20
-    prior_sma20 = float(sma20.dropna().iloc[-5]) if len(sma20.dropna()) >= 5 else latest_sma20
-
-    if resolved_price >= latest_sma20 >= latest_sma50 and latest_sma20 >= prior_sma20:
-        trend = {"label": "Bullish", "tone": "hot"}
-    elif resolved_price <= latest_sma20 <= latest_sma50 and latest_sma20 <= prior_sma20:
-        trend = {"label": "Bearish", "tone": "cold"}
-    elif resolved_price > latest_sma20:
-        trend = {"label": "Uptrend", "tone": "hot"}
-    elif resolved_price > 0 and abs(resolved_price - latest_sma20) / resolved_price <= 0.03:
-        trend = {"label": "Basing", "tone": "wild"}
-    else:
-        trend = {"label": "Neutral", "tone": "wild"}
-
-    support = round(float(low.tail(20).min()), 2)
-    resistance = round(float(high.tail(20).max()), 2)
-    range_width = round(max(0.0, resistance - support), 2)
-    distance_to_support_pct = round(((resolved_price - support) / resolved_price) * 100, 2) if resolved_price > 0 else 0.0
-    distance_to_resistance_pct = round(((resistance - resolved_price) / resolved_price) * 100, 2) if resolved_price > 0 else 0.0
-
-    atr_expand = round(float(atr_z_score), 2) if atr_z_score is not None else 0.0
-    iv_impulse = round(float(iv_rank_change), 3) if iv_rank_change is not None else 0.0
-    alignment_score = clamp(
-        ((float(rvol_value) if isinstance(rvol_value, (int, float)) else 1.0) - 1) * 18
-        + max(atr_expand, 0.0) * 10
-        + max(iv_impulse, 0.0) * 40
-        + (14 if trend["tone"] == "hot" else 6 if trend["tone"] == "wild" else 0),
-        0,
-        100,
+    return formula_market_context_from_history(
+        history,
+        price=price,
+        atr_z_score=atr_z_score,
+        iv_rank_change=iv_rank_change,
     )
-    alignment_label = "Aligned" if alignment_score >= 72 else "Developing" if alignment_score >= 48 else "Fragile"
-
-    return {
-        "rvol": rvol_value if isinstance(rvol_value, str) else round(float(rvol_value), 2),
-        "trend": trend,
-        "triggerBias": "Waiting",
-        "atrExpansion": atr_expand,
-        "ivImpulse": iv_impulse,
-        "support": support,
-        "resistance": resistance,
-        "rangeWidth": range_width,
-        "distanceToSupportPct": distance_to_support_pct,
-        "distanceToResistancePct": distance_to_resistance_pct,
-        "alignmentScore": round(float(alignment_score), 1),
-        "alignmentLabel": alignment_label,
-        "sourceStatus": "history",
-    }
 
 
 def compute_market_context_snapshot(row: dict[str, Any]) -> dict[str, Any]:
@@ -1054,91 +967,7 @@ def compute_market_context_snapshot(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_market_context(row: dict[str, Any]) -> dict[str, Any]:
-    existing_context = row.get("marketContext") if isinstance(row.get("marketContext"), dict) else {}
-    price = float(row.get("price") or 0.0)
-
-    rvol_value = number_or_none(row.get("rvol"))
-    if rvol_value is None:
-        rvol_value = number_or_none(existing_context.get("rvol"))
-    if rvol_value is None:
-        rvol_value = relative_volume_proxy(row)
-
-    trend_source = row.get("trend") or existing_context.get("trend")
-    if isinstance(trend_source, dict):
-        trend = {
-            "label": str(trend_source.get("label") or "Neutral"),
-            "tone": str(trend_source.get("tone") or trend_tone_from_label(trend_source.get("label"))),
-        }
-    else:
-        trend = build_trend_descriptor({**row, "trend": trend_source})
-
-    support = number_or_none(row.get("support"))
-    resistance = number_or_none(row.get("resistance"))
-    if support is None:
-        support = number_or_none(existing_context.get("support"))
-    if resistance is None:
-        resistance = number_or_none(existing_context.get("resistance"))
-    if support is None or resistance is None:
-        proxy_levels = build_support_resistance_proxy(row)
-        support = support if support is not None else proxy_levels["support"]
-        resistance = resistance if resistance is not None else proxy_levels["resistance"]
-
-    range_width = round(max(0.0, float(resistance) - float(support)), 2)
-
-    distance_to_support_pct = number_or_none(row.get("distanceToSupportPct"))
-    if distance_to_support_pct is None:
-        distance_to_support_pct = number_or_none(existing_context.get("distanceToSupportPct"))
-    if distance_to_support_pct is None:
-        distance_to_support_pct = round(((price - float(support)) / price) * 100, 2) if price > 0 else 0.0
-
-    distance_to_resistance_pct = number_or_none(row.get("distanceToResistancePct"))
-    if distance_to_resistance_pct is None:
-        distance_to_resistance_pct = number_or_none(existing_context.get("distanceToResistancePct"))
-    if distance_to_resistance_pct is None:
-        distance_to_resistance_pct = round(((float(resistance) - price) / price) * 100, 2) if price > 0 else 0.0
-
-    atr_expand = number_or_none(row.get("atrZScore"))
-    if atr_expand is None:
-        atr_expand = number_or_none(existing_context.get("atrExpansion")) or 0.0
-    iv_impulse = number_or_none(row.get("ivRankChange"))
-    if iv_impulse is None:
-        iv_impulse = number_or_none(existing_context.get("ivImpulse")) or 0.0
-
-    alignment_score = clamp(
-        (float(rvol_value) - 1) * 18
-        + clamp(float(row.get("momentumScore") or 0.0), 0, 2.5) * 22
-        + clamp(float(row.get("readyScore") or 0.0), 0, 2.5) * 14
-        + (14 if row.get("signalTrigger") else 0),
-        0,
-        100,
-    )
-    alignment_label = "Aligned" if alignment_score >= 72 else "Developing" if alignment_score >= 48 else "Fragile"
-    source_status = "fallback"
-    if (
-        price <= 0
-        and float(support) <= 0
-        and float(resistance) <= 0
-        and str(trend.get("label") or "").strip() in {"", "N/A"}
-        and not row.get("signalTrigger")
-        and row.get("daysUntilEarnings", 0) >= UNKNOWN_EARNINGS_DAYS
-    ):
-        source_status = "unavailable"
-
-    return {
-        "rvol": round(float(rvol_value), 2),
-        "trend": trend,
-        "triggerBias": "Confirmed" if row.get("signalTrigger") else "Waiting",
-        "atrExpansion": round(float(atr_expand), 2),
-        "ivImpulse": round(float(iv_impulse), 3),
-        "support": round(float(support), 2),
-        "resistance": round(float(resistance), 2),
-        "rangeWidth": range_width,
-        "distanceToSupportPct": round(float(distance_to_support_pct), 2),
-        "distanceToResistancePct": round(float(distance_to_resistance_pct), 2),
-        "alignmentScore": round(float(alignment_score), 1),
-        "alignmentLabel": alignment_label,
-        "sourceStatus": source_status,
-    }
+    return formula_market_context_from_row(row, unknown_earnings_days=UNKNOWN_EARNINGS_DAYS)
 
 
 def sync_bc_columns(backtest_root: Path, sheet_name: str) -> dict[str, Any]:
@@ -1601,6 +1430,7 @@ def read_sheet_rows_from_table(headers: list[str], raw_rows: list[list[str]]) ->
         return []
 
     index_map = {header: idx for idx, header in enumerate(headers)}
+    tos_custom_metric_lookup = load_custom_metrics_by_ticker()
 
     def read(cells: list[str], header: str) -> str:
         idx = index_map.get(header)
@@ -1646,6 +1476,7 @@ def read_sheet_rows_from_table(headers: list[str], raw_rows: list[list[str]]) ->
                 "resistance": number_or_none(read(cells, "Resistance")),
                 "distanceToSupportPct": number_or_none(read(cells, "% To Support")),
                 "distanceToResistancePct": number_or_none(read(cells, "% To Resistance")),
+                "tosCustomMetrics": tos_custom_metric_lookup.get(ticker, {}),
             }
         )
         rows.append(row)

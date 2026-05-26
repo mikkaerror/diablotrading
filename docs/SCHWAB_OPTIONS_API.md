@@ -7,6 +7,10 @@ Inferno desk.
 > is the research note explaining which Schwab-derivable metrics actually
 > produce edge for a $500-ticket manual options book, with a tiered build
 > backlog (vol calibration → cross-instrument → positioning).
+>
+> **Price-history companion:** [`SCHWAB_PRICE_HISTORY.md`](SCHWAB_PRICE_HISTORY.md)
+> covers the read-only daily candle lane used to recompute the user's
+> OHLCV-derived TOS custom metrics.
 
 ## Goal
 
@@ -87,6 +91,24 @@ The local helper:
 
 This helper is still intentionally narrow: it does not call account, order,
 preview, cancel, or replace endpoints.
+
+## Account API Companion
+
+Module: `inferno_schwab_account_sync.py`
+
+Status: active, read-only.
+
+The account companion now handles approved-account balances and positions via
+Schwab's account endpoints while preserving the same no-submit authority:
+
+- reads account-number metadata and account rows with `fields=positions`
+- saves only suffix-level account identity
+- persists balances and positions only for the configured approved suffix
+- feeds `inferno_live_account_sync.py` as the preferred broker-truth source
+- leaves thinkorswim as the visualization/manual-trading cockpit
+
+See [`SCHWAB_ACCOUNT_API.md`](SCHWAB_ACCOUNT_API.md) for the formula migration
+crosswalk and runbook.
 
 ## Phase 3: Model Enrichment
 

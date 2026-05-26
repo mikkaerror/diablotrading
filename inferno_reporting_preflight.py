@@ -21,6 +21,7 @@ from inferno_reporting_summary import (
     DOCTOR_TEXT_FILE,
     LIVE_ACCOUNT_SYNC_FILE,
     MORNING_BRIEF_TEXT_FILE,
+    SCHWAB_ACCOUNT_SYNC_FILE,
     SCHWAB_DAILY_OPS_FILE,
     SCHWAB_OPTIONS_FILE,
     TOS_SESSION_PROBE_FILE,
@@ -35,7 +36,7 @@ from inferno_reporting_summary import (
 )
 from inferno_schwab_oauth import load_config as load_schwab_config
 from inferno_schwab_oauth import token_status as schwab_token_status
-from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_file, smtp_configured
+from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_file, load_json_file, smtp_configured
 
 
 REPORTING_PREFLIGHT_FILE = DATA_DIR / "inferno_reporting_preflight.json"
@@ -130,19 +131,51 @@ def _schwab_check() -> dict[str, Any]:
     }
 
 
+def _account_api_source_ready() -> bool:
+    """Return True when live account sync is already sourced from Schwab."""
+    live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    return (
+        bool(live_sync.get("ok"))
+        and live_sync.get("accountDataSource") == "schwab-account-api"
+        and live_sync.get("tosRequiredForAccountSync") is False
+    )
+
+
 def _tos_check() -> dict[str, Any]:
     """Check TOS attach-only state without opening or focusing the app."""
     summary = build_tos_visibility_summary()
+    account_api_source = _account_api_source_ready()
     level = summary.get("level")
-    ok = level in {"visible", "running-not-visible"}
-    severity = "pass" if level == "visible" else "warn" if level == "running-not-visible" else "fail"
+    ok = account_api_source or level in {"visible", "running-not-visible"}
+    severity = (
+        "pass"
+        if account_api_source or level == "visible"
+        else "warn"
+        if level == "running-not-visible"
+        else "fail"
+    )
+    detail = render_tos_visibility_line(summary)
+    if account_api_source:
+        detail += " | not required for Schwab account API sync"
     return {
         "name": "tos attach-only",
         "ok": ok,
         "severity": severity,
         "level": level,
-        "detail": render_tos_visibility_line(summary),
+        "detail": detail,
     }
+
+
+def _tos_session_probe_check() -> dict[str, Any]:
+    """Check TOS probe freshness only when TOS is required for account sync."""
+    if _account_api_source_ready():
+        return {
+            "name": "TOS session probe",
+            "ok": True,
+            "severity": "pass",
+            "detail": "not required for Schwab account API sync",
+        }
+    return _artifact_check("TOS session probe", TOS_SESSION_PROBE_FILE, max_age_hours=8)
 
 
 def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
@@ -156,8 +189,9 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
         _artifact_check("tracker snapshot", TRACKER_SNAPSHOT_FILE, max_age_hours=18),
         _artifact_check("Schwab options tape", SCHWAB_OPTIONS_FILE, max_age_hours=max_age_hours),
         _artifact_check("Schwab daily ops", SCHWAB_DAILY_OPS_FILE, max_age_hours=max_age_hours),
+        _artifact_check("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, max_age_hours=8),
         _artifact_check("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8),
-        _artifact_check("TOS session probe", TOS_SESSION_PROBE_FILE, max_age_hours=8),
+        _tos_session_probe_check(),
         _artifact_check("morning brief", MORNING_BRIEF_TEXT_FILE, max_age_hours=30),
         _artifact_check("action pulse", ACTION_PULSE_FILE, max_age_hours=8),
     ]
@@ -178,7 +212,7 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
     if hard_failures:
         payload["nextActions"].append("Fix failed preflight checks before trusting or sending next-week reports.")
     if warnings:
-        payload["nextActions"].append("Warnings are allowed, but reveal the existing TOS window before a fresh scrape.")
+        payload["nextActions"].append("Warnings are allowed; reveal TOS only when a supervised desktop capture is needed.")
     if not hard_failures and not warnings:
         payload["nextActions"].append("Reporting preflight is clean; proceed with the normal operating cadence.")
     save_reporting_preflight(payload)

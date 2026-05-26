@@ -16,9 +16,55 @@ from inferno_config import (
     MAX_OPEN_PAPER_TICKETS,
     MAX_SINGLE_TICKET_DOLLARS,
     MAX_STRIKE_PLAN_AGE_MINUTES,
+    MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT,
+    MIN_CREDIT_SPREAD_CREDIT_RISK,
     MIN_DEBIT_SPREAD_REWARD_RISK,
     local_now,
 )
+
+
+def current_single_ticket_cap() -> dict[str, Any]:
+    """Resolve the effective per-ticket cap for the current cycle.
+
+    Consults ``inferno_capital_scaling.current_recommended_cap()`` lazily so
+    risk policy stays importable even if the scaling module is missing or
+    broken. Always returns a safe ``float`` for ``effectiveCap``: the config
+    constant is the floor-of-truth fallback.
+
+    Return shape::
+
+        {
+          "effectiveCap":          float,  # always present
+          "source":                str,    # "ack" | "config-default" | "scaling-unavailable"
+          "recommendedCap":        float | None,
+          "ackedCap":              float | None,
+          "verdict":               str | None,
+          "shouldUseRecommendation": bool,
+        }
+    """
+    try:
+        from inferno_capital_scaling import current_recommended_cap  # lazy
+        info = current_recommended_cap() or {}
+    except Exception:
+        return {
+            "effectiveCap": float(MAX_SINGLE_TICKET_DOLLARS),
+            "source": "scaling-unavailable",
+            "recommendedCap": None,
+            "ackedCap": None,
+            "verdict": None,
+            "shouldUseRecommendation": False,
+        }
+    effective = info.get("effectiveCap")
+    if effective is None or not isinstance(effective, (int, float)):
+        effective = float(MAX_SINGLE_TICKET_DOLLARS)
+    return {
+        "effectiveCap": float(effective),
+        "source": "ack" if info.get("shouldUseRecommendation") else "config-default",
+        "recommendedCap": info.get("recommendedCap"),
+        "ackedCap": info.get("ackedCap"),
+        "verdict": info.get("verdict"),
+        "shouldUseRecommendation": bool(info.get("shouldUseRecommendation")),
+    }
 
 
 @dataclass(frozen=True)
@@ -136,6 +182,36 @@ def debit_spread_reward_risk(item: dict[str, Any]) -> float | None:
     return round(profit / loss, 4)
 
 
+def credit_spread_credit_risk(item: dict[str, Any]) -> float | None:
+    """Compute credit/risk for defined-risk credit spreads."""
+    plan = strategy_plan(item)
+    if "estimatedCredit" not in plan:
+        return None
+    credit = number(plan.get("estimatedCredit"), default=0) * 100
+    loss = max_loss_dollars(item)
+    if credit <= 0 or loss <= 0:
+        return 0.0
+    return round(credit / loss, 4)
+
+
+def underlying_source_drift(item: dict[str, Any]) -> dict[str, Any]:
+    """Compare the intent price with Schwab's current chain underlying."""
+    source_price = number(item.get("sourcePrice"), number(item.get("price")))
+    effective_price = number(item.get("price"))
+    schwab_options = item.get("schwabOptions") if isinstance(item.get("schwabOptions"), dict) else {}
+    schwab_underlying = number(schwab_options.get("underlyingPrice")) if schwab_options else 0.0
+    drift_pct = None
+    if source_price > 0 and schwab_underlying > 0:
+        drift_pct = round((schwab_underlying - source_price) / source_price * 100.0, 4)
+    return {
+        "sourcePrice": source_price or None,
+        "effectivePrice": effective_price or None,
+        "schwabUnderlyingPrice": schwab_underlying or None,
+        "underlyingSourceDriftPct": drift_pct,
+        "maxUnderlyingSourceDivergencePct": MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT,
+    }
+
+
 VISIBLE_QUOTE_MIN_PRICE = 0.10  # bids/asks below this are not real markets
 
 
@@ -191,6 +267,26 @@ def market_context_guards(item: dict[str, Any]) -> tuple[list[str], list[str], d
             warnings.append("bullish call spread has limited room before resistance")
         if rvol < 0.9:
             warnings.append("bullish call spread lacks strong RVOL confirmation")
+    elif strategy == "PUT_DEBIT_SPREAD":
+        if trend in {"Bullish", "Uptrend"}:
+            blocks.append("bearish put spread conflicts with bullish trend")
+        if distance_to_support <= 1.5:
+            blocks.append("bearish put spread is too close to support")
+        elif distance_to_support <= 3.0:
+            warnings.append("bearish put spread has limited room before support")
+        if rvol < 0.9:
+            warnings.append("bearish put spread lacks strong RVOL confirmation")
+    elif strategy == "PUT_CREDIT_SPREAD":
+        if trend in {"Bearish", "Downtrend"}:
+            blocks.append("bullish put credit spread conflicts with bearish trend")
+        if distance_to_support <= 3.0:
+            blocks.append("put credit spread is too close to support")
+        elif distance_to_support <= 6.0:
+            warnings.append("put credit spread has modest support cushion")
+        if rvol >= 2.25 or atr_expansion >= 2.0:
+            blocks.append("put credit spread is fighting extreme expansion risk")
+        elif rvol >= 1.5 or atr_expansion >= 1.2:
+            warnings.append("put credit spread is selling premium into elevated movement risk")
     elif strategy == "IRON_CONDOR":
         if rvol >= 1.35 or atr_expansion >= 1.0:
             blocks.append("iron condor is fighting expansion and elevated RVOL")
@@ -297,6 +393,8 @@ def evaluate_strike_item(
     projected_loss = projected_daily_loss(item, ledger_items)
     age = strike_plan_age_minutes(strike_plan_generated_at)
     rr = debit_spread_reward_risk(item)
+    credit_rr = credit_spread_credit_risk(item)
+    underlying_drift = underlying_source_drift(item)
     open_items = open_paper_items(ledger_items)
     plan = strategy_plan(item)
     context_blocks, context_warnings, context_metrics = market_context_guards(item)
@@ -312,12 +410,33 @@ def evaluate_strike_item(
         blocks.append(f"{ticker} already has an open paper ticket")
     if len(open_items) >= MAX_OPEN_PAPER_TICKETS:
         blocks.append(f"open paper ticket cap reached ({MAX_OPEN_PAPER_TICKETS})")
-    if loss > MAX_SINGLE_TICKET_DOLLARS:
-        blocks.append(f"max loss ${loss:.2f} exceeds single-ticket cap ${MAX_SINGLE_TICKET_DOLLARS:.2f}")
+    cap_info = current_single_ticket_cap()
+    effective_cap = cap_info["effectiveCap"]
+    if loss > effective_cap:
+        cap_source = cap_info.get("source") or "config-default"
+        blocks.append(
+            f"max loss ${loss:.2f} exceeds single-ticket cap ${effective_cap:.2f} ({cap_source})"
+        )
     if projected_loss > MAX_DAILY_TICKET_DOLLARS:
         blocks.append(f"projected daily max loss ${projected_loss:.2f} exceeds cap ${MAX_DAILY_TICKET_DOLLARS:.2f}")
     if rr is not None and rr < MIN_DEBIT_SPREAD_REWARD_RISK:
         blocks.append(f"reward/risk {rr:.2f} is below debit-spread floor {MIN_DEBIT_SPREAD_REWARD_RISK:.2f}")
+    if credit_rr is not None and credit_rr < MIN_CREDIT_SPREAD_CREDIT_RISK:
+        blocks.append(
+            f"credit/risk {credit_rr:.2f} is below credit-spread floor {MIN_CREDIT_SPREAD_CREDIT_RISK:.2f}"
+        )
+    drift_pct = underlying_drift.get("underlyingSourceDriftPct")
+    if drift_pct is not None and abs(drift_pct) > MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT:
+        blocks.append(
+            f"source price ${underlying_drift.get('sourcePrice'):.2f} diverges from Schwab underlying "
+            f"${underlying_drift.get('schwabUnderlyingPrice'):.2f} by {abs(drift_pct):.2f}%; "
+            "refresh tracker/execution queue before staging"
+        )
+    elif drift_pct is not None and abs(drift_pct) > 2.0:
+        warnings.append(
+            f"source price differs from Schwab underlying by {abs(drift_pct):.2f}%; "
+            "prefer refreshed tracker context before sizing"
+        )
     blocks.extend(visible_quote_blocks(item))
     blocks.extend(plan.get("liquidityNotes") or [])
     blocks.extend(schwab_blocks)
@@ -335,6 +454,10 @@ def evaluate_strike_item(
         "ticker": ticker,
         "maxLossDollars": loss,
         "maxSingleTicketDollars": MAX_SINGLE_TICKET_DOLLARS,
+        "effectiveSingleTicketCap": effective_cap,
+        "effectiveSingleTicketCapSource": cap_info.get("source"),
+        "scalingRecommendation": cap_info.get("recommendedCap"),
+        "scalingVerdict": cap_info.get("verdict"),
         "projectedDailyLossDollars": projected_loss,
         "maxDailyTicketDollars": MAX_DAILY_TICKET_DOLLARS,
         "openPaperTickets": len(open_items),
@@ -343,6 +466,9 @@ def evaluate_strike_item(
         "maxStrikePlanAgeMinutes": MAX_STRIKE_PLAN_AGE_MINUTES,
         "debitSpreadRewardRisk": rr,
         "minDebitSpreadRewardRisk": MIN_DEBIT_SPREAD_REWARD_RISK,
+        "creditSpreadCreditRisk": credit_rr,
+        "minCreditSpreadCreditRisk": MIN_CREDIT_SPREAD_CREDIT_RISK,
+        **underlying_drift,
         "marketContext": context_metrics,
         "schwabOptions": schwab_metrics,
     }

@@ -139,7 +139,7 @@ def build_execution_process(verdict: str) -> list[str]:
 
 def build_capital_launch_check(
     *,
-    deployable_cash: float = 1000.0,
+    deployable_cash: float | None = None,
     for_date: str | None = None,
     refresh_live_sync: bool = False,
 ) -> dict[str, Any]:
@@ -147,8 +147,8 @@ def build_capital_launch_check(
     ensure_dirs()
 
     # Keep this read-only. ``refresh_live_sync`` may use an existing artifact or
-    # the already-open TOS window, but none of these builders has submit power.
-    live_sync = build_live_account_sync(refresh_statement=refresh_live_sync)
+    # Schwab account API, but none of these builders has submit power.
+    live_sync = build_live_account_sync(refresh_schwab=refresh_live_sync, refresh_statement=False)
     live_review = build_live_position_review(refresh_live_sync=False)
     readiness = build_capital_deployment_readiness(
         deployable_cash=deployable_cash,
@@ -162,11 +162,14 @@ def build_capital_launch_check(
     failed_gates = gate_rows(risk_gate_audit, {"fail"})
     warning_gates = gate_rows(risk_gate_audit, {"warn"})
     decisions = required_human_decisions(live_book_packet)
+    guardrails = readiness.get("guardrails") or {}
+    effective_deployable_cash = number(guardrails.get("deployableCash"), number(deployable_cash))
 
     payload = {
         "generatedAt": local_now().isoformat(),
         "stage": "capital-launch-check",
-        "deployableCash": deployable_cash,
+        "deployableCash": effective_deployable_cash,
+        "deployableCashSource": readiness.get("deployableCashSource"),
         "deploymentDate": readiness.get("deploymentDate"),
         "verdict": verdict_block["verdict"],
         "message": verdict_block["message"],
@@ -234,6 +237,7 @@ def render_capital_launch_check(payload: dict[str, Any]) -> str:
         "",
         "Capital guardrails",
         f"- Deployable cash: ${number(payload.get('deployableCash')):,.2f}",
+        f"- Deployable cash source: {payload.get('deployableCashSource') or '-'}",
         f"- Max options risk: ${number(guardrails.get('maxOptionsRisk')):,.2f}",
         f"- Max starter ticket: ${number(guardrails.get('maxStarterTicket')):,.2f}",
         f"- Max long-term buy: ${number(guardrails.get('maxLongTermBuy')):,.2f}",
@@ -292,8 +296,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--deployable-cash",
         type=float,
-        default=1000.0,
-        help="Expected cash available for the next deployment window.",
+        default=None,
+        help="Expected cash available for the next deployment window. If omitted, live account sync cash is used.",
     )
     parser.add_argument(
         "--for-date",

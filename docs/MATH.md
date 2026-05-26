@@ -1021,6 +1021,438 @@ math the desk is committed to first, *growth* second.
 
 **Module:** `inferno_blowup_guardrails`.
 
+## 24. Score calibration and expected-move discipline
+
+Two new diagnostics tighten the bridge between *ranked conviction* and
+*realised evidence* without changing trade authority.
+
+### Score calibration
+
+The desk's `readiness` and `scenarioScore` fields are ranking surfaces.
+They are not posterior probabilities. A score of 80 means "ranked ahead
+of lower-scored alternatives under the current model", not "80% chance
+of profit".
+
+`inferno_score_calibration` tests that ranking surface with closed
+scenario observations:
+
+```
+favorable_rate(bucket) = favorable_observations / closed_observations
+```
+
+The module buckets scores into:
+
+```
+0-49, 50-59, 60-69, 70-79, 80-89, 90-100
+```
+
+For each bucket it reports favorable / neutral / unfavorable rates,
+mean observation score, mean underlying return, mean absolute underlying
+move, and a diagnostic gap:
+
+```
+gap = favorable_rate(bucket) - score_midpoint(bucket) / 100
+```
+
+That gap is not treated as a trading edge because the score midpoint is
+not a true probability. It is a pressure test: if high-score buckets do
+not beat low-score buckets over enough samples, the ranking surface is
+not earning trust.
+
+The module also reports adjacent monotonicity violations when a higher
+score bucket has a lower favorable rate than the previous useful bucket.
+Small buckets stay visibly small and cannot promote a strategy.
+
+### Expected move ledger
+
+Long straddles and strangles require movement, not just a correct story.
+The expected-move ledger asks whether the realised absolute move cleared
+the option structure's movement hurdle:
+
+```
+realized_abs_move_pct = abs(exit_underlying - entry_underlying) / entry_underlying
+```
+
+When breakevens are available, the required move is the smaller
+two-sided breakeven distance:
+
+```
+required_move_pct = min(
+  abs(entry_underlying - lower_breakeven),
+  abs(upper_breakeven - entry_underlying)
+) / entry_underlying
+```
+
+When breakevens are missing, the module uses the entry debit as a
+conservative proxy:
+
+```
+debit_implied_move_pct = entry_debit / entry_underlying
+```
+
+The closed-record edge is:
+
+```
+move_edge_pct = realized_abs_move_pct - required_move_pct
+```
+
+A long-vol record "beats expected move" only when:
+
+```
+realized_abs_move_pct >= required_move_pct
+```
+
+This still excludes spread, fees, and Greek path risk unless those are
+already reflected in the closed ticket's R outcome. That is why the
+ledger reports both move edge and outcome R when available.
+
+For current long-vol candidates, the desk adds a diagnostic premium
+hurdle:
+
+```
+required_move_atr_multiple = required_move_pct / atr_percent
+```
+
+The candidate is then labelled:
+
+| Label | ATR multiple | Diagnostic rank penalty |
+|---|---:|---:|
+| reasonable | `<= 1.25x` | `0` |
+| stretch | `> 1.25x` and `<= 2.0x` | `6` |
+| hard | `> 2.0x` and `<= 3.0x` | `12` |
+| extreme | `> 3.0x` | `20` |
+
+The adjusted score is:
+
+```
+rank_pressure_score = max(0, scenario_score - rank_penalty)
+```
+
+This is ranking pressure, not execution authority. It tells the desk
+when long vol is asking for too much movement relative to the recent
+range and should be compared against defined-risk alternatives.
+
+### Defined-risk alternative scoring
+
+When a current long-vol candidate is labelled `hard` or `extreme`,
+`inferno_strategy_alternative_scorer` compares three non-call structures:
+
+- `PUT_CREDIT_SPREAD`: bullish defined-risk short premium; expected
+  Greek posture is mild positive delta, positive theta, negative vega.
+- `IRON_CONDOR`: neutral defined-risk short premium; expected Greek
+  posture is near-neutral delta, positive theta, negative vega.
+- `PUT_DEBIT_SPREAD`: bearish defined-risk debit; expected Greek
+  posture is negative delta, limited negative theta, limited positive
+  vega.
+
+It also scores `STAND_ASIDE` as a valid zero-risk decision.
+
+The main contextual ratios are:
+
+```
+support_atr_multiple = distance_to_support_pct / atr_percent
+resistance_atr_multiple = distance_to_resistance_pct / atr_percent
+range_atr_multiple = min(support_atr_multiple, resistance_atr_multiple)
+```
+
+The scorer rewards structures whose Greek posture fits the market
+context and penalises them for poor option-chain quality:
+
+```
+alternative_score = raw_context_score - chain_quality_penalty
+```
+
+Unpriced alternatives are capped at `72` so an idea without current
+chain pricing cannot outrank a priced, clean ticket with false
+precision. The comparison to long vol is:
+
+```
+score_edge_vs_long_vol = alternative_score - rank_pressure_score
+```
+
+A non-call alternative is only marked `prefer-alternative-research`
+when the score is at least `70` and clears the pressured long-vol score
+by at least `5` points. This is a research ranking only; it still needs
+strike-cycle pricing and risk-policy approval before any paper staging.
+
+`inferno_strategy_alternative_pricing` then prices the top research
+recommendations in isolation. It can price more than one ranked
+strategy variant per ticker group, so a failed top idea can be compared
+against the next-best non-call structure without changing any queue or
+ledger. It uses the same strike-selector plan builders and the same
+paper risk policy, but writes only its own artifact:
+
+```
+price -> expand ranked variants -> build candidate legs -> evaluate paper risk -> report pass/block
+```
+
+For `PUT_CREDIT_SPREAD`, the pricing pass now enumerates a ladder of
+short/long put pairs instead of accepting the first conservative pair.
+The short-put sample deliberately includes both near-price strikes and
+support-safe strikes below the current support reference, so a blocked
+result can distinguish high-premium/unsafe placement from low-premium
+support-safe placement.
+
+For `IRON_CONDOR`, the pricing pass similarly enumerates short-call /
+short-put pairs plus wing widths. The short-call sample includes both
+near-price calls and resistance-safe calls above the current resistance
+reference; the short-put sample includes both near-price and
+support-safe puts. A range-safe condor requires:
+
+```
+short_put_strike < support
+short_call_strike > resistance
+credit/risk >= floor
+max_loss <= single_ticket_cap
+net_theta > 0
+net_vega < 0
+```
+
+Each row gets two gates:
+
+```
+optimizer_passed = credit/risk >= floor
+                 and max_loss <= single_ticket_cap
+                 and short_put_strike < support
+                 and net_theta > 0
+                 and net_vega < 0
+
+combined_passed = optimizer_passed and paper_risk_passed
+```
+
+Rows sort by `combined_passed`, then paper-risk pass, optimizer pass,
+optimizer score, credit/risk, and smaller max loss. The retained ladder
+therefore answers a cleaner question: "Was put-credit bad, or was the
+first sampled spread bad?"
+
+The pricing pass does not mutate the execution queue, approval queue,
+main strike plan, or paper ledger. A `priced-risk-blocked` verdict is
+useful information: it means the idea beat long vol theoretically but
+failed actual chain/risk math.
+
+When a priced alternative clears both gates, `inferno_strategy_shadow_comparison`
+copies the passing structure into a separate comparison register. That
+register is not the shadow evidence ledger; it is a research snapshot for
+tracking the same ticker across three hypotheses:
+
+```
+passing_defined_risk_structure
+  vs blocked_put_credit_structure
+  vs pressured_long_vol_hurdle
+```
+
+The register preserves the condor's credit, max loss, credit/risk,
+breakevens, wings, and Greeks alongside the put-credit block reasons
+and long-vol ATR hurdle. Its purpose is theory cleanup: after expiration
+or manual outcome review, the desk can ask whether the range-safe
+condor actually improved on both the original long-vol idea and the
+put-credit spread that the optimizer rejected.
+
+The same register also adds a deterministic expiration payoff grid for
+the priced alternatives. For credit structures, entry credit is treated
+as positive cash flow and intrinsic value is marked from the trader's
+perspective:
+
+```
+put_credit_pnl = credit * 100
+               - max(0, short_put - underlying) * 100
+               + max(0, long_put - underlying) * 100
+
+iron_condor_pnl = credit * 100
+                - max(0, short_put - underlying) * 100
+                + max(0, long_put - underlying) * 100
+                - max(0, underlying - short_call) * 100
+                + max(0, underlying - long_call) * 100
+```
+
+Rows are evaluated at current underlying, support, resistance, one ATR
+down/up, and the condor breakevens when present. Each row reports both
+dollar P/L and R multiple:
+
+```
+r_multiple = pnl / estimated_max_loss
+```
+
+This grid is still diagnostic-only. It makes the theory falsifiable
+without creating a paper ticket or shadow-evidence outcome.
+
+**Strict contract:** both modules are `researchOnly=true`,
+`diagnosticOnly=true`, and `promotable=false`. They can criticize the
+score model and long-vol premium assumptions, but they cannot create
+orders, relax gates, or grant live authority.
+
+**Modules:** `inferno_score_calibration`, `inferno_expected_move_ledger`,
+`inferno_strategy_alternative_scorer`, `inferno_strategy_alternative_pricing`,
+`inferno_strategy_shadow_comparison`.
+
+## 31. Schwab account sync normalization
+
+`inferno_schwab_account_sync.py` converts Schwab approved-account position rows
+into the live-sync shape used by `inferno_live_position_review.py`.
+
+For equities:
+
+```
+qty = long_quantity - short_quantity
+mark = abs(market_value) / abs(qty)
+cost_basis = abs(qty) * average_price
+open_pl = market_value - cost_basis        # long positions
+open_pl_pct = open_pl / cost_basis * 100
+weight_pct = mark_value / net_liq * 100
+```
+
+For options, the same formula uses a 100 multiplier:
+
+```
+mark = abs(market_value) / (abs(qty) * 100)
+cost_basis = abs(qty) * average_price * 100
+```
+
+When Schwab supplies explicit open P/L fields, the adapter uses Schwab's value
+and derives the percent from cost basis. Day P/L is preserved separately as
+`dayPl` and `dayPlPercent`; it does not replace open P/L for drawdown or
+position-review logic.
+
+The adapter stores balances and positions only for the configured approved
+suffix. Other suffixes may appear as suffix-level candidates for guardrail
+visibility, but their balances and holdings are intentionally dropped.
+
+## 32. TOS-style formula mirror
+
+`inferno_tos_formula_math.py` is the local mirror for tracker/TOS-style
+context formulas. It keeps the math testable and lets automation use API
+history instead of screen-only TOS columns.
+
+RVOL excludes the latest bar from its own baseline:
+
+```
+rvol = volume_t / mean(volume_(t-1) ... volume_(t-n))
+```
+
+with `n = 20` and a minimum of 6 usable volume bars.
+
+Trend uses close, SMA20, SMA50, and SMA20 slope:
+
+```
+Bullish if price >= sma20 >= sma50 and sma20 rising
+Bearish if price <= sma20 <= sma50 and sma20 falling
+Uptrend if price > sma20
+Basing if price is within 3% of sma20
+Neutral otherwise
+```
+
+Support and resistance use the trailing 20-bar high/low range:
+
+```
+support = min(low over trailing 20 bars)
+resistance = max(high over trailing 20 bars)
+```
+
+The current tracker score formulas in columns U:Y are:
+
+```
+value_score = confidence * (iv_rank / 100) * (abs(atr_z_score) + 1)
+momentum_score = max(0, iv_rank_change)
+squeeze_score = max(0, -atr_z_score)
+ready_score = value_score if signal_trigger and setup_rec != "Avoid" else 0
+priority = value_score + momentum_score + squeeze_score + ready_score
+```
+
+This means the tracker `Momentum Score` is IV-rank momentum, not price
+momentum. The price-momentum mirror is a separate research signal:
+
+```
+roc_n = close_t / close_(t-n) - 1
+weighted_return_pct = roc5 * 0.25 + roc20 * 0.45 + roc60 * 0.30
+acceleration_pct = roc5 - (roc20 * 5 / 20)
+atr_multiple = weighted_return_pct / max(atr_percent, 1)
+momentum_score = clamp(1.25 + atr_multiple * 0.18 + acceleration_pct * 0.035 + trend_bonus, 0, 2.5)
+```
+
+Strength is a `0` to `100` composite:
+
+```
+relative_strength_pct = symbol_weighted_return_pct - benchmark_weighted_return_pct
+relative_score = clamp(50 + relative_strength_pct * 2, 0, 100)
+strength = momentum_score_100 * 0.35
+         + relative_score * 0.25
+         + trend_score * 0.20
+         + participation_score * 0.20
+```
+
+`inferno_tos_formula_audit.py` compares the latest snapshot against the
+mirror and writes `reports/tos_formula_audit_latest.txt`. It is read-only:
+no broker calls, no sheet writes, no queue mutation, and no staging.
+
+`inferno_tos_custom_metrics.py` is the separate lane for user-authored
+ThinkScript custom columns. It imports TOS-exported values by ticker or accepts
+Schwab price-history recomputations for formulas that use only OHLCV. In both
+cases, it stores values under `tosCustomMetrics`:
+
+```
+row.tosCustomMetrics[metric_key].raw
+row.tosCustomMetrics[metric_key].value
+row.tosCustomMetrics[metric_key].formulaStatus
+row.marketContext.tosCustomMetricSourceStatus
+row.marketContext.tosCustomSignalSummary
+```
+
+The currently recognized TOS headers from the watchlist screenshot are:
+`RVOL`, `Pv52H`, `MOM`, `ATR%`, `Str...`, and `SUP/RES *`.
+
+`tosCustomSignalSummary` is observed-only. It exposes bands such as
+`rvolBand`, `momentumSign`, and `strengthBand` for research visibility, but
+does not change readiness, sizing, or risk gates by itself.
+
+The exact Python mirrors for the screenshot formulas live under
+`marketContext.tosCustomFormulaMirror`:
+
+```
+tos_rvol = volume / Average(volume, 30)
+tos_pv52h = close / Highest(high, 252) * 100
+tos_momentum = close - Average(close, 10)
+tos_atr_percent = Average(TrueRange(high, close, low), 14) / close * 100
+tos_strength = (close - low) / (high - low) * 100
+tos_support_resistance_state =
+    "Near High" if close is within 2% of Highest(high, 10)
+    "Near Low" if close is within 2% of Lowest(low, 10)
+    "Neutral" otherwise
+```
+
+These mirrors are exact formula translations from the user screenshots and
+the local TOS custom quote cache. They remain separate from legacy
+market-context fields until outcome calibration says they should affect gates.
+
+`inferno_schwab_tos_metrics_sync.py` now runs the same six mirrors on Schwab
+daily candles and publishes the canonical custom-metrics artifact. That is the
+preferred automation path for these metrics because it avoids a fragile TOS UI
+or CSV dependency while still matching the user's ThinkScript formulas.
+
+`inferno_tos_metric_theory_audit.py` is the anti-confirmation layer. It does
+not change gates. It checks each visible metric against a more decision-useful
+companion:
+
+- RVOL gets a prior-30 denominator and 63-day volume percentile.
+- Pv52H gets drawdown-from-high context.
+- MOM gets percent and ATR-normalized momentum because raw dollars are not
+  cross-ticker comparable.
+- ATR% is classified as risk/sizing context, not directional evidence.
+- Strength gets a 5-day close-location check.
+- SUP/RES gets treated as tactical 10-day context only.
+
+The audit writes explicit `supports`, `challenges`, `context`, and
+`antiYesManCaveats` lists by ticker so formula evidence can clarify a thesis
+instead of flattering it.
+
+If `formulaStatus != captured` or `hasThinkScript = false`, the metric is
+available as observed TOS evidence but is not yet a fully reproduced local
+formula.
+
+See [TOS_FORMULA_MIRROR.md](TOS_FORMULA_MIRROR.md) for the full crosswalk and
+the placeholder table where exact ThinkScript formulas should be pasted.
+See [TOS_CUSTOM_METRICS.md](TOS_CUSTOM_METRICS.md) for the exact-value import
+and registry workflow.
+
 ## Where to add a new metric
 
 When the desk adds a new probability or statistical primitive:

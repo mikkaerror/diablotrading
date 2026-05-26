@@ -70,7 +70,7 @@ class PaperBottleneckReducerTests(unittest.TestCase):
 
         payload = build_reducer(
             director_loader=lambda: director,
-            snapshot_loader=lambda: {"rows": []},
+            snapshot_loader=lambda: {"rows": [{"ticker": "OTEX", "price": 28.75, "support": 27.2}]},
             scenario_target=1,
         )
 
@@ -78,6 +78,8 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertTrue(scenario["executableInPaperMoney"])
         self.assertFalse(scenario["shadowOnly"])
         self.assertEqual(scenario["evidenceLane"], "paper-stage")
+        self.assertEqual(scenario["price"], 28.75)
+        self.assertEqual(scenario["priceSource"], "latest_snapshot.rows")
         self.assertFalse(scenario["brokerSubmitAllowed"])
         self.assertFalse(scenario["liveTradingAllowed"])
 

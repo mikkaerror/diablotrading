@@ -206,6 +206,13 @@ def normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
+def normal_pdf(x: float) -> float:
+    """Standard normal density φ(x)."""
+    if not math.isfinite(x):
+        raise ValueError(f"x must be finite, got {x}")
+    return math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+
+
 def approximate_call_delta(
     spot: float,
     strike: float,
@@ -231,3 +238,68 @@ def approximate_put_delta(
 ) -> float:
     """Black-Scholes put delta = N(d1) - 1, so puts are in ``[-1, 0]``."""
     return approximate_call_delta(spot, strike, sigma_annual, days_to_expiry, r) - 1.0
+
+
+def approximate_gamma(
+    spot: float,
+    strike: float,
+    sigma_annual: float,
+    days_to_expiry: float,
+    r: float = 0.0,
+) -> float:
+    """Black-Scholes gamma for calls and puts.
+
+    Gamma is identical for vanilla calls and puts at the same strike/expiry.
+    """
+    _validate_positive(spot, "spot")
+    _validate_positive(sigma_annual, "sigma_annual")
+    t = time_in_years(days_to_expiry)
+    return normal_pdf(d1(spot, strike, sigma_annual, t, r)) / (spot * sigma_annual * math.sqrt(t))
+
+
+def approximate_vega(
+    spot: float,
+    strike: float,
+    sigma_annual: float,
+    days_to_expiry: float,
+    r: float = 0.0,
+) -> float:
+    """Black-Scholes vega per 1 volatility point.
+
+    Broker UIs often quote vega as price change for a 1 percentage-point IV
+    move, so we divide the textbook value by 100.
+    """
+    _validate_positive(spot, "spot")
+    t = time_in_years(days_to_expiry)
+    return spot * normal_pdf(d1(spot, strike, sigma_annual, t, r)) * math.sqrt(t) / 100.0
+
+
+def approximate_theta(
+    spot: float,
+    strike: float,
+    sigma_annual: float,
+    days_to_expiry: float,
+    *,
+    put_call: str,
+    r: float = 0.0,
+) -> float:
+    """Black-Scholes theta per calendar day.
+
+    Long options usually have negative theta. Short legs invert this downstream
+    when strategy net Greeks are aggregated.
+    """
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(sigma_annual, "sigma_annual")
+    t = time_in_years(days_to_expiry)
+    d_1 = d1(spot, strike, sigma_annual, t, r)
+    d_2 = d_1 - sigma_annual * math.sqrt(t)
+    first_term = -(spot * normal_pdf(d_1) * sigma_annual) / (2.0 * math.sqrt(t))
+    side = str(put_call or "").upper()
+    if side == "CALL":
+        annual_theta = first_term - r * strike * math.exp(-r * t) * normal_cdf(d_2)
+    elif side == "PUT":
+        annual_theta = first_term + r * strike * math.exp(-r * t) * normal_cdf(-d_2)
+    else:
+        raise ValueError("put_call must be CALL or PUT")
+    return annual_theta / DAYS_PER_YEAR

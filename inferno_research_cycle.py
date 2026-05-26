@@ -11,9 +11,15 @@ from inferno_hypothesis_lab import build_hypothesis_lab, save_hypothesis_lab
 from inferno_hypothesis_ledger import build_ledger_report, save_ledger_report, update_ledger
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_performance_analytics import build_performance_analytics, save_performance_analytics
+from inferno_expected_move_ledger import build_expected_move_ledger, save_expected_move_ledger
 from inferno_scenario_backtest import build_scenario_backtest, save_scenario_backtest
 from inferno_scenario_evidence import build_scenario_evidence, save_scenario_evidence
+from inferno_score_calibration import build_score_calibration, save_score_calibration
 from inferno_shadow_evidence import build_shadow_evidence, save_shadow_evidence
+from inferno_strategy_alternative_scorer import (
+    build_strategy_alternative_scorer,
+    save_strategy_alternative_scorer,
+)
 from inferno_strategy_lab import build_strategy_lab, save_strategy_lab
 from inferno_strategy_replay import build_replay, save_replay
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
@@ -49,6 +55,15 @@ def build_research_cycle() -> dict[str, Any]:
 
     scenario_backtest = build_scenario_backtest(scenario_evidence=scenario_evidence)
     save_scenario_backtest(scenario_backtest)
+
+    score_calibration = build_score_calibration(scenario_evidence=scenario_evidence, shadow_ledger=shadow)
+    save_score_calibration(score_calibration)
+
+    expected_move = build_expected_move_ledger(shadow_ledger=shadow)
+    save_expected_move_ledger(expected_move)
+
+    strategy_alternatives = build_strategy_alternative_scorer(expected_move=expected_move)
+    save_strategy_alternative_scorer(strategy_alternatives)
 
     overall = strategy_lab.get("overall") or {}
     performance_desk = performance.get("deskVerdict") or {}
@@ -103,11 +118,37 @@ def build_research_cycle() -> dict[str, Any]:
             ],
             "promotable": bool(scenario_backtest.get("promotable")),
         },
+        "scoreCalibration": {
+            "stage": score_calibration.get("stage"),
+            "verdict": score_calibration.get("verdict"),
+            "closedScenarioObservations": (score_calibration.get("counts") or {}).get("closedScenarioObservations"),
+            "scenarioScoreRows": (score_calibration.get("counts") or {}).get("scenarioScoreRows"),
+            "promotable": bool(score_calibration.get("promotable")),
+        },
+        "expectedMoveLedger": {
+            "stage": expected_move.get("stage"),
+            "verdict": expected_move.get("verdict"),
+            "closedLongVolRecords": (expected_move.get("counts") or {}).get("closedLongVolRecords"),
+            "currentLongVolCandidates": (expected_move.get("counts") or {}).get("currentLongVolCandidates"),
+            "beatRate": (expected_move.get("overall") or {}).get("beatRate"),
+            "hurdleCounts": expected_move.get("currentHurdleCounts") or {},
+            "promotable": bool(expected_move.get("promotable")),
+        },
+        "strategyAlternativeScorer": {
+            "stage": strategy_alternatives.get("stage"),
+            "verdict": strategy_alternatives.get("verdict"),
+            "pressureCandidates": (strategy_alternatives.get("counts") or {}).get("pressureCandidates"),
+            "primaryHardExtreme": (strategy_alternatives.get("counts") or {}).get("primaryHardExtreme"),
+            "recommendations": (strategy_alternatives.get("counts") or {}).get("recommendations") or {},
+            "promotable": bool(strategy_alternatives.get("promotable")),
+        },
         "nextActions": [
             "Use shadow replay as research context only; do not confuse it with promotable paper evidence.",
             "Keep filling the paper evidence loop until the real strategy lab exits insufficient-data.",
             "Review top hypotheses for filters worth testing in the next approval cycle.",
             "Use scenario evidence for underlying-move learning, but keep option evidence verdicts tied to paper/shadow option outcomes.",
+            "Use score calibration and expected-move reports to pressure-test rankings and long-vol premium assumptions before expanding size.",
+            "Use the strategy alternative scorer to price put-credit/condor/put-debit candidates before favoring hard or extreme long vol.",
         ],
     }
 
@@ -148,6 +189,23 @@ def research_cycle_text(report: dict[str, Any]) -> str:
         f"- observation verdicts: {json.dumps((report.get('scenarioBacktest') or {}).get('observationVerdictCounts') or {})}",
         f"- top focus: {', '.join((report.get('scenarioBacktest') or {}).get('topFocusTickers') or []) or 'none'}",
         f"- promotable: {(report.get('scenarioBacktest') or {}).get('promotable')}",
+        "",
+        "Calibration lane:",
+        f"- score calibration: {(report.get('scoreCalibration') or {}).get('verdict')} | "
+        f"closed observations {(report.get('scoreCalibration') or {}).get('closedScenarioObservations')} | "
+        f"score rows {(report.get('scoreCalibration') or {}).get('scenarioScoreRows')} | "
+        f"promotable {(report.get('scoreCalibration') or {}).get('promotable')}",
+        f"- expected move: {(report.get('expectedMoveLedger') or {}).get('verdict')} | "
+        f"closed long-vol {(report.get('expectedMoveLedger') or {}).get('closedLongVolRecords')} | "
+        f"current long-vol {(report.get('expectedMoveLedger') or {}).get('currentLongVolCandidates')} | "
+        f"beat rate {(report.get('expectedMoveLedger') or {}).get('beatRate')} | "
+        f"hurdles {json.dumps((report.get('expectedMoveLedger') or {}).get('hurdleCounts') or {})} | "
+        f"promotable {(report.get('expectedMoveLedger') or {}).get('promotable')}",
+        f"- strategy alternatives: {(report.get('strategyAlternativeScorer') or {}).get('verdict')} | "
+        f"pressure candidates {(report.get('strategyAlternativeScorer') or {}).get('pressureCandidates')} | "
+        f"hard/extreme {(report.get('strategyAlternativeScorer') or {}).get('primaryHardExtreme')} | "
+        f"recommendations {json.dumps((report.get('strategyAlternativeScorer') or {}).get('recommendations') or {})} | "
+        f"promotable {(report.get('strategyAlternativeScorer') or {}).get('promotable')}",
         "",
         "Next actions:",
     ]

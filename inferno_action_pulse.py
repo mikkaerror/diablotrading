@@ -27,6 +27,7 @@ from inferno_daily_loop import build_daily_loop, save_daily_loop
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_ops_maintenance import run_maintenance
 from inferno_paper_bottleneck_reducer import build_reducer as build_paper_bottleneck_reducer
+from inferno_paper_bottleneck_reducer import PAPER_BOTTLENECK_REDUCER_FILE
 from inferno_paper_bottleneck_reducer import save_reducer as save_paper_bottleneck_reducer
 from inferno_reporting_summary import (
     build_freshness_panel,
@@ -51,6 +52,7 @@ ACTION_PULSE_FILE = DATA_DIR / "inferno_action_pulse.json"
 ACTION_PULSE_TEXT_FILE = REPORTS_DIR / "action_pulse_latest.txt"
 ACTION_PULSE_STATE_FILE = DATA_DIR / "inferno_action_pulse_state.json"
 SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
+DAILY_LOOP_FILE = DATA_DIR / "inferno_daily_loop.json"
 
 PHASE_LABELS = {
     "open": "Open Watch",
@@ -224,12 +226,33 @@ def refresh_paper_evidence_summary() -> dict[str, Any]:
     return summarize_paper_evidence(report)
 
 
+def load_saved_daily_loop_summary() -> dict[str, Any]:
+    """Return the latest daily-loop artifact without refreshing the heavy loop."""
+    report = load_json_file(DAILY_LOOP_FILE) or {}
+    if report:
+        return report
+    return {
+        "deskVerdict": "not-refreshed",
+        "decideTodayTickers": [],
+        "failedCount": None,
+        "okCount": None,
+        "stepCount": None,
+        "narrative": "Fast action pulse used saved artifacts; run the full daily loop for a fresh narrative.",
+    }
+
+
+def load_saved_paper_evidence_summary() -> dict[str, Any]:
+    """Return the latest paper-evidence reducer without rebuilding it."""
+    return summarize_paper_evidence(load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
+
+
 def build_action_pulse(
     *,
     phase: str,
     deployable_cash: float = 1000.0,
     skip_maintenance: bool = False,
     refresh_live_sync: bool = False,
+    fast: bool = False,
 ) -> dict[str, Any]:
     """Build the action pulse payload and supporting reports."""
     ensure_dirs()
@@ -237,6 +260,9 @@ def build_action_pulse(
     generated_at = local_now().isoformat()
 
     maintenance: dict[str, Any] | None = None
+    if fast:
+        skip_maintenance = True
+
     if not skip_maintenance:
         maintenance = run_maintenance(
             backtest_root=default_backtest_root(),
@@ -244,21 +270,27 @@ def build_action_pulse(
             force_email=False,
         )
 
-    daily_loop = build_daily_loop()
-    save_daily_loop(daily_loop)
+    if fast:
+        daily_loop = load_saved_daily_loop_summary()
+    else:
+        daily_loop = build_daily_loop()
+        save_daily_loop(daily_loop)
 
     launch = build_capital_launch_check(
         deployable_cash=deployable_cash,
         refresh_live_sync=refresh_live_sync,
     )
     schwab_daily_ops = summarize_schwab_daily_ops(load_json_file(SCHWAB_DAILY_OPS_FILE) or {})
-    paper_evidence = refresh_paper_evidence_summary()
+    paper_evidence = load_saved_paper_evidence_summary() if fast else refresh_paper_evidence_summary()
     freshness_panel = build_freshness_panel()
     for row in freshness_panel.get("rows") or []:
         if row.get("label") == "action pulse":
             row.update({"generatedAt": generated_at, "ageHours": 0.0, "status": "fresh"})
     tos_visibility = build_tos_visibility_summary()
     cash_arg = command_cash_arg(deployable_cash)
+    pulse_command = f'./run_inferno_action_pulse.sh --phase manual --deployable-cash {cash_arg}'
+    if fast:
+        pulse_command += " --fast"
 
     payload = {
         "generatedAt": generated_at,
@@ -266,6 +298,7 @@ def build_action_pulse(
         "phase": phase,
         "phaseLabel": phase_label(phase),
         "diagnosticOnly": True,
+        "fastMode": fast,
         "deployableCash": deployable_cash,
         "verdict": launch.get("verdict"),
         "message": launch.get("message"),
@@ -289,7 +322,7 @@ def build_action_pulse(
         "warningSummary": summarize_warnings(launch),
         "operatorCommands": [
             "./run_inferno_schwab_daily_ops.sh",
-            f'./run_inferno_action_pulse.sh --phase manual --deployable-cash {cash_arg} --send --force-send',
+            f"{pulse_command} --send --force-send",
             f'./run_inferno_capital_launch_check.sh --deployable-cash {cash_arg}',
             f'./run_inferno_strike_cycle.sh --deployable-cash {cash_arg}',
             'python3 inferno_approval_queue.py status',
@@ -323,6 +356,7 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         f"- Phase: {payload.get('phaseLabel')}",
         f"- Verdict: {payload.get('verdict')}",
         f"- Message: {payload.get('message')}",
+        f"- Fast mode: {payload.get('fastMode', False)}",
         f"- TOS: {render_tos_visibility_line(tos_visibility)}",
         "",
         "Freshness panel",
@@ -491,6 +525,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-send", action="store_true", help="Send even if this phase already sent today.")
     parser.add_argument("--skip-maintenance", action="store_true", help="Skip ops maintenance before building the pulse.")
     parser.add_argument("--refresh-live-sync", action="store_true", help="Refresh live sync before launch check.")
+    parser.add_argument("--fast", action="store_true", help="Use saved heavy artifacts for quick manual status.")
     return parser.parse_args()
 
 
@@ -505,6 +540,7 @@ def main() -> int:
         deployable_cash=args.deployable_cash,
         skip_maintenance=args.skip_maintenance,
         refresh_live_sync=args.refresh_live_sync,
+        fast=args.fast,
     )
     delivery = {"sent": False, "status": "not-requested"}
     if args.send:

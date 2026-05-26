@@ -178,6 +178,8 @@ marked ✅; gap is ⬜.
 
 ### `/marketdata/v1/pricehistory`
 
+✅ Daily OHLCV adapter for focused symbols
+✅ Recomputed TOS custom metrics: RVOL, Pv52H, MOM, ATR%, Strength, SUP/RES
 ⬜ 252-day close-to-close realized vol per underlying
 ⬜ Yang-Zhang OHLC realized vol (lower variance, captures overnight gap)
 ⬜ Earnings-window realized moves (one-day close-to-open after announcement)

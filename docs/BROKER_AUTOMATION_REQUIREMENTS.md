@@ -9,6 +9,8 @@ fail-closed interfaces.
 - configured approved live account: read-only oversight
 - native TOS export: useful when stable, not trusted as the only source
 - Schwab options API: active read-only market-data lane, no account/order calls
+- Schwab account API: active read-only approved-account balance/position lane,
+  no order calls
 - broker submit authority: off
 
 ## Required Before Live Automation
@@ -48,11 +50,13 @@ come from broker-grade data or a dedicated market-data provider:
 ```bash
 ./run_inferno_broker_preview.sh
 python3 inferno_schwab_options.py AAPL NVDA --json
+./run_inferno_schwab_account_sync.sh
 ```
 
 The broker preview builds payloads from paper-staged tickets. The Schwab
-options adapter enriches quote quality when configured. Neither command can
-submit orders.
+options adapter enriches quote quality when configured. The Schwab account sync
+reads approved-account balances and positions. None of these commands can submit
+orders.
 
 ## No-Go Rule
 

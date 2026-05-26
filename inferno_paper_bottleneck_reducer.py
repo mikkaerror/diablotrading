@@ -76,6 +76,44 @@ def normalize_ticker(value: Any) -> str:
     return str(value or "").strip().upper()
 
 
+def snapshot_row_lookup(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Index the latest snapshot rows by ticker for price/context enrichment."""
+    lookup: dict[str, dict[str, Any]] = {}
+    for row in snapshot.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        ticker = normalize_ticker(row.get("ticker"))
+        if ticker and ticker not in lookup:
+            lookup[ticker] = row
+    return lookup
+
+
+def enrich_scenario_from_snapshot(scenario: dict[str, Any], snapshot_row: dict[str, Any] | None) -> dict[str, Any]:
+    """Add non-authority market context already present in the latest snapshot."""
+    if not snapshot_row:
+        return scenario
+    price = snapshot_row.get("price")
+    if scenario.get("price") is None and price is not None:
+        scenario["price"] = price
+        scenario["baselineUnderlyingPrice"] = price
+        scenario["priceSource"] = "latest_snapshot.rows"
+    context = dict(scenario.get("marketContextSummary") or {})
+    for key in (
+        "rvol",
+        "trend",
+        "support",
+        "resistance",
+        "distanceToSupportPct",
+        "distanceToResistancePct",
+        "atrPercent",
+        "ivRank",
+    ):
+        if context.get(key) is None and snapshot_row.get(key) is not None:
+            context[key] = snapshot_row.get(key)
+    scenario["marketContextSummary"] = context
+    return scenario
+
+
 def scenario_from_director_candidate(
     candidate: dict[str, Any],
     *,
@@ -109,6 +147,9 @@ def scenario_from_director_candidate(
         "readiness": candidate.get("readiness"),
         "confidence": candidate.get("confidence"),
         "daysUntilEarnings": candidate.get("daysUntilEarnings"),
+        "price": candidate.get("price"),
+        "baselineUnderlyingPrice": candidate.get("baselineUnderlyingPrice") or candidate.get("price"),
+        "priceSource": candidate.get("priceSource"),
         "estimatedMaxLoss": candidate.get("estimatedMaxLoss"),
         "capitalGap": round(capital_gap, 2),
         "priorityScore": candidate.get("priorityScore"),
@@ -181,6 +222,9 @@ def tracker_shadow_candidates(
             "readiness": row.get("readiness"),
             "confidence": row.get("confidence"),
             "daysUntilEarnings": row.get("daysUntilEarnings"),
+            "price": row.get("price"),
+            "baselineUnderlyingPrice": row.get("price"),
+            "priceSource": "latest_snapshot.rows" if row.get("price") is not None else None,
             "estimatedMaxLoss": None,
             "capitalGap": None,
             "priorityScore": row.get("priority"),
@@ -247,6 +291,11 @@ def build_reducer(
     snapshot = (snapshot_loader or (lambda: load_json_file(SNAPSHOT_FILE) or {}))()
 
     scenarios = collect_director_scenarios(director)
+    snapshot_rows = snapshot_row_lookup(snapshot)
+    scenarios = [
+        enrich_scenario_from_snapshot(item, snapshot_rows.get(normalize_ticker(item.get("ticker"))))
+        for item in scenarios
+    ]
     excluded = {normalize_ticker(item.get("ticker")) for item in scenarios}
     if len(scenarios) < scenario_target:
         scenarios.extend(
@@ -326,7 +375,7 @@ def reducer_text(payload: dict[str, Any]) -> str:
         lines.append(
             f"- #{item.get('rank')} {item.get('ticker')} | {item.get('evidenceLane')} | "
             f"score {item.get('scenarioScore')} | {item.get('setupRec')} | "
-            f"{item.get('daysUntilEarnings')}d"
+            f"{item.get('daysUntilEarnings')}d | price {item.get('price') or 'n/a'}"
         )
         lines.append(f"  action: {item.get('reducerAction')}")
 
@@ -335,7 +384,7 @@ def reducer_text(payload: dict[str, Any]) -> str:
         tag = "PAPER" if item.get("executableInPaperMoney") else "SHADOW"
         lines.append(
             f"- #{item.get('rank')} {item.get('ticker')} [{tag}] "
-            f"{item.get('sourceLane')} | score {item.get('scenarioScore')}"
+            f"{item.get('sourceLane')} | score {item.get('scenarioScore')} | price {item.get('price') or 'n/a'}"
         )
 
     lines.extend(["", "Rules:"])
@@ -362,6 +411,8 @@ def reducer_csv(payload: dict[str, Any]) -> str:
         "setupRec",
         "strategy",
         "daysUntilEarnings",
+        "price",
+        "priceSource",
         "readiness",
         "confidence",
         "estimatedMaxLoss",
@@ -385,6 +436,8 @@ def reducer_csv(payload: dict[str, Any]) -> str:
             "setupRec": item.get("setupRec"),
             "strategy": item.get("strategy"),
             "daysUntilEarnings": item.get("daysUntilEarnings"),
+            "price": item.get("price"),
+            "priceSource": item.get("priceSource"),
             "readiness": item.get("readiness"),
             "confidence": item.get("confidence"),
             "estimatedMaxLoss": item.get("estimatedMaxLoss"),

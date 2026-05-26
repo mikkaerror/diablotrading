@@ -28,6 +28,7 @@ from server import DATA_DIR, LOG_FILE, REPORTS_DIR, SNAPSHOT_FILE
 TRACKER_SNAPSHOT_FILE = SNAPSHOT_FILE
 SCHWAB_OPTIONS_FILE = DATA_DIR / "inferno_schwab_options.json"
 SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
+SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
 LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 TOS_SESSION_PROBE_FILE = DATA_DIR / "inferno_tos_session_probe.json"
 TOS_EXPORT_VERIFIER_FILE = DATA_DIR / "inferno_tos_export_verifier.json"
@@ -149,6 +150,7 @@ def build_freshness_panel(*, now: datetime | None = None) -> dict[str, Any]:
         _freshness_entry("tracker snapshot", TRACKER_SNAPSHOT_FILE, max_age_hours=18, now=current),
         _freshness_entry("Schwab options tape", SCHWAB_OPTIONS_FILE, max_age_hours=18, now=current),
         _freshness_entry("Schwab daily ops", SCHWAB_DAILY_OPS_FILE, max_age_hours=18, now=current),
+        _freshness_entry("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
         _freshness_entry("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
         _freshness_entry("doctor", DOCTOR_TEXT_FILE, max_age_hours=8, now=current),
         _freshness_entry(

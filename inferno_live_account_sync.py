@@ -2,29 +2,31 @@ from __future__ import annotations
 
 """Live account synchronization and audit for the Inferno desk.
 
-This module turns the already-scraped thinkorswim Account Statement packet into
-one durable artifact that the rest of the stack can trust. The goal is simple:
-keep the live account read-only, keep the approved suffix guard in place, and
-attach tracker context to every live holding so the desk can reason about
-positions without hand-reading TOS every time.
+This module turns Schwab account API data or, when needed, the already-scraped
+thinkorswim Account Statement packet into one durable artifact that the rest of
+the stack can trust. The goal is simple: keep the live account read-only, keep
+the approved suffix guard in place, and attach tracker context to every live
+holding so the desk can reason about positions without hand-reading TOS every
+time.
 
 The sync stays intentionally conservative:
-1. read the latest account-statement artifact or refresh it from the open pane
+1. prefer Schwab read-only account data, falling back to the TOS statement
 2. prove the visible account belongs to the allowed live suffix set
 3. enrich each holding with tracker/dash context from `latest_snapshot.json`
 4. emit JSON + text artifacts that doctor/ops can verify independently
 """
 
 import argparse
-import json
 from typing import Any
 
 from inferno_config import TOS_ALLOWED_ACCOUNT_SUFFIXES, TOS_ALLOW_LIVE_READONLY, local_now
+from inferno_io import atomic_write_json, atomic_write_text
 from inferno_reporting_summary import (
     build_tos_visibility_summary,
     normalize_tos_fallback_message,
     render_tos_visibility_line,
 )
+from inferno_schwab_account_sync import SCHWAB_ACCOUNT_SYNC_FILE
 from inferno_tos_account_statement_scraper import ACCOUNT_STATEMENT_FILE, ACCOUNT_STATEMENT_LAST_GOOD_FILE, scrape_account_statement
 from inferno_tos_session_probe import probe_tos_session
 from server import DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
@@ -192,12 +194,59 @@ def load_statement(*, refresh: bool) -> dict[str, Any]:
     return scrape_account_statement()
 
 
-def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any]:
+def schwab_statement_from_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Convert a healthy Schwab account sync report into statement shape."""
+    if not report or not report.get("ok"):
+        return None
+    return {
+        "ok": True,
+        "generatedAt": report.get("generatedAt"),
+        "accountMode": report.get("accountMode") or "live",
+        "accountSuffixCandidates": report.get("accountSuffixCandidates") or [],
+        "netLiquidatingValue": report.get("netLiquidatingValue"),
+        "totalCash": report.get("totalCash"),
+        "positions": report.get("positions") or [],
+        "_accountDataSource": "schwab-account-api",
+        "_schwabAccountVerdict": report.get("verdict"),
+        "_schwabAccountMessage": report.get("message"),
+        "_schwabAccountGeneratedAt": report.get("generatedAt"),
+    }
+
+
+def load_schwab_account_report(*, refresh: bool) -> dict[str, Any] | None:
+    """Load or refresh the read-only Schwab account sync artifact."""
+    if refresh:
+        from inferno_schwab_account_sync import build_schwab_account_sync, save_schwab_account_sync
+
+        report = build_schwab_account_sync()
+        save_schwab_account_sync(report)
+        return report
+    return load_json_file(SCHWAB_ACCOUNT_SYNC_FILE)
+
+
+def build_live_account_sync(
+    *,
+    refresh_statement: bool = False,
+    prefer_schwab: bool = True,
+    refresh_schwab: bool = False,
+) -> dict[str, Any]:
     """Build the live-account sync artifact from the approved read-only account."""
     ensure_dirs()
 
-    statement = load_statement(refresh=refresh_statement)
-    session_probe = probe_tos_session()
+    schwab_report = load_schwab_account_report(refresh=refresh_schwab) if prefer_schwab else None
+    schwab_statement = schwab_statement_from_report(schwab_report)
+    statement = schwab_statement or load_statement(refresh=refresh_statement)
+    account_data_source = text(statement.get("_accountDataSource")) or "tos-account-statement"
+    using_schwab = account_data_source == "schwab-account-api"
+    session_probe = (
+        {
+            "accountMode": "unknown",
+            "accountSuffixCandidates": [],
+            "summary": "not required; Schwab account API is the live account source",
+        }
+        if using_schwab
+        else probe_tos_session()
+    )
     tos_visibility = build_tos_visibility_summary()
     raw_statement_mode = text(statement.get("accountMode")).lower()
     raw_session_mode = text(session_probe.get("accountMode")).lower()
@@ -216,6 +265,11 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
         "ok": False,
         "verdict": "blocked",
         "message": "",
+        "accountDataSource": account_data_source,
+        "tosRequiredForAccountSync": not using_schwab,
+        "schwabAccountGeneratedAt": (schwab_report or {}).get("generatedAt") or statement.get("_schwabAccountGeneratedAt"),
+        "schwabAccountVerdict": (schwab_report or {}).get("verdict") or statement.get("_schwabAccountVerdict"),
+        "schwabAccountMessage": (schwab_report or {}).get("message") or statement.get("_schwabAccountMessage"),
         "statementGeneratedAt": statement.get("generatedAt"),
         "statementOk": statement.get("ok"),
         "statementRefreshFallback": statement.get("_refreshFallback"),
@@ -242,6 +296,10 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
 
     if not statement.get("ok"):
         report["message"] = text(statement.get("message")) or "account statement scrape unavailable"
+        if schwab_report and not schwab_report.get("ok"):
+            report["nextActions"].append(
+                "Schwab account API did not produce a usable account packet; inspect schwab_account_sync_latest.txt."
+            )
         save_live_account_sync(report)
         return report
 
@@ -292,6 +350,8 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
         next_actions.append("Review earnings-near positions before the next catalyst window.")
     if fragile_flags:
         next_actions.append("Re-check weak alignment names against support/resistance before adding exposure.")
+    if schwab_report and not schwab_report.get("ok") and not using_schwab:
+        next_actions.append("Schwab account API was unavailable; live sync used the TOS statement fallback.")
     if not next_actions:
         next_actions.append("Live holdings are synced and tracker-aligned.")
     report["nextActions"] = next_actions
@@ -310,6 +370,9 @@ def build_live_account_sync(*, refresh_statement: bool = False) -> dict[str, Any
         report["statementRefreshFallback"] = fallback
         report["nextActions"].append(f"Attach-only fallback used: {fallback}.")
 
+    if using_schwab:
+        report["nextActions"].append("TOS is optional for this sync; keep using it for visualization/manual execution.")
+
     save_live_account_sync(report)
     return report
 
@@ -323,6 +386,7 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
         f"Generated: {report.get('generatedAt')}",
         f"Verdict: {report.get('verdict')}",
         f"Message: {report.get('message')}",
+        f"Account data source: {report.get('accountDataSource')}",
         f"Account mode: {report.get('accountMode')}",
         f"Allowed live readonly: {report.get('allowedLiveReadonly')}",
         f"Matched suffix: {report.get('matchedSuffix') or '-'}",
@@ -330,6 +394,8 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
         f"Net liq: {report.get('netLiquidatingValue') or '-'}",
         f"Total cash: {report.get('totalCash') or '-'}",
         f"TOS visibility: {render_tos_visibility_line(report.get('tosVisibility') or {})}",
+        f"TOS required for account sync: {report.get('tosRequiredForAccountSync')}",
+        f"Schwab account sync: {report.get('schwabAccountVerdict') or '-'} | {report.get('schwabAccountGeneratedAt') or '-'}",
         f"Attach-only fallback: {report.get('statementRefreshFallback') or '-'}",
         f"Positions: {counts.get('positions', 0)}",
         f"Tracker matched: {counts.get('matchedPositions', 0)}",
@@ -362,14 +428,24 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
 def save_live_account_sync(report: dict[str, Any]) -> None:
     """Persist the live-account sync JSON and text artifacts."""
     ensure_dirs()
-    LIVE_ACCOUNT_SYNC_FILE.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    LIVE_ACCOUNT_SYNC_TEXT_FILE.write_text(live_account_sync_text(report), encoding="utf-8")
+    atomic_write_json(LIVE_ACCOUNT_SYNC_FILE, report)
+    atomic_write_text(LIVE_ACCOUNT_SYNC_TEXT_FILE, live_account_sync_text(report))
 
 
 def parse_args() -> argparse.Namespace:
     """Parse the tiny CLI surface for build/status usage."""
-    parser = argparse.ArgumentParser(description="Sync the approved live thinkorswim account into Inferno artifacts.")
+    parser = argparse.ArgumentParser(description="Sync the approved live account into Inferno artifacts.")
     parser.add_argument("command", nargs="?", choices=("build", "status"), default="build")
+    parser.add_argument(
+        "--refresh-schwab",
+        action="store_true",
+        help="Refresh the read-only Schwab account API packet before building the sync.",
+    )
+    parser.add_argument(
+        "--no-schwab",
+        action="store_true",
+        help="Skip Schwab account data and use the TOS account-statement lane.",
+    )
     parser.add_argument(
         "--refresh-statement",
         action="store_true",
@@ -384,7 +460,11 @@ def main() -> int:
     if args.command == "status" and LIVE_ACCOUNT_SYNC_TEXT_FILE.exists():
         print(LIVE_ACCOUNT_SYNC_TEXT_FILE.read_text(encoding="utf-8"))
         return 0
-    report = build_live_account_sync(refresh_statement=args.refresh_statement)
+    report = build_live_account_sync(
+        refresh_statement=args.refresh_statement,
+        prefer_schwab=not args.no_schwab,
+        refresh_schwab=args.refresh_schwab,
+    )
     print(live_account_sync_text(report))
     return 0 if report.get("ok") else 1
 

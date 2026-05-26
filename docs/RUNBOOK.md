@@ -442,6 +442,7 @@ desk graduates toward more broker authority.
 ### Review the live book against tracker conviction
 
 ```bash
+./run_inferno_schwab_account_sync.sh
 ./run_inferno_live_account_sync.sh
 ./run_inferno_live_position_review.sh
 ./run_inferno_live_book_review_packet.sh
@@ -449,6 +450,8 @@ desk graduates toward more broker authority.
 
 This writes:
 
+- [data/inferno_schwab_account_sync.json](data/inferno_schwab_account_sync.json)
+- [reports/schwab_account_sync_latest.txt](reports/schwab_account_sync_latest.txt)
 - [data/inferno_live_account_sync.json](data/inferno_live_account_sync.json)
 - [reports/live_account_sync_latest.txt](reports/live_account_sync_latest.txt)
 - [data/inferno_live_position_review.json](data/inferno_live_position_review.json)
@@ -456,12 +459,16 @@ This writes:
 - [data/inferno_live_book_review_packet.json](data/inferno_live_book_review_packet.json)
 - [reports/live_book_review_packet_latest.txt](reports/live_book_review_packet_latest.txt)
 
-Use this when the live account statement window is already open and you want a
-read-only answer to:
+Use this when you want a read-only answer to:
 
 - which holdings still align with the tracker
 - which names look fragile even if they are profitable
 - which positions are supported by long-term shovel research or shadow evidence
+
+Schwab account API is the preferred source for balances and positions. The
+legacy TOS account-statement scrape remains a supervised fallback, but TOS is
+not required when `Account data source: schwab-account-api` and `TOS required
+for account sync: False` appear in the live sync report.
 
 `review` is still an acceptable live-position-review verdict. It means the
 automation succeeded and surfaced a name that deserves a human check before
@@ -1306,6 +1313,80 @@ Then inspect:
 
 - [data/inferno_ops_status.json](data/inferno_ops_status.json)
 - [reports/morning_brief_latest.txt](reports/morning_brief_latest.txt)
+
+## If TOS-Style Formula Values Look Off
+
+Run the local formula mirror audit:
+
+```bash
+./run_inferno_tos_formula_audit.sh --limit 20
+```
+
+Then inspect:
+
+- [reports/tos_formula_audit_latest.txt](reports/tos_formula_audit_latest.txt)
+- [docs/TOS_FORMULA_MIRROR.md](docs/TOS_FORMULA_MIRROR.md)
+
+The audit is diagnostic-only. It compares RVOL, trend, support, resistance,
+and momentum against local history calculations and does not touch Sheets,
+Schwab, TOS, or any staging queue.
+
+## If You Need Your Special TOS Metrics In The Model
+
+Create the editable ThinkScript metric registry:
+
+```bash
+./run_inferno_tos_custom_metrics.sh --init-registry
+```
+
+Pull formulas from the local TOS custom quote cache:
+
+```bash
+./run_inferno_tos_custom_metrics.sh --init-registry --pull-formulas-from-cache
+```
+
+Then review or edit each custom column's exact ThinkScript in:
+
+- [data/tos_custom_metric_registry.json](data/tos_custom_metric_registry.json)
+
+To capture current TOS-produced values, export the watchlist/custom quote table
+to CSV and run:
+
+```bash
+./run_inferno_tos_custom_metrics.sh --values-csv "/path/to/tos-export.csv"
+```
+
+For the six OHLCV-only screenshot metrics, prefer the Schwab sync instead of a
+manual TOS export:
+
+```bash
+./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12
+```
+
+This fetches Schwab daily candles, recomputes RVOL, Pv52H, MOM, ATR%,
+Strength, and SUP/RES, then publishes the same
+`data/inferno_tos_custom_metrics.json` artifact used by the model.
+
+Then run the anti-confirmation theory audit:
+
+```bash
+./run_inferno_tos_metric_theory_audit.sh --limit 12
+```
+
+This checks whether each metric supports the thesis, challenges it, or is only
+context. It also calls out formula caveats such as raw dollar MOM not being
+scale-safe and ATR% being a risk/sizing signal rather than a directional edge.
+
+Then inspect:
+
+- [reports/tos_custom_metrics_latest.txt](reports/tos_custom_metrics_latest.txt)
+- [reports/schwab_tos_metrics_sync_latest.txt](reports/schwab_tos_metrics_sync_latest.txt)
+- [reports/tos_metric_theory_audit_latest.txt](reports/tos_metric_theory_audit_latest.txt)
+- [docs/TOS_CUSTOM_METRICS.md](docs/TOS_CUSTOM_METRICS.md)
+- [docs/SCHWAB_PRICE_HISTORY.md](docs/SCHWAB_PRICE_HISTORY.md)
+
+Captured values are joined by ticker into the next tracker snapshot as
+`tosCustomMetrics` and into `marketContext.tosCustomMetrics`.
 
 ## Labels And Roles
 

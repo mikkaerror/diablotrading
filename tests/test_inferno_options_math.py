@@ -10,8 +10,9 @@ Counter-arguments the module must survive:
    ``E[|·|] ≈ 0.7979 · σ · √T`` relationship.
 4. ATM call delta is exactly 0.5 when the lognormal drift term cancels.
 5. Put-call delta parity: ``Δ_call - Δ_put = 1`` always.
-6. IV rank → annualised IV interpolation clamps at [0, 100] bounds.
-7. VRP arithmetic returns zero when implied move is zero.
+6. Gamma/vega/theta signs line up with vanilla option math.
+7. IV rank → annualised IV interpolation clamps at [0, 100] bounds.
+8. VRP arithmetic returns zero when implied move is zero.
 """
 
 import math
@@ -115,6 +116,32 @@ class DeltaTests(unittest.TestCase):
     def test_deep_otm_call_delta_near_zero(self) -> None:
         delta = om.approximate_call_delta(spot=50, strike=200, sigma_annual=0.30, days_to_expiry=30)
         self.assertLess(delta, 0.01)
+
+
+class GreekTests(unittest.TestCase):
+    def test_gamma_is_positive_for_call_or_put(self) -> None:
+        gamma = om.approximate_gamma(spot=100, strike=100, sigma_annual=0.35, days_to_expiry=30)
+        self.assertGreater(gamma, 0)
+
+    def test_vega_is_positive_for_long_option(self) -> None:
+        vega = om.approximate_vega(spot=100, strike=100, sigma_annual=0.35, days_to_expiry=30)
+        self.assertGreater(vega, 0)
+
+    def test_long_option_theta_is_negative(self) -> None:
+        call_theta = om.approximate_theta(
+            spot=100, strike=100, sigma_annual=0.35, days_to_expiry=30, put_call="CALL"
+        )
+        put_theta = om.approximate_theta(
+            spot=100, strike=100, sigma_annual=0.35, days_to_expiry=30, put_call="PUT"
+        )
+        self.assertLess(call_theta, 0)
+        self.assertLess(put_theta, 0)
+
+    def test_invalid_theta_side_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            om.approximate_theta(
+                spot=100, strike=100, sigma_annual=0.35, days_to_expiry=30, put_call="SIDEWAYS"
+            )
 
 
 class VRPArithmeticTests(unittest.TestCase):

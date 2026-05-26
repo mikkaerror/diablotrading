@@ -218,8 +218,21 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
+                        "refresh_schwab_account_sync",
+                        return_value={
+                            "ok": True,
+                            "status": "healthy",
+                            "matchedSuffix": "1234",
+                            "counts": {"accounts": 1, "approvedAccounts": 1, "positions": 3},
+                            "readOnly": True,
+                        },
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
                         "refresh_live_account_sync",
-                        return_value={"ok": True, "status": "healthy", "matchedSuffix": "1234", "counts": {"positions": 3, "matchedPositions": 3}},
+                        return_value={"ok": True, "status": "healthy", "matchedSuffix": "1234", "accountDataSource": "schwab-account-api", "counts": {"positions": 3, "matchedPositions": 3}},
                     )
                 )
                 stack.enter_context(
@@ -288,6 +301,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["staleApprovalGovernor"]["ttlMarketDays"], 5)
             self.assertEqual(saved["approvalInbox"]["status"], "idle")
             self.assertEqual(saved["approvalDispatch"]["status"], "sent")
+            self.assertEqual(saved["schwabAccountSync"]["status"], "healthy")
             self.assertEqual(saved["liveAccountSync"]["status"], "healthy")
             self.assertEqual(saved["livePositionReview"]["status"], "review")
             self.assertEqual(saved["modelCommandCenter"]["status"], "ready")
@@ -299,6 +313,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Broker preview: preview-built", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Stale approval governor: no-action", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Approval inbox: idle", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Schwab account sync: healthy", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))

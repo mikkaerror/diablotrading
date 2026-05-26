@@ -12,6 +12,13 @@ import yfinance as yf
 
 from inferno_config import EXECUTION_QUEUE_LIMIT, MAX_SINGLE_TICKET_DOLLARS, ROOT, local_now
 from inferno_doctor import in_current_service_cycle
+from inferno_options_math import (
+    approximate_call_delta,
+    approximate_gamma,
+    approximate_put_delta,
+    approximate_theta,
+    approximate_vega,
+)
 from inferno_schwab_options import SCHWAB_OPTIONS_FILE
 from inferno_risk_policy import evaluate_strike_item
 from server import (
@@ -55,6 +62,10 @@ class OptionLeg:
     volume: int
     open_interest: int
     implied_volatility: float
+    delta: float | None = None
+    gamma: float | None = None
+    theta: float | None = None
+    vega: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +80,10 @@ class OptionLeg:
             "volume": self.volume,
             "openInterest": self.open_interest,
             "impliedVolatility": self.implied_volatility,
+            "delta": self.delta,
+            "gamma": self.gamma,
+            "theta": self.theta,
+            "vega": self.vega,
         }
 
 
@@ -129,6 +144,29 @@ def schwab_options_for_intent(intent: dict[str, Any], index: dict[str, dict[str,
     return index.get(ticker)
 
 
+def effective_intent_for_pricing(intent: dict[str, Any], schwab_options: dict[str, Any] | None) -> dict[str, Any]:
+    """Prefer Schwab chain underlyings for strike math while preserving source price."""
+    source_price = number(intent.get("price"))
+    schwab_price = number((schwab_options or {}).get("underlyingPrice"))
+    effective_price = schwab_price if schwab_price > 0 else source_price
+    adjusted = {
+        **intent,
+        "sourcePrice": source_price,
+        "price": effective_price,
+        "underlyingPriceSource": "schwab-options-underlying" if schwab_price > 0 else "execution-intent",
+    }
+    market_context = dict(intent.get("marketContext") or {})
+    if effective_price > 0:
+        support = number(market_context.get("support"))
+        resistance = number(market_context.get("resistance"))
+        if support > 0:
+            market_context["distanceToSupportPct"] = round((effective_price - support) / effective_price * 100.0, 4)
+        if resistance > 0:
+            market_context["distanceToResistancePct"] = round((resistance - effective_price) / effective_price * 100.0, 4)
+    adjusted["marketContext"] = market_context
+    return adjusted
+
+
 def load_execution_queue() -> dict[str, Any]:
     """Load the execution queue, rebuilding it when the saved desk drifted stale.
 
@@ -180,7 +218,45 @@ def option_spread_pct(row: pd.Series) -> float:
     return round(max(0.0, (ask - bid) / mid), 4)
 
 
-def to_leg(row: pd.Series, instruction: str, put_call: str, expiration: str) -> OptionLeg:
+def days_to_expiration(expiration: str) -> int:
+    """Return calendar days from the local service date to expiration."""
+    parsed = parse_date(expiration)
+    if not parsed:
+        return 1
+    return max(1, (parsed.date() - local_now().date()).days)
+
+
+def normalized_iv_for_math(value: Any) -> float | None:
+    """Normalize vendor IV values into annualized decimal form for Greeks."""
+    sigma = number(value)
+    if sigma <= 0:
+        return None
+    return round(sigma / 100.0, 6) if sigma > 3 else round(sigma, 6)
+
+
+def approximate_leg_greeks(row: pd.Series, put_call: str, expiration: str, spot: float) -> dict[str, float | None]:
+    """Approximate Greeks for a candidate leg from vendor IV.
+
+    yfinance chains do not carry Greeks. This keeps strategy selection honest by
+    using the same audited Black-Scholes primitives as the rest of the desk.
+    """
+    sigma = normalized_iv_for_math(row.get("impliedVolatility"))
+    strike = number(row.get("strike"))
+    if not sigma or spot <= 0 or strike <= 0:
+        return {"delta": None, "gamma": None, "theta": None, "vega": None}
+    dte = days_to_expiration(expiration)
+    side = str(put_call).upper()
+    delta = approximate_call_delta(spot, strike, sigma, dte) if side == "CALL" else approximate_put_delta(spot, strike, sigma, dte)
+    return {
+        "delta": round(delta, 4),
+        "gamma": round(approximate_gamma(spot, strike, sigma, dte), 6),
+        "theta": round(approximate_theta(spot, strike, sigma, dte, put_call=side), 6),
+        "vega": round(approximate_vega(spot, strike, sigma, dte), 6),
+    }
+
+
+def to_leg(row: pd.Series, instruction: str, put_call: str, expiration: str, spot: float | None = None) -> OptionLeg:
+    greeks = approximate_leg_greeks(row, put_call, expiration, number(spot)) if spot else {}
     return OptionLeg(
         instruction=instruction,
         put_call=put_call,
@@ -193,6 +269,10 @@ def to_leg(row: pd.Series, instruction: str, put_call: str, expiration: str) -> 
         volume=integer(row.get("volume")),
         open_interest=integer(row.get("openInterest")),
         implied_volatility=round(number(row.get("impliedVolatility")), 6),
+        delta=greeks.get("delta"),
+        gamma=greeks.get("gamma"),
+        theta=greeks.get("theta"),
+        vega=greeks.get("vega"),
     )
 
 
@@ -314,6 +394,37 @@ def build_liquidity_notes(legs: list[OptionLeg]) -> list[str]:
     return notes
 
 
+def net_greek_summary(legs: list[OptionLeg]) -> dict[str, Any]:
+    """Aggregate signed Greeks for a multi-leg plan."""
+    totals = {"netDelta": 0.0, "netGamma": 0.0, "netTheta": 0.0, "netVega": 0.0}
+    completeness = {"delta": 0, "gamma": 0, "theta": 0, "vega": 0}
+    for leg in legs:
+        sign = -1.0 if leg.instruction.upper().startswith("SELL") else 1.0
+        for key, attr in (
+            ("netDelta", "delta"),
+            ("netGamma", "gamma"),
+            ("netTheta", "theta"),
+            ("netVega", "vega"),
+        ):
+            value = getattr(leg, attr)
+            if value is None:
+                continue
+            totals[key] += sign * float(value)
+            completeness[attr] += 1
+    complete_count = min(completeness.values()) if completeness else 0
+    leg_count = len(legs) or 1
+    summary = {key: round(value, 6) for key, value in totals.items()}
+    summary["greeksComplete"] = complete_count == len(legs)
+    summary["greeksCompletenessPct"] = round(complete_count / leg_count, 4)
+    if summary["netTheta"] > 0 and summary["netVega"] < 0:
+        summary["volPosture"] = "short-vol-theta-positive"
+    elif summary["netTheta"] < 0 and summary["netVega"] > 0:
+        summary["volPosture"] = "long-vol-theta-negative"
+    else:
+        summary["volPosture"] = "mixed"
+    return summary
+
+
 VERTICAL_DEBIT_MAX_WIDTH_RATIO = 0.95  # debit > 0.95 × width = guaranteed loss on fill
 
 
@@ -326,8 +437,8 @@ def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFr
     if short_call_row is None:
         return None
 
-    long_leg = to_leg(long_call_row, "BUY_TO_OPEN", "CALL", expiration)
-    short_leg = to_leg(short_call_row, "SELL_TO_OPEN", "CALL", expiration)
+    long_leg = to_leg(long_call_row, "BUY_TO_OPEN", "CALL", expiration, price)
+    short_leg = to_leg(short_call_row, "SELL_TO_OPEN", "CALL", expiration, price)
     debit = max(0.0, long_leg.ask - short_leg.bid)
     width = max(0.0, short_leg.strike - long_leg.strike)
     # Refuse plans where the worst-case fill (ask of long − bid of short)
@@ -350,6 +461,7 @@ def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFr
         "estimatedMaxProfit": round(max_profit * 100, 2),
         "breakEven": round(long_leg.strike + debit, 4),
         "width": round(width, 4),
+        "greekSummary": net_greek_summary(legs),
         "liquidityNotes": build_liquidity_notes(legs),
     }
 
@@ -361,8 +473,8 @@ def straddle_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame, 
     if call_row is None or put_row is None:
         return None
 
-    call_leg = to_leg(call_row, "BUY_TO_OPEN", "CALL", expiration)
-    put_leg = to_leg(put_row, "BUY_TO_OPEN", "PUT", expiration)
+    call_leg = to_leg(call_row, "BUY_TO_OPEN", "CALL", expiration, price)
+    put_leg = to_leg(put_row, "BUY_TO_OPEN", "PUT", expiration, price)
     debit = call_leg.ask + put_leg.ask
     center = round((call_leg.strike + put_leg.strike) / 2, 4)
     legs = [call_leg, put_leg]
@@ -377,6 +489,7 @@ def straddle_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame, 
         "estimatedMaxProfit": "uncapped",
         "lowerBreakEven": round(center - debit, 4),
         "upperBreakEven": round(center + debit, 4),
+        "greekSummary": net_greek_summary(legs),
         "liquidityNotes": build_liquidity_notes(legs),
     }
 
@@ -424,8 +537,8 @@ def cap_aware_long_strangle_plan(
         return None
 
     call_row, put_row, debit, _ = best_pair
-    call_leg = to_leg(call_row, "BUY_TO_OPEN", "CALL", expiration)
-    put_leg = to_leg(put_row, "BUY_TO_OPEN", "PUT", expiration)
+    call_leg = to_leg(call_row, "BUY_TO_OPEN", "CALL", expiration, price)
+    put_leg = to_leg(put_row, "BUY_TO_OPEN", "PUT", expiration, price)
     legs = [call_leg, put_leg]
     return {
         "strategy": "LONG_STRANGLE",
@@ -437,6 +550,7 @@ def cap_aware_long_strangle_plan(
         "estimatedMaxProfit": "uncapped",
         "lowerBreakEven": round(put_leg.strike - debit, 4),
         "upperBreakEven": round(call_leg.strike + debit, 4),
+        "greekSummary": net_greek_summary(legs),
         "liquidityNotes": build_liquidity_notes(legs),
         "paperVariantOnly": True,
         "variantFamily": PAPER_REHEARSAL_VARIANT_FAMILY,
@@ -478,6 +592,116 @@ def effective_paper_rehearsal_item(item: dict[str, Any]) -> dict[str, Any] | Non
     }
 
 
+def effective_strategy_alternative_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the best clean Greek-supported strategy alternative, if any."""
+    alternatives = []
+    for alternative in item.get("strategyAlternatives") or []:
+        verdict = alternative.get("riskVerdict") or {}
+        if verdict.get("passed"):
+            alternatives.append(alternative)
+    if not alternatives:
+        return None
+    alternatives.sort(
+        key=lambda alt: (
+            number(alt.get("estimatedMaxLoss"), 99999.0),
+            -abs(number((alt.get("greekSummary") or {}).get("netTheta"))),
+        )
+    )
+    alternative = alternatives[0]
+    return {
+        **item,
+        "paperVariantOnly": True,
+        "paperVariantFamily": alternative.get("variantFamily"),
+        "paperVariantOfStrategy": alternative.get("variantForStrategy") or (item.get("strikePlan") or {}).get("strategy"),
+        "strikePlan": alternative,
+        "riskVerdict": alternative.get("riskVerdict") or {},
+    }
+
+
+def put_credit_spread_plan(intent: dict[str, Any], expiration: str, puts: pd.DataFrame) -> dict[str, Any] | None:
+    """Build a bullish/neutral defined-risk put credit spread.
+
+    This is the first non-call, non-straddle alternative the desk may consider:
+    positive theta, negative vega, bounded max loss, and a short strike below
+    the current price/support area. It remains paper-only until evidence earns
+    more authority.
+    """
+    price = number(intent.get("price"))
+    market_context = intent.get("marketContext") or {}
+    support = number(market_context.get("support"))
+    atr = max(number(intent.get("atr20Day")), price * max(number(intent.get("atrPercent")) / 100.0, 0.04))
+    target = min(price - atr, support * 0.99 if support > 0 else price - atr)
+    short_put_row = nearest_row(sellable(puts[puts["strike"] < price]), target)
+    if short_put_row is None:
+        return None
+    long_put_row = next_lower_row(buyable(puts), number(short_put_row.get("strike")))
+    if long_put_row is None:
+        return None
+
+    short_put = to_leg(short_put_row, "SELL_TO_OPEN", "PUT", expiration, price)
+    long_put = to_leg(long_put_row, "BUY_TO_OPEN", "PUT", expiration, price)
+    credit = round(short_put.bid - long_put.ask, 4)
+    width = max(0.0, short_put.strike - long_put.strike)
+    if credit <= 0 or width <= 0 or credit >= width:
+        return None
+    max_loss = max(0.0, width - credit)
+    legs = [short_put, long_put]
+    support_cushion = None
+    if support > 0 and short_put.strike > 0:
+        support_cushion = round((support - short_put.strike) / short_put.strike * 100.0, 4)
+
+    return {
+        "strategy": "PUT_CREDIT_SPREAD",
+        "direction": "bullish-defined-risk-premium",
+        "expiration": expiration,
+        "legs": [leg.as_dict() for leg in legs],
+        "estimatedCredit": round(credit, 4),
+        "estimatedMaxLoss": round(max_loss * 100, 2),
+        "estimatedMaxProfit": round(credit * 100, 2),
+        "breakEven": round(short_put.strike - credit, 4),
+        "width": round(width, 4),
+        "shortPutStrike": short_put.strike,
+        "longPutStrike": long_put.strike,
+        "supportCushionToShortPct": support_cushion,
+        "greekSummary": net_greek_summary(legs),
+        "liquidityNotes": build_liquidity_notes(legs),
+    }
+
+
+def put_debit_spread_plan(intent: dict[str, Any], expiration: str, puts: pd.DataFrame) -> dict[str, Any] | None:
+    """Build a bearish defined-risk put debit spread."""
+    price = number(intent.get("price"))
+    long_put_row = nearest_row(buyable(puts), price)
+    if long_put_row is None:
+        return None
+    short_put_row = next_lower_row(sellable(puts), number(long_put_row.get("strike")))
+    if short_put_row is None:
+        return None
+
+    long_put = to_leg(long_put_row, "BUY_TO_OPEN", "PUT", expiration, price)
+    short_put = to_leg(short_put_row, "SELL_TO_OPEN", "PUT", expiration, price)
+    debit = round(long_put.ask - short_put.bid, 4)
+    width = max(0.0, long_put.strike - short_put.strike)
+    if debit <= 0 or width <= 0 or debit > width * VERTICAL_DEBIT_MAX_WIDTH_RATIO:
+        return None
+    max_profit = max(0.0, width - debit)
+    legs = [long_put, short_put]
+
+    return {
+        "strategy": "PUT_DEBIT_SPREAD",
+        "direction": "bearish-defined-risk",
+        "expiration": expiration,
+        "legs": [leg.as_dict() for leg in legs],
+        "estimatedDebit": round(debit, 4),
+        "estimatedMaxLoss": round(debit * 100, 2),
+        "estimatedMaxProfit": round(max_profit * 100, 2),
+        "breakEven": round(long_put.strike - debit, 4),
+        "width": round(width, 4),
+        "greekSummary": net_greek_summary(legs),
+        "liquidityNotes": build_liquidity_notes(legs),
+    }
+
+
 def iron_condor_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame, puts: pd.DataFrame) -> dict[str, Any] | None:
     price = number(intent.get("price"))
     atr = max(number(intent.get("atr20Day")), price * 0.05)
@@ -491,10 +715,10 @@ def iron_condor_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFram
     if long_call_row is None or long_put_row is None:
         return None
 
-    short_call = to_leg(short_call_row, "SELL_TO_OPEN", "CALL", expiration)
-    long_call = to_leg(long_call_row, "BUY_TO_OPEN", "CALL", expiration)
-    short_put = to_leg(short_put_row, "SELL_TO_OPEN", "PUT", expiration)
-    long_put = to_leg(long_put_row, "BUY_TO_OPEN", "PUT", expiration)
+    short_call = to_leg(short_call_row, "SELL_TO_OPEN", "CALL", expiration, price)
+    long_call = to_leg(long_call_row, "BUY_TO_OPEN", "CALL", expiration, price)
+    short_put = to_leg(short_put_row, "SELL_TO_OPEN", "PUT", expiration, price)
+    long_put = to_leg(long_put_row, "BUY_TO_OPEN", "PUT", expiration, price)
     credit = (short_call.bid + short_put.bid) - (long_call.ask + long_put.ask)
     call_width = max(0.0, long_call.strike - short_call.strike)
     put_width = max(0.0, short_put.strike - long_put.strike)
@@ -511,8 +735,118 @@ def iron_condor_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFram
         "estimatedMaxProfit": round(max(0.0, credit) * 100, 2),
         "shortCallStrike": short_call.strike,
         "shortPutStrike": short_put.strike,
+        "greekSummary": net_greek_summary(legs),
         "liquidityNotes": build_liquidity_notes(legs),
     }
+
+
+def greek_supports_short_premium(plan: dict[str, Any]) -> bool:
+    """Return True when net Greeks match a short-premium thesis."""
+    greeks = plan.get("greekSummary") or {}
+    return bool(
+        greeks.get("greeksComplete")
+        and number(greeks.get("netTheta")) > 0
+        and number(greeks.get("netVega")) < 0
+    )
+
+
+def greek_supports_directional_debit(plan: dict[str, Any], *, expected_delta_sign: int) -> bool:
+    """Return True when net Greeks match a directional debit thesis."""
+    greeks = plan.get("greekSummary") or {}
+    delta = number(greeks.get("netDelta"))
+    vega = number(greeks.get("netVega"))
+    if not greeks.get("greeksComplete"):
+        return False
+    if expected_delta_sign > 0 and delta <= 0:
+        return False
+    if expected_delta_sign < 0 and delta >= 0:
+        return False
+    return vega >= 0
+
+
+def strategy_alternative_gate(intent: dict[str, Any], strategy: str, plan: dict[str, Any]) -> tuple[bool, str]:
+    """Decide whether an alternative deserves risk-policy evaluation."""
+    context = intent.get("marketContext") or {}
+    trend = str((context.get("trend") or {}).get("label") or "Neutral")
+    rvol = number(context.get("rvol"), 1.0)
+    atr_expansion = number(context.get("atrExpansion") or intent.get("atrZScore"), 0.0)
+    distance_to_support = number(context.get("distanceToSupportPct"), 999.0)
+    distance_to_resistance = number(context.get("distanceToResistancePct"), 999.0)
+    iv_rank = number(intent.get("ivRank"), 50.0)
+
+    if strategy == "PUT_CREDIT_SPREAD":
+        if trend not in {"Bullish", "Uptrend", "Base"}:
+            return False, f"trend {trend} does not support bullish put-credit alternative"
+        if iv_rank < 45.0:
+            return False, f"IV rank {iv_rank:.1f} is not rich enough to sell put-credit premium"
+        if distance_to_support < 6.0:
+            return False, "support cushion is too thin for a put-credit alternative"
+        if rvol > 2.25 or atr_expansion > 2.0:
+            return False, "movement risk is too hot for short put premium"
+        if not greek_supports_short_premium(plan) or number((plan.get("greekSummary") or {}).get("netDelta")) <= 0:
+            return False, "Greeks do not support bullish short-premium posture"
+        return True, "bullish support cushion plus positive-theta/negative-vega put credit alternative"
+
+    if strategy == "PUT_DEBIT_SPREAD":
+        if trend not in {"Bearish", "Downtrend"}:
+            return False, f"trend {trend} does not support bearish put-debit alternative"
+        if distance_to_support < 3.0:
+            return False, "support is too close for a bearish put-debit alternative"
+        if not greek_supports_directional_debit(plan, expected_delta_sign=-1):
+            return False, "Greeks do not support bearish debit posture"
+        return True, "bearish trend plus negative-delta defined-risk put debit alternative"
+
+    if strategy == "IRON_CONDOR":
+        if trend not in {"Neutral", "Base"}:
+            return False, f"trend {trend} is not calm enough for an iron-condor alternative"
+        if iv_rank < 50.0:
+            return False, f"IV rank {iv_rank:.1f} is not rich enough for condor premium"
+        if rvol > 1.15 or atr_expansion > 0.6:
+            return False, "expansion risk is too high for an iron-condor alternative"
+        if min(distance_to_support, distance_to_resistance) < 4.0:
+            return False, "range edge is too close for an iron-condor alternative"
+        if not greek_supports_short_premium(plan):
+            return False, "Greeks do not support short-premium condor posture"
+        return True, "calm range plus positive-theta/negative-vega condor alternative"
+
+    return False, "unsupported alternative"
+
+
+def mark_strategy_alternative(plan: dict[str, Any], *, variant_for: str, reason: str) -> dict[str, Any]:
+    """Annotate an alternative plan as paper-only and auditable."""
+    return {
+        **plan,
+        "paperVariantOnly": True,
+        "variantFamily": f"greek-supported-{str(plan.get('strategy') or '').lower().replace('_', '-')}",
+        "variantForStrategy": variant_for,
+        "variantReason": reason,
+    }
+
+
+def build_strategy_alternatives(
+    intent: dict[str, Any],
+    expiration: str,
+    calls: pd.DataFrame,
+    puts: pd.DataFrame,
+    *,
+    primary_strategy: str | None,
+) -> list[dict[str, Any]]:
+    """Build Greek-gated alternatives to the tracker's first-choice setup."""
+    alternatives: list[dict[str, Any]] = []
+    variant_for = primary_strategy or str(intent.get("setupRec") or "UNKNOWN")
+    candidates = [
+        put_credit_spread_plan(intent, expiration, puts),
+        put_debit_spread_plan(intent, expiration, puts),
+        iron_condor_plan(intent, expiration, calls, puts),
+    ]
+    for plan in candidates:
+        if not plan:
+            continue
+        ok, reason = strategy_alternative_gate(intent, str(plan.get("strategy") or ""), plan)
+        if not ok:
+            continue
+        alternatives.append(mark_strategy_alternative(plan, variant_for=variant_for, reason=reason))
+    return alternatives
 
 
 def build_strike_plan_for_intent(
@@ -521,9 +855,10 @@ def build_strike_plan_for_intent(
 ) -> dict[str, Any]:
     ticker = str(intent.get("ticker", "")).upper()
     setup = str(intent.get("setupRec", ""))
-    market_context = intent.get("marketContext") or {}
-    trend = (market_context.get("trend") or {}).get("label") or "Neutral"
     schwab_options = schwab_options_for_intent(intent, schwab_options_index)
+    pricing_intent = effective_intent_for_pricing(intent, schwab_options)
+    market_context = pricing_intent.get("marketContext") or {}
+    trend = (market_context.get("trend") or {}).get("label") or "Neutral"
     base = {
         "ticker": ticker,
         "generatedAt": local_now().isoformat(),
@@ -532,7 +867,9 @@ def build_strike_plan_for_intent(
         "intentBlocks": intent.get("intentBlocks") or [],
         "approvalStatus": intent.get("approvalStatus"),
         "setupRec": setup,
-        "price": intent.get("price"),
+        "price": pricing_intent.get("price"),
+        "sourcePrice": pricing_intent.get("sourcePrice"),
+        "underlyingPriceSource": pricing_intent.get("underlyingPriceSource"),
         "daysUntilEarnings": intent.get("daysUntilEarnings"),
         "riskUnits": intent.get("riskUnits"),
         "paperOnly": True,
@@ -550,8 +887,10 @@ def build_strike_plan_for_intent(
     }
 
     try:
+        if number(pricing_intent.get("price")) <= 0:
+            return {**base, "ok": False, "reason": "missing usable underlying price"}
         stock = yf.Ticker(ticker)
-        expirations = ranked_expiration_candidates(stock.options, integer(intent.get("daysUntilEarnings")))
+        expirations = ranked_expiration_candidates(stock.options, integer(pricing_intent.get("daysUntilEarnings")))
         if not expirations:
             return {**base, "ok": False, "reason": "no option expirations found"}
         attempts: list[str] = []
@@ -561,20 +900,28 @@ def build_strike_plan_for_intent(
             puts = clean_chain(chain.puts)
 
             rehearsal_variant = None
+            strategy_alternatives: list[dict[str, Any]] = []
             if setup == "Vertical Call":
-                strategy = vertical_call_plan(intent, expiration, calls)
+                strategy = vertical_call_plan(pricing_intent, expiration, calls)
             elif setup == "Straddle":
-                strategy = straddle_plan(intent, expiration, calls, puts)
+                strategy = straddle_plan(pricing_intent, expiration, calls, puts)
                 if strategy and number(strategy.get("estimatedMaxLoss")) > MAX_SINGLE_TICKET_DOLLARS:
-                    rehearsal_variant = cap_aware_long_strangle_plan(intent, expiration, calls, puts)
+                    rehearsal_variant = cap_aware_long_strangle_plan(pricing_intent, expiration, calls, puts)
             elif setup == "Iron Condor":
-                strategy = iron_condor_plan(intent, expiration, calls, puts)
+                strategy = iron_condor_plan(pricing_intent, expiration, calls, puts)
             else:
                 strategy = None
 
             if strategy is None:
                 attempts.append(expiration)
                 continue
+            strategy_alternatives = build_strategy_alternatives(
+                pricing_intent,
+                expiration,
+                calls,
+                puts,
+                primary_strategy=strategy.get("strategy"),
+            )
 
             return {
                 **base,
@@ -582,6 +929,7 @@ def build_strike_plan_for_intent(
                 "expiration": expiration,
                 "strikePlan": strategy,
                 "paperRehearsalVariant": rehearsal_variant,
+                "strategyAlternatives": strategy_alternatives,
                 "orderPolicy": {
                     "entryOrderType": "LIMIT",
                     "timeInForce": "DAY",
@@ -629,6 +977,23 @@ def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> lis
                     strike_plan_generated_at=generated_at,
                 ).as_dict(),
             }
+        alternatives = []
+        for alternative in annotated.get("strategyAlternatives") or []:
+            alternative_item = {
+                **annotated,
+                "strikePlan": alternative,
+            }
+            alternatives.append(
+                {
+                    **alternative,
+                    "riskVerdict": evaluate_strike_item(
+                        alternative_item,
+                        strike_plan_generated_at=generated_at,
+                    ).as_dict(),
+                }
+            )
+        if alternatives:
+            annotated["strategyAlternatives"] = alternatives
         annotated_plans.append(annotated)
     annotated_plans, governor = apply_setup_concentration_governor(annotated_plans)
     return annotated_plans, governor
@@ -795,12 +1160,16 @@ def build_text_report(plan: dict[str, Any]) -> str:
         strike_plan = item.get("strikePlan", {})
         legs = strike_plan.get("legs", [])
         price_text = format_money(item.get("price"))
+        source_price = number(item.get("sourcePrice"))
+        source_detail = ""
+        if source_price > 0 and abs(source_price - number(item.get("price"))) > 0.01:
+            source_detail = f" ({item.get('underlyingPriceSource')}; source {format_money(source_price)})"
         cost = strike_plan.get("estimatedDebit", strike_plan.get("estimatedCredit", 0))
         cost_label = "Debit" if "estimatedDebit" in strike_plan else "Credit"
         lines.extend(
             [
                 f"{item.get('ticker')} | {strike_plan.get('strategy')} | {item.get('intentStatus')} | {item.get('approvalStatus')}",
-                f"  Underlying: {price_text} | Expiration: {strike_plan.get('expiration')} | {cost_label}: {format_money(cost)}",
+                f"  Underlying: {price_text}{source_detail} | Expiration: {strike_plan.get('expiration')} | {cost_label}: {format_money(cost)}",
                 f"  Risk: {format_money(strike_plan.get('estimatedMaxLoss'))} max loss | Profit: {format_money(strike_plan.get('estimatedMaxProfit'))}",
             ]
         )
@@ -821,6 +1190,12 @@ def build_text_report(plan: dict[str, Any]) -> str:
                 f"spread {schwab_options.get('atmSpreadQuality')} | "
                 f"liq {schwab_options.get('atmLiquidityScore')}"
             )
+        greeks = strike_plan.get("greekSummary") or {}
+        if greeks:
+            lines.append(
+                f"  Greeks: delta {greeks.get('netDelta')} | gamma {greeks.get('netGamma')} | "
+                f"theta {greeks.get('netTheta')} | vega {greeks.get('netVega')} | {greeks.get('volPosture')}"
+            )
         for leg in legs:
             lines.append(
                 f"  {leg.get('instruction')} {leg.get('putCall')} {leg.get('strike')} "
@@ -840,6 +1215,26 @@ def build_text_report(plan: dict[str, Any]) -> str:
                 f"max loss {format_money(variant.get('estimatedMaxLoss'))}"
             )
             lines.append(f"  Rehearsal note: {variant.get('variantReason')}")
+        alternatives = item.get("strategyAlternatives") or []
+        for alternative in alternatives[:3]:
+            alt_verdict = alternative.get("riskVerdict") or {}
+            cost = alternative.get("estimatedDebit", alternative.get("estimatedCredit", 0))
+            cost_label = "debit" if "estimatedDebit" in alternative else "credit"
+            alt_greeks = alternative.get("greekSummary") or {}
+            lines.append(
+                f"  Alternative: {alternative.get('strategy')} | {cost_label} {format_money(cost)} | "
+                f"max loss {format_money(alternative.get('estimatedMaxLoss'))} | "
+                f"risk {'pass' if alt_verdict.get('passed') else 'block'}"
+            )
+            if alt_greeks:
+                lines.append(
+                    f"    Greeks: delta {alt_greeks.get('netDelta')} | theta {alt_greeks.get('netTheta')} | "
+                    f"vega {alt_greeks.get('netVega')} | {alt_greeks.get('volPosture')}"
+                )
+            lines.append(f"    note: {alternative.get('variantReason')}")
+            blocks = alt_verdict.get("blocks") or []
+            if blocks:
+                lines.append(f"    blocks: {'; '.join(blocks[:3])}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

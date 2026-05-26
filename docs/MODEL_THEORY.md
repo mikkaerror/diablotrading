@@ -42,6 +42,16 @@ Ask: what happened on paper?
 Paper tickets, shadow outcomes, and outcome review decide whether a strategy is
 actually durable. No paper proof, no promotion.
 
+The proof layer now also asks two calibration questions:
+
+- Did higher `readiness` / `scenarioScore` buckets lead to better closed
+  observations?
+- Did long-vol structures produce enough realised movement to clear their
+  breakeven or debit-implied hurdle?
+
+Those answers sharpen the theory, but they do not grant authority by
+themselves.
+
 ### Promote
 
 Ask: has the strategy earned more authority?

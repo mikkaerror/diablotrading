@@ -4,7 +4,7 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-05-24.
+Last updated: 2026-05-25.
 
 For the one-page purpose and strategy brief, start with
 [`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
@@ -49,6 +49,7 @@ Safety            — authority, risk, secrets
 | `install_inferno_watchlist_autorefresh_service.py` | **NEW** LaunchAgent installer for the autorefresh service | operator-triggered |
 | `inferno_schwab_oauth.py` | Local read-only Schwab OAuth helper: auth URL, token exchange, refresh, ignored vault status | operator-triggered + daily ops refresh |
 | `inferno_schwab_options.py` | **NEW** Read-only Schwab option-chain adapter for bid/ask, Greeks, liquidity, and expected-move enrichment | on-demand + future strike cycle |
+| `inferno_schwab_account_sync.py` | **NEW** Read-only Schwab account/balance/position sync for the approved suffix; TOS-independent broker truth, no order endpoints | `reports/schwab_account_sync_latest.txt` |
 
 ## Monitoring (what is happening)
 
@@ -114,6 +115,12 @@ Safety            — authority, risk, secrets
 | `inferno_regime_drift.py` | Two-sided CUSUM change-point detection per strategy stream | `reports/regime_drift_latest.txt` |
 | `inferno_information_gain.py` | Mutual information ranking of features over win/loss outcomes | `reports/information_gain_latest.txt` |
 | `inferno_options_math.py` | Black-Scholes primitives: d1/d2, implied move, deltas, IV-rank conversion | pure library, no artifact |
+| `inferno_tos_custom_metrics.py` | Read-only registry/value capture for user-authored ThinkScript custom columns | `reports/tos_custom_metrics_latest.txt` |
+| `inferno_schwab_price_history.py` | Read-only Schwab daily candle adapter for OHLCV-derived TOS metric mirrors | `reports/schwab_price_history_latest.txt` |
+| `inferno_schwab_tos_metrics_sync.py` | Publishes Schwab-derived TOS custom metrics into the canonical model artifact | `reports/schwab_tos_metrics_sync_latest.txt` |
+| `inferno_tos_metric_theory_audit.py` | Anti-confirmation audit that checks whether TOS custom metrics support, challenge, or merely contextualize a thesis | `reports/tos_metric_theory_audit_latest.txt` |
+| `inferno_tos_formula_math.py` | Pure local mirror for TOS-style RVOL, trend, support/resistance, momentum, and strength formulas | pure library, no artifact |
+| `inferno_tos_formula_audit.py` | Read-only drift audit comparing tracker values to the local TOS formula mirror | `reports/tos_formula_audit_latest.txt` |
 | `inferno_walk_forward.py` | Chronological train/validate split; six-state edge survival ladder | `reports/walk_forward_latest.txt` |
 | `inferno_factor_regression.py` | Hand-rolled logistic regression on one-hot features; bootstrap-CI coefficients | `reports/factor_regression_latest.txt` |
 | `inferno_math_verify.py` | Cross-module invariant checker over every math artifact | `reports/math_verify_latest.txt` |
@@ -178,7 +185,7 @@ Safety            — authority, risk, secrets
 | `inferno_paper_evidence_loop.py` | Track paper outcomes from staging through close | `data/inferno_paper_evidence_loop.json` |
 | `inferno_paper_execution.py` | Stage paper orders (paperMoney only) | side-effects on paper ledger |
 | `inferno_paper_exit_auditor.py` | Audit open paper positions for stale exits | `data/inferno_paper_exit_auditor.json` |
-| `inferno_live_account_sync.py` | Read-only sync from live account positions | `data/inferno_live_account_sync.json` |
+| `inferno_live_account_sync.py` | Read-only sync from Schwab account API first, TOS statement fallback second | `data/inferno_live_account_sync.json` |
 | `inferno_live_position_review.py` | Classify live positions as supported / review / fragile | `data/inferno_live_position_review.json` |
 | `inferno_execution_clerk.py` | Build broker-preview blueprints (no live submit) | `data/inferno_execution_clerk.json` |
 | `inferno_broker_preview.py` | Preview-mode broker order construction | preview-only |

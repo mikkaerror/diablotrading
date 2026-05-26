@@ -44,7 +44,7 @@ useful playbook is:
 |---|---|---|---|
 | Ticker universe and model columns | Google Earnings Tracker | TOS watchlist extract | Universe and score source of truth |
 | Option chain, bid/ask, Greeks, OI, IV | Schwab API | yfinance / local estimates | Strike quality, slippage, implied move |
-| Broker cash, positions, fills | TOS account statement export | Manual operator confirmation | Reality check only, never auto-submit |
+| Broker cash, positions, fills | Schwab account API for cash/positions; TOS/fill export for supervised fills | Manual operator confirmation | Reality check only, never auto-submit |
 | Prices, ATR, RVOL, trend | Existing tracker scripts / market context layer | yfinance | Setup scoring and trend gates |
 | Support/resistance | Market context layer | manual chart review | Entry timing and stop/target logic |
 | Fundamentals and theme | SEC filings, earnings releases, industry data | analyst/vendor summaries | Long-term conviction context |

@@ -50,14 +50,21 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
 OUTCOME_ATTRIBUTION_FILE = ROOT / "data" / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = ROOT / "data" / "inferno_rule_edge_decay.json"
 SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
+SCORE_CALIBRATION_FILE = ROOT / "data" / "inferno_score_calibration.json"
+EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
+STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
+STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
+STRATEGY_SHADOW_COMPARISON_FILE = ROOT / "data" / "inferno_strategy_shadow_comparison.json"
 PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
+CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -553,6 +560,58 @@ def slippage_estimator_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def score_calibration_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"insufficient-data", "calibration-building", "calibration-watch"},
+    )
+
+
+def expected_move_ledger_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "insufficient-data",
+            "move-edge-positive",
+            "move-edge-negative",
+            "move-edge-watch",
+        },
+    )
+
+
+def strategy_alternative_scorer_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "no-pressure-candidates",
+            "alternatives-preferred",
+            "alternatives-watch",
+            "stand-aside-biased",
+        },
+    )
+
+
+def strategy_alternative_pricing_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "no-priceable-candidates",
+            "priced-risk-pass",
+            "priced-risk-blocked",
+        },
+    )
+
+
+def strategy_shadow_comparison_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "shadow-comparison-ready",
+            "no-passing-alternatives",
+        },
+    )
+
+
 def portfolio_correlation_status(report: dict) -> tuple[bool, str]:
     return _research_module_status(
         report,
@@ -611,6 +670,29 @@ def paper_velocity_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def capital_scaling_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the capital-scaling recommender freshness and verdict.
+
+    Every published verdict is a valid research outcome; the doctor only
+    checks that the artifact is present and freshly computed. The verdict
+    itself (``aligned`` / ``config-cap-too-high`` / etc.) is informational
+    — the operator decides whether to ack the formula.
+    """
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "aligned",
+            "config-cap-too-high",
+            "config-cap-too-low",
+            "ack-required",
+            "nlv-stale",
+            "nlv-missing",
+            "config-cap-missing",
+            "build-failed",
+        },
+    )
+
+
 def schwab_edge_signals_status(report: dict) -> tuple[bool, str]:
     """Evaluate the Schwab edge-signals bridge freshness and verdict.
 
@@ -649,6 +731,38 @@ def schwab_edge_signals_status(report: dict) -> tuple[bool, str]:
                 "sourceStatus": source_status,
                 "researchOnly": report.get("researchOnly"),
                 "promotable": report.get("promotable"),
+            }
+        )
+    )
+    return ok, detail
+
+
+def schwab_account_sync_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the read-only Schwab account sync freshness and safety flags."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "")
+    counts = report.get("counts") or {}
+    safe = (
+        bool(report.get("brokerReadOnly"))
+        and not bool(report.get("orderEndpointsAllowed"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    ok = fresh and safe and bool(report.get("ok")) and verdict in {"healthy"}
+    detail = (
+        f"{verdict} | positions={counts.get('positions', 0)} | "
+        f"approved={counts.get('approvedAccounts', 0)}/{counts.get('accounts', 0)} | "
+        f"suffix={report.get('matchedSuffix') or '-'} | read-only={safe}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "readOnly": report.get("brokerReadOnly"),
+                "ordersAllowed": report.get("orderEndpointsAllowed"),
             }
         )
     )
@@ -1072,6 +1186,12 @@ def main() -> int:
     if not schwab_edge_ok:
         warnings += 1
 
+    schwab_account = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
+    schwab_account_ok, schwab_account_detail = schwab_account_sync_status(schwab_account)
+    lines.append(summarize_status("Schwab account sync", schwab_account_ok, schwab_account_detail))
+    if schwab_account and not schwab_account_ok:
+        warnings += 1
+
     attribution = load_json_file(OUTCOME_ATTRIBUTION_FILE) or {}
     attribution_ok, attribution_detail = outcome_attribution_status(attribution)
     lines.append(summarize_status("Outcome attribution", attribution_ok, attribution_detail))
@@ -1088,6 +1208,36 @@ def main() -> int:
     slippage_ok, slippage_detail = slippage_estimator_status(slippage)
     lines.append(summarize_status("Slippage estimator", slippage_ok, slippage_detail))
     if not slippage_ok:
+        warnings += 1
+
+    score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
+    score_calibration_ok, score_calibration_detail = score_calibration_status(score_calibration)
+    lines.append(summarize_status("Score calibration", score_calibration_ok, score_calibration_detail))
+    if not score_calibration_ok:
+        warnings += 1
+
+    expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
+    expected_move_ok, expected_move_detail = expected_move_ledger_status(expected_move)
+    lines.append(summarize_status("Expected move ledger", expected_move_ok, expected_move_detail))
+    if not expected_move_ok:
+        warnings += 1
+
+    strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
+    strategy_alternatives_ok, strategy_alternatives_detail = strategy_alternative_scorer_status(strategy_alternatives)
+    lines.append(summarize_status("Strategy alternative scorer", strategy_alternatives_ok, strategy_alternatives_detail))
+    if not strategy_alternatives_ok:
+        warnings += 1
+
+    strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
+    strategy_alt_pricing_ok, strategy_alt_pricing_detail = strategy_alternative_pricing_status(strategy_alt_pricing)
+    lines.append(summarize_status("Strategy alternative pricing", strategy_alt_pricing_ok, strategy_alt_pricing_detail))
+    if not strategy_alt_pricing_ok:
+        warnings += 1
+
+    strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
+    strategy_shadow_ok, strategy_shadow_detail = strategy_shadow_comparison_status(strategy_shadow_comparison)
+    lines.append(summarize_status("Strategy shadow comparison", strategy_shadow_ok, strategy_shadow_detail))
+    if not strategy_shadow_ok:
         warnings += 1
 
     portfolio_corr = load_json_file(PORTFOLIO_CORRELATION_FILE) or {}
@@ -1112,6 +1262,12 @@ def main() -> int:
     paper_velocity_ok, paper_velocity_detail = paper_velocity_status(paper_velocity)
     lines.append(summarize_status("Paper velocity", paper_velocity_ok, paper_velocity_detail))
     if not paper_velocity_ok:
+        warnings += 1
+
+    capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}
+    capital_scaling_ok, capital_scaling_detail = capital_scaling_status(capital_scaling)
+    lines.append(summarize_status("Capital scaling", capital_scaling_ok, capital_scaling_detail))
+    if not capital_scaling_ok:
         warnings += 1
 
     blowup_guardrails = load_json_file(BLOWUP_GUARDRAILS_FILE) or {}
@@ -1401,7 +1557,8 @@ def main() -> int:
     live_sync_detail = (
         f"{live_account_sync.get('verdict')} | positions={live_sync_counts.get('positions', 0)} | "
         f"matched={live_sync_counts.get('matchedPositions', 0)} | "
-        f"suffix={live_account_sync.get('matchedSuffix') or '-'}"
+        f"suffix={live_account_sync.get('matchedSuffix') or '-'} | "
+        f"source={live_account_sync.get('accountDataSource') or '-'}"
         if live_account_sync
         else "missing"
     )
