@@ -108,7 +108,7 @@ Claude (this session) is building these, all research-only, all behind the same 
 1. **`inferno_paper_mark_to_market.py`** — refreshes Schwab quotes on every open paper ticket each cycle, computes current spread mid, persists it to the ledger. Unblocks every price-triggered playbook rule.
 2. **`inferno_trade_management.py`** — daily auditor that walks open positions and emits per-position recommended action (`hold`, `take-profit-1`, `stop-loss`, `time-stop`, `pre-event-exit`) based on the trade-management playbook. Outputs a phone-readable report card.
 3. **Peak-NLV tracker** — small addition to the scaling module so the drawdown circuit-breaker has data.
-4. **`reports/while_away_latest.txt`** — one artifact aggregating decisions waiting on you, MTM recs, drift alerts, and drawdown state. Phone-readable. Glance at this once a day in Vegas; ignore the rest.
+4. **`reports/while_away_latest.txt`** — one artifact aggregating Schwab account truth, live-book blockers, formula/double-count cautions, shadow comparisons, and travel-mode action rules. Phone-readable. Build it with `./run_inferno_while_away_packet.sh`, glance at it once a day in Vegas, ignore the rest.
 
 None of this touches authority. The desk does not place a single trade while you're away.
 
@@ -142,4 +142,10 @@ python3 inferno_approval_queue.py reject MRVL
 python3 inferno_approval_queue.py approve PL
 ```
 
-Run those three commands tonight, sleep, fly to Vegas. The system runs research-only behind you and surfaces decisions to `reports/while_away_latest.txt` once a day. You read that one file, ignore the rest, enjoy the pool.
+Run those three commands tonight, then refresh the away packet:
+
+```bash
+./run_inferno_while_away_packet.sh
+```
+
+Sleep, fly to Vegas. The system runs research-only behind you and surfaces decisions to `reports/while_away_latest.txt`. You read that one file, ignore the rest, enjoy the pool.

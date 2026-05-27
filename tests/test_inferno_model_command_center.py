@@ -113,6 +113,18 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_while_away_packet.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:25-06:00",
+                        "stage": "while-away-operator-packet",
+                        "verdict": "monitor-only",
+                        "researchOnly": True,
+                        "promotable": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_risk_gate_audit.json").write_text(
                 json.dumps(
                     {
@@ -225,6 +237,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("OPS_MAINTENANCE_FILE", data_dir / "inferno_ops_maintenance.json"),
                 ("LIVE_POSITION_REVIEW_FILE", data_dir / "inferno_live_position_review.json"),
                 ("LIVE_BOOK_REVIEW_PACKET_FILE", data_dir / "inferno_live_book_review_packet.json"),
+                ("WHILE_AWAY_PACKET_FILE", data_dir / "inferno_while_away_packet.json"),
                 ("LIVE_ACCOUNT_SYNC_FILE", data_dir / "inferno_live_account_sync.json"),
                 ("SCHWAB_ACCOUNT_SYNC_FILE", data_dir / "inferno_schwab_account_sync.json"),
                 ("CAPITAL_DEPLOYMENT_READINESS_FILE", data_dir / "inferno_capital_deployment_readiness.json"),
@@ -249,6 +262,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["liveFragile"], 1)
             self.assertEqual(payload["headlineMetrics"]["liveBookHardBlockers"], 1)
             self.assertEqual(payload["headlineMetrics"]["liveBookWarnings"], 1)
+            self.assertEqual(payload["headlineMetrics"]["whileAwayVerdict"], "monitor-only")
             self.assertEqual(payload["headlineMetrics"]["paperAutoSelected"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
@@ -275,6 +289,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
+            self.assertIn("reports/while_away_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertEqual(len(payload["activeMissions"]), 1)
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
@@ -285,6 +300,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Schwab account sync: healthy", text_report)
             self.assertIn("Account source: schwab-account-api", text_report)
             self.assertIn("Live book review packet: blocked", text_report)
+            self.assertIn("While away packet: monitor-only", text_report)
             self.assertIn("Capital deployment readiness: manual-ready-with-warnings", text_report)
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
@@ -301,6 +317,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/scenario_backtest_latest.txt", text_report)
             self.assertIn("reports/math_verify_latest.txt", text_report)
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
+            self.assertIn("reports/while_away_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)
             self.assertIn("Conviction giants: NVDA, AVGO", text_report)
             self.assertIn("Conviction balanced: NVDA, MOD", text_report)

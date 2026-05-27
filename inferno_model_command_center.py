@@ -38,6 +38,7 @@ ACTIVE_MISSIONS_FILE = COORDINATION_DIR / "active_missions.json"
 
 MODEL_COMMAND_CENTER_FILE = DATA_DIR / "inferno_model_command_center.json"
 MODEL_COMMAND_CENTER_TEXT_FILE = REPORTS_DIR / "model_command_center_latest.txt"
+WHILE_AWAY_PACKET_FILE = DATA_DIR / "inferno_while_away_packet.json"
 
 DEPLOY_PREFLIGHT_FILE = DATA_DIR / "inferno_deploy_preflight.json"
 OPS_MAINTENANCE_FILE = DATA_DIR / "inferno_ops_maintenance.json"
@@ -96,6 +97,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "command",
         "question": "What matters right now?",
         "artifact": "reports/model_command_center_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "while-away",
+        "question": "What should I read when I am away from the desk?",
+        "artifact": "reports/while_away_latest.txt",
         "owner": "codex",
     },
     {
@@ -554,6 +561,7 @@ def build_command_center() -> dict[str, Any]:
     ops = load_json_file(OPS_MAINTENANCE_FILE) or {}
     live_review = load_json_file(LIVE_POSITION_REVIEW_FILE) or {}
     live_book_packet = load_json_file(LIVE_BOOK_REVIEW_PACKET_FILE) or {}
+    while_away_packet = load_json_file(WHILE_AWAY_PACKET_FILE) or {}
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
@@ -606,6 +614,7 @@ def build_command_center() -> dict[str, Any]:
         "schwabAccountSync": artifact_summary(SCHWAB_ACCOUNT_SYNC_FILE, keys=("stage", "verdict", "message", "generatedAt", "matchedSuffix", "brokerReadOnly", "orderEndpointsAllowed")),
         "livePositionReview": artifact_summary(LIVE_POSITION_REVIEW_FILE, keys=("verdict", "message", "generatedAt")),
         "liveBookReviewPacket": artifact_summary(LIVE_BOOK_REVIEW_PACKET_FILE, keys=("verdict", "generatedAt", "capitalReadinessVerdict", "manualDeploymentAllowed", "autoLiveAllowed")),
+        "whileAwayPacket": artifact_summary(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
@@ -659,6 +668,7 @@ def build_command_center() -> dict[str, Any]:
         "liveFragile": live_counts.get("fragile", 0),
         "liveBookHardBlockers": live_packet_counts.get("hardBlockers", 0),
         "liveBookWarnings": live_packet_counts.get("warnings", 0),
+        "whileAwayVerdict": while_away_packet.get("verdict"),
         "paperStageable": paper_counts.get("stageableNow", 0),
         "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
@@ -827,6 +837,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
+            "./run_inferno_while_away_packet.sh",
             "./run_inferno_usage_optimizer.sh",
             f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
             f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
@@ -838,6 +849,7 @@ def build_command_center() -> dict[str, Any]:
         "recommendedReads": [
             str(ROOT / "reports/usage_optimizer_latest.txt"),
             str(ROOT / "reports/model_command_center_latest.txt"),
+            str(ROOT / "reports/while_away_latest.txt"),
             str(ROOT / "reports/central_command_latest.txt"),
             str(ROOT / "docs/PROJECT_STATUS.md"),
             str(ROOT / "docs/MODEL_COLLABORATION_BRIEF.md"),
@@ -912,6 +924,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Schwab account sync: {status_value(status.get('schwabAccountSync') or {})}",
             f"- Live position review: {status_value(status.get('livePositionReview') or {})}",
             f"- Live book review packet: {status_value(status.get('liveBookReviewPacket') or {})}",
+            f"- While away packet: {status_value(status.get('whileAwayPacket') or {})}",
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
@@ -937,6 +950,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live fragile: {metrics.get('liveFragile', 0)}",
             f"- Live hard blockers: {metrics.get('liveBookHardBlockers', 0)}",
             f"- Live review warnings: {metrics.get('liveBookWarnings', 0)}",
+            f"- While away verdict: {metrics.get('whileAwayVerdict') or '-'}",
             f"- Paper stageable: {metrics.get('paperStageable', 0)}",
             f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
