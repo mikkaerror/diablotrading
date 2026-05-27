@@ -65,6 +65,7 @@ DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
 CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
+PAPER_MTM_FILE = ROOT / "data" / "inferno_paper_mark_to_market.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -670,6 +671,48 @@ def paper_velocity_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def paper_mark_to_market_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the paper mark-to-market freshness and fetch status.
+
+    Every published fetchStatus is a valid research outcome (including
+    'disabled' or 'not-configured', which mean Schwab options is gated off
+    in this environment). The doctor checks the artifact is present and
+    freshly computed; the auditor downstream decides what to do with the
+    fetchStatus.
+    """
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    research_only = not bool(report.get("promotable"))
+    verdict = str(report.get("fetchStatus") or report.get("verdict") or "unknown")
+    ok_verdicts = {
+        "ok",
+        "fixture",
+        "disabled",
+        "not-configured",
+        "no-open-positions",
+        "partial-error",
+        "error",
+    }
+    ok = fresh and research_only and verdict in ok_verdicts
+    if fresh:
+        detail = (
+            f"{verdict} | open={report.get('openPositionCount')} | "
+            f"marked={len(report.get('marksByTicketId') or {})} | "
+            f"research-only={research_only}"
+        )
+    else:
+        detail = json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "promotable": report.get("promotable"),
+            }
+        )
+    return ok, detail
+
+
 def capital_scaling_status(report: dict) -> tuple[bool, str]:
     """Evaluate the capital-scaling recommender freshness and verdict.
 
@@ -1262,6 +1305,12 @@ def main() -> int:
     paper_velocity_ok, paper_velocity_detail = paper_velocity_status(paper_velocity)
     lines.append(summarize_status("Paper velocity", paper_velocity_ok, paper_velocity_detail))
     if not paper_velocity_ok:
+        warnings += 1
+
+    paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
+    paper_mtm_ok, paper_mtm_detail = paper_mark_to_market_status(paper_mtm)
+    lines.append(summarize_status("Paper mark-to-market", paper_mtm_ok, paper_mtm_detail))
+    if not paper_mtm_ok:
         warnings += 1
 
     capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}

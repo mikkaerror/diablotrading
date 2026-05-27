@@ -15,6 +15,7 @@ from inferno_doctor import (
     in_current_service_cycle,
     live_position_review_status,
     model_command_center_status,
+    paper_mark_to_market_status,
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
@@ -106,6 +107,33 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         ok, detail = action_pulse_status({})
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
+
+    def test_paper_mark_to_market_status_accepts_disabled_fetch(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = paper_mark_to_market_status(
+                {
+                    "generatedAt": "2026-05-27T04:00:00+00:00",
+                    "verdict": "disabled",
+                    "fetchStatus": "disabled",
+                    "promotable": False,
+                    "openPositionCount": 2,
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("disabled", detail)
+        self.assertIn("open=2", detail)
+        self.assertIn("research-only=True", detail)
+
+    def test_paper_mark_to_market_status_warns_when_promotable(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = paper_mark_to_market_status(
+                {
+                    "generatedAt": "2026-05-27T04:00:00+00:00",
+                    "verdict": "ok",
+                    "promotable": True,
+                }
+            )
+        self.assertFalse(ok)
 
     def test_research_cycle_status_accepts_fresh_refresh(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

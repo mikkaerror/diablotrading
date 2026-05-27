@@ -37,6 +37,7 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
             ("TOS_METRIC_THEORY_AUDIT_FILE", self.data / "inferno_tos_metric_theory_audit.json"),
             ("SCHWAB_TOS_METRICS_SYNC_FILE", self.data / "inferno_schwab_tos_metrics_sync.json"),
             ("PAPER_TEST_DIRECTOR_FILE", self.data / "inferno_paper_test_director.json"),
+            ("PAPER_MTM_FILE", self.data / "inferno_paper_mark_to_market.json"),
             ("STRATEGY_SHADOW_COMPARISON_FILE", self.data / "inferno_strategy_shadow_comparison.json"),
             ("CAPITAL_SCALING_FILE", self.data / "inferno_capital_scaling.json"),
         ]
@@ -180,6 +181,16 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
             },
         )
         self.write_json(
+            "inferno_paper_mark_to_market.json",
+            {
+                "generatedAt": "2026-05-27T04:00:00+00:00",
+                "verdict": "disabled",
+                "fetchStatus": "disabled",
+                "openPositionCount": 2,
+                "marksByTicketId": {"ticket-1": {}, "ticket-2": {}},
+            },
+        )
+        self.write_json(
             "inferno_strategy_shadow_comparison.json",
             {
                 "verdict": "shadow-compare-ready",
@@ -212,9 +223,12 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
         self.assertFalse(packet["authority"]["touchesBrokerOrders"])
         self.assertEqual(packet["account"]["source"], "schwab-account-api")
         self.assertEqual(packet["capital"]["maxOptionsRisk"], 41.97)
+        self.assertEqual(packet["paperEvidence"]["markToMarket"]["fetchStatus"], "disabled")
+        self.assertEqual(packet["paperEvidence"]["markToMarket"]["markedTickets"], 2)
         self.assertEqual(packet["liveBook"]["topPositions"][0]["symbol"], "TE")
         self.assertIn("No automated broker submit.", packet["operatorActions"]["blocked"])
         self.assertIn("monitor-only", rendered)
+        self.assertIn("Paper MTM: disabled | open 2 | marked 2", rendered)
         self.assertIn("Do not double-count rvolTos + rvolPrior30", rendered)
         self.assertTrue((self.reports / "while_away_latest.txt").exists())
 

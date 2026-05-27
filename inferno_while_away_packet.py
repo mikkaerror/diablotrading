@@ -31,6 +31,7 @@ RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 TOS_METRIC_THEORY_AUDIT_FILE = DATA_DIR / "inferno_tos_metric_theory_audit.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+PAPER_MTM_FILE = DATA_DIR / "inferno_paper_mark_to_market.json"
 STRATEGY_SHADOW_COMPARISON_FILE = DATA_DIR / "inferno_strategy_shadow_comparison.json"
 CAPITAL_SCALING_FILE = DATA_DIR / "inferno_capital_scaling.json"
 
@@ -247,6 +248,7 @@ def build_while_away_packet() -> dict[str, Any]:
     theory_audit = load_json_file(TOS_METRIC_THEORY_AUDIT_FILE) or {}
     schwab_metrics = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
     shadow = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
     capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}
 
@@ -318,6 +320,13 @@ def build_while_away_packet() -> dict[str, Any]:
         "paperEvidence": {
             "verdict": paper_director.get("verdict"),
             "counts": paper_director.get("counts") or {},
+            "markToMarket": {
+                "verdict": paper_mtm.get("verdict"),
+                "fetchStatus": paper_mtm.get("fetchStatus"),
+                "openPositionCount": paper_mtm.get("openPositionCount"),
+                "markedTickets": len(paper_mtm.get("marksByTicketId") or {}),
+                "generatedAt": paper_mtm.get("generatedAt"),
+            },
             "capitalScalingVerdict": capital_scaling.get("verdict"),
         },
         "shadowComparisons": shadow_comparison_summary(shadow),
@@ -328,6 +337,7 @@ def build_while_away_packet() -> dict[str, Any]:
             "./run_inferno_live_account_sync.sh build",
             "./run_inferno_live_position_review.sh build",
             "./run_inferno_live_book_review_packet.sh",
+            "./run_inferno_paper_mark_to_market.sh",
             "./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12 --json",
             "./run_inferno_tos_metric_theory_audit.sh --limit 12",
             "./run_inferno_while_away_packet.sh",
@@ -411,6 +421,9 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
             "",
             "Paper and shadow evidence:",
             f"- Paper director: {paper.get('verdict')} | counts {json.dumps(paper.get('counts') or {})}",
+            f"- Paper MTM: {(paper.get('markToMarket') or {}).get('fetchStatus')} | "
+            f"open {(paper.get('markToMarket') or {}).get('openPositionCount')} | "
+            f"marked {(paper.get('markToMarket') or {}).get('markedTickets')}",
             f"- Capital scaling: {paper.get('capitalScalingVerdict')}",
             f"- Shadow comparisons: {shadow.get('verdict')} | counts {json.dumps(shadow.get('counts') or {})}",
         ]

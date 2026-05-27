@@ -190,6 +190,13 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
+                        "refresh_paper_mark_to_market",
+                        return_value={"ok": True, "status": "disabled", "openPositionCount": 1, "markedTickets": 1},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
                         "refresh_broker_preview",
                         return_value={"ok": True, "status": "preview-built", "count": 0, "previewOnly": True, "generatedAt": "2026-05-10T07:05:00-10:00"},
                     )
@@ -295,6 +302,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["paperTestDirector"]["status"], "approval-bottleneck")
             self.assertEqual(saved["paperBottleneckReducer"]["status"], "scenario-slate-ready")
             self.assertEqual(saved["paperEvidenceLoop"]["status"], "approval-bottleneck")
+            self.assertEqual(saved["paperMarkToMarket"]["status"], "disabled")
             self.assertEqual(saved["brokerPreview"]["status"], "preview-built")
             self.assertTrue(saved["brokerPreview"]["previewOnly"])
             self.assertEqual(saved["staleApprovalGovernor"]["status"], "no-action")
@@ -310,6 +318,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Cloud control plane: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper test director: approval-bottleneck", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Paper mark-to-market: disabled", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Broker preview: preview-built", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Stale approval governor: no-action", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Approval inbox: idle", report_text_file.read_text(encoding="utf-8"))

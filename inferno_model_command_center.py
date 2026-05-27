@@ -52,6 +52,7 @@ CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readi
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
+PAPER_MTM_FILE = DATA_DIR / "inferno_paper_mark_to_market.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
 SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
@@ -133,6 +134,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper",
         "question": "What paper evidence is next?",
         "artifact": "reports/paper_test_director_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "paper-mtm",
+        "question": "What are open paper tickets worth right now?",
+        "artifact": "reports/paper_mark_to_market_latest.txt",
         "owner": "shared",
     },
     {
@@ -568,6 +575,7 @@ def build_command_center() -> dict[str, Any]:
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
     scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
     scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
     score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
@@ -619,6 +627,7 @@ def build_command_center() -> dict[str, Any]:
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
+        "paperMarkToMarket": artifact_summary(PAPER_MTM_FILE, keys=("stage", "verdict", "fetchStatus", "generatedAt", "researchOnly", "promotable", "openPositionCount")),
         "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
         "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
         "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
@@ -673,6 +682,9 @@ def build_command_center() -> dict[str, Any]:
         "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
+        "paperMtmFetchStatus": paper_mtm.get("fetchStatus"),
+        "paperMtmOpenPositions": paper_mtm.get("openPositionCount"),
+        "paperMtmMarkedTickets": len(paper_mtm.get("marksByTicketId") or {}),
         "paperScenarioTopFive": [
             item.get("ticker")
             for item in (paper_reducer.get("topFiveFocus") or [])
@@ -822,6 +834,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_strike_cycle.sh",
             "./run_inferno_ops_maintenance.sh",
             "./run_inferno_paper_evidence_harvest.sh",
+            "./run_inferno_paper_mark_to_market.sh",
             "./run_inferno_scenario_evidence.sh",
             "./run_inferno_scenario_backtest.sh",
             "./run_inferno_score_calibration.sh",
@@ -862,6 +875,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
             str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
+            str(ROOT / "reports/paper_mark_to_market_latest.txt"),
             str(ROOT / "reports/score_calibration_latest.txt"),
             str(ROOT / "reports/expected_move_ledger_latest.txt"),
             str(ROOT / "reports/strategy_alternative_scorer_latest.txt"),
@@ -929,6 +943,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
+            f"- Paper mark-to-market: {status_value(status.get('paperMarkToMarket') or {})}",
             f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
             f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
             f"- Score calibration: {status_value(status.get('scoreCalibration') or {})}",
@@ -955,6 +970,9 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
+            f"- Paper MTM: {metrics.get('paperMtmFetchStatus') or '-'} | "
+            f"open {metrics.get('paperMtmOpenPositions')} | "
+            f"marked {metrics.get('paperMtmMarkedTickets')}",
             f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
             f"- Scenario backtest evidence: {metrics.get('scenarioClosedEvidenceCount', 0)}",
             f"- Scenario observations closed: {metrics.get('scenarioClosedObservationCount', 0)}",

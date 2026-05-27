@@ -33,6 +33,7 @@ from inferno_paper_bottleneck_reducer import build_reducer as build_paper_bottle
 from inferno_paper_bottleneck_reducer import save_reducer as save_paper_bottleneck_reducer
 from inferno_paper_exit_auditor import build_audit as build_paper_exit_audit, save_audit as save_paper_exit_audit
 from inferno_paper_evidence_loop import build_audit as build_paper_evidence_loop_audit, save_audit as save_paper_evidence_loop_audit
+from inferno_paper_mark_to_market import build_paper_mark_to_market, save_paper_mark_to_market
 from inferno_paper_test_director import build_director as build_paper_test_director, save_director as save_paper_test_director
 from inferno_config import DEFAULT_SHEET_NAME, ROOT, default_backtest_root, local_now
 from inferno_heartbeat import record_heartbeat
@@ -269,6 +270,26 @@ def refresh_paper_exit_audit() -> dict[str, Any]:
         "status": str(report.get("verdict") or "unknown"),
         "generatedAt": report.get("generatedAt"),
         "counts": report.get("counts") or {},
+    }
+
+
+def refresh_paper_mark_to_market() -> dict[str, Any]:
+    """Rebuild paper-ticket MTM so trade-management inputs stay fresh."""
+    try:
+        report = build_paper_mark_to_market()
+        save_paper_mark_to_market(report)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "refresh-failed",
+            "error": str(exc),
+        }
+    return {
+        "ok": True,
+        "status": str(report.get("fetchStatus") or report.get("verdict") or "unknown"),
+        "generatedAt": report.get("generatedAt"),
+        "openPositionCount": report.get("openPositionCount"),
+        "markedTickets": len(report.get("marksByTicketId") or {}),
     }
 
 
@@ -595,6 +616,13 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"close-now {counts.get('closeNow', 0)} | "
             f"reconcile {counts.get('orphanOpenFillRows', 0)}"
         )
+    paper_mtm = report.get("paperMarkToMarket") or {}
+    if paper_mtm:
+        lines.append(
+            f"Paper mark-to-market: {paper_mtm.get('status')} | "
+            f"open {paper_mtm.get('openPositionCount', 0)} | "
+            f"marked {paper_mtm.get('markedTickets', 0)}"
+        )
     broker_preview = report.get("brokerPreview") or {}
     if broker_preview:
         lines.append(
@@ -711,6 +739,7 @@ def run_maintenance(
     paper_bottleneck_reducer = refresh_paper_bottleneck_reducer()
     paper_evidence_loop = refresh_paper_evidence_loop()
     paper_exit_audit = refresh_paper_exit_audit()
+    paper_mark_to_market = refresh_paper_mark_to_market()
     broker_preview = refresh_broker_preview()
     stale_approvals = refresh_stale_approval_governor()
     approval_inbox = refresh_approval_inbox()
@@ -751,6 +780,7 @@ def run_maintenance(
         "paperBottleneckReducer": paper_bottleneck_reducer,
         "paperEvidenceLoop": paper_evidence_loop,
         "paperExitAudit": paper_exit_audit,
+        "paperMarkToMarket": paper_mark_to_market,
         "brokerPreview": broker_preview,
         "staleApprovalGovernor": stale_approvals,
         "approvalInbox": approval_inbox,
@@ -768,6 +798,7 @@ def run_maintenance(
             and bool(paper_bottleneck_reducer.get("ok"))
             and bool(paper_evidence_loop.get("ok"))
             and bool(paper_exit_audit.get("ok"))
+            and bool(paper_mark_to_market.get("ok"))
             and bool(broker_preview.get("ok"))
             and bool(stale_approvals.get("ok"))
             and bool(approval_inbox.get("ok"))

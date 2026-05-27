@@ -153,6 +153,21 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_paper_mark_to_market.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:35-06:00",
+                        "stage": "paper-mark-to-market-research-only",
+                        "verdict": "disabled",
+                        "fetchStatus": "disabled",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "openPositionCount": 2,
+                        "marksByTicketId": {"ticket-1": {}, "ticket-2": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_scenario_backtest.json").write_text(
                 json.dumps(
                     {
@@ -244,6 +259,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
+                ("PAPER_MTM_FILE", data_dir / "inferno_paper_mark_to_market.json"),
                 ("SCENARIO_BACKTEST_FILE", data_dir / "inferno_scenario_backtest.json"),
                 ("PAPER_EVIDENCE_LOOP_FILE", data_dir / "inferno_paper_evidence_loop.json"),
                 ("PERFORMANCE_ANALYTICS_FILE", data_dir / "inferno_performance_analytics.json"),
@@ -266,6 +282,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["paperAutoSelected"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
+            self.assertEqual(payload["headlineMetrics"]["paperMtmFetchStatus"], "disabled")
+            self.assertEqual(payload["headlineMetrics"]["paperMtmOpenPositions"], 2)
+            self.assertEqual(payload["headlineMetrics"]["paperMtmMarkedTickets"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioTopFive"], ["FLNC", "THR"])
             self.assertEqual(payload["headlineMetrics"]["scenarioClosedEvidenceCount"], 4)
             self.assertEqual(payload["headlineMetrics"]["scenarioBacktestTopFocus"], ["FLNC", "THR", "MOD"])
@@ -290,6 +309,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
             self.assertIn("reports/while_away_latest.txt", "\n".join(payload["recommendedReads"]))
+            self.assertIn("reports/paper_mark_to_market_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertEqual(len(payload["activeMissions"]), 1)
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
@@ -305,6 +325,8 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", text_report)
+            self.assertIn("Paper mark-to-market: disabled", text_report)
+            self.assertIn("Paper MTM: disabled | open 2 | marked 2", text_report)
             self.assertIn("Scenario backtest: scenario-backtest-research-only", text_report)
             self.assertIn("Paper scenarios: 12", text_report)
             self.assertIn("Paper top five: FLNC, THR", text_report)
@@ -318,6 +340,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/math_verify_latest.txt", text_report)
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/while_away_latest.txt", text_report)
+            self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)
             self.assertIn("Conviction giants: NVDA, AVGO", text_report)
             self.assertIn("Conviction balanced: NVDA, MOD", text_report)
