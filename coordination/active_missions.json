@@ -46,5 +46,24 @@
       "risk",
       "evidence"
     ]
+  },
+  {
+    "id": "mission-0ba12b45",
+    "createdAt": "2026-05-27T04:03:45.203009+00:00",
+    "updatedAt": "2026-05-27T04:03:45.203009+00:00",
+    "title": "Mark-to-market + trade-management auditor (Vegas-window session)",
+    "body": "Session-bounded lane-cross: claude builds inferno_paper_mark_to_market.py and inferno_trade_management.py per user direction on 2026-05-26. Both research-only, promotable=False, no authority changes. Codex retains primary ownership of the capital-readiness lane (mission-9b615675); this mission is scoped only to the Vegas-window night-build of the MTM data layer and the trade-management auditor that consumes it. Closes when both modules are shipped, wired into doctor + command center, and tests are green.",
+    "owner": "shared",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "claude",
+      "lane-cross",
+      "mark-to-market",
+      "trade-management",
+      "playbook",
+      "research-only",
+      "vegas-window"
+    ]
   }
 ]
