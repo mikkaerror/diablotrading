@@ -93,9 +93,11 @@ class BuildIntegrationTests(unittest.TestCase):
     def _patched_paths(self, tmp: Path, sync_file: Path):
         """Patch the module-level file paths to live inside the tmp dir."""
         ack_file = tmp / "inferno_capital_scaling_ack.json"
+        state_file = tmp / "inferno_capital_scaling_state.json"
         return [
             patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync_file),
             patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack_file),
+            patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file),
         ]
 
     def test_build_research_only_invariants(self) -> None:
@@ -201,6 +203,14 @@ class AckFlowTests(unittest.TestCase):
             ack_file.write_text(json.dumps(ack_payload), encoding="utf-8")
         return sync, ack_file
 
+    def _patched_ack_paths(self, tmp: Path, sync_file: Path, ack_file: Path):
+        state_file = tmp / "inferno_capital_scaling_state.json"
+        return [
+            patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync_file),
+            patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack_file),
+            patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file),
+        ]
+
     def test_ack_within_tolerance_yields_should_use_recommendation(self) -> None:
         with TemporaryDirectory() as td:
             tmp = Path(td)
@@ -211,8 +221,10 @@ class AckFlowTests(unittest.TestCase):
                 acked_cap=250.0,
                 acked_nlv=25_000,
             )
+            state_file = tmp / "inferno_capital_scaling_state.json"
             with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
                  patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
                  patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
                 payload = cs.build_capital_scaling(now=NOW)
         ack_status = payload["ack"]
@@ -232,8 +244,10 @@ class AckFlowTests(unittest.TestCase):
                 acked_cap=250.0,
                 acked_nlv=25_000,
             )
+            state_file = tmp / "inferno_capital_scaling_state.json"
             with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
                  patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
                  patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
                 payload = cs.build_capital_scaling(now=NOW)
         ack_status = payload["ack"]
@@ -250,6 +264,7 @@ class CurrentRecommendedCapAccessorTests(unittest.TestCase):
             sync = _write_sync(tmp, nlv=1108.08, generated_at=NOW - timedelta(hours=4))
             with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
                  patch.object(cs, "CAPITAL_SCALING_ACK_FILE", tmp / "missing.json"), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", tmp / "state.json"), \
                  patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
                 info = cs.current_recommended_cap(now=NOW)
         self.assertEqual(info["effectiveCap"], 500.0)
@@ -260,6 +275,7 @@ class CurrentRecommendedCapAccessorTests(unittest.TestCase):
     def test_ack_within_tolerance_uses_acked_cap(self) -> None:
         with TemporaryDirectory() as td:
             tmp = Path(td)
+            state_file = tmp / "state.json"
             sync = _write_sync(tmp, nlv=25_500, generated_at=NOW - timedelta(hours=2))
             ack_file = tmp / "inferno_capital_scaling_ack.json"
             ack_file.write_text(json.dumps({
@@ -274,6 +290,7 @@ class CurrentRecommendedCapAccessorTests(unittest.TestCase):
             }), encoding="utf-8")
             with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
                  patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack_file), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
                  patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
                 info = cs.current_recommended_cap(now=NOW)
         # The acked cap is 250, well below the config default of 500, so it wins.
@@ -288,6 +305,157 @@ class CurrentRecommendedCapAccessorTests(unittest.TestCase):
         self.assertEqual(info["effectiveCap"], 500.0)
         self.assertFalse(info["shouldUseRecommendation"])
         self.assertEqual(info["verdict"], "build-failed")
+
+
+class PeakNlvTrackerTests(unittest.TestCase):
+    """Pin the auto-maintained peak-NLV state file behavior."""
+
+    def test_first_run_records_current_nlv_as_peak(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            state_file = tmp / "state.json"
+            with patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file):
+                state = cs._update_drawdown_state(nlv=5000.0, nlv_age_hours=1.0, now=NOW)
+        self.assertEqual(state["peakNlv"], 5000.0)
+        self.assertEqual(state["lastNlv"], 5000.0)
+
+    def test_higher_nlv_advances_peak(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            state_file = tmp / "state.json"
+            with patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file):
+                cs._update_drawdown_state(nlv=5000.0, nlv_age_hours=1.0, now=NOW)
+                state = cs._update_drawdown_state(
+                    nlv=5500.0,
+                    nlv_age_hours=1.0,
+                    now=NOW + timedelta(days=1),
+                )
+        self.assertEqual(state["peakNlv"], 5500.0)
+        self.assertEqual(state["lastNlv"], 5500.0)
+
+    def test_lower_nlv_preserves_peak(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            state_file = tmp / "state.json"
+            with patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file):
+                cs._update_drawdown_state(nlv=5000.0, nlv_age_hours=1.0, now=NOW)
+                state = cs._update_drawdown_state(
+                    nlv=4500.0,
+                    nlv_age_hours=1.0,
+                    now=NOW + timedelta(days=1),
+                )
+        self.assertEqual(state["peakNlv"], 5000.0)  # peak holds
+        self.assertEqual(state["lastNlv"], 4500.0)
+
+    def test_stale_nlv_does_not_advance_peak(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            state_file = tmp / "state.json"
+            with patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file):
+                # Stale (>24h) NLV reading -- ignore for peak purposes.
+                state = cs._update_drawdown_state(
+                    nlv=10000.0, nlv_age_hours=48.0, now=NOW
+                )
+        self.assertEqual(state, {})  # nothing persisted
+
+    def test_missing_nlv_does_not_advance_peak(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            state_file = tmp / "state.json"
+            with patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file):
+                state = cs._update_drawdown_state(nlv=None, nlv_age_hours=1.0, now=NOW)
+        self.assertEqual(state, {})
+
+
+class DrawdownStepperTests(unittest.TestCase):
+    """Pin the drawdown stepper output for each playbook tier."""
+
+    def test_at_peak_returns_normal(self) -> None:
+        out = cs._drawdown_stepper(peak=10_000, current=10_000)
+        self.assertEqual(out["level"], "normal")
+        self.assertEqual(out["capMultiplier"], 1.0)
+        self.assertTrue(out["newEntriesAllowed"])
+        self.assertEqual(out["drawdownFraction"], 0.0)
+
+    def test_below_step_1_threshold_returns_normal(self) -> None:
+        # 9% drawdown
+        out = cs._drawdown_stepper(peak=10_000, current=9_100)
+        self.assertEqual(out["level"], "normal")
+        self.assertEqual(out["capMultiplier"], 1.0)
+
+    def test_step_1_at_exact_threshold(self) -> None:
+        out = cs._drawdown_stepper(peak=10_000, current=9_000)
+        self.assertEqual(out["level"], "step-1-half")
+        self.assertEqual(out["capMultiplier"], 0.5)
+
+    def test_step_2_at_exact_threshold(self) -> None:
+        out = cs._drawdown_stepper(peak=10_000, current=8_000)
+        self.assertEqual(out["level"], "step-2-quarter")
+        self.assertEqual(out["capMultiplier"], 0.25)
+
+    def test_pause_above_30pct(self) -> None:
+        out = cs._drawdown_stepper(peak=10_000, current=6_900)
+        self.assertEqual(out["level"], "pause")
+        self.assertEqual(out["capMultiplier"], 0.0)
+        self.assertFalse(out["newEntriesAllowed"])
+
+    def test_unknown_when_peak_missing(self) -> None:
+        out = cs._drawdown_stepper(peak=None, current=5_000)
+        self.assertEqual(out["level"], "unknown")
+        self.assertEqual(out["capMultiplier"], 1.0)
+        self.assertTrue(out["newEntriesAllowed"])
+
+    def test_negative_drawdown_floored_at_zero(self) -> None:
+        # NLV exceeds recorded peak (shouldn't happen because peak advances,
+        # but guard against arithmetic surprises).
+        out = cs._drawdown_stepper(peak=10_000, current=11_000)
+        self.assertEqual(out["drawdownFraction"], 0.0)
+        self.assertEqual(out["level"], "normal")
+
+
+class DrawdownCapMultiplierIntegrationTests(unittest.TestCase):
+    """The drawdown stepper must shrink the effectiveCap in current_recommended_cap()."""
+
+    def test_step_1_halves_config_cap_when_no_ack(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            sync = _write_sync(tmp, nlv=9_000, generated_at=NOW - timedelta(hours=2))
+            state_file = tmp / "state.json"
+            # Seed the state file with a peak that puts us at >=10% drawdown.
+            state_file.write_text(json.dumps({
+                "peakNlv": 10_000,
+                "peakNlvAt": (NOW - timedelta(days=1)).isoformat(),
+                "lastNlv": 10_000,
+                "lastUpdatedAt": (NOW - timedelta(days=1)).isoformat(),
+            }), encoding="utf-8")
+            with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
+                 patch.object(cs, "CAPITAL_SCALING_ACK_FILE", tmp / "missing.json"), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
+                 patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
+                info = cs.current_recommended_cap(now=NOW)
+        self.assertEqual(info["effectiveCap"], 250.0)  # 500 * 0.5
+        self.assertEqual(info["drawdownLevel"], "step-1-half")
+        self.assertEqual(info["drawdownCapMultiplier"], 0.5)
+
+    def test_pause_zeros_effective_cap(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            sync = _write_sync(tmp, nlv=6_500, generated_at=NOW - timedelta(hours=2))
+            state_file = tmp / "state.json"
+            state_file.write_text(json.dumps({
+                "peakNlv": 10_000,
+                "peakNlvAt": (NOW - timedelta(days=1)).isoformat(),
+                "lastNlv": 10_000,
+                "lastUpdatedAt": (NOW - timedelta(days=1)).isoformat(),
+            }), encoding="utf-8")
+            with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
+                 patch.object(cs, "CAPITAL_SCALING_ACK_FILE", tmp / "missing.json"), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
+                 patch.object(cs, "MAX_SINGLE_TICKET_DOLLARS", 500.0):
+                info = cs.current_recommended_cap(now=NOW)
+        self.assertEqual(info["effectiveCap"], 0.0)
+        self.assertEqual(info["drawdownLevel"], "pause")
+        self.assertFalse(info["newEntriesAllowed"])
 
 
 class TextRendererTests(unittest.TestCase):

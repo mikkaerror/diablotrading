@@ -63,6 +63,7 @@ LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 CAPITAL_SCALING_FILE = DATA_DIR / "inferno_capital_scaling.json"
 CAPITAL_SCALING_TEXT_FILE = REPORTS_DIR / "capital_scaling_latest.txt"
 CAPITAL_SCALING_ACK_FILE = DATA_DIR / "inferno_capital_scaling_ack.json"
+CAPITAL_SCALING_STATE_FILE = DATA_DIR / "inferno_capital_scaling_state.json"
 
 
 # ─────────────────────────── formula parameters ───────────────────────
@@ -82,6 +83,20 @@ DEFAULT_SCALING_BEHAVIOR = "symmetric-on-current-nlv"
 
 # Tolerance bands for the verdict (config vs recommendation).
 ALIGNED_BAND_PCT = 0.20  # within 20% counts as aligned
+
+# Drawdown stepper (from docs/POSITION_SIZING_RESEARCH.md §4.4).
+# Maps the trailing drawdown from peak NLV to a cap multiplier.
+# The shape is monotonically non-increasing in drawdown.
+DRAWDOWN_STEP_1_PCT = 0.10  # >=10% drawdown -> halve the cap
+DRAWDOWN_STEP_2_PCT = 0.20  # >=20% drawdown -> quarter the cap
+DRAWDOWN_PAUSE_NEW_ENTRIES_PCT = 0.30  # >30% drawdown -> pause new entries
+
+DRAWDOWN_LEVELS = (
+    {"level": "normal",         "minDrawdown": 0.00,                   "capMultiplier": 1.00},
+    {"level": "step-1-half",    "minDrawdown": DRAWDOWN_STEP_1_PCT,    "capMultiplier": 0.50},
+    {"level": "step-2-quarter", "minDrawdown": DRAWDOWN_STEP_2_PCT,    "capMultiplier": 0.25},
+    {"level": "pause",          "minDrawdown": DRAWDOWN_PAUSE_NEW_ENTRIES_PCT, "capMultiplier": 0.00},
+)
 
 
 # ─────────────────────────── helpers ──────────────────────────────────
@@ -157,6 +172,92 @@ class ScalingInputs:
             "dailyTicketsRatio": self.daily_tickets_ratio,
             "scalingBehavior": self.scaling_behavior,
         }
+
+
+def _read_state() -> dict[str, Any]:
+    """Read the auto-maintained drawdown state file. Returns {} when absent."""
+    return load_json_file(CAPITAL_SCALING_STATE_FILE) or {}
+
+
+def _write_state(payload: dict[str, Any]) -> None:
+    """Persist the drawdown state file (idempotent)."""
+    ensure_dirs()
+    atomic_write_json(CAPITAL_SCALING_STATE_FILE, payload)
+
+
+def _update_drawdown_state(
+    *,
+    nlv: float | None,
+    nlv_age_hours: float | None,
+    now: datetime,
+) -> dict[str, Any]:
+    """Refresh the persistent peak-NLV record.
+
+    Logic:
+      - When NLV is unavailable or stale, return the cached state unchanged.
+      - When NLV is fresh and exceeds the recorded peak (or no peak exists),
+        record a new peak with timestamp.
+      - Always update ``lastNlv`` / ``lastUpdatedAt`` so the operator can
+        see how recently the tracker actually advanced.
+
+    Returns the up-to-date state dict (also persisted to disk).
+    """
+    state = _read_state()
+    if nlv is None:
+        return state
+    if nlv_age_hours is not None and nlv_age_hours > DEFAULT_NLV_STALE_HOURS:
+        return state
+
+    prior_peak = _coerce_float(state.get("peakNlv"))
+    peak = nlv if (prior_peak is None or nlv > prior_peak) else prior_peak
+    peak_at = (
+        now.isoformat()
+        if (prior_peak is None or nlv > prior_peak)
+        else state.get("peakNlvAt")
+    )
+
+    new_state = {
+        "peakNlv": round(peak, 2),
+        "peakNlvAt": peak_at,
+        "lastNlv": round(float(nlv), 2),
+        "lastUpdatedAt": now.isoformat(),
+    }
+    _write_state(new_state)
+    return new_state
+
+
+def _drawdown_stepper(
+    *,
+    peak: float | None,
+    current: float | None,
+) -> dict[str, Any]:
+    """Map current trailing drawdown to a cap multiplier per the playbook.
+
+    Returns a dict with:
+      drawdownFraction (0.0 = at peak; 0.30 = down 30% from peak)
+      level            ('normal' | 'step-1-half' | 'step-2-quarter' | 'pause')
+      capMultiplier    (1.0 | 0.5 | 0.25 | 0.0)
+      newEntriesAllowed (False only at 'pause')
+    """
+    if peak is None or current is None or peak <= 0:
+        return {
+            "drawdownFraction": None,
+            "level": "unknown",
+            "capMultiplier": 1.0,
+            "newEntriesAllowed": True,
+        }
+    drawdown = max(0.0, (peak - current) / peak)
+    # Walk levels in increasing min-drawdown so the *deepest* matching tier wins.
+    selected = DRAWDOWN_LEVELS[0]
+    for tier in DRAWDOWN_LEVELS:
+        if drawdown >= tier["minDrawdown"]:
+            selected = tier
+    return {
+        "drawdownFraction": round(drawdown, 4),
+        "level": selected["level"],
+        "capMultiplier": selected["capMultiplier"],
+        "newEntriesAllowed": selected["level"] != "pause",
+    }
 
 
 def _read_live_account(now: datetime) -> tuple[float | None, str | None, float | None]:
@@ -380,6 +481,23 @@ def build_capital_scaling(*, now: datetime | None = None) -> dict[str, Any]:
         round(recommended * daily_ratio, 2) if recommended is not None else None
     )
 
+    # Peak-NLV tracking + drawdown stepper.
+    state = _update_drawdown_state(nlv=nlv, nlv_age_hours=nlv_age, now=now)
+    peak_nlv = _coerce_float(state.get("peakNlv"))
+    stepper = _drawdown_stepper(peak=peak_nlv, current=nlv)
+    drawdown_state = {
+        "peakNlv": peak_nlv,
+        "peakNlvAt": state.get("peakNlvAt"),
+        "currentNlv": nlv,
+        "lastUpdatedAt": state.get("lastUpdatedAt"),
+        **stepper,
+        "thresholds": {
+            "step1Pct": DRAWDOWN_STEP_1_PCT,
+            "step2Pct": DRAWDOWN_STEP_2_PCT,
+            "pauseNewEntriesPct": DRAWDOWN_PAUSE_NEW_ENTRIES_PCT,
+        },
+    }
+
     return {
         "generatedAt": now.isoformat(),
         "stage": CAPITAL_SCALING_STAGE,
@@ -403,6 +521,7 @@ def build_capital_scaling(*, now: datetime | None = None) -> dict[str, Any]:
             ),
         },
         "ack": ack_status,
+        "drawdownState": drawdown_state,
         "verdict": verdict,
         "explanation": explanation,
         "citations": ["KELLY-1956", "THORP-2006", "DE-PRADO-2018"],
@@ -479,8 +598,22 @@ def capital_scaling_text(payload: dict[str, Any]) -> str:
         f"  Drawdown trigger:        {ack.get('drawdownTrigger')}",
         f"  Needs fresh ack:         {ack.get('needsFreshAck')}",
         "",
-        "Reminders:",
     ]
+    dd = payload.get("drawdownState") or {}
+    if dd:
+        lines.extend(
+            [
+                "Drawdown state:",
+                f"  Peak NLV:                {fm(dd.get('peakNlv'))}",
+                f"  Peak NLV at:             {dd.get('peakNlvAt')}",
+                f"  Drawdown from peak:      {pct(dd.get('drawdownFraction'))}",
+                f"  Stepper level:           {dd.get('level')}",
+                f"  Cap multiplier:          {dd.get('capMultiplier')}×",
+                f"  New entries allowed:     {dd.get('newEntriesAllowed')}",
+                "",
+            ]
+        )
+    lines.append("Reminders:")
     for r in payload.get("reminders") or []:
         lines.append(f"  - {r}")
     return "\n".join(lines).rstrip() + "\n"
@@ -563,13 +696,21 @@ def current_recommended_cap(now: datetime | None = None) -> dict[str, Any]:
         }
     rec = payload.get("recommendation") or {}
     ack = payload.get("ack") or {}
+    drawdown = payload.get("drawdownState") or {}
     recommended = _coerce_float(rec.get("recommendedCap"))
     acked = _coerce_float(ack.get("ackedCap"))
     verdict = payload.get("verdict")
+    dd_level = drawdown.get("level") or "unknown"
+    dd_multiplier = _coerce_float(drawdown.get("capMultiplier"))
+    if dd_multiplier is None:
+        dd_multiplier = 1.0
+    new_entries_allowed = bool(drawdown.get("newEntriesAllowed", True))
 
     # Use the ack'd cap when the ack covers the current recommendation; else
     # fall back to the config default. We deliberately do NOT auto-promote
-    # the raw recommendation without an ack.
+    # the raw recommendation without an ack. The drawdown stepper multiplier
+    # is applied to the chosen cap regardless of source (ack or config),
+    # because the playbook says drawdown discipline applies always.
     if (
         ack.get("ackPresent")
         and ack.get("withinAckTolerance")
@@ -581,19 +722,30 @@ def current_recommended_cap(now: datetime | None = None) -> dict[str, Any]:
         ceiling = _coerce_float((payload.get("inputs") or {}).get("ceilingDollars"))
         if ceiling is not None:
             effective_cap = min(effective_cap, ceiling)
+        # Apply drawdown stepper to the cap.
+        effective_cap = effective_cap * dd_multiplier
         return {
             "recommendedCap": recommended,
             "ackedCap": acked,
             "verdict": verdict,
             "shouldUseRecommendation": True,
             "effectiveCap": round(effective_cap, 2),
+            "drawdownLevel": dd_level,
+            "drawdownCapMultiplier": dd_multiplier,
+            "newEntriesAllowed": new_entries_allowed,
         }
+    # No ack: enforce drawdown stepper against the config cap.
+    base_config_cap = float(MAX_SINGLE_TICKET_DOLLARS)
+    effective_config_cap = round(base_config_cap * dd_multiplier, 2)
     return {
         "recommendedCap": recommended,
         "ackedCap": acked,
         "verdict": verdict,
         "shouldUseRecommendation": False,
-        "effectiveCap": float(MAX_SINGLE_TICKET_DOLLARS),
+        "effectiveCap": effective_config_cap,
+        "drawdownLevel": dd_level,
+        "drawdownCapMultiplier": dd_multiplier,
+        "newEntriesAllowed": new_entries_allowed,
     }
 
 
