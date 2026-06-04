@@ -149,7 +149,27 @@ Tests live in `tests/test_inferno_<lane>.py`. Wire into:
 - **Two agents touching the same file** → surface to user, propose
   branch-per-agent or staged-by-hunks.
 
-## 7. Specific anti-patterns from past sessions
+## 7. The fast-path operator entry point
+
+The desk has many reports. The day-to-day entry point for the operator is
+`./today.sh` (which calls `today.py`). It reads existing artifacts and
+prints one screen:
+
+  - current NLV and cash, plus change from peak
+  - any paper candidates waiting on approval, each one as one line
+  - a y/n/s/q prompt per candidate that calls `inferno_approval_queue.py`
+    approve/reject under the hood
+  - an append-only `data/operator_decisions.csv` audit trail
+
+This is intentionally the SMALLEST surface. It does NOT fetch fresh data
+(run the dawn/strike cycle first), does NOT mutate authority, does NOT
+generate new reports. It exists so the operator can read one screen,
+type one letter, and move on.
+
+If you add a flag, you are reintroducing the friction the script exists
+to remove. Resist.
+
+## 8. Specific anti-patterns from past sessions
 
 - **Don't** read `outputs/today_math_worksheet.py` and assume it's part of
   the pipeline — it's a one-off diagnostic.
