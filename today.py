@@ -37,6 +37,7 @@ SCALING_STATE = DATA / "inferno_capital_scaling_state.json"
 DIRECTOR = DATA / "inferno_paper_test_director.json"
 LIVE_POSITIONS = DATA / "inferno_live_position_review.json"
 DECISIONS_LOG = DATA / "operator_decisions.csv"
+BROKER_TRUTH_MAX_AGE_HOURS = 36.0
 
 # Plain-English names so the prompt reads like English, not config.
 PRETTY_STRATEGY = {
@@ -71,6 +72,35 @@ def _money(value, default: str = "n/a") -> str:
         return default
 
 
+def _artifact_age_hours(payload: dict, *, now: _dt.datetime | None = None) -> float | None:
+    """Return artifact age while handling aware and naive ISO timestamps."""
+    raw = str(payload.get("generatedAt") or "").strip()
+    if not raw:
+        return None
+    try:
+        generated = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    current = now or _dt.datetime.now().astimezone()
+    if generated.tzinfo is None:
+        generated = generated.replace(tzinfo=current.tzinfo)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=generated.tzinfo)
+    return max(0.0, (current - generated.astimezone(current.tzinfo)).total_seconds() / 3600.0)
+
+
+def _freshness_label(payload: dict, *, now: _dt.datetime | None = None) -> tuple[bool, str]:
+    """Return broker-artifact freshness plus a compact age label."""
+    age = _artifact_age_hours(payload, now=now)
+    if age is None:
+        return False, "unknown age"
+    if age < 24:
+        label = f"{age:.1f}h old"
+    else:
+        label = f"{age / 24:.1f}d old"
+    return age <= BROKER_TRUTH_MAX_AGE_HOURS, label
+
+
 def _strategy_label(raw: str | None) -> str:
     return PRETTY_STRATEGY.get((raw or "").upper(), raw or "Unknown")
 
@@ -82,10 +112,11 @@ def _max_profit_label(value) -> str:
     return _money(value)
 
 
-def print_money_header() -> None:
+def print_money_header(*, now: _dt.datetime | None = None) -> bool:
     """One-line P/L line at the top so the operator sees the number first."""
     sync = _load_json(LIVE_SYNC)
     state = _load_json(SCALING_STATE)
+    fresh, age_label = _freshness_label(sync, now=now)
 
     raw_nlv = sync.get("netLiquidatingValue")
     nlv = _money(raw_nlv)
@@ -111,11 +142,18 @@ def print_money_header() -> None:
         delta += f"  ({sign}{from_last:,.2f} vs last)"
 
     print()
-    print(f"Money:  {nlv}  cash {cash}{delta}")
+    if raw_nlv is None:
+        print("Money:  unavailable (no Schwab account snapshot)")
+    elif fresh:
+        print(f"Money:  {nlv}  cash {cash}{delta}")
+    else:
+        print(f"Money (last known; STALE {age_label}):  {nlv}  cash {cash}{delta}")
+        print("  Refresh broker truth: ./run_inferno_schwab_account_sync.sh --json")
     print()
+    return fresh
 
 
-def print_holdings_section() -> None:
+def print_holdings_section(*, now: _dt.datetime | None = None) -> None:
     """Show the legacy book in dollar terms: position value, unrealized P/L.
 
     The point is to keep the operator's main money story (long-term-core
@@ -127,6 +165,7 @@ def print_holdings_section() -> None:
     positions = review.get("positions") or []
     if not positions:
         return
+    fresh, age_label = _freshness_label(review, now=now)
 
     total_mv = 0.0
     total_pl = 0.0
@@ -158,7 +197,7 @@ def print_holdings_section() -> None:
                 pass
         rows.append(f"  {sym:<6} {_money(mv)}{pl_str}")
 
-    print("Holdings:")
+    print("Holdings:" if fresh else f"Holdings (last known; STALE {age_label}):")
     for r in rows:
         print(r)
     if positions:
