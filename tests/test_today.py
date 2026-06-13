@@ -75,6 +75,30 @@ class TodayFreshnessTests(unittest.TestCase):
         self.assertIn("Money (last known; STALE 5.0d old)", rendered)
         self.assertIn("./run_inferno_schwab_account_sync.sh --json", rendered)
 
+    def test_fresh_wrapper_does_not_hide_stale_schwab_snapshot(self) -> None:
+        sync = self.write_json(
+            "live.json",
+            {
+                "generatedAt": "2026-06-13T20:00:00+00:00",
+                "accountDataSource": "schwab-account-api",
+                "schwabAccountGeneratedAt": "2026-06-08T21:00:00+00:00",
+                "netLiquidatingValue": 968.28,
+                "totalCash": 0,
+            },
+        )
+        state = self.write_json("state.json", {"peakNlv": 1274.58})
+
+        output = StringIO()
+        with (
+            patch.object(today, "LIVE_SYNC", sync),
+            patch.object(today, "SCALING_STATE", state),
+            redirect_stdout(output),
+        ):
+            fresh = today.print_money_header(now=NOW)
+
+        self.assertFalse(fresh)
+        self.assertIn("Money (last known; STALE 5.0d old)", output.getvalue())
+
     def test_stale_holdings_are_labeled(self) -> None:
         review = self.write_json(
             "positions.json",
@@ -90,9 +114,21 @@ class TodayFreshnessTests(unittest.TestCase):
                 ],
             },
         )
+        sync = self.write_json(
+            "live.json",
+            {
+                "generatedAt": "2026-06-13T20:00:00+00:00",
+                "accountDataSource": "schwab-account-api",
+                "schwabAccountGeneratedAt": "2026-06-08T21:00:00+00:00",
+            },
+        )
 
         output = StringIO()
-        with patch.object(today, "LIVE_POSITIONS", review), redirect_stdout(output):
+        with (
+            patch.object(today, "LIVE_POSITIONS", review),
+            patch.object(today, "LIVE_SYNC", sync),
+            redirect_stdout(output),
+        ):
             today.print_holdings_section(now=NOW)
 
         self.assertIn("Holdings (last known; STALE 5.0d old):", output.getvalue())

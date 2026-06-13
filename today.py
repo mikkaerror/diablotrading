@@ -29,6 +29,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from inferno_reporting_summary import live_account_source_timestamp
+
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 
@@ -74,7 +76,7 @@ def _money(value, default: str = "n/a") -> str:
 
 def _artifact_age_hours(payload: dict, *, now: _dt.datetime | None = None) -> float | None:
     """Return artifact age while handling aware and naive ISO timestamps."""
-    raw = str(payload.get("generatedAt") or "").strip()
+    raw = live_account_source_timestamp(payload) or str(payload.get("generatedAt") or "").strip()
     if not raw:
         return None
     try:
@@ -162,10 +164,11 @@ def print_holdings_section(*, now: _dt.datetime | None = None) -> None:
     Schwab account sync.
     """
     review = _load_json(LIVE_POSITIONS)
+    sync = _load_json(LIVE_SYNC)
     positions = review.get("positions") or []
     if not positions:
         return
-    fresh, age_label = _freshness_label(review, now=now)
+    fresh, age_label = _freshness_label(sync or review, now=now)
 
     total_mv = 0.0
     total_pl = 0.0
