@@ -67,9 +67,27 @@ def parse_timestamp(raw: Any) -> datetime | None:
         return None
 
 
+def live_account_source_timestamp(payload: dict[str, Any]) -> str | None:
+    """Return the timestamp of the broker data, not the wrapper rebuild."""
+    source = text(payload.get("accountDataSource")).lower()
+    keys = (
+        ("schwabAccountGeneratedAt", "statementGeneratedAt", "generatedAt")
+        if source == "schwab-account-api"
+        else ("statementGeneratedAt", "generatedAt")
+    )
+    for key in keys:
+        if text(payload.get(key)):
+            return text(payload.get(key))
+    return None
+
+
 def artifact_generated_at(path: Path) -> str | None:
     """Return the best available timestamp for a JSON or text artifact."""
     payload = load_json(path)
+    if path == LIVE_ACCOUNT_SYNC_FILE:
+        source_timestamp = live_account_source_timestamp(payload)
+        if source_timestamp:
+            return source_timestamp
     for key in ("generatedAt", "checkedAt", "sentAt", "timestamp"):
         if text(payload.get(key)):
             return text(payload.get(key))

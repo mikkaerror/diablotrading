@@ -5,7 +5,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from inferno_action_pulse import build_action_pulse, render_action_pulse, sent_key, subject_for_pulse
+from inferno_action_pulse import (
+    build_action_pulse,
+    render_action_pulse,
+    resolve_deployable_cash,
+    sent_key,
+    subject_for_pulse,
+)
 
 
 class InfernoActionPulseTests(unittest.TestCase):
@@ -19,6 +25,94 @@ class InfernoActionPulseTests(unittest.TestCase):
     def test_sent_key_is_phase_scoped(self) -> None:
         self.assertEqual(sent_key("open", "2026-05-15"), "2026-05-15:open")
         self.assertEqual(sent_key("preclose", "2026-05-15"), "2026-05-15:preclose")
+
+    @patch("inferno_action_pulse.freshness_status", return_value="fresh")
+    @patch("inferno_action_pulse.load_json_file")
+    def test_resolve_deployable_cash_prefers_current_artifacts(
+        self,
+        load_json_mock,
+        _freshness_mock,
+    ) -> None:
+        load_json_mock.side_effect = [
+            {
+                "generatedAt": "2026-06-13T09:00:00-06:00",
+                "deployableCashSource": "live-account-sync",
+                "guardrails": {"deployableCash": "$167.88"},
+            },
+        ]
+
+        self.assertEqual(resolve_deployable_cash(), 167.88)
+
+    @patch("inferno_action_pulse.freshness_status", side_effect=["stale", "fresh"])
+    @patch("inferno_action_pulse.load_json_file")
+    def test_resolve_deployable_cash_falls_back_to_fresh_live_cash(
+        self,
+        load_json_mock,
+        _freshness_mock,
+    ) -> None:
+        load_json_mock.side_effect = [
+            {
+                "generatedAt": "2026-06-08T09:00:00-06:00",
+                "deployableCashSource": "live-account-sync",
+                "guardrails": {"deployableCash": "$500.00"},
+            },
+            {"generatedAt": "2026-06-13T09:00:00-06:00", "totalCash": "$42.50"},
+        ]
+
+        self.assertEqual(resolve_deployable_cash(), 42.50)
+
+    @patch("inferno_action_pulse.freshness_status", return_value="fresh")
+    @patch("inferno_action_pulse.load_json_file")
+    def test_resolve_deployable_cash_preserves_fresh_zero(
+        self,
+        load_json_mock,
+        _freshness_mock,
+    ) -> None:
+        load_json_mock.return_value = {
+            "generatedAt": "2026-06-13T09:00:00-06:00",
+            "deployableCashSource": "live-account-sync",
+            "guardrails": {"deployableCash": 0.0},
+        }
+
+        self.assertEqual(resolve_deployable_cash(), 0.0)
+        load_json_mock.assert_called_once()
+
+    @patch("inferno_action_pulse.freshness_status", return_value="stale")
+    @patch("inferno_action_pulse.load_json_file")
+    def test_resolve_deployable_cash_uses_zero_when_all_sources_are_stale(
+        self,
+        load_json_mock,
+        _freshness_mock,
+    ) -> None:
+        load_json_mock.side_effect = [
+            {"generatedAt": "2026-06-08T09:00:00-06:00", "guardrails": {"deployableCash": 500.0}},
+            {"generatedAt": "2026-06-08T09:00:00-06:00", "totalCash": 250.0},
+        ]
+
+        self.assertEqual(resolve_deployable_cash(), 0.0)
+
+    @patch("inferno_action_pulse.freshness_status", return_value="fresh")
+    @patch("inferno_action_pulse.load_json_file")
+    def test_resolve_deployable_cash_does_not_promote_planning_scenario_cash(
+        self,
+        load_json_mock,
+        _freshness_mock,
+    ) -> None:
+        load_json_mock.side_effect = [
+            {
+                "generatedAt": "2026-06-13T09:00:00-06:00",
+                "deployableCashSource": "operator-argument",
+                "guardrails": {"deployableCash": 5000.0},
+            },
+            {
+                "generatedAt": "2026-06-13T09:01:00-06:00",
+                "accountDataSource": "schwab-account-api",
+                "schwabAccountGeneratedAt": "2026-06-13T09:00:00-06:00",
+                "totalCash": 42.5,
+            },
+        ]
+
+        self.assertEqual(resolve_deployable_cash(), 42.5)
 
     def test_render_action_pulse_surfaces_safety_locks(self) -> None:
         rendered = render_action_pulse(

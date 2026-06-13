@@ -15,6 +15,7 @@ from typing import Any
 from inferno_capital_allocator import build_capital_allocator, save_capital_allocator
 from inferno_config import account_suffix_allowed, approved_account_scope, local_now, local_today
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_reporting_summary import freshness_status, live_account_source_timestamp
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -115,20 +116,25 @@ def artifact_verdict(payload: dict[str, Any]) -> str:
     )
 
 
-def infer_cash_from_live_sync(live_sync: dict[str, Any]) -> float:
-    """Infer deployable cash from the live sync artifact when possible."""
-    return number(
-        first_present(
-            live_sync.get("totalCash"),
-            live_sync.get("cashAvailableForTrading"),
-            live_sync.get("stockBuyingPower"),
-            live_sync.get("buyingPower"),
-            live_sync.get("availableFundsForTrading"),
-            nested(live_sync, ("accountSummary", "Stock Buying Power")),
-            nested(live_sync, ("accountSummary", "Available Funds For Trading")),
-            nested(live_sync, ("balances", "stockBuyingPower")),
-        )
+def infer_cash_from_live_sync(live_sync: dict[str, Any]) -> float | None:
+    """Infer live cash while preserving zero and distinguishing missing data."""
+    raw_cash = first_present(
+        live_sync.get("totalCash"),
+        live_sync.get("cashAvailableForTrading"),
+        live_sync.get("stockBuyingPower"),
+        live_sync.get("buyingPower"),
+        live_sync.get("availableFundsForTrading"),
+        nested(live_sync, ("accountSummary", "Stock Buying Power")),
+        nested(live_sync, ("accountSummary", "Available Funds For Trading")),
+        nested(live_sync, ("balances", "stockBuyingPower")),
     )
+    if raw_cash is None:
+        return None
+    cleaned = str(raw_cash).replace("$", "").replace(",", "").replace("%", "").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
 
 
 def build_guardrail_summary(allocator: dict[str, Any]) -> dict[str, Any]:
@@ -218,8 +224,16 @@ def evaluate_readiness(
     live_sync = artifacts["liveSync"]
     live_suffix = text(first_present(live_sync.get("matchedSuffix"), live_sync.get("accountSuffix")))
     live_verdict = artifact_verdict(live_sync)
+    live_freshness = freshness_status(
+        live_account_source_timestamp(live_sync),
+        max_age_hours=8,
+    )
     if live_verdict not in {"healthy", "matched", "ok"}:
         blockers.append(f"Live account sync is not healthy: {live_verdict}.")
+    if live_freshness != "fresh":
+        blockers.append(
+            f"Live account sync is {live_freshness}. Refresh Schwab account truth before sizing capital."
+        )
     if live_suffix and not account_suffix_allowed(live_suffix):
         blockers.append(f"Live account suffix is {live_suffix}, expected {approved_account_scope()}.")
     if not live_suffix:
@@ -286,14 +300,14 @@ def evaluate_readiness(
     if ops_verdict not in {"healthy", "ok", "missing"}:
         warnings.append(f"Ops maintenance artifact is not clean: {ops_verdict}.")
 
-    for name in ("liveSync", "dataReadiness", "tickerAudit"):
+    for name in ("dataReadiness", "tickerAudit"):
         payload = artifacts[name]
         if payload and not is_generated_today(payload):
             warnings.append(f"{name} artifact is not stamped today. Refresh before deployment window.")
 
     guardrails = build_guardrail_summary(allocator)
     if guardrails["deployableCash"] <= 0:
-        warnings.append("Capital allocator has no deployable cash. Rebuild with expected cash before sizing.")
+        blockers.append("Capital allocator has no deployable cash. Refresh broker truth or provide an explicit planning amount.")
 
     next_actions.extend(
         [
@@ -385,12 +399,21 @@ def build_capital_deployment_readiness(
     artifacts = load_artifacts()
     deployable_cash_source = "operator-argument"
     if deployable_cash is None:
-        live_cash = infer_cash_from_live_sync(artifacts.get("liveSync") or {})
-        if live_cash > 0:
+        live_sync = artifacts.get("liveSync") or {}
+        live_cash = infer_cash_from_live_sync(live_sync)
+        live_freshness = freshness_status(
+            live_account_source_timestamp(live_sync),
+            max_age_hours=8,
+        )
+        if live_cash is not None and live_freshness == "fresh":
             deployable_cash = live_cash
             deployable_cash_source = "live-account-sync"
+        elif live_cash is not None:
+            deployable_cash = 0.0
+            deployable_cash_source = "live-account-sync-stale"
         else:
-            deployable_cash_source = "allocator-default"
+            deployable_cash = 0.0
+            deployable_cash_source = "live-account-sync-unavailable"
 
     allocator = build_capital_allocator(deployable_cash_dollars=deployable_cash)
     save_capital_allocator(allocator)
@@ -414,7 +437,7 @@ def parse_args() -> argparse.Namespace:
         "--deployable-cash",
         type=float,
         default=None,
-        help="Expected cash to size against. If omitted, allocator defaults are used.",
+        help="Expected cash to size against. If omitted, fresh live-account cash is required.",
     )
     parser.add_argument(
         "--for-date",

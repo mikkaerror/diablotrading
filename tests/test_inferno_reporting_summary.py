@@ -14,6 +14,37 @@ import inferno_reporting_summary as summary
 class InfernoReportingSummaryTests(unittest.TestCase):
     """Protect freshness and attach-only wording from drifting."""
 
+    def test_live_account_freshness_uses_embedded_schwab_timestamp(self) -> None:
+        payload = {
+            "generatedAt": "2026-06-13T15:20:46-06:00",
+            "accountDataSource": "schwab-account-api",
+            "schwabAccountGeneratedAt": "2026-06-08T23:02:41-05:00",
+            "statementGeneratedAt": "2026-06-08T23:02:41-05:00",
+        }
+
+        self.assertEqual(
+            summary.live_account_source_timestamp(payload),
+            "2026-06-08T23:02:41-05:00",
+        )
+
+    def test_artifact_generated_at_does_not_launder_stale_broker_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "live.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-06-13T15:20:46-06:00",
+                        "accountDataSource": "schwab-account-api",
+                        "schwabAccountGeneratedAt": "2026-06-08T23:02:41-05:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(summary, "LIVE_ACCOUNT_SYNC_FILE", path):
+                generated_at = summary.artifact_generated_at(path)
+
+        self.assertEqual(generated_at, "2026-06-08T23:02:41-05:00")
+
     def test_tos_running_but_not_visible_gets_precise_attach_only_wording(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

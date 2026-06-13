@@ -32,6 +32,8 @@ from inferno_paper_bottleneck_reducer import save_reducer as save_paper_bottlene
 from inferno_reporting_summary import (
     build_freshness_panel,
     build_tos_visibility_summary,
+    freshness_status,
+    live_account_source_timestamp,
     render_freshness_lines,
     render_tos_visibility_line,
     sanitize_tos_language,
@@ -53,6 +55,8 @@ ACTION_PULSE_TEXT_FILE = REPORTS_DIR / "action_pulse_latest.txt"
 ACTION_PULSE_STATE_FILE = DATA_DIR / "inferno_action_pulse_state.json"
 SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
 DAILY_LOOP_FILE = DATA_DIR / "inferno_daily_loop.json"
+CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
+LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 
 PHASE_LABELS = {
     "open": "Open Watch",
@@ -86,6 +90,32 @@ def command_cash_arg(value: Any) -> str:
     if cash.is_integer():
         return str(int(cash))
     return f"{cash:.2f}"
+
+
+def resolve_deployable_cash(explicit_cash: float | None = None) -> float:
+    """Return deployable cash without inventing capital from stale artifacts."""
+    if explicit_cash is not None:
+        return float(explicit_cash)
+
+    capital = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
+    guardrails = capital.get("guardrails") or {}
+    capital_cash = guardrails.get("deployableCash")
+    if (
+        capital.get("deployableCashSource") == "live-account-sync"
+        and capital_cash not in (None, "")
+        and freshness_status(capital.get("generatedAt"), max_age_hours=8) == "fresh"
+    ):
+        return number(capital_cash, default=0.0)
+
+    live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    live_cash = live_sync.get("totalCash")
+    if (
+        live_cash not in (None, "")
+        and freshness_status(live_account_source_timestamp(live_sync), max_age_hours=8) == "fresh"
+    ):
+        return number(live_cash, default=0.0)
+
+    return 0.0
 
 
 def load_state() -> dict[str, Any]:
@@ -249,7 +279,7 @@ def load_saved_paper_evidence_summary() -> dict[str, Any]:
 def build_action_pulse(
     *,
     phase: str,
-    deployable_cash: float = 1000.0,
+    deployable_cash: float | None = None,
     skip_maintenance: bool = False,
     refresh_live_sync: bool = False,
     fast: bool = False,
@@ -269,6 +299,8 @@ def build_action_pulse(
             sheet_name=DEFAULT_SHEET_NAME,
             force_email=False,
         )
+
+    deployable_cash = resolve_deployable_cash(deployable_cash)
 
     if fast:
         daily_loop = load_saved_daily_loop_summary()
@@ -520,7 +552,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build and optionally send the Inferno action pulse.")
     parser.add_argument("command", nargs="?", default="run", choices=["run", "status"])
     parser.add_argument("--phase", choices=sorted(PHASE_LABELS), default="manual")
-    parser.add_argument("--deployable-cash", type=float, default=1000.0)
+    parser.add_argument("--deployable-cash", type=float)
     parser.add_argument("--send", action="store_true", help="Send the action pulse via SMTP.")
     parser.add_argument("--force-send", action="store_true", help="Send even if this phase already sent today.")
     parser.add_argument("--skip-maintenance", action="store_true", help="Skip ops maintenance before building the pulse.")

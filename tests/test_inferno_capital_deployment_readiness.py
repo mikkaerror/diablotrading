@@ -94,6 +94,7 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
                 patch.object(readiness, "save_capital_allocator", return_value=None),
                 patch.object(readiness, "ensure_dirs", return_value=None),
                 patch.object(readiness, "local_today", return_value="2026-05-14"),
+                patch.object(readiness, "freshness_status", return_value="fresh"),
                 patch.object(readiness, "account_suffix_allowed", return_value=True),
                 patch.object(readiness, "approved_account_scope", return_value="account ending 1234"),
             ]
@@ -135,6 +136,57 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
             )
 
         self.assertEqual(result["deployableCashSource"], "live-account-sync")
+
+    def test_fresh_zero_cash_does_not_fall_back_to_allocator_default(self):
+        self.write_base_artifacts()
+        atomic_write_json(
+            self.files["LIVE_ACCOUNT_SYNC_FILE"],
+            {
+                "verdict": "healthy",
+                "matchedSuffix": "1234",
+                "generatedAt": "2026-05-14T09:00:00-06:00",
+                "totalCash": 0.0,
+            },
+        )
+        zero_allocator = {
+            "deployableCash": 0.0,
+            "maxOptionsRisk": 0.0,
+            "maxStarterTicket": 0.0,
+            "maxLongTermBuy": 0.0,
+            "reserveCash": 0.0,
+        }
+        with (
+            self._stack_patches(),
+            patch.object(readiness, "build_capital_allocator", return_value=zero_allocator) as allocator_mock,
+        ):
+            result = readiness.build_capital_deployment_readiness(for_date="2026-05-15")
+
+        allocator_mock.assert_called_once_with(deployable_cash_dollars=0.0)
+        self.assertEqual(result["deployableCashSource"], "live-account-sync")
+        self.assertEqual(result["guardrails"]["deployableCash"], 0.0)
+        self.assertEqual(result["verdict"], "not-ready")
+        self.assertIn("no deployable cash", "\n".join(result["blockers"]))
+
+    def test_stale_live_cash_is_not_used_for_sizing(self):
+        self.write_base_artifacts()
+        zero_allocator = {
+            "deployableCash": 0.0,
+            "maxOptionsRisk": 0.0,
+            "maxStarterTicket": 0.0,
+            "maxLongTermBuy": 0.0,
+            "reserveCash": 0.0,
+        }
+        with (
+            self._stack_patches(),
+            patch.object(readiness, "freshness_status", return_value="stale"),
+            patch.object(readiness, "build_capital_allocator", return_value=zero_allocator) as allocator_mock,
+        ):
+            result = readiness.build_capital_deployment_readiness(for_date="2026-05-15")
+
+        allocator_mock.assert_called_once_with(deployable_cash_dollars=0.0)
+        self.assertEqual(result["deployableCashSource"], "live-account-sync-stale")
+        self.assertEqual(result["verdict"], "not-ready")
+        self.assertIn("Live account sync is stale", "\n".join(result["blockers"]))
 
     def _stack_patches(self):
         stack = ExitStack()
