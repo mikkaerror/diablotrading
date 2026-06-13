@@ -17,6 +17,7 @@ thinkorswim desktop exports do all the work.
 
 import argparse
 import base64
+import gzip
 import json
 import os
 import ssl
@@ -24,6 +25,7 @@ import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
@@ -143,6 +145,11 @@ def extract_authorization_code(value: str) -> str:
     if not text:
         raise SystemExit("No authorization code or redirect URL was provided.")
     parsed = urlparse(text)
+    if parsed.scheme and parsed.netloc and not parsed.query:
+        raise SystemExit(
+            "That URL does not include a Schwab authorization code. "
+            "Paste the full redirect URL with '?code=...' from the browser address bar."
+        )
     if parsed.query:
         code = parse_qs(parsed.query).get("code", [""])[0].strip()
         if code:
@@ -170,11 +177,32 @@ def request_token(config: dict[str, Any], form: dict[str, str]) -> dict[str, Any
             "Authorization": _basic_auth_header(config["client_id"], config["client_secret"]),
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",
+            "Accept-Encoding": "identity",
         },
         method="POST",
     )
-    with urlopen(request, timeout=30, context=https_context()) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=30, context=https_context()) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raw = exc.read()
+        if str(exc.headers.get("Content-Encoding", "")).lower() == "gzip":
+            try:
+                raw = gzip.decompress(raw)
+            except OSError:
+                pass
+        body_text = raw.decode("utf-8", errors="replace").strip()
+        try:
+            body = json.loads(body_text) if body_text else {}
+        except json.JSONDecodeError:
+            body = {"response": body_text[:500]}
+        error = body.get("error") or "unknown"
+        description = body.get("error_description") or body.get("message") or body.get("response") or ""
+        detail = f"Schwab OAuth token request failed: HTTP {exc.code} {error}"
+        if description:
+            detail += f" | {description}"
+        detail += " | Generate a fresh auth URL and exchange the redirect URL immediately; codes are one-use and short-lived."
+        raise SystemExit(detail) from exc
 
 
 def enrich_token_payload(payload: dict[str, Any], previous: dict[str, Any] | None = None) -> dict[str, Any]:
