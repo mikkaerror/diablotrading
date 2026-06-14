@@ -44,15 +44,26 @@ CLI::
 
 import argparse
 import json
+import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from inferno_config import (
-    SCHWAB_OPTIONS_ENABLED,
-    local_now,
-)
+from inferno_schwab_oauth import ENV_FILE, parse_env_file
+
+
+def load_schwab_env(path: Path = ENV_FILE) -> dict[str, str]:
+    """Load the ignored Schwab config before importing API constants."""
+    values = parse_env_file(path)
+    for key, value in values.items():
+        os.environ[key] = value
+    return values
+
+
+load_schwab_env()
+
+from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_schwab_options import (
     fetch_option_chain,
@@ -61,6 +72,13 @@ from inferno_schwab_options import (
     normalize_contract,
 )
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
+
+SCHWAB_OPTIONS_ENABLED = os.environ.get("SCHWAB_OPTIONS_ENABLED", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 # ─────────────────────────── files / constants ───────────────────────

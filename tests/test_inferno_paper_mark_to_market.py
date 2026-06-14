@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -257,6 +258,20 @@ class LegLookupTests(unittest.TestCase):
 
 
 class BuildIntegrationTests(unittest.TestCase):
+    def test_load_schwab_env_enables_scheduled_market_data_config(self) -> None:
+        with (
+            patch.object(
+                mtm,
+                "parse_env_file",
+                return_value={"SCHWAB_OPTIONS_ENABLED": "1"},
+            ),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            values = mtm.load_schwab_env()
+            self.assertEqual(os.environ["SCHWAB_OPTIONS_ENABLED"], "1")
+
+        self.assertEqual(values["SCHWAB_OPTIONS_ENABLED"], "1")
+
     def test_research_only_invariants(self) -> None:
         ledger_override = {"items": []}
         payload = mtm.build_paper_mark_to_market(

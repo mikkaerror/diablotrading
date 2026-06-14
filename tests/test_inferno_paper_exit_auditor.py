@@ -78,6 +78,35 @@ class PaperExitAuditorTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "close-today")
         self.assertEqual(payload["counts"]["closeNow"], 1)
 
+    def test_aging_unexpired_ticket_requires_review_not_forced_close(self) -> None:
+        """Age alone should escalate review while strategy rules own the exit."""
+        ticket = {
+            "ticker": "MOD",
+            "ticketId": "aging-ticket",
+            "strategy": "CALL_DEBIT_SPREAD",
+            "tradeDate": "2026-05-19",
+            "expiration": "2026-06-18",
+            "paperExecution": {"status": "open", "openedAt": "2026-05-19T09:30:00-06:00"},
+            "outcome": {"status": "open"},
+        }
+        with (
+            patch.object(auditor, "load_open_ledger_tickets", return_value=[ticket]),
+            patch.object(auditor, "load_fill_rows", return_value=[]),
+            patch.object(auditor, "local_now") as now_mock,
+        ):
+            now_mock.return_value = __import__("datetime").datetime.fromisoformat(
+                "2026-06-13T10:00:00-06:00"
+            )
+            payload = auditor.build_audit()
+
+        self.assertEqual(payload["verdict"], "review-open-exits")
+        self.assertEqual(payload["counts"]["closeNow"], 0)
+        self.assertEqual(payload["counts"]["reviewToday"], 1)
+        self.assertIn(
+            "consult trade-management",
+            " ".join(payload["openTickets"][0]["reasons"]),
+        )
+
     def test_reconcile_when_open_fill_row_has_no_matching_ticket(self) -> None:
         """Orphan open fill rows should trigger reconciliation."""
         row = {

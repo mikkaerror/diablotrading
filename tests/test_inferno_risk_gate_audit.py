@@ -138,6 +138,17 @@ class RiskGateAuditTests(unittest.TestCase):
         self.assertIn("live-position-fragility", payload["summary"]["blockedGateIds"])
         self.assertFalse(payload["liveTradingAllowed"])
 
+    def test_paper_exit_gate_reads_review_today_count(self):
+        row = audit.evaluate_paper_exit_gate(
+            {
+                "verdict": "review-open-exits",
+                "counts": {"closeNow": 0, "reviewToday": 1},
+            }
+        )
+
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("review=1", row["detail"])
+
     def test_authority_submit_flag_fails_hard(self):
         self.write_base_artifacts(broker_submit=True)
         with self.patch_paths():

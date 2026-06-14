@@ -420,7 +420,12 @@ def evaluate_paper_exit_gate(exit_audit: dict[str, Any]) -> dict[str, Any]:
     audit_verdict = verdict(exit_audit)
     counts = exit_audit.get("counts") or {}
     close_now = number(counts.get("closeNow") or exit_audit.get("closeNow"))
-    review = number(counts.get("review") or exit_audit.get("review"))
+    review = number(
+        counts.get("reviewToday")
+        or counts.get("review")
+        or exit_audit.get("reviewToday")
+        or exit_audit.get("review")
+    )
     status = "pass" if audit_verdict in {"clean", "healthy", "ok"} and close_now <= 0 else "warn"
     return gate(
         "paper-exit-capture",

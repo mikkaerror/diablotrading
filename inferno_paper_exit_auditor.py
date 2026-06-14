@@ -93,9 +93,15 @@ def audit_ticket(ticket: dict[str, Any], *, today: date) -> dict[str, Any]:
         urgency = "review-today"
         reasons.append("expiration is tomorrow")
 
-    if days_open is not None and days_open >= OVERDUE_AFTER_OPEN_DAYS:
-        urgency = "close-now"
-        reasons.append(f"paper position has been open {days_open} days")
+    if (
+        days_open is not None
+        and days_open >= OVERDUE_AFTER_OPEN_DAYS
+        and urgency not in {"close-now", "reconcile"}
+    ):
+        urgency = "review-today"
+        reasons.append(
+            f"paper position has been open {days_open} days; consult trade-management before closing"
+        )
     elif days_open is not None and days_open >= REVIEW_AFTER_OPEN_DAYS and urgency == "monitor":
         urgency = "review-today"
         reasons.append(f"paper position has been open {days_open} days")
