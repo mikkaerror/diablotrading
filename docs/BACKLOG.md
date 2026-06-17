@@ -26,7 +26,7 @@ context. Items are ranked by leverage. Each one names its owner and a clear
   reporting. Today's `today.sh` shows only point-in-time NLV; no history.
 - **Done signal:** `data/nlv_history.csv` has one new row per nightly run
   with columns `date, nlv, cash, per_ticker_mv...`
-- **Status:** SHIPPING NOW (this session)
+- **Status:** DONE — commit `d9c9dd2`. First row written `2026-06-17 $1,007.57`.
 
 ### #2 — Universe-cap-fit audit
 - **Owner:** claude
@@ -68,6 +68,10 @@ context. Items are ranked by leverage. Each one names its owner and a clear
 - **Done signal:** today.py prints a `⚠ Drawdown banner` line at the
   very top when stepper level is not `normal`.
 - **Estimate:** ~15 lines.
+- **Note 2026-06-17:** codex shipped `_freshness_label` and source-age
+  labels in today.py (commits `c916113`, `5787ae1`). Overlapping but
+  different — codex covers artifact staleness, this item covers
+  drawdown tier. Still leverage in shipping this one.
 
 ### #6 — `./today.sh --quiet` mode for cron
 - **Owner:** claude
@@ -95,7 +99,10 @@ context. Items are ranked by leverage. Each one names its owner and a clear
 
 ## Completed (last 30 days)
 
-(no items yet — this section will populate as the queue churns)
+- 2026-06-17 — #1 — Daily NLV + per-position snapshot to CSV — claude/d9c9dd2
+- 2026-06-17 — risk_policy test isolation fix (drawdown stepper regression) — claude/this cleanup
+- 2026-06-17 — today.py source freshness labels — codex/c916113, codex/5787ae1
+- 2026-06-17 — today.py stale-broker-truth labelling — codex/2bb8030
 
 ---
 

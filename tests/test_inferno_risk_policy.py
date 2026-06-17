@@ -26,6 +26,11 @@ the live ledger, authority manifest, or any artifact.
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+import inferno_capital_scaling as _capital_scaling
 
 from inferno_config import (
     MAX_DAILY_TICKET_DOLLARS,
@@ -291,7 +296,40 @@ class SchwabOptionQualityTests(unittest.TestCase):
 
 
 class EvaluateStrikeItemTests(unittest.TestCase):
-    """Top-level policy evaluation tests."""
+    """Top-level policy evaluation tests.
+
+    These tests need the capital-scaling state file isolated to a tmp dir,
+    because the drawdown stepper reads the live state and would otherwise
+    shrink the effective cap based on whatever NLV state is on disk.
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        tmp = Path(self._tmp.name)
+        self._state_patch = patch.object(
+            _capital_scaling,
+            "CAPITAL_SCALING_STATE_FILE",
+            tmp / "scaling_state.json",
+        )
+        self._ack_patch = patch.object(
+            _capital_scaling,
+            "CAPITAL_SCALING_ACK_FILE",
+            tmp / "scaling_ack.json",
+        )
+        self._sync_patch = patch.object(
+            _capital_scaling,
+            "LIVE_ACCOUNT_SYNC_FILE",
+            tmp / "missing_sync.json",
+        )
+        self._state_patch.start()
+        self._ack_patch.start()
+        self._sync_patch.start()
+
+    def tearDown(self):
+        self._state_patch.stop()
+        self._ack_patch.stop()
+        self._sync_patch.stop()
+        self._tmp.cleanup()
 
     def test_clean_ticket_passes(self):
         v = evaluate_strike_item(
