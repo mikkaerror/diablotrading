@@ -26,6 +26,7 @@ from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
+OPERATOR_LONG_TERM_HOLDS_FILE = DATA_DIR / "operator_long_term_holds.json"
 
 LIVE_POSITION_REVIEW_FILE = DATA_DIR / "inferno_live_position_review.json"
 LIVE_POSITION_REVIEW_TEXT_FILE = REPORTS_DIR / "live_position_review_latest.txt"
@@ -49,6 +50,25 @@ def numeric(value: Any) -> float | None:
         return float(raw)
     except ValueError:
         return None
+
+
+def load_operator_long_term_holds(path: Any = OPERATOR_LONG_TERM_HOLDS_FILE) -> set[str]:
+    """Load operator-declared long-term core holds from a tiny JSON config."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return set()
+    except (OSError, json.JSONDecodeError):
+        return set()
+
+    raw_symbols = payload.get("symbols") if isinstance(payload, dict) else payload
+    if not isinstance(raw_symbols, list):
+        return set()
+    return {
+        text(symbol).upper()
+        for symbol in raw_symbols
+        if text(symbol)
+    }
 
 
 def load_edge_index(edge_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -158,8 +178,10 @@ def posture_for_position(
     edge_row: dict[str, Any] | None,
     shadow: dict[str, Any] | None,
     score: float,
+    operator_hold_symbols: set[str] | None = None,
 ) -> tuple[str, str, list[str]]:
     """Return a live-book posture, action label, and reasons for one holding."""
+    ticker = text(position.get("symbol")).upper()
     tracker = position.get("trackerContext") or {}
     flags = set(position.get("riskFlags") or [])
     reasons: list[str] = []
@@ -180,6 +202,10 @@ def posture_for_position(
             f"shadow evidence: {shadow.get('closedCount')} closed / win {shadow.get('winRate')}"
         )
 
+    if ticker in (operator_hold_symbols or set()) and "untracked" not in flags:
+        reasons.append("operator-declared long-term hold; not a fresh-capital blocker")
+        return "supported", "hold-core", reasons
+
     if "untracked" in flags or score < 35:
         return "fragile", "manual-review", reasons or ["weak conviction stack"]
     if "concentration" in flags or "earnings-soon" in flags or "fragile-alignment" in flags or score < 55:
@@ -195,13 +221,15 @@ def build_position_review(
     position: dict[str, Any],
     edge_index: dict[str, dict[str, Any]],
     shadow_index: dict[str, dict[str, Any]],
+    operator_hold_symbols: set[str] | None = None,
 ) -> dict[str, Any]:
     """Build one live holding review packet."""
     ticker = text(position.get("symbol")).upper()
     edge_row = edge_index.get(ticker)
     shadow = shadow_index.get(ticker)
     score = conviction_score(position, edge_row, shadow)
-    posture, action, reasons = posture_for_position(position, edge_row, shadow, score)
+    operator_declared = ticker in (operator_hold_symbols or set())
+    posture, action, reasons = posture_for_position(position, edge_row, shadow, score, operator_hold_symbols)
     tracker = position.get("trackerContext") or {}
     return {
         "symbol": ticker,
@@ -215,6 +243,7 @@ def build_position_review(
         "convictionScore": score,
         "posture": posture,
         "actionLabel": action,
+        "operatorLongTermHold": operator_declared,
         "reasons": reasons,
         "trackerContext": tracker,
         "edgeContext": (
@@ -245,6 +274,7 @@ def build_live_position_review(*, refresh_live_sync: bool = False) -> dict[str, 
     shadow_payload = load_json_file(SHADOW_EVIDENCE_FILE) or {}
     edge_index = load_edge_index(edge_payload)
     shadow_index = shadow_summary_by_ticker(shadow_payload)
+    operator_hold_symbols = load_operator_long_term_holds()
 
     report: dict[str, Any] = {
         "generatedAt": local_now().isoformat(),
@@ -260,6 +290,7 @@ def build_live_position_review(*, refresh_live_sync: bool = False) -> dict[str, 
             "constructive": 0,
             "review": 0,
             "fragile": 0,
+            "operatorLongTermHolds": 0,
             "withEdgeContext": 0,
             "withShadowContext": 0,
         },
@@ -272,7 +303,7 @@ def build_live_position_review(*, refresh_live_sync: bool = False) -> dict[str, 
         return report
 
     reviews = [
-        build_position_review(position, edge_index, shadow_index)
+        build_position_review(position, edge_index, shadow_index, operator_hold_symbols)
         for position in (live_sync.get("positions") or [])
     ]
     reviews.sort(key=lambda row: (numeric(row.get("weightPct")) or 0.0, numeric(row.get("convictionScore")) or 0.0), reverse=True)
@@ -285,6 +316,7 @@ def build_live_position_review(*, refresh_live_sync: bool = False) -> dict[str, 
         "constructive": posture_counts.get("constructive", 0),
         "review": posture_counts.get("review", 0),
         "fragile": posture_counts.get("fragile", 0),
+        "operatorLongTermHolds": sum(1 for row in reviews if row.get("operatorLongTermHold")),
         "withEdgeContext": sum(1 for row in reviews if row.get("edgeContext")),
         "withShadowContext": sum(1 for row in reviews if row.get("shadowContext")),
     }
@@ -300,6 +332,11 @@ def build_live_position_review(*, refresh_live_sync: bool = False) -> dict[str, 
         next_actions.append("One or more positions are concentrated; confirm sizing before layering exposure.")
     if any("earnings-soon" in (row.get("riskFlags") or []) for row in reviews):
         next_actions.append("At least one live name is near earnings; reconfirm catalyst plan before next week.")
+    declared_holds = [row["symbol"] for row in reviews if row.get("operatorLongTermHold")]
+    if declared_holds:
+        next_actions.append(
+            f"Declared long-term holds do not block fresh-capital review: {', '.join(declared_holds)}."
+        )
     if not next_actions:
         next_actions.append("Live book is tracker-aligned and only needs routine monitoring.")
     report["nextActions"] = next_actions
@@ -333,6 +370,7 @@ def live_position_review_text(report: dict[str, Any]) -> str:
         f"Constructive: {counts.get('constructive', 0)}",
         f"Review: {counts.get('review', 0)}",
         f"Fragile: {counts.get('fragile', 0)}",
+        f"Declared long-term holds: {counts.get('operatorLongTermHolds', 0)}",
         f"Edge context: {counts.get('withEdgeContext', 0)}",
         f"Shadow context: {counts.get('withShadowContext', 0)}",
         "",
@@ -351,6 +389,7 @@ def live_position_review_text(report: dict[str, Any]) -> str:
             + f"{row.get('symbol')} | {row.get('actionLabel')} | posture={row.get('posture')} | "
             + f"score={row.get('convictionScore')} | weight={row.get('weightPct') or '-'}% | "
             + f"P/L%={row.get('plPercent') or '-'} | "
+            + f"declaredHold={bool(row.get('operatorLongTermHold'))} | "
             + f"align={tracker.get('alignmentLabel') or '-'} | "
             + f"edge={edge.get('edgeScore') or '-'} | "
             + f"shadowR={shadow.get('avgReturnOnRisk') if shadow else '-'}"

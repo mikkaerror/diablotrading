@@ -49,6 +49,10 @@ context. Items are ranked by leverage. Each one names its owner and a clear
   classification lives) reads a `data/operator_long_term_holds.json` list
   and suppresses the review verdict for any ticker in that list.
 - **Estimate:** ~30 lines + a tiny JSON config.
+- **Status:** DONE — current cleanup. `TE`, `IREN`, `HIVE`, and `CLSK`
+  are declared long-term holds; they remain visible in live-book review but
+  no longer hard-block fresh-capital review solely from fragile short-term
+  alignment.
 
 ### #4 — Friction telemetry in today.py
 - **Owner:** claude
@@ -100,6 +104,7 @@ context. Items are ranked by leverage. Each one names its owner and a clear
 ## Completed (last 30 days)
 
 - 2026-06-17 — #1 — Daily NLV + per-position snapshot to CSV — claude/d9c9dd2
+- 2026-06-17 — #3 — Long-term-hold flag in live position review — codex/current cleanup
 - 2026-06-17 — risk_policy test isolation fix (drawdown stepper regression) — claude/this cleanup
 - 2026-06-17 — today.py source freshness labels — codex/c916113, codex/5787ae1
 - 2026-06-17 — today.py stale-broker-truth labelling — codex/2bb8030

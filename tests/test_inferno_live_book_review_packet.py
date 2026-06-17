@@ -48,6 +48,30 @@ class LiveBookReviewPacketTests(unittest.TestCase):
         self.assertGreaterEqual(packet["reviewHeat"], 80)
         self.assertTrue(any("capital deployment blocked" in prompt for prompt in packet["reviewPrompts"]))
 
+    def test_operator_declared_hold_gets_thesis_prompt_not_blocker_prompt(self) -> None:
+        packet = build_position_packet(
+            {
+                "symbol": "IREN",
+                "posture": "supported",
+                "actionLabel": "hold-core",
+                "operatorLongTermHold": True,
+                "convictionScore": 25,
+                "riskFlags": ["fragile-alignment"],
+                "trackerContext": {
+                    "alignmentLabel": "Fragile",
+                    "support": 8,
+                    "resistance": 12,
+                },
+            }
+        )
+
+        self.assertEqual(packet["unlockEffect"], "does-not-block")
+        self.assertTrue(packet["operatorLongTermHold"])
+        rendered = "\n".join(packet["reviewPrompts"])
+        self.assertIn("operator-declared long-term hold", rendered)
+        self.assertNotIn("capital deployment blocked", rendered)
+        self.assertNotIn("Re-check support/resistance", rendered)
+
     @patch("inferno_live_book_review_packet.save_review_packet")
     @patch("inferno_live_book_review_packet.load_json_file")
     def test_review_packet_summarizes_blockers_and_warnings(self, load_json_mock, _save_mock) -> None:

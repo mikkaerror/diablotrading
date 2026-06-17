@@ -1,6 +1,6 @@
 # Mission Control
 
-Current as of 2026-05-20.
+Current as of 2026-06-17.
 
 This is the shortest honest description of the desk. Read this before changing
 code, interpreting a signal, opening thinkorswim, or asking another model to
@@ -32,15 +32,15 @@ liveTradingAllowed: false
 
 ## Current Desk Snapshot
 
-Updated 2026-05-20 after the live-position intake pass.
+Updated 2026-06-17 after the long-term-hold cleanup and Schwab tape refresh.
 
 | Lane | Current read |
 |---|---|
-| Approved account scope | read-only TOS account ending 8499 |
-| Live positions captured | IREN, HIVE, TE, CLSK |
+| Approved account scope | read-only Schwab account ending 8499; TOS remains a manual visual cockpit |
+| Live positions captured | TE, IREN, HIVE, CLSK |
 | Tracker sync | HIVE, TE, and CLSK appended; IREN already existed; formulas hydrated and audits healthy |
-| Fresh capital posture | blocked until fragile live-book issues are reviewed |
-| Schwab option tape | IREN paper-ready; CLSK and TE manual-review; HIVE avoid-chain |
+| Fresh capital posture | manual-ready-with-warnings; no live-book hard blockers; paper/strategy evidence still blocks automation |
+| Schwab option tape | fresh; current active read is thin-data-only, so use it as research context rather than sizing permission |
 | Automation authority | unchanged: research/paper only, no live submit |
 
 ## Strategy Thesis

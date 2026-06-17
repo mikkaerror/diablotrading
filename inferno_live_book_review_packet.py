@@ -167,6 +167,13 @@ def review_prompt(position: dict[str, Any], math_block: dict[str, Any]) -> list[
     posture = text(position.get("posture")).lower()
     tracker = position.get("trackerContext") or {}
     earnings_bucket = text(math_block.get("earningsBucket"))
+    operator_hold = bool(position.get("operatorLongTermHold"))
+
+    if operator_hold and posture != "fragile":
+        prompts.append(
+            f"{ticker} is an operator-declared long-term hold; monitor the thesis, but do not treat it as a fresh-capital blocker."
+        )
+        return prompts
 
     if posture == "fragile":
         prompts.append(
@@ -228,6 +235,7 @@ def build_position_packet(position: dict[str, Any]) -> dict[str, Any]:
         "math": math_block,
         "reasons": list(position.get("reasons") or []),
         "riskFlags": list(position.get("riskFlags") or []),
+        "operatorLongTermHold": bool(position.get("operatorLongTermHold")),
         "reviewPrompts": review_prompt(position, math_block),
         "trackerContext": tracker,
         "edgeContext": position.get("edgeContext"),

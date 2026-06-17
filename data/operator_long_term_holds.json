@@ -1,0 +1,11 @@
+{
+  "symbols": [
+    "TE",
+    "IREN",
+    "HIVE",
+    "CLSK"
+  ],
+  "researchOnly": true,
+  "brokerSubmitAllowed": false,
+  "note": "Operator-declared long-term core holds. These names stay visible in live-book review, but they do not hard-block fresh-capital review solely because short-term structure is fragile."
+}
