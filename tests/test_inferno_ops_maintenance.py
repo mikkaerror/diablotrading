@@ -133,7 +133,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                         return_value={"generatedAt": "2026-05-06T07:00:00-10:00", "skipped": False, "downloadsManager": {"importedFiles": 0}, "fillIngest": {}},
                     )
                 )
-                stack.enter_context(
+                repair_email = stack.enter_context(
                     patch.object(
                         ops_maintenance,
                         "repair_morning_email",
@@ -215,7 +215,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                         return_value={"ok": True, "status": "idle", "checkedCount": 2, "appliedCount": 1, "skippedCount": 1},
                     )
                 )
-                stack.enter_context(
+                approval_dispatch = stack.enter_context(
                     patch.object(
                         ops_maintenance,
                         "refresh_approval_dispatch",
@@ -291,11 +291,15 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 report = ops_maintenance.run_maintenance(
                     backtest_root=temp_root,
                     sheet_name="Earnings Tracker",
+                    skip_outbound=True,
                     cloud_region="us-central1",
                 )
 
             saved = json.loads(report_file.read_text(encoding="utf-8"))
             self.assertTrue(report["ok"])
+            repair_email.assert_not_called()
+            approval_dispatch.assert_not_called()
+            self.assertEqual(saved["emailRepair"]["status"], "skipped")
             self.assertEqual(saved["cloudControlPlane"]["status"], "ready")
             self.assertEqual(saved["cloudExecutionAudit"]["status"], "healthy")
             self.assertEqual(saved["advisories"], [])
@@ -308,7 +312,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["staleApprovalGovernor"]["status"], "no-action")
             self.assertEqual(saved["staleApprovalGovernor"]["ttlMarketDays"], 5)
             self.assertEqual(saved["approvalInbox"]["status"], "idle")
-            self.assertEqual(saved["approvalDispatch"]["status"], "sent")
+            self.assertEqual(saved["approvalDispatch"]["status"], "skipped")
             self.assertEqual(saved["schwabAccountSync"]["status"], "healthy")
             self.assertEqual(saved["liveAccountSync"]["status"], "healthy")
             self.assertEqual(saved["livePositionReview"]["status"], "review")

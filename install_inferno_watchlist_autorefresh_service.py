@@ -23,7 +23,7 @@ from inferno_config import LOCAL_ENV_FILE, ROOT, backtest_python
 
 WATCH_LABEL = "io.diablotrading.inferno-watchlist-autorefresh"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCH_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_watchlist_autorefresh_service.sh"
 ENTRYPOINT = ROOT / "inferno_watchlist_autorefresh.py"
@@ -51,7 +51,7 @@ def plist_payload(interval_seconds: int, auto_apply: bool) -> dict:
         env_vars["INFERNO_WATCHLIST_CONFIRM"] = "1"
     return {
         "Label": WATCH_LABEL,
-        "ProgramArguments": ["/bin/zsh", str(SERVICE_WRAPPER)],
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": interval_seconds,

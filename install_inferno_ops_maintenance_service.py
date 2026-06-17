@@ -4,8 +4,9 @@ from __future__ import annotations
 
 This service is intentionally lightweight. It does not rebuild the full dawn
 stack; it just keeps the surrounding ops artifacts honest during the day:
-email recovery, ticker hydration, downloads watch freshness, and watchdog
-refresh.
+ticker hydration, downloads watch freshness, and watchdog refresh. Recurring
+maintenance intentionally skips outbound email lanes; dawn owns the daily
+brief, and approval prompts should be triggered by explicit desk workflows.
 """
 
 import argparse
@@ -19,7 +20,7 @@ from inferno_config import LOCAL_ENV_FILE, ROOT, backtest_python
 
 WATCH_LABEL = "io.diablotrading.inferno-ops-maintenance"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCH_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_ops_maintenance_service.sh"
 ENTRYPOINT = ROOT / "inferno_ops_maintenance.py"
@@ -43,7 +44,7 @@ def plist_payload(interval_seconds: int) -> dict:
     stderr_path = str(LOG_DIR / "inferno_ops_maintenance.stderr.log")
     return {
         "Label": WATCH_LABEL,
-        "ProgramArguments": ["/bin/zsh", str(SERVICE_WRAPPER)],
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": interval_seconds,
@@ -67,7 +68,7 @@ def ensure_wrapper() -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                f'exec "{runner_python}" "{ENTRYPOINT}" run "$@"',
+                f'exec "{runner_python}" "{ENTRYPOINT}" run --skip-outbound --ok-on-attention "$@"',
                 "",
             ]
         ),

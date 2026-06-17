@@ -34,7 +34,7 @@ from inferno_config import ROOT, backtest_python
 
 SERVICE_LABEL = "io.diablotrading.inferno-daily-loop"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_daily_loop_service.sh"
 ENTRYPOINT = ROOT / "inferno_daily_loop.py"
@@ -73,7 +73,7 @@ def plist_payload(times: tuple[tuple[int, int], ...]) -> dict:
 
     return {
         "Label": SERVICE_LABEL,
-        "ProgramArguments": ["/bin/zsh", str(SERVICE_WRAPPER)],
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": False,
         "StartCalendarInterval": intervals,

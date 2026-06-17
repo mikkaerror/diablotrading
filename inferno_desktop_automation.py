@@ -272,6 +272,15 @@ def save_desktop_report(report: dict[str, Any]) -> None:
     DESKTOP_AUTOMATION_TEXT_FILE.write_text(desktop_report_text(report), encoding="utf-8")
 
 
+def exit_code_for_report(report: dict[str, Any], *, ok_on_blocked: bool = False) -> int:
+    """Return the CLI/service exit code for a completed desktop cycle."""
+    if report.get("verdict") in {"ready", "review", "scheduled-idle"}:
+        return 0
+    if ok_on_blocked and report.get("verdict") == "blocked":
+        return 0
+    return 1
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the desktop automation cycle."""
     parser = argparse.ArgumentParser(description="Run the guarded Inferno desktop automation cycle.")
@@ -282,6 +291,11 @@ def parse_args() -> argparse.Namespace:
         "--require-tos-running",
         action="store_true",
         help="Block the cycle unless thinkorswim is already running",
+    )
+    parser.add_argument(
+        "--ok-on-blocked",
+        action="store_true",
+        help="Return success after writing a blocked report; intended for launchd status freshness.",
     )
     return parser.parse_args()
 
@@ -298,7 +312,7 @@ def main() -> int:
         require_tos_running=args.require_tos_running,
     )
     print(desktop_report_text(report))
-    return 0 if report.get("verdict") in {"ready", "review", "scheduled-idle"} else 1
+    return exit_code_for_report(report, ok_on_blocked=args.ok_on_blocked)
 
 
 if __name__ == "__main__":

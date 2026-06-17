@@ -724,6 +724,8 @@ def run_maintenance(
     backtest_root: Path,
     sheet_name: str,
     force_email: bool = False,
+    skip_email_repair: bool = False,
+    skip_outbound: bool = False,
     cloud_region: str = DEFAULT_CLOUD_REGION,
 ) -> dict[str, Any]:
     """Run the safe maintenance sweep and persist the result."""
@@ -732,7 +734,11 @@ def run_maintenance(
     ticker_audit = build_ticker_universe_audit_from_sheet(backtest_root, sheet_name)
     data_audit = run_audit()
     downloads_watch = run_watch(automation=False, export_first=False)
-    email_repair = repair_morning_email(force=force_email)
+    email_repair = (
+        {"attempted": False, "ok": True, "status": "skipped"}
+        if skip_email_repair or skip_outbound
+        else repair_morning_email(force=force_email)
+    )
     cloud_control_plane = refresh_cloud_control_plane(region=cloud_region)
     cloud_execution_audit = refresh_cloud_execution_audit(region=cloud_region)
     paper_test_director = refresh_paper_test_director()
@@ -743,7 +749,11 @@ def run_maintenance(
     broker_preview = refresh_broker_preview()
     stale_approvals = refresh_stale_approval_governor()
     approval_inbox = refresh_approval_inbox()
-    approval_dispatch = refresh_approval_dispatch()
+    approval_dispatch = (
+        {"ok": True, "status": "skipped", "pendingCount": 0, "sentCount": 0, "skippedCount": 0}
+        if skip_outbound
+        else refresh_approval_dispatch()
+    )
     schwab_account_sync = refresh_schwab_account_sync()
     live_account_sync = refresh_live_account_sync()
     live_position_review = refresh_live_position_review()
@@ -832,6 +842,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--backtest-root", default=str(default_backtest_root()))
     parser.add_argument("--sheet-name", default=DEFAULT_SHEET_NAME)
     parser.add_argument("--force-email", action="store_true", help="Send the latest snapshot even if ops status says email already sent.")
+    parser.add_argument("--skip-email-repair", action="store_true", help="Refresh maintenance artifacts without sending a missed morning email.")
+    parser.add_argument("--skip-outbound", action="store_true", help="Refresh maintenance artifacts without sending email or approval prompts.")
+    parser.add_argument(
+        "--ok-on-attention",
+        action="store_true",
+        help="Exit zero after a completed sweep even when the desk report still needs attention.",
+    )
     parser.add_argument("--cloud-region", default=DEFAULT_CLOUD_REGION, help="Cloud region used by read-only cloud maintenance checks.")
     return parser.parse_args()
 
@@ -848,10 +865,14 @@ def main() -> int:
         backtest_root=Path(args.backtest_root).expanduser().resolve(),
         sheet_name=args.sheet_name,
         force_email=args.force_email,
+        skip_email_repair=args.skip_email_repair,
+        skip_outbound=args.skip_outbound,
         cloud_region=args.cloud_region,
     )
     print(maintenance_report_text(report))
-    return 0 if report.get("ok") else 1
+    if report.get("ok") or args.ok_on_attention:
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

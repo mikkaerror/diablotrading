@@ -23,7 +23,7 @@ PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCHDOG_LABEL}.plist"
 LEGACY_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_LABEL}.plist"
 LEGACY_WATCHDOG_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LEGACY_WATCHDOG_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 PIPELINE_ENTRYPOINT = ROOT / "inferno_dawn_pipeline.py"
 WATCHDOG_ENTRYPOINT = ROOT / "inferno_watchdog.py"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
@@ -50,7 +50,7 @@ def plist_payload(hour: int, minute: int) -> dict:
     stderr_path = str(LOG_DIR / "inferno_dawn.stderr.log")
     return {
         "Label": LABEL,
-        "ProgramArguments": ["/bin/zsh", str(SERVICE_WRAPPER)],
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": SAFETY_INTERVAL_SECONDS,
@@ -73,7 +73,7 @@ def watchdog_plist_payload(hour: int, minute: int) -> dict:
     stderr_path = str(LOG_DIR / "inferno_watchdog.stderr.log")
     return {
         "Label": WATCHDOG_LABEL,
-        "ProgramArguments": ["/bin/zsh", str(WATCHDOG_WRAPPER)],
+        "ProgramArguments": [str(WATCHDOG_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": WATCHDOG_INTERVAL_SECONDS,

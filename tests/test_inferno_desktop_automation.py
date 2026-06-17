@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from inferno_desktop_automation import desktop_verdict, run_desktop_cycle
+from inferno_desktop_automation import desktop_verdict, exit_code_for_report, run_desktop_cycle
 
 
 class DesktopAutomationTests(unittest.TestCase):
@@ -31,6 +31,11 @@ class DesktopAutomationTests(unittest.TestCase):
             desktop_verdict(True, "manual-check", {"skipped": False}, {"sandboxReady": True}),
             "review",
         )
+
+    def test_ok_on_blocked_only_changes_service_exit_code(self) -> None:
+        report = {"verdict": "blocked"}
+        self.assertEqual(exit_code_for_report(report), 1)
+        self.assertEqual(exit_code_for_report(report, ok_on_blocked=True), 0)
 
     @patch("inferno_desktop_automation.save_desktop_report")
     @patch("inferno_desktop_automation.save_tos_sandbox_session")

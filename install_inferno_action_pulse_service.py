@@ -22,7 +22,7 @@ from inferno_config import ROOT, backtest_python
 
 SERVICE_LABEL = "io.diablotrading.inferno-action-pulse"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_action_pulse_service.sh"
 ENTRYPOINT = ROOT / "inferno_action_pulse.py"
@@ -55,7 +55,7 @@ def parse_schedule(raw: list[str]) -> tuple[tuple[str, int, int], ...]:
     return tuple(parsed)
 
 
-def ensure_wrapper(deployable_cash: float) -> None:
+def ensure_wrapper() -> None:
     """Write the launchd wrapper that dispatches by phase argument."""
     runner_python = backtest_python()
     SERVICE_BIN_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,10 +66,15 @@ def ensure_wrapper(deployable_cash: float) -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                'PHASE="${1:-manual}"',
+                'if [ "$#" -gt 0 ]; then',
+                '  PHASE="$1"',
+                "else",
+                '  H="$(date +%H)"',
+                '  if [ "$H" -lt 12 ]; then PHASE="open"; else PHASE="preclose"; fi',
+                "fi",
                 (
                     f'exec "{runner_python}" "{ENTRYPOINT}" '
-                    f'--phase "$PHASE" --deployable-cash {deployable_cash:.2f} --send'
+                    f'--phase "$PHASE" --send'
                 ),
                 "",
             ]
@@ -82,17 +87,9 @@ def ensure_wrapper(deployable_cash: float) -> None:
 def plist_payload(schedule: tuple[tuple[str, int, int], ...]) -> dict:
     """Build the LaunchAgent plist payload."""
     LOG_DIR.mkdir(exist_ok=True)
-    # launchd cannot pass different arguments per StartCalendarInterval entry
-    # inside one plist. The wrapper infers phase from local clock: morning
-    # fires are open watch, afternoon fires are pre-close watch.
-    program_args = [
-        "/bin/zsh",
-        "-c",
-        f'H="$(date +%H)"; if [ "$H" -lt 12 ]; then exec "{SERVICE_WRAPPER}" open; else exec "{SERVICE_WRAPPER}" preclose; fi',
-    ]
     return {
         "Label": SERVICE_LABEL,
-        "ProgramArguments": program_args,
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": False,
         "StartCalendarInterval": [
@@ -111,7 +108,7 @@ def plist_payload(schedule: tuple[tuple[str, int, int], ...]) -> dict:
 
 def install(schedule: tuple[tuple[str, int, int], ...], deployable_cash: float) -> int:
     """Install and load the LaunchAgent."""
-    ensure_wrapper(deployable_cash)
+    ensure_wrapper()
     PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     with PLIST_PATH.open("wb") as handle:
         plistlib.dump(plist_payload(schedule), handle)
@@ -123,7 +120,7 @@ def install(schedule: tuple[tuple[str, int, int], ...], deployable_cash: float) 
         return result.returncode
     print(f"Installed action-pulse LaunchAgent at {PLIST_PATH}")
     print("Times (local weekdays): " + ", ".join(f"{phase}={hour:02d}:{minute:02d}" for phase, hour, minute in schedule))
-    print(f"Deployable cash basis: ${deployable_cash:,.2f}")
+    print("Deployable cash basis: dynamic from current capital/live-account artifacts")
     return 0
 
 

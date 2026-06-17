@@ -26,7 +26,7 @@ from inferno_config import (
 
 WATCH_LABEL = DESKTOP_AUTOMATION_LABEL
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCH_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_desktop_automation_service.sh"
 ENTRYPOINT = ROOT / "inferno_desktop_automation.py"
@@ -47,14 +47,9 @@ def plist_payload(export_first: bool, require_tos_running: bool) -> dict:
     LOG_DIR.mkdir(exist_ok=True)
     stdout_path = str(LOG_DIR / "inferno_desktop_automation.stdout.log")
     stderr_path = str(LOG_DIR / "inferno_desktop_automation.stderr.log")
-    arguments = ["/bin/zsh", str(SERVICE_WRAPPER)]
-    if export_first:
-        arguments.append("--export-first")
-    if require_tos_running:
-        arguments.append("--require-tos-running")
     return {
         "Label": WATCH_LABEL,
-        "ProgramArguments": arguments,
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": DESKTOP_AUTOMATION_INTERVAL_SECONDS,
@@ -80,7 +75,7 @@ def ensure_wrapper(export_first: bool, require_tos_running: bool) -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                f'exec "{runner_python}" "{ENTRYPOINT}" run --automation {export_flag}{tos_flag}"$@"',
+                f'exec "{runner_python}" "{ENTRYPOINT}" run --automation --ok-on-blocked {export_flag}{tos_flag}"$@"',
                 "",
             ]
         ),

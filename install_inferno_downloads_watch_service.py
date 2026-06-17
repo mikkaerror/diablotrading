@@ -26,7 +26,7 @@ from inferno_config import (
 
 WATCH_LABEL = DOWNLOADS_WATCH_LABEL
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{WATCH_LABEL}.plist"
-LOG_DIR = ROOT / "logs"
+LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_downloads_watch_service.sh"
 ENTRYPOINT = ROOT / "inferno_downloads_watch.py"
@@ -47,12 +47,9 @@ def plist_payload(export_first: bool) -> dict:
     LOG_DIR.mkdir(exist_ok=True)
     stdout_path = str(LOG_DIR / "inferno_downloads_watch.stdout.log")
     stderr_path = str(LOG_DIR / "inferno_downloads_watch.stderr.log")
-    arguments = ["/bin/zsh", str(SERVICE_WRAPPER)]
-    if export_first:
-        arguments.append("--export-first")
     return {
         "Label": WATCH_LABEL,
-        "ProgramArguments": arguments,
+        "ProgramArguments": [str(SERVICE_WRAPPER)],
         "WorkingDirectory": str(ROOT),
         "RunAtLoad": True,
         "StartInterval": DOWNLOADS_WATCH_INTERVAL_SECONDS,
