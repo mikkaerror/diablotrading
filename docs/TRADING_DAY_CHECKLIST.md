@@ -47,15 +47,15 @@ or skip the day entirely. The market's open tomorrow.
 
 ## Step 3 — Size each ticket (1 minute)
 
-Use the deployable cash printed by the latest capital readiness report.
+Use the guardrails printed by the latest capital readiness report. The options
+budget is dynamic; do not infer it from a fixed percentage.
 
 ```
-max_options_risk = deployable_cash * 0.25
-ticket_size = max_options_risk / candidates_today
-ticket_size = min(ticket_size, printed_single-ticket_cap)
+ticket_size = printed_max_options_risk / candidates_today
+ticket_size = min(ticket_size, printed_max_starter_ticket)
 ```
 
-Never exceed the printed single-ticket cap regardless of conviction.
+Never exceed the printed starter-ticket cap regardless of conviction.
 Never exceed the printed max options risk budget.
 
 ## Step 4 — Paper-stage before live (3 minutes)

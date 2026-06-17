@@ -94,7 +94,12 @@ def build_sleeves(
         cash -= 0.05
     elif catalyst_count == 0:
         options -= 0.10
-        cash += 0.10
+        if shovel_count:
+            # No catalyst lane means do not force options; use the freed budget
+            # for long-term candidates when they exist instead of over-reserving.
+            long_term += 0.10
+        else:
+            cash += 0.10
 
     if shovel_count >= 4:
         long_term += 0.05

@@ -16,12 +16,12 @@ remains locked. The legacy live book is now explicitly marked as
 operator-declared long-term holds, so TE, IREN, HIVE, and CLSK no longer hard
 block fresh-capital review solely because short-term structure is fragile.
 
-Latest readiness sweep: 2026-06-17 13:52 MT. Capital launch is
+Latest readiness sweep: 2026-06-17 16:20 MT. Capital launch is
 `manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
 `clean`; Schwab options data is fresh as the primary read-only option quote
 tape; paper evidence is still the bottleneck with 30 closed scored outcomes
 remaining before any automation promotion. Current live account read: NLV
-$1,565.47, cash $599.93, four supported declared long-term holds, zero live-book
+$1,576.33, cash $599.93, four supported declared long-term holds, zero live-book
 hard blockers.
 
 `reports/model_command_center_latest.txt` is now the PM landing page. If this
@@ -51,7 +51,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
 | Live account sync | healthy | matched configured approved suffix; source is Schwab account API |
 | Live book | healthy, read-only | 4 matched positions · TE/IREN/HIVE/CLSK declared long-term holds · supported=4, fragile=0, hard blockers=0 |
-| Capital deployment | `manual-ready-with-warnings` | deployable cash $599.93; max options risk $89.99; max starter ticket $89.99; reserve $269.97; live submit still OFF |
+| Capital deployment | `manual-ready-with-warnings` | deployable cash $599.93; max options risk $89.99; max starter ticket $89.99; long-term buy lane $299.96; reserve $209.98; live submit still OFF |
 | Risk gate audit | `manual-only` | 5/12 pass; hard fails 0; promotion fails 3; warnings 4 |
 | Tracker | synced | 146 sheet / 146 snapshot; HIVE, TE, CLSK appended; IREN already existed; 0 critical/advisory ticker issues |
 | Watchlist closed-loop | shipped | 5-min autorefresh, three-way reconciler |

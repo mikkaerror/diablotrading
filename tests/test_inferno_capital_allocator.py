@@ -26,6 +26,28 @@ class InfernoCapitalAllocatorTests(unittest.TestCase):
         self.assertEqual(sleeves["options"], 0.0)
         self.assertGreater(sleeves["cash"], sleeves["longTerm"])
 
+    def test_build_sleeves_redirects_no_catalyst_budget_to_long_term_candidates(self) -> None:
+        sleeves = build_sleeves(
+            {"decision": {"authorityLevel": "paper-evidence-only"}},
+            {"deskVerdict": {"level": "insufficient-data"}},
+            {"marketRegime": {"riskLevel": "normal"}},
+            {"topCatalystTrades": [], "topLongTermShovels": [{"ticker": "CHKP"}]},
+        )
+
+        self.assertEqual(sleeves["options"], 0.15)
+        self.assertEqual(sleeves["longTerm"], 0.5)
+        self.assertEqual(sleeves["cash"], 0.35)
+
+    def test_build_sleeves_preserves_cash_when_no_lane_has_candidates(self) -> None:
+        sleeves = build_sleeves(
+            {"decision": {"authorityLevel": "paper-evidence-only"}},
+            {"deskVerdict": {"level": "insufficient-data"}},
+            {"marketRegime": {"riskLevel": "normal"}},
+            {"topCatalystTrades": [], "topLongTermShovels": []},
+        )
+
+        self.assertEqual(sleeves["cash"], 0.55)
+
     def test_build_options_lane_uses_execution_intents_when_available(self) -> None:
         lane = build_options_lane(
             {
