@@ -34,6 +34,8 @@ site/
 .pdm-python
 .pdm-build/
 __pypackages__/
+node_modules/
+.codex-spreadsheet-runtime/
 *.egg-info/
 *.egg
 .env.smtp
