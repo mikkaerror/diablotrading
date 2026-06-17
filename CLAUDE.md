@@ -169,7 +169,41 @@ type one letter, and move on.
 If you add a flag, you are reintroducing the friction the script exists
 to remove. Resist.
 
-## 8. Specific anti-patterns from past sessions
+## 8. The autonomous-vs-ack boundary (binding)
+
+The desk runs a recurring "always-on" optimization loop via
+`./nightly_optimize.sh` (cron-able on Mac). The boundary between what
+that loop can do without operator approval, vs what requires an
+explicit click, is fixed:
+
+**Autonomous (no operator approval needed):**
+  - Data refreshes (Schwab account/options/price-history, tracker, live sync)
+  - Recomputing research-only recommenders (capital_scaling, paper_velocity,
+    paper_mark_to_market, trade_management, central_command,
+    while_away_packet)
+  - Regenerating reports under `reports/*_latest.txt`
+  - Appending to `data/nlv_history.csv` (NLV snapshots)
+  - Universe / slate analysis that writes to `data/` as research artifacts
+  - Coordination notes via `inferno_model_command_center.py note`
+  - Backlog item progress notes
+
+**Always requires explicit operator approval:**
+  - Approving / rejecting any paper ticket (operator runs `./today.sh`)
+  - Ack-ing or revoking the capital-scaling formula
+  - Touching `liveTradingAllowed` / `brokerSubmitAllowed` (still hard-coded)
+  - Any change to risk policy constants
+  - Edits to the universe / tracker that change what tickers are eligible
+  - Anything that mutates the live broker book
+
+If a recurring task is sitting on this line and you're not sure which
+side it lands on: STOP, surface the question to the operator, do not
+proceed by inference.
+
+The point of the boundary is: the loop keeps the data fresh and the
+reports honest. The operator stays the only person who clicks a button
+that costs money or moves discipline.
+
+## 9. Specific anti-patterns from past sessions
 
 - **Don't** read `outputs/today_math_worksheet.py` and assume it's part of
   the pipeline — it's a one-off diagnostic.
