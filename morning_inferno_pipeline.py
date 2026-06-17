@@ -253,6 +253,9 @@ def readiness_label(readiness: float) -> str:
 
 
 def number_or_none(value: Any) -> float | None:
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool):
+        parsed = float(value)
+        return parsed if np.isfinite(parsed) else None
     cleaned = str(value or "").replace("$", "").replace(",", "").strip()
     if not cleaned or cleaned.upper() == "N/A" or cleaned == "#N/A":
         return None

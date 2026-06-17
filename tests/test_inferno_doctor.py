@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for overnight doctor freshness handling."""
 
 import unittest
+import subprocess
 from datetime import datetime
 from unittest.mock import patch
 
@@ -13,12 +14,14 @@ from inferno_doctor import (
     cycle_days,
     cycle_reference_day,
     in_current_service_cycle,
+    launch_agent_status,
     live_position_review_status,
     model_command_center_status,
     paper_mark_to_market_status,
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
+    trade_management_status,
 )
 
 
@@ -108,6 +111,53 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
 
+    def test_launch_agent_status_warns_on_nonzero_last_exit(self) -> None:
+        with patch(
+            "inferno_doctor.run_command",
+            return_value=subprocess.CompletedProcess(
+                args=["launchctl", "print"],
+                returncode=0,
+                stdout="runs = 3\nlast exit code = 78: EX_CONFIG\n",
+                stderr="",
+            ),
+        ):
+            ok, detail = launch_agent_status("io.example.bad")
+
+        self.assertFalse(ok)
+        self.assertIn("runs=3", detail)
+        self.assertIn("last exit code=78: EX_CONFIG", detail)
+
+    def test_launch_agent_status_accepts_zero_last_exit(self) -> None:
+        with patch(
+            "inferno_doctor.run_command",
+            return_value=subprocess.CompletedProcess(
+                args=["launchctl", "print"],
+                returncode=0,
+                stdout="runs = 1\nlast exit code = 0\n",
+                stderr="",
+            ),
+        ):
+            ok, detail = launch_agent_status("io.example.good")
+
+        self.assertTrue(ok)
+        self.assertIn("last exit code=0", detail)
+
+    def test_launch_agent_status_accepts_never_exited_before_first_run(self) -> None:
+        with patch(
+            "inferno_doctor.run_command",
+            return_value=subprocess.CompletedProcess(
+                args=["launchctl", "print"],
+                returncode=0,
+                stdout="runs = 0\nlast exit code = (never exited)\n",
+                stderr="",
+            ),
+        ):
+            ok, detail = launch_agent_status("io.example.scheduled")
+
+        self.assertTrue(ok)
+        self.assertIn("runs=0", detail)
+        self.assertIn("last exit code=(never exited)", detail)
+
     def test_paper_mark_to_market_status_accepts_disabled_fetch(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):
             ok, detail = paper_mark_to_market_status(
@@ -131,6 +181,59 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                     "generatedAt": "2026-05-27T04:00:00+00:00",
                     "verdict": "ok",
                     "promotable": True,
+                }
+            )
+        self.assertFalse(ok)
+
+    def test_trade_management_status_accepts_actions_recommended(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = trade_management_status(
+                {
+                    "generatedAt": "2026-05-27T04:05:00+00:00",
+                    "verdict": "actions-recommended",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "liveTradingAllowed": False,
+                    "brokerSubmitAllowed": False,
+                    "openPositionCount": 2,
+                    "actionableCount": 1,
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("actions-recommended", detail)
+        self.assertIn("open=2", detail)
+        self.assertIn("actionable=1", detail)
+
+    def test_trade_management_status_accepts_awaiting_data(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = trade_management_status(
+                {
+                    "generatedAt": "2026-05-27T04:05:00+00:00",
+                    "verdict": "awaiting-data",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "liveTradingAllowed": False,
+                    "brokerSubmitAllowed": False,
+                    "openPositionCount": 1,
+                    "actionableCount": 0,
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("awaiting-data", detail)
+
+    def test_trade_management_status_warns_when_authority_changes(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = trade_management_status(
+                {
+                    "generatedAt": "2026-05-27T04:05:00+00:00",
+                    "verdict": "all-hold",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": True,
+                    "liveTradingAllowed": False,
+                    "brokerSubmitAllowed": False,
                 }
             )
         self.assertFalse(ok)

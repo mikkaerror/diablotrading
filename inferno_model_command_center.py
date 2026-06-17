@@ -49,10 +49,12 @@ SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
 SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
+CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 PAPER_MTM_FILE = DATA_DIR / "inferno_paper_mark_to_market.json"
+TRADE_MANAGEMENT_FILE = DATA_DIR / "inferno_trade_management.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
 SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
@@ -113,6 +115,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "codex",
     },
     {
+        "lane": "capital-scenarios",
+        "question": "How does the desk behave across likely cash amounts?",
+        "artifact": "reports/capital_scenario_matrix_latest.txt",
+        "owner": "codex",
+    },
+    {
         "lane": "risk",
         "question": "Which gates are blocking?",
         "artifact": "reports/risk_gate_audit_latest.txt",
@@ -140,6 +148,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper-mtm",
         "question": "What are open paper tickets worth right now?",
         "artifact": "reports/paper_mark_to_market_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "paper-trade-management",
+        "question": "Which open paper tickets need action under the playbook?",
+        "artifact": "reports/trade_management_latest.txt",
         "owner": "shared",
     },
     {
@@ -321,6 +335,28 @@ def ensure_command_center_dirs() -> None:
 def text(value: Any) -> str:
     """Normalize loose values into compact display text."""
     return str(value or "").strip()
+
+
+def has_display_value(value: Any) -> bool:
+    """Return true for real zero values while rejecting absent display fields."""
+    if value is None:
+        return False
+    if isinstance(value, str) and text(value) == "":
+        return False
+    return True
+
+
+def first_display_value(*values: Any) -> Any:
+    """Return the first non-empty value without treating zero as missing."""
+    for value in values:
+        if has_display_value(value):
+            return value
+    return None
+
+
+def display_value(value: Any) -> Any:
+    """Render missing values as '-' without hiding numeric zero."""
+    return value if has_display_value(value) else "-"
 
 
 def number(value: Any, default: float = 0.0) -> float:
@@ -576,6 +612,7 @@ def build_command_center() -> dict[str, Any]:
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
+    trade_management = load_json_file(TRADE_MANAGEMENT_FILE) or {}
     scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
     scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
     score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
@@ -624,10 +661,12 @@ def build_command_center() -> dict[str, Any]:
         "liveBookReviewPacket": artifact_summary(LIVE_BOOK_REVIEW_PACKET_FILE, keys=("verdict", "generatedAt", "capitalReadinessVerdict", "manualDeploymentAllowed", "autoLiveAllowed")),
         "whileAwayPacket": artifact_summary(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
+        "capitalScenarioMatrix": artifact_summary(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
         "paperMarkToMarket": artifact_summary(PAPER_MTM_FILE, keys=("stage", "verdict", "fetchStatus", "generatedAt", "researchOnly", "promotable", "openPositionCount")),
+        "tradeManagement": artifact_summary(TRADE_MANAGEMENT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "openPositionCount", "actionableCount")),
         "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
         "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
         "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
@@ -669,8 +708,10 @@ def build_command_center() -> dict[str, Any]:
     )
     headline_metrics = {
         "accountDataSource": live_sync.get("accountDataSource"),
-        "accountNetLiquidatingValue": live_sync.get("netLiquidatingValue") or schwab_account_sync.get("netLiquidatingValue"),
-        "accountTotalCash": live_sync.get("totalCash") or schwab_account_sync.get("totalCash"),
+        "accountNetLiquidatingValue": first_display_value(
+            live_sync.get("netLiquidatingValue"), schwab_account_sync.get("netLiquidatingValue")
+        ),
+        "accountTotalCash": first_display_value(live_sync.get("totalCash"), schwab_account_sync.get("totalCash")),
         "schwabAccountVerdict": schwab_account_sync.get("verdict"),
         "liveSupported": live_counts.get("supported", 0),
         "liveReview": live_counts.get("review", 0),
@@ -685,6 +726,10 @@ def build_command_center() -> dict[str, Any]:
         "paperMtmFetchStatus": paper_mtm.get("fetchStatus"),
         "paperMtmOpenPositions": paper_mtm.get("openPositionCount"),
         "paperMtmMarkedTickets": len(paper_mtm.get("marksByTicketId") or {}),
+        "tradeManagementVerdict": trade_management.get("verdict"),
+        "tradeManagementOpenPositions": trade_management.get("openPositionCount"),
+        "tradeManagementActionable": trade_management.get("actionableCount"),
+        "tradeManagementVerdictCounts": trade_management.get("verdictCounts") or {},
         "paperScenarioTopFive": [
             item.get("ticker")
             for item in (paper_reducer.get("topFiveFocus") or [])
@@ -835,6 +880,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_ops_maintenance.sh",
             "./run_inferno_paper_evidence_harvest.sh",
             "./run_inferno_paper_mark_to_market.sh",
+            "./run_inferno_trade_management.sh",
             "./run_inferno_scenario_evidence.sh",
             "./run_inferno_scenario_backtest.sh",
             "./run_inferno_score_calibration.sh",
@@ -853,6 +899,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_while_away_packet.sh",
             "./run_inferno_usage_optimizer.sh",
             f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
+            "./run_inferno_capital_scenario_matrix.sh --deployable-cash 500 3000 5000",
             f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
@@ -876,6 +923,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
             str(ROOT / "reports/paper_mark_to_market_latest.txt"),
+            str(ROOT / "reports/trade_management_latest.txt"),
             str(ROOT / "reports/score_calibration_latest.txt"),
             str(ROOT / "reports/expected_move_ledger_latest.txt"),
             str(ROOT / "reports/strategy_alternative_scorer_latest.txt"),
@@ -940,10 +988,12 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live book review packet: {status_value(status.get('liveBookReviewPacket') or {})}",
             f"- While away packet: {status_value(status.get('whileAwayPacket') or {})}",
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
+            f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Paper mark-to-market: {status_value(status.get('paperMarkToMarket') or {})}",
+            f"- Trade management: {status_value(status.get('tradeManagement') or {})}",
             f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
             f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
             f"- Score calibration: {status_value(status.get('scoreCalibration') or {})}",
@@ -959,8 +1009,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             "",
             "Headline metrics:",
             f"- Account source: {metrics.get('accountDataSource') or '-'}",
-            f"- Account NLV: {metrics.get('accountNetLiquidatingValue') or '-'}",
-            f"- Account cash: {metrics.get('accountTotalCash') or '-'}",
+            f"- Account NLV: {display_value(metrics.get('accountNetLiquidatingValue'))}",
+            f"- Account cash: {display_value(metrics.get('accountTotalCash'))}",
             f"- Live supported: {metrics.get('liveSupported', 0)}",
             f"- Live fragile: {metrics.get('liveFragile', 0)}",
             f"- Live hard blockers: {metrics.get('liveBookHardBlockers', 0)}",
@@ -973,6 +1023,10 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper MTM: {metrics.get('paperMtmFetchStatus') or '-'} | "
             f"open {metrics.get('paperMtmOpenPositions')} | "
             f"marked {metrics.get('paperMtmMarkedTickets')}",
+            f"- Trade management: {metrics.get('tradeManagementVerdict') or '-'} | "
+            f"open {metrics.get('tradeManagementOpenPositions')} | "
+            f"actionable {metrics.get('tradeManagementActionable')} | "
+            f"counts {json.dumps(metrics.get('tradeManagementVerdictCounts') or {})}",
             f"- Paper top five: {', '.join(metrics.get('paperScenarioTopFive') or []) or 'none'}",
             f"- Scenario backtest evidence: {metrics.get('scenarioClosedEvidenceCount', 0)}",
             f"- Scenario observations closed: {metrics.get('scenarioClosedObservationCount', 0)}",
@@ -1112,6 +1166,8 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
         f"hard fails {metrics.get('riskGateHardFails')}",
         f"- Strategy lab: {status_value(status.get('strategyLab') or {})} | "
         f"remaining {metrics.get('paperRemainingForPromotion', 0)}",
+        f"- Trade management: {status_value(status.get('tradeManagement') or {})} | "
+        f"actionable {metrics.get('tradeManagementActionable')}",
         "",
         "Currently active missions:",
     ])

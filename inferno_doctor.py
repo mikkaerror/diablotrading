@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import smtplib
 import subprocess
 from datetime import datetime, timedelta
@@ -66,6 +67,7 @@ CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
 CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
 PAPER_MTM_FILE = ROOT / "data" / "inferno_paper_mark_to_market.json"
+TRADE_MANAGEMENT_FILE = ROOT / "data" / "inferno_trade_management.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -116,6 +118,26 @@ def run_command(*args: str) -> subprocess.CompletedProcess[str]:
 def launch_agent_loaded(label: str) -> bool:
     domain = f"gui/{os.getuid()}/{label}"
     return run_command("launchctl", "print", domain).returncode == 0
+
+
+def launch_agent_status(label: str) -> tuple[bool, str]:
+    """Return launchd load health plus the last exit code when available."""
+    domain = f"gui/{os.getuid()}/{label}"
+    result = run_command("launchctl", "print", domain)
+    if result.returncode != 0:
+        return False, "not loaded"
+
+    runs_match = re.search(r"\bruns = ([^\n]+)", result.stdout)
+    exit_match = re.search(r"\blast exit code = ([^\n]+)", result.stdout)
+    detail_parts = ["loaded"]
+    if runs_match:
+        detail_parts.append(f"runs={runs_match.group(1).strip()}")
+    if exit_match:
+        last_exit = exit_match.group(1).strip()
+        detail_parts.append(f"last exit code={last_exit}")
+        if not last_exit.startswith("0") and "never exited" not in last_exit:
+            return False, " | ".join(detail_parts)
+    return True, " | ".join(detail_parts)
 
 
 def pmset_sched_text() -> str:
@@ -713,6 +735,46 @@ def paper_mark_to_market_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def trade_management_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the paper trade-management auditor freshness and safety flags.
+
+    ``actions-recommended`` is a healthy research outcome: it means the
+    operator has a morning decision card, not that the desk took action.
+    """
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "unknown")
+    research_only = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("liveTradingAllowed"))
+        and not bool(report.get("brokerSubmitAllowed"))
+    )
+    ok = fresh and research_only and verdict in {
+        "no-open-positions",
+        "all-hold",
+        "awaiting-data",
+        "actions-recommended",
+    }
+    detail = (
+        f"{verdict} | open={report.get('openPositionCount')} | "
+        f"actionable={report.get('actionableCount')} | research-only={research_only}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "researchOnly": report.get("researchOnly"),
+                "promotable": report.get("promotable"),
+            }
+        )
+    )
+    return ok, detail
+
+
 def capital_scaling_status(report: dict) -> tuple[bool, str]:
     """Evaluate the capital-scaling recommender freshness and verdict.
 
@@ -893,24 +955,24 @@ def main() -> int:
     if not scripts_ok:
         warnings += 1
 
-    dawn_loaded = launch_agent_loaded(LABEL)
-    lines.append(summarize_status("Dawn agent", dawn_loaded, "loaded" if dawn_loaded else "not loaded"))
-    if not dawn_loaded:
+    dawn_ok, dawn_detail = launch_agent_status(LABEL)
+    lines.append(summarize_status("Dawn agent", dawn_ok, dawn_detail))
+    if not dawn_ok:
         warnings += 1
 
-    watchdog_loaded = launch_agent_loaded(WATCHDOG_LABEL)
-    lines.append(summarize_status("Watchdog agent", watchdog_loaded, "loaded" if watchdog_loaded else "not loaded"))
-    if not watchdog_loaded:
+    watchdog_ok, watchdog_detail = launch_agent_status(WATCHDOG_LABEL)
+    lines.append(summarize_status("Watchdog agent", watchdog_ok, watchdog_detail))
+    if not watchdog_ok:
         warnings += 1
 
-    downloads_watch_loaded = launch_agent_loaded(DOWNLOADS_WATCH_LABEL)
-    desktop_automation_loaded = launch_agent_loaded(DESKTOP_AUTOMATION_LABEL)
-    local_automation_loaded = downloads_watch_loaded or desktop_automation_loaded
+    downloads_watch_ok, downloads_watch_detail = launch_agent_status(DOWNLOADS_WATCH_LABEL)
+    desktop_automation_ok, desktop_automation_detail = launch_agent_status(DESKTOP_AUTOMATION_LABEL)
+    local_automation_loaded = downloads_watch_ok or desktop_automation_ok
     local_automation_detail_parts = []
-    if downloads_watch_loaded:
-        local_automation_detail_parts.append("downloads-watch")
-    if desktop_automation_loaded:
-        local_automation_detail_parts.append("desktop-coordinator")
+    if downloads_watch_ok:
+        local_automation_detail_parts.append(f"downloads-watch ({downloads_watch_detail})")
+    if desktop_automation_ok:
+        local_automation_detail_parts.append(f"desktop-coordinator ({desktop_automation_detail})")
     lines.append(
         summarize_status(
             "Local automation agent",
@@ -923,15 +985,15 @@ def main() -> int:
     if not local_automation_loaded:
         warnings += 1
 
-    action_pulse_loaded = launch_agent_loaded(ACTION_PULSE_LABEL)
+    action_pulse_ok, action_pulse_detail = launch_agent_status(ACTION_PULSE_LABEL)
     lines.append(
         summarize_status(
             "Action pulse agent",
-            action_pulse_loaded,
-            "loaded for 07:05 and 13:30" if action_pulse_loaded else "not loaded",
+            action_pulse_ok,
+            f"07:05 and 13:30 | {action_pulse_detail}" if action_pulse_ok else action_pulse_detail,
         )
     )
-    if not action_pulse_loaded:
+    if not action_pulse_ok:
         warnings += 1
 
     sched_text = pmset_sched_text()
@@ -1311,6 +1373,12 @@ def main() -> int:
     paper_mtm_ok, paper_mtm_detail = paper_mark_to_market_status(paper_mtm)
     lines.append(summarize_status("Paper mark-to-market", paper_mtm_ok, paper_mtm_detail))
     if not paper_mtm_ok:
+        warnings += 1
+
+    trade_management = load_json_file(TRADE_MANAGEMENT_FILE) or {}
+    trade_management_ok, trade_management_detail = trade_management_status(trade_management)
+    lines.append(summarize_status("Trade management", trade_management_ok, trade_management_detail))
+    if not trade_management_ok:
         warnings += 1
 
     capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}

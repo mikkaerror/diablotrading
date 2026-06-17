@@ -56,6 +56,15 @@ def numeric(value: Any) -> float | None:
         return None
 
 
+def display_value(value: Any) -> Any:
+    """Preserve zero values while using '-' for absent display fields."""
+    if value is None:
+        return "-"
+    if isinstance(value, str) and text(value) == "":
+        return "-"
+    return value
+
+
 def suffix_match(candidates: list[str]) -> str | None:
     """Return the allowed live-account suffix that matches the current probe."""
     for allowed in TOS_ALLOWED_ACCOUNT_SUFFIXES:
@@ -391,8 +400,8 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
         f"Allowed live readonly: {report.get('allowedLiveReadonly')}",
         f"Matched suffix: {report.get('matchedSuffix') or '-'}",
         f"Visible suffixes: {', '.join(report.get('accountSuffixCandidates') or []) or '-'}",
-        f"Net liq: {report.get('netLiquidatingValue') or '-'}",
-        f"Total cash: {report.get('totalCash') or '-'}",
+        f"Net liq: {display_value(report.get('netLiquidatingValue'))}",
+        f"Total cash: {display_value(report.get('totalCash'))}",
         f"TOS visibility: {render_tos_visibility_line(report.get('tosVisibility') or {})}",
         f"TOS required for account sync: {report.get('tosRequiredForAccountSync')}",
         f"Schwab account sync: {report.get('schwabAccountVerdict') or '-'} | {report.get('schwabAccountGeneratedAt') or '-'}",
@@ -415,10 +424,10 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
         lines.append(
             "- "
             + f"{item.get('symbol')} qty={item.get('qty')} mv={item.get('markValue')} "
-            + f"w={item.get('weightPct') or '-'}% "
+            + f"w={display_value(item.get('weightPct'))}% "
             + f"bucket={item.get('bucket')} "
-            + f"priority={tracker.get('priority') or '-'} "
-            + f"ready={tracker.get('readyScore') or '-'} "
+            + f"priority={display_value(tracker.get('priority'))} "
+            + f"ready={display_value(tracker.get('readyScore'))} "
             + f"align={tracker.get('alignmentLabel') or '-'} "
             + f"flags={', '.join(item.get('riskFlags') or []) or '-'}"
         )

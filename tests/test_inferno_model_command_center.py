@@ -67,7 +67,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (data_dir / "inferno_live_account_sync.json").write_text(
-                json.dumps({"generatedAt": "2026-05-10T10:02:00-06:00", "verdict": "healthy", "message": "", "matchedSuffix": "1234", "accountDataSource": "schwab-account-api", "netLiquidatingValue": 1000.0, "totalCash": 200.0}),
+                json.dumps({"generatedAt": "2026-05-10T10:02:00-06:00", "verdict": "healthy", "message": "", "matchedSuffix": "1234", "accountDataSource": "schwab-account-api", "netLiquidatingValue": 1000.0, "totalCash": 0.0}),
                 encoding="utf-8",
             )
             (data_dir / "inferno_schwab_account_sync.json").write_text(
@@ -95,6 +95,18 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                         "message": "manual only",
                         "manualDeploymentAllowed": True,
                         "autoLiveAllowed": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_capital_scenario_matrix.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:35-06:00",
+                        "stage": "capital-scenario-matrix",
+                        "verdict": "all-blocked",
+                        "deploymentDate": "2026-07-06",
+                        "scenarioCount": 3,
                     }
                 ),
                 encoding="utf-8",
@@ -164,6 +176,22 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                         "promotable": False,
                         "openPositionCount": 2,
                         "marksByTicketId": {"ticket-1": {}, "ticket-2": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_trade_management.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:40-06:00",
+                        "stage": "trade-management-research-only",
+                        "verdict": "actions-recommended",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "authorityChanged": False,
+                        "openPositionCount": 2,
+                        "actionableCount": 1,
+                        "verdictCounts": {"hold": 1, "take-profit-1": 1},
                     }
                 ),
                 encoding="utf-8",
@@ -256,10 +284,12 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("LIVE_ACCOUNT_SYNC_FILE", data_dir / "inferno_live_account_sync.json"),
                 ("SCHWAB_ACCOUNT_SYNC_FILE", data_dir / "inferno_schwab_account_sync.json"),
                 ("CAPITAL_DEPLOYMENT_READINESS_FILE", data_dir / "inferno_capital_deployment_readiness.json"),
+                ("CAPITAL_SCENARIO_MATRIX_FILE", data_dir / "inferno_capital_scenario_matrix.json"),
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
                 ("PAPER_MTM_FILE", data_dir / "inferno_paper_mark_to_market.json"),
+                ("TRADE_MANAGEMENT_FILE", data_dir / "inferno_trade_management.json"),
                 ("SCENARIO_BACKTEST_FILE", data_dir / "inferno_scenario_backtest.json"),
                 ("PAPER_EVIDENCE_LOOP_FILE", data_dir / "inferno_paper_evidence_loop.json"),
                 ("PERFORMANCE_ANALYTICS_FILE", data_dir / "inferno_performance_analytics.json"),
@@ -285,6 +315,8 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["paperMtmFetchStatus"], "disabled")
             self.assertEqual(payload["headlineMetrics"]["paperMtmOpenPositions"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperMtmMarkedTickets"], 2)
+            self.assertEqual(payload["headlineMetrics"]["tradeManagementVerdict"], "actions-recommended")
+            self.assertEqual(payload["headlineMetrics"]["tradeManagementActionable"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioTopFive"], ["FLNC", "THR"])
             self.assertEqual(payload["headlineMetrics"]["scenarioClosedEvidenceCount"], 4)
             self.assertEqual(payload["headlineMetrics"]["scenarioBacktestTopFocus"], ["FLNC", "THR", "MOD"])
@@ -295,6 +327,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["convictionBestBalanced"], ["NVDA", "MOD"])
             self.assertEqual(payload["headlineMetrics"]["capitalDeploymentVerdict"], "manual-ready-with-warnings")
             self.assertFalse(payload["headlineMetrics"]["autoLiveAllowed"])
+            self.assertEqual(payload["systemStatus"]["capitalScenarioMatrix"]["verdict"], "all-blocked")
             self.assertEqual(payload["headlineMetrics"]["riskGateVerdict"], "blocked")
             self.assertEqual(payload["headlineMetrics"]["riskGateHardFails"], 1)
             self.assertEqual(payload["headlineMetrics"]["mathVerifyVerdict"], "clean")
@@ -304,12 +337,14 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["systemStatus"]["schwabAccountSync"]["verdict"], "healthy")
             self.assertEqual(payload["headlineMetrics"]["accountDataSource"], "schwab-account-api")
             self.assertEqual(payload["headlineMetrics"]["accountNetLiquidatingValue"], 1000.0)
+            self.assertEqual(payload["headlineMetrics"]["accountTotalCash"], 0.0)
             self.assertTrue(payload["executiveSummary"][0].startswith("Capital:"))
             self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
             self.assertIn("reports/while_away_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertIn("reports/paper_mark_to_market_latest.txt", "\n".join(payload["recommendedReads"]))
+            self.assertIn("reports/trade_management_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertEqual(len(payload["activeMissions"]), 1)
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
@@ -319,14 +354,18 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Deploy preflight: ready-for-pilot", text_report)
             self.assertIn("Schwab account sync: healthy", text_report)
             self.assertIn("Account source: schwab-account-api", text_report)
+            self.assertIn("Account cash: 0.0", text_report)
             self.assertIn("Live book review packet: blocked", text_report)
             self.assertIn("While away packet: monitor-only", text_report)
             self.assertIn("Capital deployment readiness: manual-ready-with-warnings", text_report)
+            self.assertIn("Capital scenario matrix: all-blocked", text_report)
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", text_report)
             self.assertIn("Paper mark-to-market: disabled", text_report)
             self.assertIn("Paper MTM: disabled | open 2 | marked 2", text_report)
+            self.assertIn("Trade management: actions-recommended", text_report)
+            self.assertIn("actionable 1", text_report)
             self.assertIn("Scenario backtest: scenario-backtest-research-only", text_report)
             self.assertIn("Paper scenarios: 12", text_report)
             self.assertIn("Paper top five: FLNC, THR", text_report)
@@ -340,7 +379,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/math_verify_latest.txt", text_report)
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/while_away_latest.txt", text_report)
+            self.assertIn("reports/capital_scenario_matrix_latest.txt", text_report)
             self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
+            self.assertIn("reports/trade_management_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)
             self.assertIn("Conviction giants: NVDA, AVGO", text_report)
             self.assertIn("Conviction balanced: NVDA, MOD", text_report)

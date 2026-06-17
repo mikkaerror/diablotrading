@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from inferno_live_account_sync import build_live_account_sync, load_statement
+from inferno_live_account_sync import build_live_account_sync, live_account_sync_text, load_statement
 
 
 class InfernoLiveAccountSyncTests(unittest.TestCase):
@@ -232,6 +232,32 @@ class InfernoLiveAccountSyncTests(unittest.TestCase):
         self.assertFalse(report["tosRequiredForAccountSync"])
         self.assertEqual(report["counts"]["matchedPositions"], 1)
         mock_probe_tos_session.assert_not_called()
+
+    def test_live_account_sync_text_preserves_zero_cash(self) -> None:
+        text = live_account_sync_text(
+            {
+                "generatedAt": "2026-06-03T21:24:00-06:00",
+                "verdict": "attention",
+                "message": "live holdings synced",
+                "accountDataSource": "schwab-account-api",
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
+                "matchedSuffix": "8499",
+                "accountSuffixCandidates": ["8499"],
+                "netLiquidatingValue": 1067.4,
+                "totalCash": 0.0,
+                "tosVisibility": {},
+                "tosRequiredForAccountSync": False,
+                "schwabAccountVerdict": "healthy",
+                "schwabAccountGeneratedAt": "2026-06-03T21:24:00-06:00",
+                "statementRefreshFallback": None,
+                "counts": {},
+                "nextActions": [],
+                "positions": [],
+            }
+        )
+
+        self.assertIn("Total cash: 0.0", text)
 
     @patch("inferno_live_account_sync.scrape_account_statement")
     @patch("inferno_live_account_sync.load_json_file")

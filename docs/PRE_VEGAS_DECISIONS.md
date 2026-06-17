@@ -146,6 +146,7 @@ Run those three commands tonight, then refresh the away packet:
 
 ```bash
 ./run_inferno_paper_mark_to_market.sh
+./run_inferno_trade_management.sh
 ./run_inferno_while_away_packet.sh
 ```
 

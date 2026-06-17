@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for market-context audit and risk layering."""
 
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -43,6 +44,24 @@ class InfernoMarketContextLayeringTests(unittest.TestCase):
         self.assertEqual(audit["populatedRows"], 2)
         self.assertEqual(audit["totalRows"], 2)
         self.assertEqual(audit["bullishRows"], 2)
+
+    def test_market_context_audit_treats_numeric_zero_as_populated(self) -> None:
+        rows = [
+            {
+                "ticker": "GLDD",
+                "marketContext": {
+                    "rvol": 0.0,
+                    "trend": {"label": "Neutral", "tone": "wild"},
+                    "support": 16.92,
+                    "resistance": 17.02,
+                    "alignmentLabel": "Fragile",
+                },
+            },
+        ]
+        audit = build_market_context_audit(rows)
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["populatedRows"], 1)
+        self.assertEqual(audit["missingTickers"], [])
 
     def test_market_context_audit_ignores_vendor_gaps(self) -> None:
         rows = [
@@ -132,7 +151,18 @@ class InfernoMarketContextLayeringTests(unittest.TestCase):
                 ],
             },
         }
-        verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
+        with patch(
+            "inferno_risk_policy.current_single_ticket_cap",
+            return_value={
+                "effectiveCap": 500.0,
+                "source": "config-default",
+                "recommendedCap": None,
+                "ackedCap": None,
+                "verdict": None,
+                "shouldUseRecommendation": False,
+            },
+        ):
+            verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
         self.assertFalse(verdict.passed)
         self.assertIn("bullish call spread is too close to resistance", verdict.blocks)
 
@@ -198,7 +228,18 @@ class InfernoMarketContextLayeringTests(unittest.TestCase):
             },
         }
 
-        verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
+        with patch(
+            "inferno_risk_policy.current_single_ticket_cap",
+            return_value={
+                "effectiveCap": 500.0,
+                "source": "config-default",
+                "recommendedCap": None,
+                "ackedCap": None,
+                "verdict": None,
+                "shouldUseRecommendation": False,
+            },
+        ):
+            verdict = evaluate_strike_item(item, strike_plan_generated_at=None, ledger_items=[])
 
         self.assertTrue(verdict.passed)
         self.assertFalse(verdict.metrics["schwabOptions"]["attached"])

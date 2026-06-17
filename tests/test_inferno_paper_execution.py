@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for paper-only rehearsal variants in the ledger."""
 
 import unittest
+from unittest.mock import patch
 
 import inferno_paper_execution as paper_execution
 
@@ -20,22 +21,33 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
             "intentBlocks": ["human approval still required"],
             "strikePlan": {
                 "strategy": "LONG_STRADDLE",
-                "estimatedDebit": 2.95,
-                "estimatedMaxLoss": 295.0,
+                "estimatedDebit": 2.45,
+                "estimatedMaxLoss": 245.0,
                 "estimatedMaxProfit": "uncapped",
                 "liquidityNotes": [],
                 "legs": [
-                    {"symbol": "WSC_20260515C50", "instruction": "BUY_TO_OPEN", "ask": 1.5},
-                    {"symbol": "WSC_20260515P50", "instruction": "BUY_TO_OPEN", "ask": 1.45},
+                    {"symbol": "WSC_20260515C50", "instruction": "BUY_TO_OPEN", "ask": 1.25},
+                    {"symbol": "WSC_20260515P50", "instruction": "BUY_TO_OPEN", "ask": 1.2},
                 ],
             },
         }
 
-        status, reasons, verdict, auto_block_reason = paper_execution.paper_status_for_item(
-            item,
-            strike_plan_generated_at=paper_execution.local_now().isoformat(),
-            ledger={"items": []},
-        )
+        with patch(
+            "inferno_risk_policy.current_single_ticket_cap",
+            return_value={
+                "effectiveCap": 500.0,
+                "source": "config-default",
+                "recommendedCap": None,
+                "ackedCap": None,
+                "verdict": None,
+                "shouldUseRecommendation": False,
+            },
+        ):
+            status, reasons, verdict, auto_block_reason = paper_execution.paper_status_for_item(
+                item,
+                strike_plan_generated_at=paper_execution.local_now().isoformat(),
+                ledger={"items": []},
+            )
 
         self.assertEqual(status, "paper-staged")
         self.assertEqual(reasons, [])

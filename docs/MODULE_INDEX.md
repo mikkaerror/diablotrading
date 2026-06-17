@@ -140,6 +140,7 @@ Safety            — authority, risk, secrets
 | `inferno_scenario_evidence.py` | Research-only underlying-move observations for the daily scenario slate | `reports/scenario_evidence_latest.txt` |
 | `inferno_scenario_backtest.py` | Research-only scorecard comparing today's 10+ scenario slate against closed paper/shadow evidence | `reports/scenario_backtest_latest.txt` |
 | `inferno_paper_mark_to_market.py` | Research-only current-mid refresh for open paper tickets; feeds trade-management rules without mutating the ledger | `reports/paper_mark_to_market_latest.txt` |
+| `inferno_trade_management.py` | Research-only per-position playbook auditor for open paper tickets; recommends holds, trims, stops, and pre-event exits without mutating the ledger | `reports/trade_management_latest.txt` |
 | `inferno_outcome_reviewer.py` | Re-score closed paper outcomes against expectations | `data/inferno_outcome_reviewer.json` |
 | `inferno_shadow_evidence.py` | Shadow ledger of paper tickets and their outcomes | `data/inferno_shadow_evidence.json` |
 
@@ -155,6 +156,7 @@ Safety            — authority, risk, secrets
 | `inferno_usage_optimizer.py` | Compact read-first / do-not-paste handoff packet for new model sessions | `reports/usage_optimizer_latest.txt` |
 | `run_inferno_paper_evidence_harvest.sh` | One-command paper evidence refresh across director/reducer/observations/reviews/backtest | market prep + after close |
 | `run_inferno_paper_mark_to_market.sh` | Refresh current mids for open paper tickets | before trade-management review |
+| `run_inferno_trade_management.sh` | Render the playbook-based open-position recommendation card | after paper mark-to-market |
 
 ## Observability (watch the brain)
 

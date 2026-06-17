@@ -191,16 +191,14 @@ The trade-management rules above already have hooks in the existing code:
 - **Exit reconciliation** — `inferno_paper_exit_auditor.py` already flags open paper tickets by age and expiration window (`REVIEW_AFTER_OPEN_DAYS=2`, `OVERDUE_AFTER_OPEN_DAYS=4`). What it does NOT do yet is recommend exit *price triggers*; today's auditor is purely time-based.
 - **Outcome scoring** — `inferno_paper_execution_ledger.json` records the outcome each closed paper trade produces. This is the input the future Kelly math and the per-family cap adjustments need.
 
-### 6.1 The one missing piece — `inferno_trade_management.py`
+### 6.1 The daily auditor — `inferno_trade_management.py`
 
-The natural next module: a research-only auditor that walks each open paper position daily and emits a per-position **recommended action** ("trim 50% at +50% target hit", "cut at stop", "time stop in 3 days") based on the rules above. Outputs a report card the operator reads each morning alongside the doctor.
-
-I haven't built this yet — it's the right next thing if you want the playbook enforced as code rather than discipline. Spec sketch:
+The playbook is now enforced as a research-only auditor that walks each open paper position daily and emits a per-position **recommended action** ("trim 50% at +50% target hit", "cut at stop", "time stop in 3 days") based on the rules above. It outputs a report card the operator reads each morning alongside the doctor.
 
 ```
 inferno_trade_management.py
   Input:   inferno_paper_execution_ledger.json (open positions)
-           inferno_tos_export_chain.json (current quotes)
+           inferno_paper_mark_to_market.json (current marks)
   Output:  data/inferno_trade_management.json   (per-position actions)
            reports/trade_management_latest.txt (operator briefing)
   Verdicts per position:
@@ -211,10 +209,16 @@ inferno_trade_management.py
       stop-loss     — hit stop; close
       time-stop     — T-X days reached; close
       pre-event-exit — earnings tomorrow; close to avoid IV crush
-  Stage:   research-only, promotable=False, liveTradingAllowed=False.
+  Stage:   research-only, promotable=False, liveTradingAllowed=False,
+           brokerSubmitAllowed=False.
 ```
 
-Same pattern as `inferno_paper_velocity` and `inferno_capital_scaling`. If you want this built, say "build it" and it ships in the same session.
+Run it after mark-to-market refresh:
+
+```bash
+./run_inferno_paper_mark_to_market.sh
+./run_inferno_trade_management.sh
+```
 
 ---
 
