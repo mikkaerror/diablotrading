@@ -99,6 +99,25 @@ context. Items are ranked by leverage. Each one names its owner and a clear
   entry from `author: automation` summarizing the nightly run.
 - **Estimate:** ~15 lines.
 
+### #8 — Capital flow advisor (harvest options → buy shares)
+- **Owner:** claude
+- **Why:** docs/CAPITAL_FLOW_POLICY.md defines the policy (Standard bands,
+  $200 harvest trigger, 80% sweep, TE/IREN/HIVE/CLSK conviction list).
+  This item operationalizes it: a small module that reads policy + closed
+  paper outcomes + current live positions, computes the harvest
+  recommendation, writes a report. Adds a `Harvest:` block to today.sh
+  when the trigger fires.
+- **Done signal:** `inferno_capital_flow_advisor.py` writes
+  `data/inferno_capital_flow.json` and `reports/capital_flow_recommendation_latest.txt`;
+  today.sh shows a `Harvest:` block when realized PnL ≥ $200 over the
+  trailing 14 days.
+- **Estimate:** ~150 lines. Blocked on: 30+ closed paper outcomes
+  existing so realized PnL is computable. Today: 0 closed outcomes,
+  so the module would correctly report "no harvest yet."
+- **Note:** Even with 0 closed outcomes, shipping the module is useful
+  because it surfaces "harvest trigger requires $X more realized PnL"
+  in the daily report, making the goal concrete.
+
 ---
 
 ## Completed (last 30 days)
