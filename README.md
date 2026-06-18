@@ -12,7 +12,28 @@ matures.
 
 ## Start here
 
-Run this first for the current operating truth:
+**If you are the operator, every morning:**
+
+```bash
+./today.sh                 # one-screen glance: money, holdings, candidates
+```
+
+**If you are an agent (Claude or Codex), every session start:**
+
+Read [`CLAUDE.md`](CLAUDE.md) at the repo root for the binding onramp
+ritual, lane boundaries, and the autonomous-vs-ack discipline. Then
+read [`docs/BACKLOG.md`](docs/BACKLOG.md) — the ranked queue of small,
+shippable improvements with one named owner per item.
+
+**Background loop (cron-able on Mac):**
+
+```bash
+./nightly_optimize.sh      # refresh data, recompute recommenders,
+                           # regenerate reports, append NLV snapshot.
+                           # Research-only; never approves a ticket.
+```
+
+For the current operating-truth snapshot, run:
 
 ```bash
 ./run_inferno_central_command.sh
