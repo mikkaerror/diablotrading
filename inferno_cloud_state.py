@@ -29,6 +29,8 @@ CLOUD_STATE_TEXT_FILE = REPORTS_DIR / "cloud_state_latest.txt"
 DEFAULT_CLOUD_STATE_PREFIX = "diablotrading-state"
 DEFAULT_ARTIFACT_PATHS = [
     "data/inferno_paper_execution_ledger.json",
+    "data/inferno_fast_paper_cohort.json",
+    "data/inferno_fast_paper_ledger.json",
     "data/inferno_shadow_evidence.json",
     "data/inferno_performance_analytics.json",
     "data/inferno_strategy_lab.json",
@@ -37,6 +39,7 @@ DEFAULT_ARTIFACT_PATHS = [
     "data/inferno_authority_manifest.json",
     "data/inferno_tos_sandbox_session.json",
     "reports/paper_execution_ledger_latest.txt",
+    "reports/fast_paper_cohort_latest.txt",
     "reports/shadow_evidence_latest.txt",
     "reports/performance_analytics_latest.txt",
     "reports/strategy_lab_latest.txt",

@@ -292,6 +292,8 @@ def normalize_contract(raw: dict[str, Any]) -> dict[str, Any]:
         "intrinsicValue": number(raw.get("intrinsicValue")),
         "timeValue": number(raw.get("timeValue")),
         "theoreticalOptionValue": number(raw.get("theoreticalOptionValue")),
+        "quoteTimeInLong": int_number(raw.get("quoteTimeInLong")) or None,
+        "tradeTimeInLong": int_number(raw.get("tradeTimeInLong")) or None,
         "liquidityScore": liquidity_score,
     }
 

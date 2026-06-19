@@ -3,6 +3,8 @@ from __future__ import annotations
 """Tests for research-only strategy alternative pricing."""
 
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -65,6 +67,33 @@ def reducer_item() -> dict:
 
 class StrategyAlternativePricingTests(unittest.TestCase):
     """Alternative pricing should not mutate authority or operational queues."""
+
+    def setUp(self) -> None:
+        fixed_now = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+        self.time_patches = [
+            patch("inferno_strategy_alternative_pricing.local_now", return_value=fixed_now),
+            patch("inferno_strike_selector.local_now", return_value=fixed_now),
+            patch("inferno_risk_policy.local_now", return_value=fixed_now),
+        ]
+        for time_patch in self.time_patches:
+            time_patch.start()
+        self.cap_patch = patch(
+            "inferno_risk_policy.current_single_ticket_cap",
+            return_value={
+                "effectiveCap": 500.0,
+                "source": "config-default",
+                "recommendedCap": None,
+                "ackedCap": None,
+                "verdict": None,
+                "shouldUseRecommendation": False,
+            },
+        )
+        self.cap_patch.start()
+
+    def tearDown(self) -> None:
+        self.cap_patch.stop()
+        for time_patch in reversed(self.time_patches):
+            time_patch.stop()
 
     def test_source_candidates_prioritize_prefer_verdicts(self) -> None:
         rows = pricing.source_candidates(scorer_payload(), limit=2)

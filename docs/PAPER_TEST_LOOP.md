@@ -10,9 +10,17 @@ The paper loop turns conviction into evidence without risking live capital.
 ./run_inferno_paper_evidence_harvest.sh
 ```
 
-This chains the paper director, reducer, scenario evidence, outcome review,
-paper evidence audit, exit audit, and scenario backtest. Use the individual
-commands below when you need to debug a specific stage.
+This chains the paper director, reducer, accelerated option simulation cohort,
+scenario evidence, outcome review, paper evidence audit, exit audit, and
+scenario backtest. Use the individual commands below when you need to debug a
+specific stage.
+
+The accelerated cohort scans the broader bootstrap-ranked universe, selects
+the largest cap-fitting set of up to five structures, and closes each
+simulation after the next market session at conservative Schwab bid/ask
+liquidation prices. Its ledger is isolated from the true paper ledger. These
+trades accelerate exploratory learning but never reduce the 30-trade promotion
+gap.
 
 2. Refresh the strike lane when the options plan itself needs rebuilding.
 
@@ -25,6 +33,7 @@ commands below when you need to debug a specific stage.
 ```bash
 ./run_inferno_paper_test_director.sh
 ./run_inferno_paper_bottleneck_reducer.sh
+./run_inferno_fast_paper_cohort.sh
 ./run_inferno_scenario_evidence.sh
 ./run_inferno_paper_evidence_loop.sh
 ./run_inferno_paper_exit_auditor.sh

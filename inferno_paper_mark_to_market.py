@@ -292,6 +292,8 @@ def mark_to_market_one_ticket(
                 "currentBid": current_bid,
                 "currentAsk": current_ask,
                 "currentSpreadPct": spread_pct,
+                "quoteTimeInLong": match.get("quoteTimeInLong") if match else None,
+                "tradeTimeInLong": match.get("tradeTimeInLong") if match else None,
                 "deltaPct": delta_pct,
                 "status": per_leg_status,
             }

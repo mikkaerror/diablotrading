@@ -125,6 +125,7 @@ Safety            — authority, risk, secrets
 | `inferno_factor_regression.py` | Hand-rolled logistic regression on one-hot features; bootstrap-CI coefficients | `reports/factor_regression_latest.txt` |
 | `inferno_math_verify.py` | Cross-module invariant checker over every math artifact | `reports/math_verify_latest.txt` |
 | `inferno_paper_bootstrap.py` | Seeds paper ledger at relaxed gating so promotion math can earn Phase 2 | `reports/paper_bootstrap_latest.txt` |
+| `inferno_fast_paper_cohort.py` | Cycles isolated next-session option simulations from the broader bootstrap slate; never counts toward promotion | `reports/fast_paper_cohort_latest.txt` |
 | `inferno_slate_normalizer.py` | Scale-invariant percentile ranks; fixes the broken absolute-threshold gates | `reports/slate_normalized_latest.txt` |
 | `inferno_conviction_research.py` | Research-only whole-universe map of giants, sleepers, near-term winners, and contradictions | `reports/conviction_research_latest.txt` |
 | `inferno_outcome_attribution.py` | Research-only Brinson-style decomposition of closed paper/shadow outcomes | `reports/outcome_attribution_latest.txt` |

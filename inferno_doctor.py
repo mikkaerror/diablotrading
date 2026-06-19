@@ -65,6 +65,7 @@ PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json
 DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
+FAST_PAPER_COHORT_FILE = ROOT / "data" / "inferno_fast_paper_cohort.json"
 CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
 PAPER_MTM_FILE = ROOT / "data" / "inferno_paper_mark_to_market.json"
 TRADE_MANAGEMENT_FILE = ROOT / "data" / "inferno_trade_management.json"
@@ -691,6 +692,33 @@ def paper_velocity_status(report: dict) -> tuple[bool, str]:
             "promotion-ready",
         },
     )
+
+
+def fast_paper_cohort_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the isolated accelerated simulation cohort."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt") or "")
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "unknown")
+    research_only = bool(report.get("researchOnly"))
+    non_promotable = not bool(report.get("promotable"))
+    valid_verdicts = {
+        "cycled-and-seeded",
+        "seeded",
+        "market-closed",
+        "awaiting-next-session",
+        "daily-risk-cap-limited",
+        "no-priceable-candidates",
+    }
+    counts = report.get("counts") or {}
+    ok = fresh and research_only and non_promotable and verdict in valid_verdicts
+    detail = (
+        f"{verdict} | opened={counts.get('selectedToday', 0)} | "
+        f"closed={counts.get('closedToday', 0)} | open={counts.get('open', 0)} | "
+        "promotion-credit=off"
+    )
+    return ok, detail
 
 
 def paper_mark_to_market_status(report: dict) -> tuple[bool, str]:
@@ -1367,6 +1395,12 @@ def main() -> int:
     paper_velocity_ok, paper_velocity_detail = paper_velocity_status(paper_velocity)
     lines.append(summarize_status("Paper velocity", paper_velocity_ok, paper_velocity_detail))
     if not paper_velocity_ok:
+        warnings += 1
+
+    fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
+    fast_paper_ok, fast_paper_detail = fast_paper_cohort_status(fast_paper)
+    lines.append(summarize_status("Fast paper cohort", fast_paper_ok, fast_paper_detail))
+    if not fast_paper_ok:
         warnings += 1
 
     paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
