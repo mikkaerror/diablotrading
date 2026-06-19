@@ -45,6 +45,10 @@ class InfernoSecretHygieneTests(unittest.TestCase):
             self.assertEqual(report["trackedSensitiveCount"], 0)
             self.assertEqual(report["missingGitignorePatterns"], [])
 
+    def test_public_operator_config_is_not_treated_as_secret(self) -> None:
+        self.assertFalse(hygiene.path_looks_sensitive("data/operator_long_term_holds.json"))
+        self.assertTrue(hygiene.path_looks_sensitive("data/latest_snapshot.json"))
+
 
 if __name__ == "__main__":
     unittest.main()

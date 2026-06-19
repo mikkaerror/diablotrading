@@ -38,6 +38,7 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
             ("SCHWAB_TOS_METRICS_SYNC_FILE", self.data / "inferno_schwab_tos_metrics_sync.json"),
             ("PAPER_TEST_DIRECTOR_FILE", self.data / "inferno_paper_test_director.json"),
             ("PAPER_MTM_FILE", self.data / "inferno_paper_mark_to_market.json"),
+            ("FAST_PAPER_COHORT_FILE", self.data / "inferno_fast_paper_cohort.json"),
             ("STRATEGY_SHADOW_COMPARISON_FILE", self.data / "inferno_strategy_shadow_comparison.json"),
             ("CAPITAL_SCALING_FILE", self.data / "inferno_capital_scaling.json"),
         ]
@@ -191,6 +192,20 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
             },
         )
         self.write_json(
+            "inferno_fast_paper_cohort.json",
+            {
+                "verdict": "awaiting-next-session",
+                "counts": {"open": 4, "closedLifetime": 0},
+                "openSlate": [
+                    {
+                        "ticker": "PL",
+                        "strategy": "LONG_STRANGLE",
+                        "exitEligibleDate": "2026-06-22",
+                    }
+                ],
+            },
+        )
+        self.write_json(
             "inferno_strategy_shadow_comparison.json",
             {
                 "verdict": "shadow-compare-ready",
@@ -229,6 +244,8 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
         self.assertIn("No automated broker submit.", packet["operatorActions"]["blocked"])
         self.assertIn("monitor-only", rendered)
         self.assertIn("Paper MTM: disabled | open 2 | marked 2", rendered)
+        self.assertIn("Fast paper: awaiting-next-session | open 4 | promotion credit off", rendered)
+        self.assertIn("Fast PL: LONG_STRANGLE | exit eligible 2026-06-22", rendered)
         self.assertIn("Do not double-count rvolTos + rvolPrior30", rendered)
         self.assertTrue((self.reports / "while_away_latest.txt").exists())
 

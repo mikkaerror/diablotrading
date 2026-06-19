@@ -72,6 +72,10 @@ selected / approval only / hard-blocked. For paperMoney evidence, use only
 **stageable** or **auto-paper-selected** names. Live trades still require
 explicit manual confirmation.
 
+The fast-paper cohort is separate exploratory evidence. It may cycle up to
+five priceable option simulations after the next market session, but those
+outcomes do not count toward the 30-trade promotion gate.
+
 ## Step 5 — Read the broker preview (2 minutes)
 
 ```bash
@@ -154,6 +158,5 @@ These close the feedback loop so tomorrow's math sees today's outcomes.
 
 ## The single sentence
 
-> Filter to 3–5 conviction-gate passers; size each at $210–$262; cap any
-> one ticket at $500; cap the day at $1,500; click submit yourself; log
-> the fills back.
+> Filter to 3–5 conviction-gate passers; use the current readiness report's
+> printed ticket and daily-risk caps; click submit yourself; log the fills back.

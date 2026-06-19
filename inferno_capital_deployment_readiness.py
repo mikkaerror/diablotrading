@@ -8,13 +8,13 @@ important guardrails, and writes a compact readiness brief for manual review.
 from __future__ import annotations
 
 import argparse
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from inferno_capital_allocator import build_capital_allocator, save_capital_allocator
 from inferno_config import account_suffix_allowed, approved_account_scope, local_now, local_today
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_market_calendar import next_market_session
 from inferno_reporting_summary import freshness_status, live_account_source_timestamp
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
@@ -394,7 +394,7 @@ def build_capital_deployment_readiness(
 ) -> dict[str, Any]:
     """Build and persist the capital deployment readiness brief."""
     ensure_dirs()
-    deployment_date = for_date or (local_now().date() + timedelta(days=1)).isoformat()
+    deployment_date = for_date or next_market_session(local_now().date()).isoformat()
 
     artifacts = load_artifacts()
     deployable_cash_source = "operator-argument"
@@ -442,7 +442,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--for-date",
         default=None,
-        help="Deployment date to print in the brief. Defaults to tomorrow.",
+        help="Deployment date to print in the brief. Defaults to the next market session.",
     )
     return parser.parse_args()
 

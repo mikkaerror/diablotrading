@@ -31,6 +31,8 @@ shippable improvements with one named owner per item.
 ./nightly_optimize.sh      # refresh data, recompute recommenders,
                            # regenerate reports, append NLV snapshot.
                            # Research-only; never approves a ticket.
+python3 install_inferno_nightly_optimize_service.py install
+                           # install the weekday 18:30 local refresh.
 ```
 
 For the current operating-truth snapshot, run:

@@ -130,6 +130,7 @@ class NightPrepTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "ready")
         self.assertTrue(payload["readyForMorning"])
         self.assertEqual(payload["failCount"], 0)
+        self.assertIsNotNone(payload["nextMarketSession"])
         self.assertTrue(payload["dataSourcePosture"]["schwabOptionsReady"])
         self.assertTrue(payload["dataSourcePosture"]["tosCaptureReady"])
 
@@ -215,6 +216,7 @@ class NightPrepTests(unittest.TestCase):
         rendered = np.night_prep_text(payload)
         self.assertIn("Night Prep", rendered)
         self.assertIn("Verdict:", rendered)
+        self.assertIn("Next market session:", rendered)
         self.assertIn("Data source posture:", rendered)
         self.assertIn("Checks:", rendered)
         self.assertIn("Reminders:", rendered)

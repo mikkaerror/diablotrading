@@ -18,23 +18,10 @@ Strict contract:
 import argparse
 import itertools
 from collections import Counter
-from datetime import date, datetime, timedelta
-from functools import lru_cache
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
-
-from pandas.tseries.holiday import (
-    AbstractHolidayCalendar,
-    GoodFriday,
-    Holiday,
-    USLaborDay,
-    USMartinLutherKingJr,
-    USMemorialDay,
-    USPresidentsDay,
-    USThanksgivingDay,
-    nearest_workday,
-)
 
 from inferno_config import (
     MAX_DAILY_TICKET_DOLLARS,
@@ -43,6 +30,7 @@ from inferno_config import (
 )
 from inferno_execution_clerk import build_execution_queue
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_market_calendar import is_market_session, next_market_session
 from inferno_outcome_reviewer import estimated_entry_cashflow
 from inferno_paper_bootstrap import build_bootstrap
 from inferno_paper_execution import strategy_cost, ticket_hash
@@ -72,51 +60,6 @@ TARGET_DAILY_TRADES = 5
 MAX_PER_STRATEGY = 3
 CONTRACT_MULTIPLIER = 100
 EASTERN = ZoneInfo("America/New_York")
-
-
-class NyseHolidayCalendar(AbstractHolidayCalendar):
-    """NYSE full-day holidays needed by the one-session holding clock."""
-
-    rules = [
-        Holiday("New Year's Day", month=1, day=1, observance=nearest_workday),
-        USMartinLutherKingJr,
-        USPresidentsDay,
-        GoodFriday,
-        USMemorialDay,
-        Holiday(
-            "Juneteenth",
-            month=6,
-            day=19,
-            start_date="2022-06-19",
-            observance=nearest_workday,
-        ),
-        Holiday("Independence Day", month=7, day=4, observance=nearest_workday),
-        USLaborDay,
-        USThanksgivingDay,
-        Holiday("Christmas Day", month=12, day=25, observance=nearest_workday),
-    ]
-
-
-@lru_cache(maxsize=8)
-def market_holidays(year: int) -> frozenset[date]:
-    """Return observed NYSE full-day holidays around one calendar year."""
-    start = f"{year - 1}-12-20"
-    end = f"{year + 1}-01-10"
-    values = NyseHolidayCalendar().holidays(start=start, end=end)
-    return frozenset(value.date() for value in values)
-
-
-def is_market_session(value: date) -> bool:
-    """Return whether a date is a regular U.S. equity market session."""
-    return value.weekday() < 5 and value not in market_holidays(value.year)
-
-
-def next_market_session(value: date) -> date:
-    """Return the first regular market session after ``value``."""
-    candidate = value + timedelta(days=1)
-    while not is_market_session(candidate):
-        candidate += timedelta(days=1)
-    return candidate
 
 
 def number(value: Any, default: float = 0.0) -> float:

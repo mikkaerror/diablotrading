@@ -1,8 +1,10 @@
 import tempfile
 import unittest
 from contextlib import ExitStack
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import inferno_capital_deployment_readiness as readiness
 from inferno_io import atomic_write_json
@@ -115,6 +117,17 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
         self.assertFalse(result["autoLiveAllowed"])
         self.assertTrue(self.files["CAPITAL_DEPLOYMENT_READINESS_FILE"].exists())
         self.assertIn("Paper evidence loop", "\n".join(result["warnings"]))
+
+    def test_default_date_skips_juneteenth_and_weekend(self):
+        self.write_base_artifacts()
+        now = datetime(2026, 6, 18, 18, 0, tzinfo=ZoneInfo("America/Denver"))
+        with (
+            self._stack_patches(),
+            patch.object(readiness, "local_now", return_value=now),
+        ):
+            result = readiness.build_capital_deployment_readiness(deployable_cash=525)
+
+        self.assertEqual(result["deploymentDate"], "2026-06-22")
 
     def test_blocks_if_authority_allows_live_submit(self):
         self.write_base_artifacts({"brokerSubmitAllowed": True})

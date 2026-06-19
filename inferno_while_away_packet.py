@@ -32,6 +32,7 @@ TOS_METRIC_THEORY_AUDIT_FILE = DATA_DIR / "inferno_tos_metric_theory_audit.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_MTM_FILE = DATA_DIR / "inferno_paper_mark_to_market.json"
+FAST_PAPER_COHORT_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
 STRATEGY_SHADOW_COMPARISON_FILE = DATA_DIR / "inferno_strategy_shadow_comparison.json"
 CAPITAL_SCALING_FILE = DATA_DIR / "inferno_capital_scaling.json"
 
@@ -249,6 +250,7 @@ def build_while_away_packet() -> dict[str, Any]:
     schwab_metrics = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
+    fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
     shadow = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
     capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}
 
@@ -327,6 +329,12 @@ def build_while_away_packet() -> dict[str, Any]:
                 "markedTickets": len(paper_mtm.get("marksByTicketId") or {}),
                 "generatedAt": paper_mtm.get("generatedAt"),
             },
+            "fastPaper": {
+                "verdict": fast_paper.get("verdict"),
+                "counts": fast_paper.get("counts") or {},
+                "openSlate": fast_paper.get("openSlate") or [],
+                "promotionEligible": False,
+            },
             "capitalScalingVerdict": capital_scaling.get("verdict"),
         },
         "shadowComparisons": shadow_comparison_summary(shadow),
@@ -337,6 +345,7 @@ def build_while_away_packet() -> dict[str, Any]:
             "./run_inferno_live_account_sync.sh build",
             "./run_inferno_live_position_review.sh build",
             "./run_inferno_live_book_review_packet.sh",
+            "./run_inferno_fast_paper_cohort.sh",
             "./run_inferno_paper_mark_to_market.sh",
             "./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12 --json",
             "./run_inferno_tos_metric_theory_audit.sh --limit 12",
@@ -370,8 +379,11 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
         f"- NLV: {money(account.get('netLiquidatingValue'))} | cash: {money(account.get('totalCash'))} | positions: {account.get('positions')}",
         "",
         "Capital guardrails:",
-        f"- Readiness: {capital.get('verdict')} | manual allowed {capital.get('manualDeploymentAllowed')} | auto-live {capital.get('autoLiveAllowed')}",
-        f"- Deployable cash {money(capital.get('deployableCash'))} | max options risk {money(capital.get('maxOptionsRisk'))} | reserve {money(capital.get('reserveCash'))}",
+        f"- Readiness: {capital.get('verdict')} | session {capital.get('deploymentDate')} | "
+        f"manual allowed {capital.get('manualDeploymentAllowed')} | auto-live {capital.get('autoLiveAllowed')}",
+        f"- Deployable cash {money(capital.get('deployableCash'))} | "
+        f"starter cap {money(capital.get('maxStarterTicket'))} | "
+        f"max options risk {money(capital.get('maxOptionsRisk'))} | reserve {money(capital.get('reserveCash'))}",
         "",
         "Risk blockers:",
         f"- Risk gate: {risk.get('verdict')} | hard fails {risk.get('hardFails')} | promotion fails {risk.get('promotionFails')} | warnings {risk.get('warnings')}",
@@ -424,6 +436,9 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
             f"- Paper MTM: {(paper.get('markToMarket') or {}).get('fetchStatus')} | "
             f"open {(paper.get('markToMarket') or {}).get('openPositionCount')} | "
             f"marked {(paper.get('markToMarket') or {}).get('markedTickets')}",
+            f"- Fast paper: {(paper.get('fastPaper') or {}).get('verdict')} | "
+            f"open {((paper.get('fastPaper') or {}).get('counts') or {}).get('open', 0)} | "
+            "promotion credit off",
             f"- Capital scaling: {paper.get('capitalScalingVerdict')}",
             f"- Shadow comparisons: {shadow.get('verdict')} | counts {json.dumps(shadow.get('counts') or {})}",
         ]
@@ -431,6 +446,11 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
     for item in shadow.get("top") or []:
         lines.append(
             f"- Shadow {item.get('ticker')}: {item.get('strategy')} exp {item.get('expiration')} | no staging"
+        )
+    for item in (paper.get("fastPaper") or {}).get("openSlate") or []:
+        lines.append(
+            f"- Fast {item.get('ticker')}: {item.get('strategy')} | "
+            f"exit eligible {item.get('exitEligibleDate')} | exploratory only"
         )
 
     lines.extend(["", "Allowed from this packet:"])

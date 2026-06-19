@@ -48,6 +48,7 @@ from typing import Any, Callable
 
 from inferno_config import LABEL, local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_market_calendar import next_market_session
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 
@@ -70,6 +71,7 @@ EXPECTED_LAUNCH_AGENTS = (
     ("daily_loop_agent", "io.diablotrading.inferno-daily-loop"),
     ("watchdog_agent", "io.diablotrading.inferno-watchdog"),
     ("ops_maintenance_agent", "io.diablotrading.inferno-ops-maintenance"),
+    ("nightly_optimize_agent", "io.diablotrading.inferno-nightly-optimize"),
 )
 
 # Artifacts we expect to be fresh (i.e. produced within ARTIFACT_STALE_HOURS).
@@ -479,6 +481,7 @@ def build_night_prep(
     """
     now = now or local_now()
     launchctl = launchctl or _launchctl_print
+    next_session = next_market_session(now.date())
 
     checks: list[dict[str, Any]] = []
 
@@ -504,19 +507,20 @@ def build_night_prep(
     if fail_count > 0:
         verdict = "blocked"
         narrative = (
-            f"{fail_count} hard failure(s) block tomorrow morning. "
+            f"{fail_count} hard failure(s) block the next market session "
+            f"({next_session.isoformat()}). "
             "Resolve them tonight; do not assume the morning fire will recover."
         )
     elif warn_count > 0:
         verdict = "warming"
         narrative = (
             f"All required layers pass, but {warn_count} warning(s) are worth "
-            "noting. Morning fires should still succeed."
+            f"noting. The {next_session.isoformat()} market-session fires should still succeed."
         )
     else:
         verdict = "ready"
         narrative = (
-            "Every overnight layer is ready. Tomorrow morning is a "
+            f"Every overnight layer is ready for {next_session.isoformat()}. The next session is a "
             "one-command operation: drop tickers into "
             "data/inferno_watchlist_input.json and run the ingest."
         )
@@ -530,6 +534,7 @@ def build_night_prep(
         "verdict": verdict,
         "narrative": narrative,
         "readyForMorning": ready_for_morning,
+        "nextMarketSession": next_session.isoformat(),
         "passCount": pass_count,
         "warnCount": warn_count,
         "failCount": fail_count,
@@ -555,6 +560,7 @@ def night_prep_text(payload: dict[str, Any]) -> str:
         f"Stage: {payload.get('stage')}",
         f"Verdict: {payload.get('verdict')}",
         f"Ready for morning: {payload.get('readyForMorning')}",
+        f"Next market session: {payload.get('nextMarketSession')}",
         f"Pass / warn / fail: "
         f"{payload.get('passCount')} / "
         f"{payload.get('warnCount')} / "

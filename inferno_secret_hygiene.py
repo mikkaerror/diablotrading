@@ -33,6 +33,11 @@ REQUIRED_GITIGNORE_PATTERNS = [
     "*.p12",
 ]
 
+# Public operator policy/config, not credentials or generated broker truth.
+TRACKED_PUBLIC_DATA_ALLOWLIST = {
+    "data/operator_long_term_holds.json",
+}
+
 
 def text(value: Any) -> str:
     return str(value or "").strip()
@@ -57,6 +62,8 @@ def tracked_repo_files() -> list[str]:
 
 def path_looks_sensitive(path: str) -> bool:
     lowered = text(path).lower()
+    if lowered in TRACKED_PUBLIC_DATA_ALLOWLIST:
+        return False
     name = Path(lowered).name
     if lowered.startswith(("data/", "reports/", "logs/", "_backups/", "cloud-secrets/")):
         return True
