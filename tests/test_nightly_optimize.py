@@ -32,6 +32,12 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertNotIn("paper_execution.py stage", text)
         self.assertNotIn("submit_live_order", text)
 
+    def test_live_account_sync_uses_supported_cli(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('"$PYTHON" inferno_live_account_sync.py', text)
+        self.assertNotIn("inferno_live_account_sync.py --quiet", text)
+
 
 if __name__ == "__main__":
     unittest.main()

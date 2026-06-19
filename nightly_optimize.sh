@@ -60,7 +60,7 @@ run_step() {
 
 # 1) data sources (research-only, read-only)
 run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --quiet
-run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py --quiet
+run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
 run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --quiet
 run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --quiet
 

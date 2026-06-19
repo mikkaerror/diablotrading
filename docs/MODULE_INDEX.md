@@ -86,6 +86,7 @@ Safety            — authority, risk, secrets
 | `inferno_capital_deployment_readiness.py` | Manual-review capital readiness brief; sizes the desk against caps without touching the broker | `reports/capital_deployment_readiness_latest.txt` |
 | `inferno_capital_launch_check.py` | One-command capital preflight refreshing the read-only safety artifacts | `reports/capital_launch_check_latest.txt` |
 | `inferno_account_optimization.py` | Research-only growth, contribution, concentration, and contract-risk stress test from live Schwab truth | `reports/account_optimization_latest.txt` |
+| `inferno_sizing_positioning_timing.py` | Total-NLV sleeve drift, candidate price reconciliation, and dated deployment timing overlay | `reports/sizing_positioning_timing_latest.txt` |
 
 ## Breathing (is the system alive?)
 
