@@ -5,10 +5,11 @@
 # What this does, in order:
 #   1) refresh upstream data sources (Schwab account / options / price history,
 #      live account sync, tracker)
-#   2) re-run the research-only recommenders that consume them
-#   3) regenerate the reports/ surfaces
-#   4) append a daily NLV snapshot to data/nlv_history.csv
-#   5) write a single coordination note summarizing what changed
+#   2) harvest paper/shadow evidence and close eligible observations
+#   3) re-run the research-only recommenders that consume them
+#   4) regenerate the reports/ surfaces
+#   5) append a daily NLV snapshot to data/nlv_history.csv
+#   6) write a single coordination note summarizing what changed
 #
 # What this DOES NOT do (see CLAUDE.md §8):
 #   - approve or reject any paper ticket  (operator runs ./today.sh)
@@ -63,20 +64,28 @@ run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py --quiet
 run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --quiet
 run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --quiet
 
-# 2) recommenders (research-only)
+# 2) evidence harvest (research-only; no approval or staging mutation)
+#
+# This must run before performance/strategy/velocity. Otherwise a newly closed
+# paper outcome can sit in the ledger while the nightly summaries still report
+# yesterday's count.
+run_step "paper evidence harvest" ./run_inferno_paper_evidence_harvest.sh
+
+# 3) recommenders (research-only)
 run_step "capital scaling"       "$PYTHON" inferno_capital_scaling.py
+run_step "performance analytics" "$PYTHON" inferno_performance_analytics.py
+run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
-run_step "paper MTM"             "$PYTHON" inferno_paper_mark_to_market.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
 
-# 3) meta surfaces
+# 4) meta surfaces
 run_step "central command"       "$PYTHON" inferno_model_command_center.py
 run_step "while-away packet"     "$PYTHON" inferno_while_away_packet.py
 
-# 4) daily NLV snapshot (backlog item #1)
+# 5) daily NLV snapshot (backlog item #1)
 run_step "nlv snapshot"          "$PYTHON" record_nlv_snapshot.py
 
-# 5) coordination note (backlog item #7)
+# 6) coordination note (backlog item #7)
 if [[ "$DRY_RUN" == "0" ]]; then
   "$PYTHON" inferno_model_command_center.py note \
     --author automation \
