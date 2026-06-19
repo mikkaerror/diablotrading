@@ -50,6 +50,7 @@ SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
+ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
@@ -119,6 +120,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "capital-scenarios",
         "question": "How does the desk behave across likely cash amounts?",
         "artifact": "reports/capital_scenario_matrix_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "account-optimization",
+        "question": "Which growth levers and risk constraints matter at the current NLV?",
+        "artifact": "reports/account_optimization_latest.txt",
         "owner": "codex",
     },
     {
@@ -576,6 +583,8 @@ def build_executive_summary(
         (
             "Capital: "
             f"{status_value(status.get('capitalDeploymentReadiness') or {})}; "
+            f"optimization={metrics.get('accountOptimizationVerdict')}; "
+            f"edge-adjusted options max loss=${metrics.get('edgeAdjustedLiveOptionsMaxLoss', 0):,.2f}; "
             f"risk gates {status_value(status.get('riskGateAudit') or {})}; "
             f"auto-live allowed={metrics.get('autoLiveAllowed')}"
         ),
@@ -617,6 +626,7 @@ def build_command_center() -> dict[str, Any]:
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
+    account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
@@ -655,6 +665,7 @@ def build_command_center() -> dict[str, Any]:
     deployable_cash_arg = command_cash_arg((capital_readiness.get("guardrails") or {}).get("deployableCash"))
 
     next_actions: list[str] = []
+    next_actions.extend((account_optimization.get("nextActions") or [])[:2])
     next_actions.extend(live_book_packet.get("unlockChecklist") or [])
     next_actions.extend(live_review.get("nextActions") or [])
     next_actions.extend(paper_director.get("nextActions") or [])
@@ -672,6 +683,7 @@ def build_command_center() -> dict[str, Any]:
         "whileAwayPacket": artifact_summary(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
         "capitalScenarioMatrix": artifact_summary(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
+        "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
@@ -726,6 +738,21 @@ def build_command_center() -> dict[str, Any]:
             live_sync.get("netLiquidatingValue"), schwab_account_sync.get("netLiquidatingValue")
         ),
         "accountTotalCash": first_display_value(live_sync.get("totalCash"), schwab_account_sync.get("totalCash")),
+        "accountOptimizationVerdict": account_optimization.get("verdict"),
+        "targetMonthlyReturnAnnualizedPct": (
+            account_optimization.get("targetStressTest") or {}
+        ).get("compoundedAnnualReturnPct"),
+        "referenceOptionsTicketPctOfNlv": (
+            account_optimization.get("optionsAffordability") or {}
+        ).get("referenceTicketPctOfNlv"),
+        "edgeAdjustedLiveOptionsMaxLoss": number(
+            (account_optimization.get("optionsAffordability") or {}).get(
+                "edgeAdjustedLiveOptionsMaxLossDollars"
+            )
+        ),
+        "accountTopPositionPct": (
+            account_optimization.get("concentration") or {}
+        ).get("topPositionPct"),
         "schwabAccountVerdict": schwab_account_sync.get("verdict"),
         "liveSupported": live_counts.get("supported", 0),
         "liveReview": live_counts.get("review", 0),
@@ -921,6 +948,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_usage_optimizer.sh",
             f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
             "./run_inferno_capital_scenario_matrix.sh --deployable-cash 500 3000 5000",
+            "./run_inferno_account_optimization.sh",
             f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
@@ -939,6 +967,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/action_pulse_latest.txt"),
             str(ROOT / "reports/capital_launch_check_latest.txt"),
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
+            str(ROOT / "reports/account_optimization_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
             str(ROOT / "reports/scenario_evidence_latest.txt"),

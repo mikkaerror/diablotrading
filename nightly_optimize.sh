@@ -75,6 +75,7 @@ run_step "paper evidence harvest" ./run_inferno_paper_evidence_harvest.sh
 run_step "capital scaling"       "$PYTHON" inferno_capital_scaling.py
 run_step "performance analytics" "$PYTHON" inferno_performance_analytics.py
 run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
+run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
 

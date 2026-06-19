@@ -85,6 +85,7 @@ Safety            — authority, risk, secrets
 | `inferno_operator_briefing.py` | Daily "what do I trade today" memo — the operator-facing summary of approval-ready tickets | `reports/operator_briefing_latest.txt` |
 | `inferno_capital_deployment_readiness.py` | Manual-review capital readiness brief; sizes the desk against caps without touching the broker | `reports/capital_deployment_readiness_latest.txt` |
 | `inferno_capital_launch_check.py` | One-command capital preflight refreshing the read-only safety artifacts | `reports/capital_launch_check_latest.txt` |
+| `inferno_account_optimization.py` | Research-only growth, contribution, concentration, and contract-risk stress test from live Schwab truth | `reports/account_optimization_latest.txt` |
 
 ## Breathing (is the system alive?)
 
