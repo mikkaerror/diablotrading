@@ -15,6 +15,7 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_execution import load_ledger
+from inferno_trade_evidence import normalized_outcome, strategy_family
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 
@@ -75,6 +76,9 @@ def summarize_closed_tickets(tickets: list[dict[str, Any]]) -> dict[str, Any]:
     closed = [ticket for ticket in tickets if outcome_status(ticket) == "closed"]
     pnls = [estimated_pnl(ticket) for ticket in closed if estimated_pnl(ticket) is not None]
     returns = [value for value in (return_on_risk(ticket) for ticket in closed) if value is not None]
+    normalized = [normalized_outcome(ticket) for ticket in closed]
+    gross_r = [row["grossR"] for row in normalized if row.get("grossR") is not None]
+    net_r = [row["netREstimate"] for row in normalized if row.get("netREstimate") is not None]
     wins = [pnl for pnl in pnls if pnl > 0]
     losses = [pnl for pnl in pnls if pnl < 0]
     total_loss_abs = abs(sum(losses))
@@ -95,6 +99,13 @@ def summarize_closed_tickets(tickets: list[dict[str, Any]]) -> dict[str, Any]:
         "profitFactor": round(sum(wins) / total_loss_abs, 4) if total_loss_abs else None,
         "expectancy": round(sum(pnls) / len(pnls), 2) if pnls else None,
         "expectancyPerDollarRisk": round(sum(returns) / len(returns), 6) if returns else None,
+        "averageGrossR": round(sum(gross_r) / len(gross_r), 6) if gross_r else None,
+        "averageNetREstimate": round(sum(net_r) / len(net_r), 6) if net_r else None,
+        "estimatedFrictionDollars": round(
+            sum(row.get("estimatedFrictionDollars") or 0.0 for row in normalized),
+            2,
+        ),
+        "netRDataQuality": "modeled-friction-not-realized",
         "tradeSharpe": sharpe_ratio(returns),
         "tradeSortino": sortino_ratio(returns),
         "maxDrawdownDollars": max_drawdown(pnls),
@@ -351,6 +362,17 @@ def strategy_summary(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summaries
 
 
+def family_summary(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate the same closed metrics by comparable strategy family."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for ticket in tickets:
+        grouped[strategy_family(ticket)].append(ticket)
+    return [
+        {"family": family, **summarize_closed_tickets(items)}
+        for family, items in sorted(grouped.items())
+    ]
+
+
 def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the current analytics package from the paper ledger."""
     ledger = ledger or load_ledger()
@@ -361,6 +383,7 @@ def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[st
     blocks = block_reason_counts(tickets)
     block_categories = block_reason_categories(tickets)
     strategies = strategy_summary(tickets)
+    families = family_summary(tickets)
     analytics = {
         "generatedAt": local_now().isoformat(),
         "sourceLedgerUpdatedAt": ledger.get("updatedAt"),
@@ -373,6 +396,7 @@ def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[st
         "topBlockReasons": blocks,
         "blockReasonCategories": block_categories,
         "strategies": strategies,
+        "families": families,
         "deskVerdict": desk_verdict(closed, strategies, blocks),
     }
     return analytics
@@ -429,6 +453,9 @@ def analytics_text(analytics: dict[str, Any]) -> str:
             f"- scored: {closed.get('scoredCount', 0)}",
             f"- win rate: {closed.get('winRate')}",
             f"- expectancy: {closed.get('expectancy')}",
+            f"- average gross R: {closed.get('averageGrossR')}",
+            f"- average net R estimate: {closed.get('averageNetREstimate')}",
+            f"- modeled friction: {closed.get('estimatedFrictionDollars')}",
             f"- total P/L: {closed.get('totalPnl')}",
             "",
             "Risk profile:",
@@ -470,6 +497,13 @@ def analytics_text(analytics: dict[str, Any]) -> str:
             f"staged {item.get('paperStaged')} | blocked {item.get('blocked')} | "
             f"closed {closed_metrics.get('scoredCount')} | expectancy {closed_metrics.get('expectancy')} | "
             f"promotion {item.get('eligibleForPromotion')}"
+        )
+    lines.extend(["", "Strategy-family net-R table:"])
+    for item in analytics.get("families") or []:
+        lines.append(
+            f"- {item.get('family')}: n={item.get('scoredCount')} | "
+            f"grossR={item.get('averageGrossR')} | netR={item.get('averageNetREstimate')} | "
+            f"friction=${item.get('estimatedFrictionDollars')}"
         )
     return "\n".join(lines).rstrip() + "\n"
 

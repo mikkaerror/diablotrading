@@ -25,6 +25,12 @@ PAPER_EXIT_AUDIT_FILE = DATA_DIR / "inferno_paper_exit_audit.json"
 EXPECTED_MOVE_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SIZING_POSITIONING_TIMING_FILE = DATA_DIR / "inferno_sizing_positioning_timing.json"
+EXPECTANCY_LEDGER_FILE = DATA_DIR / "inferno_expectancy_ledger.json"
+DTE_POLICY_FILE = DATA_DIR / "inferno_dte_policy_analysis.json"
+BEHAVIOR_AUDIT_FILE = DATA_DIR / "inferno_trading_behavior_audit.json"
+PROCESS_COMPLIANCE_FILE = DATA_DIR / "inferno_process_compliance.json"
+PORTFOLIO_HEAT_FILE = DATA_DIR / "inferno_portfolio_heat.json"
+WHEEL_SHADOW_FILE = DATA_DIR / "inferno_wheel_shadow.json"
 
 STAGE = "market-mastery-research-only"
 FRESH_ACCOUNT_HOURS = 36.0
@@ -65,6 +71,12 @@ def load_inputs() -> dict[str, dict[str, Any]]:
         "expectedMove": load_json_file(EXPECTED_MOVE_FILE) or {},
         "strategyLab": load_json_file(STRATEGY_LAB_FILE) or {},
         "sizing": load_json_file(SIZING_POSITIONING_TIMING_FILE) or {},
+        "expectancy": load_json_file(EXPECTANCY_LEDGER_FILE) or {},
+        "dtePolicy": load_json_file(DTE_POLICY_FILE) or {},
+        "behavior": load_json_file(BEHAVIOR_AUDIT_FILE) or {},
+        "processCompliance": load_json_file(PROCESS_COMPLIANCE_FILE) or {},
+        "portfolioHeat": load_json_file(PORTFOLIO_HEAT_FILE) or {},
+        "wheelShadow": load_json_file(WHEEL_SHADOW_FILE) or {},
     }
 
 
@@ -161,6 +173,12 @@ def build_plan(
     expected_move = source.get("expectedMove") or {}
     strategy_lab = source.get("strategyLab") or {}
     sizing = source.get("sizing") or {}
+    expectancy = source.get("expectancy") or {}
+    dte_policy = source.get("dtePolicy") or {}
+    behavior = source.get("behavior") or {}
+    process_compliance = source.get("processCompliance") or {}
+    portfolio_heat = source.get("portfolioHeat") or {}
+    wheel_shadow = source.get("wheelShadow") or {}
 
     account_age = age_hours(account.get("generatedAt"), current)
     options_age = age_hours(options.get("generatedAt"), current)
@@ -224,7 +242,12 @@ def build_plan(
             "priority": "P0",
             "category": "strategy",
             "title": "Gate long volatility on an explicit premium hurdle",
-            "status": "action-now" if closed_long_vol and long_vol_move_edge < 0 else "collect-data",
+            "status": (
+                "implemented-guarding"
+                if (expected_move.get("regimeDiagnostics") or expectancy)
+                else "action-now" if closed_long_vol and long_vol_move_edge < 0
+                else "collect-data"
+            ),
             "why": (
                 f"The desk has {closed_long_vol} long-vol observations; beat rate is "
                 f"{long_vol_beat_rate:.1%} and mean realized-minus-implied move is {long_vol_move_edge:.2f}%."
@@ -237,7 +260,7 @@ def build_plan(
             "priority": "P0",
             "category": "discipline",
             "title": "Create a precommitted trade decision card",
-            "status": "build-next",
+            "status": "implemented" if process_compliance else "build-next",
             "why": "OIC guidance supports defining profit and maximum-loss exits before entry; the card also makes process auditable.",
             "action": "Store thesis, disconfirming evidence, max loss, profit plan, time stop, net Greeks, liquidity, and no-trade reason.",
             "doneWhen": "No paper ticket can enter the comparison cohort without a complete card.",
@@ -247,7 +270,9 @@ def build_plan(
             "priority": "P1",
             "category": "portfolio",
             "title": "Budget correlated portfolio heat",
-            "status": "action-now" if number(sizing_current.get("equityPct")) > 0.5 else "monitor",
+            "status": "implemented-watch" if portfolio_heat else (
+                "action-now" if number(sizing_current.get("equityPct")) > 0.5 else "monitor"
+            ),
             "why": "Different AI, compute, power, and crypto-miner tickers can fail together even when position count looks diversified.",
             "action": "Cap new exposure by theme, correlation cluster, total NLV, and worst-case loss rather than by ticker count.",
             "doneWhen": "Every candidate shows incremental theme heat and portfolio max-loss contribution.",
@@ -257,7 +282,7 @@ def build_plan(
             "priority": "P1",
             "category": "measurement",
             "title": "Normalize outcomes in R and include friction",
-            "status": "build-next",
+            "status": "implemented" if expectancy else "build-next",
             "why": f"Only {scored_outcomes} strategy outcome(s) currently count toward promotion evidence.",
             "action": "Report entry risk, gross R, spread/slippage, net R, hold time, and strategy family for every close.",
             "doneWhen": "Strategy-family expectancy and drawdown can be compared on the same risk scale.",
@@ -267,7 +292,7 @@ def build_plan(
             "priority": "P1",
             "category": "behavior",
             "title": "Add turnover and disposition-effect audits",
-            "status": "build-next",
+            "status": "implemented-watch" if behavior else "build-next",
             "why": "Academic evidence links heavy retail trading to lower net returns and documents selling winners faster than losers.",
             "action": "Track turnover, trades per session, winner/loser hold time, rule exceptions, and immediate same-ticker re-entry.",
             "doneWhen": "The monthly review can distinguish edge from activity and disciplined exits from loss avoidance.",
@@ -277,7 +302,7 @@ def build_plan(
             "priority": "P1",
             "category": "experimentation",
             "title": "Run DTE and exit-policy cohorts instead of hard-coding folklore",
-            "status": "research",
+            "status": "implemented-research" if dte_policy else "research",
             "why": "Thirty-to-45 DTE and 21-DTE exits are useful practitioner hypotheses, not universal laws across every structure and regime.",
             "action": "Compare matched cohorts by strategy, entry DTE, exit DTE, profit target, stop, IV regime, and event proximity.",
             "doneWhen": "The desk adopts a rule only after net-R and drawdown evidence beats the alternative.",
@@ -287,7 +312,7 @@ def build_plan(
             "priority": "P2",
             "category": "strategy",
             "title": "Keep the wheel as a shadow feasibility study",
-            "status": "shadow-only",
+            "status": "implemented-shadow-only" if wheel_shadow else "shadow-only",
             "why": "Cash-secured puts require 100-share capital, retain substantial downside, and would add long exposure while the equity sleeve is already above target.",
             "action": "Measure assignment capital, yield after spread, downside at stress prices, and opportunity cost without staging.",
             "doneWhen": "The structure fits account capital and portfolio targets and beats a share-limit-order comparison after friction.",
@@ -327,6 +352,12 @@ def build_plan(
             "closedLongVolObservations": closed_long_vol,
             "longVolExpectedMoveBeatRate": long_vol_beat_rate,
             "longVolMeanMoveEdgePct": long_vol_move_edge,
+            "expectancyVerdict": expectancy.get("verdict"),
+            "dtePolicyVerdict": dte_policy.get("verdict"),
+            "behaviorVerdict": behavior.get("verdict"),
+            "processComplianceVerdict": process_compliance.get("verdict"),
+            "portfolioHeatVerdict": portfolio_heat.get("verdict"),
+            "wheelShadowVerdict": wheel_shadow.get("verdict"),
         },
         "operatingRules": [
             "No live options risk until the strategy evidence gate promotes it.",

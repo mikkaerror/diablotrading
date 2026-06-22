@@ -15,12 +15,15 @@ from typing import Any
 
 from inferno_config import AUTO_PAPER_SELECTION_ENABLED, local_now
 from inferno_risk_policy import evaluate_strike_item
+from inferno_trade_evidence import decision_card
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
 STRIKE_PLAN_FILE = DATA_DIR / "inferno_strike_plan.json"
 PAPER_EXECUTION_LEDGER_FILE = DATA_DIR / "inferno_paper_execution_ledger.json"
 PAPER_EXECUTION_TEXT_FILE = REPORTS_DIR / "paper_execution_ledger_latest.txt"
+SCHWAB_ACCOUNT_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
+PROCESS_COMPLIANCE_FILE = DATA_DIR / "inferno_process_compliance.json"
 
 LEDGER_VERSION = 1
 DEFAULT_LIMIT = 50
@@ -193,6 +196,11 @@ def paper_status_for_item(
         return "paper-rejected", reasons, risk_verdict.as_dict(), "not-evaluated"
 
     strike_plan = item.get("strikePlan") or {}
+    card = item.get("decisionCard") or decision_card(item)
+    if not card.get("paperComparisonAllowed"):
+        reasons.append(card.get("noTradeReason") or "decision card is incomplete")
+    if item.get("processEntryAllowed") is False:
+        reasons.append("process circuit breaker is active; resolve hard breaches before new paper entries")
     liquidity_notes = strike_plan.get("liquidityNotes") or []
     intent_blocks = list(item.get("intentBlocks") or [])
     paper_auto_selected, auto_block_reason = paper_auto_selection_decision(
@@ -273,6 +281,9 @@ def build_ledger_entry(
     """Convert one strike-plan item into a durable paper execution record."""
     now = local_now()
     strike_plan = item.get("strikePlan") or {}
+    account = load_json_file(SCHWAB_ACCOUNT_FILE) or {}
+    card = decision_card(item, account_nlv=account.get("netLiquidatingValue"))
+    item = {**item, "decisionCard": card}
     legs = strike_plan.get("legs") or []
     leg_symbols = [leg.get("symbol") for leg in legs]
     cost_type, cost = strategy_cost(strike_plan)
@@ -312,6 +323,12 @@ def build_ledger_entry(
         "underlyingPrice": item.get("price"),
         "daysUntilEarnings": item.get("daysUntilEarnings"),
         "riskUnits": item.get("riskUnits"),
+        "ivRank": item.get("ivRank"),
+        "ivRankChange": item.get("ivRankChange"),
+        "atrPercent": item.get("atrPercent"),
+        "marketContextSummary": item.get("marketContextSummary") or {},
+        "schwabOptions": item.get("schwabOptions") or {},
+        "decisionCard": card,
         "expiration": strike_plan.get("expiration"),
         "entryCostType": cost_type,
         "entryLimit": round(cost, 4),
@@ -368,12 +385,16 @@ def record_from_strike_plan(strike_plan: dict[str, Any] | None = None) -> dict[s
     """
     strike_plan = strike_plan or load_strike_plan()
     ledger = load_ledger()
+    compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
+    process_entry_allowed = compliance.get("newPaperEntriesAllowed", True)
     entries: list[dict[str, Any]] = []
     for item in strike_plan.get("items", []):
-        entries.append(build_ledger_entry(item, strike_plan.get("generatedAt"), ledger))
+        guarded_item = {**item, "processEntryAllowed": process_entry_allowed}
+        entries.append(build_ledger_entry(guarded_item, strike_plan.get("generatedAt"), ledger))
         variant_item = rehearsal_variant_item(item)
         if variant_item:
-            entries.append(build_ledger_entry(variant_item, strike_plan.get("generatedAt"), ledger))
+            guarded_variant = {**variant_item, "processEntryAllowed": process_entry_allowed}
+            entries.append(build_ledger_entry(guarded_variant, strike_plan.get("generatedAt"), ledger))
     updated, inserted = merge_entries(ledger, entries)
     save_ledger(updated)
     return {

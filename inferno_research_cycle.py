@@ -128,10 +128,21 @@ def build_research_cycle() -> dict[str, Any]:
         "expectedMoveLedger": {
             "stage": expected_move.get("stage"),
             "verdict": expected_move.get("verdict"),
+            "regimeVerdict": (expected_move.get("regimeDiagnostics") or {}).get("verdict"),
             "closedLongVolRecords": (expected_move.get("counts") or {}).get("closedLongVolRecords"),
             "currentLongVolCandidates": (expected_move.get("counts") or {}).get("currentLongVolCandidates"),
             "beatRate": (expected_move.get("overall") or {}).get("beatRate"),
             "hurdleCounts": expected_move.get("currentHurdleCounts") or {},
+            "metricConflictCount": (
+                ((expected_move.get("regimeDiagnostics") or {}).get("evidenceQuality") or {}).get(
+                    "positiveRButMissedImpliedMoveCount"
+                )
+            ),
+            "repeatedFingerprintExcessRecords": (
+                ((expected_move.get("regimeDiagnostics") or {}).get("evidenceQuality") or {}).get(
+                    "repeatedFingerprintExcessRecords"
+                )
+            ),
             "promotable": bool(expected_move.get("promotable")),
         },
         "strategyAlternativeScorer": {
@@ -196,9 +207,12 @@ def research_cycle_text(report: dict[str, Any]) -> str:
         f"score rows {(report.get('scoreCalibration') or {}).get('scenarioScoreRows')} | "
         f"promotable {(report.get('scoreCalibration') or {}).get('promotable')}",
         f"- expected move: {(report.get('expectedMoveLedger') or {}).get('verdict')} | "
+        f"regime {(report.get('expectedMoveLedger') or {}).get('regimeVerdict')} | "
         f"closed long-vol {(report.get('expectedMoveLedger') or {}).get('closedLongVolRecords')} | "
         f"current long-vol {(report.get('expectedMoveLedger') or {}).get('currentLongVolCandidates')} | "
         f"beat rate {(report.get('expectedMoveLedger') or {}).get('beatRate')} | "
+        f"metric conflicts {(report.get('expectedMoveLedger') or {}).get('metricConflictCount')} | "
+        f"repeated excess {(report.get('expectedMoveLedger') or {}).get('repeatedFingerprintExcessRecords')} | "
         f"hurdles {json.dumps((report.get('expectedMoveLedger') or {}).get('hurdleCounts') or {})} | "
         f"promotable {(report.get('expectedMoveLedger') or {}).get('promotable')}",
         f"- strategy alternatives: {(report.get('strategyAlternativeScorer') or {}).get('verdict')} | "

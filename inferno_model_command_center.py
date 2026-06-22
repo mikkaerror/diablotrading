@@ -84,6 +84,12 @@ TOS_FORMULA_AUDIT_FILE = DATA_DIR / "inferno_tos_formula_audit.json"
 TOS_CUSTOM_METRICS_FILE = DATA_DIR / "inferno_tos_custom_metrics.json"
 TOS_METRIC_THEORY_AUDIT_FILE = DATA_DIR / "inferno_tos_metric_theory_audit.json"
 MARKET_MASTERY_PLAN_FILE = DATA_DIR / "inferno_market_mastery_plan.json"
+EXPECTANCY_LEDGER_FILE = DATA_DIR / "inferno_expectancy_ledger.json"
+DTE_POLICY_ANALYSIS_FILE = DATA_DIR / "inferno_dte_policy_analysis.json"
+TRADING_BEHAVIOR_AUDIT_FILE = DATA_DIR / "inferno_trading_behavior_audit.json"
+PROCESS_COMPLIANCE_FILE = DATA_DIR / "inferno_process_compliance.json"
+PORTFOLIO_HEAT_FILE = DATA_DIR / "inferno_portfolio_heat.json"
+WHEEL_SHADOW_FILE = DATA_DIR / "inferno_wheel_shadow.json"
 
 
 REPORTING_MAP: tuple[dict[str, str], ...] = (
@@ -331,6 +337,42 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "market-mastery",
         "question": "Which strategy, sizing, exit, and discipline improvements should the desk do next?",
         "artifact": "reports/market_mastery_next_actions_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "net-r-expectancy",
+        "question": "Which strategy families earn positive net R after modeled friction?",
+        "artifact": "reports/expectancy_ledger_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "dte-policy",
+        "question": "What do the entry/exit DTE cohorts say without assuming 21 DTE is universal?",
+        "artifact": "reports/dte_policy_analysis_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "behavior",
+        "question": "Are turnover, holding periods, or rapid re-entry degrading the process?",
+        "artifact": "reports/trading_behavior_audit_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "process-compliance",
+        "question": "Should new paper entries pause because the process was breached?",
+        "artifact": "reports/process_compliance_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "portfolio-heat",
+        "question": "How much total-NLV risk is concentrated in each economic theme?",
+        "artifact": "reports/portfolio_heat_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "wheel-shadow",
+        "question": "Is any wheel candidate capital-realistic after assignment and downside stress?",
+        "artifact": "reports/wheel_shadow_latest.txt",
         "owner": "codex",
     },
     {
@@ -660,6 +702,12 @@ def build_command_center() -> dict[str, Any]:
     schwab_price_history = load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {}
     schwab_tos_metrics_sync = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
     market_mastery = load_json_file(MARKET_MASTERY_PLAN_FILE) or {}
+    expectancy_ledger = load_json_file(EXPECTANCY_LEDGER_FILE) or {}
+    dte_policy = load_json_file(DTE_POLICY_ANALYSIS_FILE) or {}
+    behavior_audit = load_json_file(TRADING_BEHAVIOR_AUDIT_FILE) or {}
+    process_compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
+    portfolio_heat = load_json_file(PORTFOLIO_HEAT_FILE) or {}
+    wheel_shadow = load_json_file(WHEEL_SHADOW_FILE) or {}
 
     missions = load_active_missions()
     notes = load_notes(limit=12)
@@ -734,6 +782,12 @@ def build_command_center() -> dict[str, Any]:
             MARKET_MASTERY_PLAN_FILE,
             keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable"),
         ),
+        "expectancyLedger": artifact_summary(EXPECTANCY_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "dtePolicyAnalysis": artifact_summary(DTE_POLICY_ANALYSIS_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "tradingBehaviorAudit": artifact_summary(TRADING_BEHAVIOR_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "processCompliance": artifact_summary(PROCESS_COMPLIANCE_FILE, keys=("stage", "verdict", "generatedAt", "newPaperEntriesAllowed")),
+        "portfolioHeat": artifact_summary(PORTFOLIO_HEAT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "wheelShadow": artifact_summary(WHEEL_SHADOW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
     }
     strategy_alt_pricing_ranked = sorted(
         [item for item in strategy_alt_pricing.get("items") or [] if isinstance(item, dict)],
@@ -968,6 +1022,12 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_risk_gate_audit.sh",
             "./run_inferno_conviction_research.sh",
             "./run_inferno_market_mastery_plan.sh",
+            "./run_inferno_expectancy_ledger.sh",
+            "./run_inferno_dte_policy_analysis.sh",
+            "./run_inferno_trading_behavior_audit.sh",
+            "./run_inferno_process_compliance.sh",
+            "./run_inferno_portfolio_heat.sh",
+            "./run_inferno_wheel_shadow.sh",
         ],
         "recommendedReads": [
             str(ROOT / "reports/usage_optimizer_latest.txt"),
@@ -1007,6 +1067,12 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/blowup_guardrails_latest.txt"),
             str(ROOT / "reports/market_mastery_next_actions_latest.txt"),
             str(ROOT / "docs/TRADING_DISCIPLINE_RESEARCH_2026-06-22.md"),
+            str(ROOT / "reports/expectancy_ledger_latest.txt"),
+            str(ROOT / "reports/dte_policy_analysis_latest.txt"),
+            str(ROOT / "reports/trading_behavior_audit_latest.txt"),
+            str(ROOT / "reports/process_compliance_latest.txt"),
+            str(ROOT / "reports/portfolio_heat_latest.txt"),
+            str(ROOT / "reports/wheel_shadow_latest.txt"),
         ],
         "nextActions": next_actions[:12],
         "activeMissions": missions,
@@ -1075,6 +1141,12 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- TOS custom metrics: {status_value(status.get('tosCustomMetrics') or {})}",
             f"- Conviction research: {status_value(status.get('convictionResearch') or {}, key='stage')}",
             f"- Market mastery plan: {status_value(status.get('marketMasteryPlan') or {})}",
+            f"- Net-R expectancy: {status_value(status.get('expectancyLedger') or {})}",
+            f"- DTE policy analysis: {status_value(status.get('dtePolicyAnalysis') or {})}",
+            f"- Trading behavior audit: {status_value(status.get('tradingBehaviorAudit') or {})}",
+            f"- Process compliance: {status_value(status.get('processCompliance') or {})}",
+            f"- Portfolio heat: {status_value(status.get('portfolioHeat') or {})}",
+            f"- Wheel shadow: {status_value(status.get('wheelShadow') or {})}",
             "",
             "Headline metrics:",
             f"- Account source: {metrics.get('accountDataSource') or '-'}",

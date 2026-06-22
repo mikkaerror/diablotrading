@@ -20,6 +20,7 @@ from inferno_config import AUTO_PAPER_SELECTION_ENABLED, MAX_SINGLE_TICKET_DOLLA
 from inferno_doctor import in_current_service_cycle
 from inferno_execution_clerk import build_execution_queue
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_trade_evidence import decision_card, volatility_context
 from inferno_strike_selector import (
     build_strike_plan,
     build_strike_plan_from_queue,
@@ -223,6 +224,8 @@ def classify_candidate(
         "reasons": combined_reasons,
         "warnings": risk_verdict.get("warnings") or [],
         "marketContextSummary": effective_item.get("marketContextSummary") or strike_item.get("marketContextSummary") or {},
+        "volatilityContext": volatility_context(effective_item),
+        "decisionCard": decision_card(effective_item),
         "nextStep": sandbox_ticket.get("nextStep") or execution_item.get("nextStep"),
         "paperVariantOnly": bool(sandbox_ticket.get("paperVariantOnly") or effective_item.get("paperVariantOnly")),
         "paperVariantFamily": sandbox_ticket.get("paperVariantFamily") or effective_item.get("paperVariantFamily"),
@@ -231,8 +234,24 @@ def classify_candidate(
         "rejectCommand": f"python3 inferno_approval_queue.py reject {ticker}",
     }
 
+    card = candidate["decisionCard"]
+    if not card.get("paperComparisonAllowed"):
+        combined_reasons = dedupe(
+            combined_reasons
+            + [card.get("noTradeReason") or "decision card is incomplete"]
+        )
+        candidate["reasons"] = combined_reasons
+
     if not effective_item.get("ok"):
         candidate["category"] = "failed-construction"
+        return candidate
+
+    if risk_verdict.get("passed") is True and not card.get("paperComparisonAllowed"):
+        candidate["category"] = "research-watch"
+        candidate["nextStep"] = (
+            "Keep shadow-only until the decision card is complete and any long-vol "
+            "premium hurdle has positive forecast edge."
+        )
         return candidate
 
     if sandbox_ticket.get("status") == "stage-in-papermoney":

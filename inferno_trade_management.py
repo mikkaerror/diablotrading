@@ -74,6 +74,7 @@ LANE_B_DEBIT_TIME_STOP_DAYS = 2
 LANE_B_DEBIT_STOP_PCT_OF_DEBIT = -0.50
 
 PRE_EVENT_EXIT_DAYS = 1            # close before earnings if <= this many days out
+DTE_POLICY_REVIEW_DAYS = 21        # review trigger, never an automatic close
 
 # Set of verdicts the doctor + tests consume.
 VERDICTS = (
@@ -416,6 +417,10 @@ def assess_ticket(
         "lane": lane,
         "expiration": ticket.get("expiration"),
         "daysToExpiration": dte,
+        "dtePolicyReview": bool(
+            dte is not None
+            and LANE_B_CREDIT_FORCE_CLOSE_DAYS < dte <= DTE_POLICY_REVIEW_DAYS
+        ),
         "daysUntilEarnings": dte_earnings,
         "entryLimit": _safe_float(ticket.get("entryLimit")),
         "estimatedMaxLoss": _safe_float(ticket.get("estimatedMaxLoss")),
@@ -468,6 +473,9 @@ def build_trade_management(
     actionable_count = sum(
         c for v, c in verdict_counts.items() if v not in {"hold", "awaiting-data"}
     )
+    dte_policy_review_count = sum(
+        1 for assessment in assessments if assessment.get("dtePolicyReview")
+    )
 
     awaiting_data_count = verdict_counts.get("awaiting-data", 0)
     overall_verdict = (
@@ -488,6 +496,7 @@ def build_trade_management(
         "verdict": overall_verdict,
         "openPositionCount": len(open_tickets),
         "actionableCount": actionable_count,
+        "dtePolicyReviewCount": dte_policy_review_count,
         "verdictCounts": verdict_counts,
         "mtmFetchStatus": mtm_fetch_status,
         "assessments": assessments,
@@ -514,11 +523,13 @@ def build_trade_management(
                 "stopPctOfDebit": LANE_B_DEBIT_STOP_PCT_OF_DEBIT,
             },
             "preEventExitDays": PRE_EVENT_EXIT_DAYS,
+            "dtePolicyReviewDays": DTE_POLICY_REVIEW_DAYS,
         },
         "citations": ["TRADE_MANAGEMENT_PLAYBOOK.md", "TASTYTRADE-50PCT-RULE"],
         "reminders": [
             "research-only: never closes, approves, or routes a trade",
             "broker submit OFF; liveTradingAllowed False; no authority change",
+            "21 DTE is a review trigger; cohort evidence decides whether a family should close there",
             "verdicts are recommendations -- the operator clicks the buttons",
         ],
     }
@@ -535,6 +546,7 @@ def trade_management_text(payload: dict[str, Any]) -> str:
         f"Overall verdict: {payload.get('verdict')}",
         f"Open positions:  {payload.get('openPositionCount')}",
         f"Actionable:      {payload.get('actionableCount')}",
+        f"DTE reviews:     {payload.get('dtePolicyReviewCount')}",
         f"MTM fetch:       {payload.get('mtmFetchStatus')}",
         "",
     ]
@@ -559,6 +571,10 @@ def trade_management_text(payload: dict[str, Any]) -> str:
                 f"(ticketId {tid[:8]}…)"
             )
             lines.append(f"    -> verdict: {a.get('verdict')}")
+            if a.get("dtePolicyReview"):
+                lines.append(
+                    "       - review-dte-policy: compare with the 21-DTE cohort; no automatic close"
+                )
             pnl = a.get("unrealizedPnlDollars")
             if pnl is not None:
                 lines.append(f"       unrealized PnL: ${pnl:+.2f}")

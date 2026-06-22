@@ -33,6 +33,7 @@ PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.jso
 
 MIN_EXPECTED_MOVE_SAMPLE = 10
 CONTRACT_MULTIPLIER = 100.0
+CHRONOLOGICAL_COHORT_COUNT = 4
 
 HURDLE_REASONABLE_ATR_MULTIPLE = 1.25
 HURDLE_STRETCH_ATR_MULTIPLE = 2.0
@@ -418,6 +419,196 @@ def group_stats(records: list[dict[str, Any]], key: str) -> list[dict[str, Any]]
     return sorted(rows, key=lambda row: (-row["sampleCount"], row["group"]))
 
 
+def outcome_r_sum(records: list[dict[str, Any]]) -> float | None:
+    """Return summed R for records that contain normalized outcomes."""
+    values = [
+        value
+        for record in records
+        if (value := number(record.get("outcomeR"))) is not None
+    ]
+    return round(sum(values), 4) if values else None
+
+
+def ticker_contribution_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Show which tickers actually contribute the aggregate long-vol result."""
+    rows = group_stats(records, "ticker")
+    for row in rows:
+        ticker_records = [
+            record for record in records if (text(record.get("ticker")) or "unknown") == row["group"]
+        ]
+        row["sumOutcomeR"] = outcome_r_sum(ticker_records)
+    return sorted(
+        rows,
+        key=lambda row: (
+            -(number(row.get("sumOutcomeR"), float("-inf")) or 0.0),
+            row["group"],
+        ),
+    )
+
+
+def chronological_cohorts(
+    records: list[dict[str, Any]],
+    *,
+    cohort_count: int = CHRONOLOGICAL_COHORT_COUNT,
+) -> list[dict[str, Any]]:
+    """Split dated records into equal chronological cohorts without causal claims."""
+    ordered = sorted(
+        records,
+        key=lambda record: (
+            text(record.get("reviewedAt")),
+            text(record.get("ticketId")),
+        ),
+    )
+    if not ordered or cohort_count <= 0:
+        return []
+    cohort_size = max(1, (len(ordered) + cohort_count - 1) // cohort_count)
+    rows: list[dict[str, Any]] = []
+    for index, start in enumerate(range(0, len(ordered), cohort_size), start=1):
+        cohort = ordered[start : start + cohort_size]
+        row = {
+            "cohort": index,
+            "oldestReviewedAt": cohort[0].get("reviewedAt"),
+            "newestReviewedAt": cohort[-1].get("reviewedAt"),
+            **move_stats(cohort),
+            "sumOutcomeR": outcome_r_sum(cohort),
+        }
+        rows.append(row)
+    return rows
+
+
+def implied_move_bucket(value: Any) -> str:
+    """Return the desk's non-overlapping implied-move evidence bucket."""
+    parsed = number(value)
+    if parsed is None or parsed < 0:
+        return "unknown"
+    if parsed < 10:
+        return "0-10%"
+    if parsed < 20:
+        return "10-20%"
+    if parsed < 30:
+        return "20-30%"
+    if parsed < 50:
+        return "30-50%"
+    if parsed < 100:
+        return "50-100%"
+    return "100%+"
+
+
+def implied_move_bucket_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Summarize result shape by the premium hurdle the market charged."""
+    order = ["0-10%", "10-20%", "20-30%", "30-50%", "50-100%", "100%+", "unknown"]
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        groups[implied_move_bucket(record.get("impliedMovePct"))].append(record)
+    rows: list[dict[str, Any]] = []
+    for label in order:
+        group = groups.get(label) or []
+        if group:
+            rows.append({"bucket": label, **move_stats(group), "sumOutcomeR": outcome_r_sum(group)})
+    return rows
+
+
+def evidence_quality_diagnostics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Surface internal conflicts and repeated scenario fingerprints."""
+    metric_conflicts = [
+        record
+        for record in records
+        if number(record.get("outcomeR"), 0.0) > 0 and not record.get("beatImpliedMove")
+    ]
+    fingerprints: dict[tuple[Any, ...], list[str]] = defaultdict(list)
+    for record in records:
+        fingerprint = (
+            record.get("ticker"),
+            record.get("baselineUnderlyingPrice"),
+            record.get("exitUnderlyingPrice"),
+            record.get("impliedMovePct"),
+            record.get("entryDebit"),
+            record.get("outcomeR"),
+        )
+        fingerprints[fingerprint].append(text(record.get("ticketId")))
+    repeated = [
+        {"count": len(ticket_ids), "ticketIds": ticket_ids}
+        for ticket_ids in fingerprints.values()
+        if len(ticket_ids) > 1
+    ]
+    repeated.sort(key=lambda row: -row["count"])
+    return {
+        "positiveRButMissedImpliedMoveCount": len(metric_conflicts),
+        "positiveRButMissedImpliedMoveTicketIds": [
+            record.get("ticketId") for record in metric_conflicts
+        ],
+        "repeatedFingerprintGroups": len(repeated),
+        "repeatedFingerprintExcessRecords": sum(row["count"] - 1 for row in repeated),
+        "largestRepeatedFingerprintGroups": repeated[:10],
+        "interpretation": (
+            "Outcome-R and expected-move math are different measures, but positive R while "
+            "missing the implied move requires reconciliation before promotion. Repeated "
+            "fingerprints remain visible and are not silently deduplicated."
+        ),
+    }
+
+
+def concentration_diagnostics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Measure how much aggregate R depends on the best historical tickers."""
+    contributions = ticker_contribution_stats(records)
+    positive = [
+        row for row in contributions if (number(row.get("sumOutcomeR"), 0.0) or 0.0) > 0
+    ]
+    top = positive[:2]
+    top_tickers = [row["group"] for row in top]
+    top_sum = sum(number(row.get("sumOutcomeR"), 0.0) or 0.0 for row in top)
+    positive_sum = sum(number(row.get("sumOutcomeR"), 0.0) or 0.0 for row in positive)
+    remaining = [
+        record for record in records if text(record.get("ticker")) not in set(top_tickers)
+    ]
+    return {
+        "topPositiveContributors": top,
+        "topPositiveContributorTickers": top_tickers,
+        "topTwoSumOutcomeR": round(top_sum, 4),
+        "shareOfPositiveOutcomeR": (
+            round(top_sum / positive_sum, 4) if positive_sum > 0 else None
+        ),
+        "excludingTopTwo": {
+            **move_stats(remaining),
+            "sumOutcomeR": outcome_r_sum(remaining),
+        },
+        "interpretation": (
+            "Concentration is descriptive, not a repeatable edge. The leave-top-two-out "
+            "result is the conservative prior until fresh, risk-passed evidence exists."
+        ),
+    }
+
+
+def regime_diagnostics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build concentration, recency, premium-bucket, and data-quality diagnostics."""
+    cohorts = chronological_cohorts(records)
+    recent = cohorts[-1] if cohorts else {}
+    concentration = concentration_diagnostics(records)
+    quality = evidence_quality_diagnostics(records)
+    recent_mean_r = number(recent.get("meanOutcomeR"))
+    recent_beat_rate = number(recent.get("beatRate"))
+    leave_out_mean_r = number((concentration.get("excludingTopTwo") or {}).get("meanOutcomeR"))
+    fragile = any(
+        value is not None and value < 0
+        for value in (recent_mean_r, leave_out_mean_r)
+    ) or (recent_beat_rate is not None and recent_beat_rate < 0.25)
+    return {
+        "verdict": "historical-edge-not-admissible" if fragile else "historical-edge-watch",
+        "tickerContributions": ticker_contribution_stats(records),
+        "concentration": concentration,
+        "chronologicalCohorts": cohorts,
+        "recentCohort": recent,
+        "impliedMoveBuckets": implied_move_bucket_stats(records),
+        "evidenceQuality": quality,
+        "causalClaimAllowed": False,
+        "promotionEvidenceEligible": False,
+        "policyInference": (
+            "Keep long-vol above a 20% implied move shadow-only until fresh risk-passed "
+            "evidence overturns the negative recent and leave-out priors."
+        ),
+    }
+
+
 def hurdle_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
     """Count current candidates by premium-hurdle label."""
     counts: dict[str, int] = {}
@@ -483,6 +674,7 @@ def build_expected_move_ledger(
         if item.get("status") != "priced"
     ]
     pressure_candidates = top_pressure_candidates(current_candidates)
+    diagnostics = regime_diagnostics(closed_records)
     return {
         "generatedAt": local_now().isoformat(),
         "stage": EXPECTED_MOVE_LEDGER_STAGE,
@@ -503,6 +695,7 @@ def build_expected_move_ledger(
         "overall": stats,
         "byFamily": group_stats(closed_records, "family"),
         "bySource": group_stats(closed_records, "source"),
+        "regimeDiagnostics": diagnostics,
         "currentHurdleCounts": hurdle_counts(current_candidates),
         "currentPressureCandidates": pressure_candidates,
         "closedRecords": closed_records,
@@ -510,6 +703,7 @@ def build_expected_move_ledger(
         "reminders": [
             "A long-vol ticket needs realised move to clear premium, spread, and decay; direction alone is not enough.",
             "Breakeven distance is preferred; debit/underlying is used only when breakevens are absent.",
+            "Repeated fingerprints and metric conflicts are reported rather than silently cleaned away.",
             "This artifact is diagnostic only and cannot promote live or paper authority.",
         ],
     }
@@ -535,6 +729,10 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
     """Render the expected-move ledger memo."""
     counts = payload.get("counts") or {}
     overall = payload.get("overall") or {}
+    diagnostics = payload.get("regimeDiagnostics") or {}
+    concentration = diagnostics.get("concentration") or {}
+    recent = diagnostics.get("recentCohort") or {}
+    quality = diagnostics.get("evidenceQuality") or {}
     lines = [
         "Inferno Expected Move Ledger",
         "",
@@ -558,10 +756,34 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
         f"- mean move edge: {fmt(overall.get('meanMoveEdgePct'), suffix='%')}",
         f"- mean outcome R: {fmt(overall.get('meanOutcomeR'))}",
         "",
+        "Regime and evidence diagnostics:",
+        f"- verdict: {diagnostics.get('verdict')}",
+        f"- top positive contributors: "
+        f"{', '.join(concentration.get('topPositiveContributorTickers') or []) or 'none'}",
+        f"- excluding top two: n={((concentration.get('excludingTopTwo') or {}).get('sampleCount', 0))} | "
+        f"beat={pct((concentration.get('excludingTopTwo') or {}).get('beatRate'))} | "
+        f"mean R={fmt((concentration.get('excludingTopTwo') or {}).get('meanOutcomeR'))}",
+        f"- recent cohort: n={recent.get('sampleCount', 0)} | "
+        f"beat={pct(recent.get('beatRate'))} | mean R={fmt(recent.get('meanOutcomeR'))}",
+        f"- positive-R / missed-implied conflicts: "
+        f"{quality.get('positiveRButMissedImpliedMoveCount', 0)}",
+        f"- repeated fingerprint excess records: "
+        f"{quality.get('repeatedFingerprintExcessRecords', 0)}",
+        "",
+        "Implied-move buckets:",
+    ]
+    for row in diagnostics.get("impliedMoveBuckets") or []:
+        lines.append(
+            f"- {row.get('bucket')}: n={row.get('sampleCount')} | "
+            f"beat={pct(row.get('beatRate'))} | mean R={fmt(row.get('meanOutcomeR'))} | "
+            f"sum R={fmt(row.get('sumOutcomeR'))}"
+        )
+    lines.extend([
+        "",
         f"Current premium hurdle counts: {json.dumps(payload.get('currentHurdleCounts') or {})}",
         "",
         "By family:",
-    ]
+    ])
     if not payload.get("byFamily"):
         lines.append("- no closed long-vol records with expected-move math yet")
     for row in payload.get("byFamily") or []:

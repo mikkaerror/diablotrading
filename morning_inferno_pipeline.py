@@ -2090,6 +2090,13 @@ def build_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
                 "signalTrigger": row["signalTrigger"],
                 "primaryRoute": row["rec1"],
                 "secondaryRoute": row["rec2"],
+                "ivRank": row.get("ivRank"),
+                "ivRankChange": row.get("ivRankChange"),
+                "atrPercent": row.get("atrPercent"),
+                "volatilityThesis": (
+                    "Context only: compare implied volatility, expected movement, term structure, "
+                    "and strategy Greeks; IV rank alone does not choose debit versus credit."
+                ),
                 "approvalStatus": "pending",
                 "generatedAt": payload["generatedAt"],
             }

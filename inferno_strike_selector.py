@@ -872,6 +872,9 @@ def build_strike_plan_for_intent(
         "underlyingPriceSource": pricing_intent.get("underlyingPriceSource"),
         "daysUntilEarnings": intent.get("daysUntilEarnings"),
         "riskUnits": intent.get("riskUnits"),
+        "ivRank": intent.get("ivRank"),
+        "ivRankChange": intent.get("ivRankChange"),
+        "atrPercent": intent.get("atrPercent"),
         "paperOnly": True,
         "liveTradingAllowed": False,
         "marketContext": market_context,
@@ -882,6 +885,8 @@ def build_strike_plan_for_intent(
             "resistance": market_context.get("resistance"),
             "distanceToSupportPct": market_context.get("distanceToSupportPct"),
             "distanceToResistancePct": market_context.get("distanceToResistancePct"),
+            "atrPercent": intent.get("atrPercent") or market_context.get("atrPercent"),
+            "ivRank": intent.get("ivRank") or market_context.get("ivRank"),
         },
         "schwabOptions": schwab_options,
     }

@@ -314,6 +314,12 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("CONVICTION_RESEARCH_FILE", data_dir / "inferno_conviction_research.json"),
                 ("MATH_VERIFY_FILE", data_dir / "inferno_math_verify.json"),
                 ("MARKET_MASTERY_PLAN_FILE", data_dir / "inferno_market_mastery_plan.json"),
+                ("EXPECTANCY_LEDGER_FILE", data_dir / "inferno_expectancy_ledger.json"),
+                ("DTE_POLICY_ANALYSIS_FILE", data_dir / "inferno_dte_policy_analysis.json"),
+                ("TRADING_BEHAVIOR_AUDIT_FILE", data_dir / "inferno_trading_behavior_audit.json"),
+                ("PROCESS_COMPLIANCE_FILE", data_dir / "inferno_process_compliance.json"),
+                ("PORTFOLIO_HEAT_FILE", data_dir / "inferno_portfolio_heat.json"),
+                ("WHEEL_SHADOW_FILE", data_dir / "inferno_wheel_shadow.json"),
             ]
             with ExitStack() as stack:
                 for name, value in patches:

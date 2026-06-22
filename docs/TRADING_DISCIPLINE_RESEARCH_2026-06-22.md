@@ -281,6 +281,69 @@ It writes:
 - `data/inferno_market_mastery_plan.json`
 - `reports/market_mastery_next_actions_latest.txt`
 
+## 8. Implemented evidence controls
+
+The research is now operationalized:
+
+- Approval and strike candidates preserve IV rank, ATR, volatility context,
+  and net Greeks without using one IV threshold as an automatic strategy gate.
+- Every new paper ledger entry freezes a decision card.
+- Long straddles and strangles remain shadow-only unless a forecasted realized
+  move exceeds the implied move plus additional modeled friction.
+- Desk evidence guards keep long vol shadow-only above a 20% implied move,
+  above a 30% ATM spread, or inside seven days to earnings when the implied
+  move is outside the ledger's 10-20% research cohort. These are conservative
+  desk policies, not universal market laws.
+- A long-vol structure above 25% of NLV remains inadmissible when fresh account
+  NLV is available to the decision card.
+- Process breaches can pause new paper entries; ordinary losing streaks cannot.
+- Schwab option-chain age now blocks paper admission after 36 hours; a fresh
+  strike-plan timestamp cannot make an old broker quote fresh.
+- Trade management surfaces 21 DTE as a review trigger.
+- DTE, expectancy, and behavior reports separate paper from shadow evidence.
+- Expectancy separates risk-passed from risk-failed structures.
+- Portfolio heat combines live share value and open paper maximum loss by
+  economic theme.
+- Wheel analysis checks 100-share lot size, assignment cash, downside stress,
+  Schwab options freshness, open interest, and bid/ask width before showing a
+  shadow candidate.
+- Turnover counts only staged paper tickets and opened shadow scenarios, not
+  blocked or rejected construction attempts.
+
+Current generated evidence:
+
+- 146 closed option observations: 1 paper and 145 shadow.
+- The only risk-passed paper outcome is one losing vertical debit trade, so
+  promotion remains 1/30.
+- The 96 long-straddle shadow outcomes are all risk-failed constructions. Their
+  confidence interval crosses zero and they cannot establish tradable edge.
+- DELL and HPE contribute nearly all positive historical long-vol R. Removing
+  those two leaves 79 records at about -0.42R mean, while the newest 24 records
+  have a 0% implied-move beat rate.
+- Six records report positive R despite missing the implied-move hurdle, and
+  repeated scenario fingerprints remain in the ledger. The diagnostics expose
+  both issues rather than silently deduplicating or reconciling them.
+- Risk-failed vertical-debit shadow outcomes have negative expectancy.
+- Winner holding time averages about 20.4 days versus 24.1 days for losers;
+  this is not yet large enough for the audit's disposition-effect flag.
+- Three shadow days exceeded 100% of available NLV in summed hypothetical max
+  loss, demonstrating why faster scenario generation must stay separate from
+  capital deployment.
+- The live digital-infrastructure/miner cluster is about 39.1% of NLV.
+- Wheel quotes are currently stale. Even on the stale tape, none of the four
+  holdings has 100 shares; only HIVE's put assignment cash fits current cash.
+
+Canonical commands:
+
+```bash
+./run_inferno_expectancy_ledger.sh
+./run_inferno_dte_policy_analysis.sh
+./run_inferno_trading_behavior_audit.sh
+./run_inferno_process_compliance.sh
+./run_inferno_portfolio_heat.sh
+./run_inferno_wheel_shadow.sh
+```
+
 ## Primary sources
 
 - Options Industry Council, May Office Hours:

@@ -19,11 +19,24 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
             "approvalStatus": "pending",
             "intentStatus": "blocked",
             "intentBlocks": ["human approval still required"],
+            "price": 50.0,
+            "ivRank": 25.0,
+            "atrPercent": 3.0,
+            "forecastRealizedMovePct": 8.0,
             "strikePlan": {
                 "strategy": "LONG_STRADDLE",
                 "estimatedDebit": 2.45,
                 "estimatedMaxLoss": 245.0,
                 "estimatedMaxProfit": "uncapped",
+                "lowerBreakEven": 47.55,
+                "upperBreakEven": 52.45,
+                "greekSummary": {
+                    "netDelta": 0.0,
+                    "netGamma": 0.1,
+                    "netTheta": -0.2,
+                    "netVega": 0.3,
+                    "greeksComplete": True,
+                },
                 "liquidityNotes": [],
                 "legs": [
                     {"symbol": "WSC_20260515C50", "instruction": "BUY_TO_OPEN", "ask": 1.25},
@@ -53,6 +66,38 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(reasons, [])
         self.assertTrue(verdict["passed"])
         self.assertEqual(auto_block_reason, "ok")
+
+    def test_long_vol_without_forecast_stays_blocked(self) -> None:
+        item = {
+            "ticker": "WSC",
+            "ok": True,
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "price": 50.0,
+            "ivRank": 25.0,
+            "strikePlan": {
+                "strategy": "LONG_STRADDLE",
+                "estimatedDebit": 2.45,
+                "estimatedMaxLoss": 245.0,
+                "lowerBreakEven": 47.55,
+                "upperBreakEven": 52.45,
+                "greekSummary": {
+                    "netDelta": 0.0,
+                    "netGamma": 0.1,
+                    "netTheta": -0.2,
+                    "netVega": 0.3,
+                    "greeksComplete": True,
+                },
+                "liquidityNotes": [],
+            },
+        }
+        status, reasons, _, _ = paper_execution.paper_status_for_item(
+            item,
+            strike_plan_generated_at=paper_execution.local_now().isoformat(),
+            ledger={"items": []},
+        )
+        self.assertEqual(status, "paper-blocked")
+        self.assertTrue(any("long-vol-premium-hurdle" in reason for reason in reasons))
 
     def test_rehearsal_variant_item_only_appears_for_size_cap_blocks(self) -> None:
         item = {

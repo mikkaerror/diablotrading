@@ -30,6 +30,8 @@ if [[ "$schwab_status" -ne 0 ]]; then
   echo "Warning: Schwab daily ops refresh did not complete; strike selector will use latest saved chain data." >&2
 fi
 
+python3 inferno_process_compliance.py build
+
 set +e
 python3 inferno_strike_selector.py build --record-ledger "${selector_args[@]}"
 selector_status=$?
@@ -39,6 +41,9 @@ python3 inferno_downloads_manager.py scan
 python3 inferno_tos_fill_ingest.py ingest
 python3 inferno_shadow_evidence.py build
 python3 inferno_performance_analytics.py build
+python3 inferno_expectancy_ledger.py build
+python3 inferno_dte_policy_analysis.py build
+python3 inferno_trading_behavior_audit.py build
 python3 inferno_strategy_lab.py build
 python3 inferno_exposure_analytics.py build
 python3 inferno_broker_preview.py build
@@ -52,5 +57,6 @@ python3 inferno_tos_sandbox.py build
 python3 inferno_paper_test_director.py build
 python3 inferno_paper_evidence_loop.py build
 python3 inferno_paper_exit_auditor.py build
+python3 inferno_process_compliance.py build
 
 exit "$selector_status"

@@ -88,6 +88,8 @@ Safety            — authority, risk, secrets
 | `inferno_account_optimization.py` | Research-only growth, contribution, concentration, and contract-risk stress test from live Schwab truth | `reports/account_optimization_latest.txt` |
 | `inferno_sizing_positioning_timing.py` | Total-NLV sleeve drift, candidate price reconciliation, and dated deployment timing overlay | `reports/sizing_positioning_timing_latest.txt` |
 | `inferno_market_mastery_plan.py` | Source-ranked strategy, sizing, exit, behavior, and Browser learning action register | `reports/market_mastery_next_actions_latest.txt` |
+| `inferno_portfolio_heat.py` | Total-NLV economic-theme heat across live shares and open paper maximum loss | `reports/portfolio_heat_latest.txt` |
+| `inferno_wheel_shadow.py` | Capital, assignment, lot-size, yield, and downside-stress feasibility for wheel structures | `reports/wheel_shadow_latest.txt` |
 
 ## Breathing (is the system alive?)
 
@@ -141,6 +143,9 @@ Safety            — authority, risk, secrets
 | `inferno_schwab_edge_signals.py` | Research-only bridge from Schwab option-chain data to tiered operator signal lanes | `reports/schwab_edge_signals_latest.txt` |
 | `inferno_math_config.py` | **NEW** Audited target source of truth for math knobs — seeds, resample counts, thresholds, vocabulary | pure library, no artifact |
 | `inferno_performance_analytics.py` | Per-ticket performance with block-reason histogram | `data/inferno_performance_analytics.json` |
+| `inferno_expectancy_ledger.py` | Net-R expectancy by evidence source, strategy family, and construction admissibility | `reports/expectancy_ledger_latest.txt` |
+| `inferno_dte_policy_analysis.py` | Observational entry/exit DTE cohorts with a non-causal 21-DTE comparison | `reports/dte_policy_analysis_latest.txt` |
+| `inferno_trading_behavior_audit.py` | Turnover, winner/loser holding time, journal coverage, and re-entry audit | `reports/trading_behavior_audit_latest.txt` |
 | `inferno_research_cycle.py` | Periodic research roll-up across the thinking layer | `data/inferno_research_cycle.json` |
 | `inferno_scenario_evidence.py` | Research-only underlying-move observations for the daily scenario slate | `reports/scenario_evidence_latest.txt` |
 | `inferno_scenario_backtest.py` | Research-only scorecard comparing today's 10+ scenario slate against closed paper/shadow evidence | `reports/scenario_backtest_latest.txt` |
@@ -216,6 +221,7 @@ Safety            — authority, risk, secrets
 | `inferno_risk_gate_audit.py` | Consolidated map of which risk gates are blocking promotion right now | `reports/risk_gate_audit_latest.txt` |
 | `inferno_blowup_guardrails.py` | Six named pre-trade ruin-prevention rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only | `reports/blowup_guardrails_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials leak into artifacts | |
+| `inferno_process_compliance.py` | Research-only paper-entry circuit breaker for missing plans, size breaches, and potential averaging down | `reports/process_compliance_latest.txt` |
 
 ## Conventions
 

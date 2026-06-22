@@ -294,6 +294,22 @@ class SchwabOptionQualityTests(unittest.TestCase):
         )
         self.assertTrue(any("too thin" in s for s in b))
 
+    def test_stale_schwab_chain_blocks(self):
+        b, _, metrics = schwab_option_quality_guards(
+            {
+                "schwabOptions": {
+                    "qualityFlags": [],
+                    "quoteQualityScore": 80,
+                    "atmSpreadQuality": "tight",
+                    "atmLiquidityScore": 80,
+                    "sourceStatus": "ok",
+                    "sourceGeneratedAt": "2000-01-01T00:00:00+00:00",
+                }
+            }
+        )
+        self.assertTrue(any("chain is stale" in value for value in b))
+        self.assertGreater(metrics["sourceAgeHours"], metrics["maxSourceAgeHours"])
+
 
 class EvaluateStrikeItemTests(unittest.TestCase):
     """Top-level policy evaluation tests.

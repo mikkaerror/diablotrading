@@ -22,6 +22,8 @@ from inferno_config import (
     local_now,
 )
 
+SCHWAB_OPTIONS_MAX_AGE_HOURS = 36.0
+
 
 def current_single_ticket_cap() -> dict[str, Any]:
     """Resolve the effective per-ticket cap for the current cycle.
@@ -328,9 +330,28 @@ def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[
     atm_bucket = str(schwab_options.get("atmExpectedMoveBucket") or "unknown")
     atm_liquidity = number(schwab_options.get("atmLiquidityScore"), 0)
     spread_pct = number(schwab_options.get("atmSpreadPct"), 0)
+    source_status = str(schwab_options.get("sourceStatus") or "").strip().lower()
+    source_generated_at = schwab_options.get("sourceGeneratedAt")
+    source_age_minutes = (
+        strike_plan_age_minutes(str(source_generated_at))
+        if source_generated_at
+        else None
+    )
+    source_age_hours = (
+        round(source_age_minutes / 60.0, 2)
+        if source_age_minutes is not None
+        else None
+    )
 
     blocks: list[str] = []
     warnings: list[str] = []
+
+    if source_status and source_status not in {"ok", "fixture"}:
+        blocks.append(f"Schwab option source status is {source_status}")
+    if source_age_hours is None:
+        warnings.append("Schwab option source timestamp is missing")
+    elif source_age_hours > SCHWAB_OPTIONS_MAX_AGE_HOURS:
+        blocks.append(f"Schwab option chain is stale at {source_age_hours:.1f} hours")
 
     hard_flags = {
         "empty-chain",
@@ -362,8 +383,10 @@ def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[
 
     return blocks, warnings, {
         "attached": True,
-        "sourceGeneratedAt": schwab_options.get("sourceGeneratedAt"),
+        "sourceGeneratedAt": source_generated_at,
         "sourceStatus": schwab_options.get("sourceStatus"),
+        "sourceAgeHours": source_age_hours,
+        "maxSourceAgeHours": SCHWAB_OPTIONS_MAX_AGE_HOURS,
         "quoteQualityScore": score,
         "quoteQualityLabel": label,
         "qualityFlags": flags,

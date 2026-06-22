@@ -69,6 +69,12 @@ FAST_PAPER_COHORT_FILE = ROOT / "data" / "inferno_fast_paper_cohort.json"
 CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
 PAPER_MTM_FILE = ROOT / "data" / "inferno_paper_mark_to_market.json"
 TRADE_MANAGEMENT_FILE = ROOT / "data" / "inferno_trade_management.json"
+EXPECTANCY_LEDGER_FILE = ROOT / "data" / "inferno_expectancy_ledger.json"
+DTE_POLICY_ANALYSIS_FILE = ROOT / "data" / "inferno_dte_policy_analysis.json"
+TRADING_BEHAVIOR_AUDIT_FILE = ROOT / "data" / "inferno_trading_behavior_audit.json"
+PROCESS_COMPLIANCE_FILE = ROOT / "data" / "inferno_process_compliance.json"
+PORTFOLIO_HEAT_FILE = ROOT / "data" / "inferno_portfolio_heat.json"
+WHEEL_SHADOW_FILE = ROOT / "data" / "inferno_wheel_shadow.json"
 BLOWUP_GUARDRAILS_FILE = ROOT / "data" / "inferno_blowup_guardrails.json"
 AUTHORITY_MANIFEST_FILE = ROOT / "data" / "inferno_authority_manifest.json"
 DOWNLOADS_MANAGER_FILE = ROOT / "data" / "inferno_downloads_manager.json"
@@ -581,6 +587,57 @@ def slippage_estimator_status(report: dict) -> tuple[bool, str]:
     return _research_module_status(
         report,
         ok_verdicts={"no-usable-tickets", "thin-anchors", "anchors-ready"},
+    )
+
+
+def expectancy_ledger_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"evidence-building", "awaiting-closed-outcomes"},
+    )
+
+
+def dte_policy_analysis_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"cohorts-ready", "awaiting-closed-outcomes"},
+    )
+
+
+def trading_behavior_audit_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "behavior-baseline-ready",
+            "activity-watch",
+            "disposition-watch",
+            "awaiting-closed-outcomes",
+        },
+    )
+
+
+def process_compliance_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"clear", "stop-new-paper-entries"},
+    )
+
+
+def portfolio_heat_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"normal", "theme-watch", "high-theme-heat"},
+    )
+
+
+def wheel_shadow_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={
+            "shadow-candidates-found",
+            "no-capital-realistic-wheel",
+            "stale-options-data",
+        },
     )
 
 
@@ -1413,6 +1470,42 @@ def main() -> int:
     trade_management_ok, trade_management_detail = trade_management_status(trade_management)
     lines.append(summarize_status("Trade management", trade_management_ok, trade_management_detail))
     if not trade_management_ok:
+        warnings += 1
+
+    expectancy_ledger = load_json_file(EXPECTANCY_LEDGER_FILE) or {}
+    expectancy_ok, expectancy_detail = expectancy_ledger_status(expectancy_ledger)
+    lines.append(summarize_status("Net-R expectancy", expectancy_ok, expectancy_detail))
+    if not expectancy_ok:
+        warnings += 1
+
+    dte_policy = load_json_file(DTE_POLICY_ANALYSIS_FILE) or {}
+    dte_policy_ok, dte_policy_detail = dte_policy_analysis_status(dte_policy)
+    lines.append(summarize_status("DTE policy analysis", dte_policy_ok, dte_policy_detail))
+    if not dte_policy_ok:
+        warnings += 1
+
+    behavior_audit = load_json_file(TRADING_BEHAVIOR_AUDIT_FILE) or {}
+    behavior_ok, behavior_detail = trading_behavior_audit_status(behavior_audit)
+    lines.append(summarize_status("Trading behavior audit", behavior_ok, behavior_detail))
+    if not behavior_ok:
+        warnings += 1
+
+    process_compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
+    process_ok, process_detail = process_compliance_status(process_compliance)
+    lines.append(summarize_status("Process compliance", process_ok, process_detail))
+    if not process_ok:
+        warnings += 1
+
+    portfolio_heat = load_json_file(PORTFOLIO_HEAT_FILE) or {}
+    portfolio_heat_ok, portfolio_heat_detail = portfolio_heat_status(portfolio_heat)
+    lines.append(summarize_status("Portfolio heat", portfolio_heat_ok, portfolio_heat_detail))
+    if not portfolio_heat_ok:
+        warnings += 1
+
+    wheel_shadow = load_json_file(WHEEL_SHADOW_FILE) or {}
+    wheel_ok, wheel_detail = wheel_shadow_status(wheel_shadow)
+    lines.append(summarize_status("Wheel shadow", wheel_ok, wheel_detail))
+    if not wheel_ok:
         warnings += 1
 
     capital_scaling = load_json_file(CAPITAL_SCALING_FILE) or {}

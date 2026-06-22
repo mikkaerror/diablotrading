@@ -141,7 +141,28 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
         self.assertIn("Inferno Expected Move Ledger", rendered)
         self.assertIn("Closed long-vol expected-move summary", rendered)
         self.assertIn("Current long-vol candidates", rendered)
+        self.assertIn("Regime and evidence diagnostics", rendered)
         self.assertIn("research-only", rendered)
+
+    def test_regime_diagnostics_surface_concentration_recency_and_quality(self) -> None:
+        payload = ledger.build_expected_move_ledger(
+            paper_ledger={"items": []},
+            shadow_ledger=shadow_ledger(),
+            paper_reducer={"scenarioSlate": []},
+        )
+        diagnostics = payload["regimeDiagnostics"]
+
+        self.assertFalse(diagnostics["causalClaimAllowed"])
+        self.assertFalse(diagnostics["promotionEvidenceEligible"])
+        self.assertEqual(
+            diagnostics["concentration"]["topPositiveContributorTickers"],
+            ["AAA"],
+        )
+        self.assertEqual(len(diagnostics["chronologicalCohorts"]), 2)
+        self.assertEqual(
+            [row["bucket"] for row in diagnostics["impliedMoveBuckets"]],
+            ["0-10%"],
+        )
 
 
 if __name__ == "__main__":

@@ -78,6 +78,12 @@ run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
 run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
+run_step "process compliance"    "$PYTHON" inferno_process_compliance.py build
+run_step "net-R expectancy"      "$PYTHON" inferno_expectancy_ledger.py build
+run_step "DTE policy analysis"   "$PYTHON" inferno_dte_policy_analysis.py build
+run_step "behavior audit"        "$PYTHON" inferno_trading_behavior_audit.py build
+run_step "portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
+run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
 
 # 4) meta surfaces

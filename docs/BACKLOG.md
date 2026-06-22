@@ -135,7 +135,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
   explicit `volatilityThesis`; missing history is labeled unknown rather than
   inferred. No automatic debit/credit block is tied to one IV threshold.
 - **Estimate:** ~80 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. Approval rows now preserve IV/ATR
+  context and explicitly state that IV rank alone cannot select the structure.
 
 ### #10 — DTE review trigger and cohort analysis
 - **Owner:** codex
@@ -144,7 +145,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
 - **Done signal:** trade management emits a `review-dte-policy` reminder and
   a report compares net R and drawdown by strategy, entry DTE, and exit DTE.
 - **Estimate:** ~80 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. Trade management emits a 21-DTE
+  review flag and `inferno_dte_policy_analysis.py` builds observational cohorts.
 
 ### #11 — Binding no-averaging-down rule for options
 - **Owner:** claude
@@ -154,7 +156,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
 - **Done signal:** the trade-management playbook and decision card state the
   distinction; the auditor flags increases in risk on an open losing ticket.
 - **Estimate:** ~40 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — `d6944e2` plus current implementation. The playbook rule is
+  binding and process compliance detects overlapping losing-ticket risk adds.
 
 ### #12 — Process-breach circuit breaker
 - **Owner:** codex
@@ -165,7 +168,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
   breaches and emits a stop-new-entries recommendation without changing
   broker authority.
 - **Estimate:** ~80 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. `inferno_process_compliance.py`
+  can stop new paper entries without changing live authority.
 
 ### #13 — Precommitted decision card and journal
 - **Owner:** claude
@@ -175,7 +179,9 @@ expected leverage. Each one is small, owned, and has a clean done signal.
 - **Done signal:** no paper comparison entry is accepted without a complete
   card; the result is appended only after the pre-trade fields are frozen.
 - **Estimate:** ~80 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — `d6944e2` plus current implementation. Paper ledger entries
+  now freeze the machine thesis, contradictions, exits, Greeks, liquidity, and
+  volatility context.
 
 ### #14 — Long-vol premium-hurdle gate
 - **Owner:** codex
@@ -186,7 +192,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
   realized move, IV-change scenario, break-even, and friction; missing or
   negative edge remains shadow-only.
 - **Estimate:** ~90 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. Missing or non-positive
+  realized-move forecasts keep long vol shadow-only.
 
 ### #15 — Turnover and disposition-effect audit
 - **Owner:** codex
@@ -197,7 +204,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
   gross versus net R, winner/loser hold time, exit exceptions, and same-ticker
   re-entry intervals.
 - **Estimate:** ~100 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. The behavior audit reports
+  turnover, holding periods, journal coverage, and rapid ticker re-entry.
 
 ### #16 — Wheel feasibility shadow
 - **Owner:** claude
@@ -208,7 +216,8 @@ expected leverage. Each one is small, owned, and has a clean done signal.
   stress, after-spread yield, covered-call opportunity cost, and comparison
   with a share limit order. No ticket staging.
 - **Estimate:** ~120 lines.
-- **Status:** pending; blocked on fresh options data.
+- **Status:** DONE — current implementation, shadow-only. Current output is
+  correctly marked stale until the Schwab options tape refreshes.
 
 ### #17 — Net-R expectancy ledger per strategy family
 - **Owner:** codex (lives in performance-analytics lane)
@@ -218,7 +227,9 @@ expected leverage. Each one is small, owned, and has a clean done signal.
 - **Done signal:** the report shows count, gross R, friction, net R, win rate,
   average win/loss, expectancy, drawdown, and confidence interval by family.
 - **Estimate:** ~80 lines + tests.
-- **Status:** pending.
+- **Status:** DONE — current implementation. Paper and shadow remain separate,
+  risk-passed and risk-failed cohorts remain separate, and modeled friction is
+  labeled rather than presented as realized slippage.
 
 ---
 
