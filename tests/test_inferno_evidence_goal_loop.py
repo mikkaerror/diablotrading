@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import inferno_evidence_goal_loop as loop
@@ -53,6 +56,10 @@ def safe_artifacts() -> dict:
             "generatedAt": generated,
             "velocity": {"weeklyRate30dWindow": 1.0},
         },
+        "scenarioEvidence": {
+            "generatedAt": generated,
+            "counts": {"open": 2, "closed": 10},
+        },
     }
 
 
@@ -96,7 +103,7 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertFalse(result["paperEntryGateOpen"])
 
-    def test_goal_loop_stops_after_successful_verified_iteration(self) -> None:
+    def test_goal_loop_labels_clean_unchanged_iteration_no_op(self) -> None:
         calls = []
 
         def runner(name, argv, *, timeout_seconds):
@@ -108,9 +115,13 @@ class EvidenceGoalLoopTests(unittest.TestCase):
             timeout_seconds=10,
             command_runner=runner,
             artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
         )
 
-        self.assertEqual(payload["verdict"], "cycle-complete")
+        self.assertEqual(payload["verdict"], "no-op")
+        self.assertEqual(payload["valueClass"], "no-op")
+        self.assertEqual(payload["progressDelta"]["acceptedProgressPoints"], 0)
         self.assertEqual(payload["iterationCount"], 1)
         self.assertTrue(payload["verification"]["passed"])
         self.assertFalse(payload["brokerSubmitAllowed"])
@@ -131,6 +142,8 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         payload = loop.build_goal_loop(
             command_runner=runner,
             artifact_loader=lambda: artifacts,
+            state_loader=lambda: {},
+            now=NOW,
         )
 
         self.assertEqual(payload["verdict"], "blocked-safety")
@@ -144,6 +157,8 @@ class EvidenceGoalLoopTests(unittest.TestCase):
                 "ok": True,
             },
             artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
         )
 
         self.assertEqual(payload["stage"], loop.GOAL_LOOP_STAGE)
@@ -152,6 +167,107 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertFalse(payload["authorityChanged"])
         self.assertFalse(payload["liveTradingAllowed"])
         self.assertFalse(payload["brokerSubmitAllowed"])
+
+    def test_goal_loop_marks_verified_evidence_gain_productive(self) -> None:
+        baseline = safe_artifacts()
+        improved = safe_artifacts()
+        improved["performance"]["closedMetrics"]["scoredCount"] = 2
+        improved["paperEvidenceLoop"]["counts"]["remainingForPromotion"] = 28
+        loads = iter([baseline, improved])
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=lambda: next(loads),
+            state_loader=lambda: {},
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "productive")
+        self.assertEqual(payload["valueClass"], "productive")
+        self.assertEqual(payload["progressDelta"]["promotionEvidenceDelta"], 1)
+        self.assertEqual(payload["progressDelta"]["acceptedProgressPoints"], 100)
+
+    def test_goal_loop_skips_recent_duplicate_when_no_useful_work_is_ready(self) -> None:
+        artifacts = safe_artifacts()
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        state = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:30:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                }
+            ]
+        }
+        calls = []
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: (
+                calls.append(name) or {"name": name, "ok": True}
+            ),
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "skipped-duplicate-work")
+        self.assertEqual(payload["iterationCount"], 0)
+        self.assertEqual(len(calls), len(loop.PRECHECK_COMMANDS))
+
+    def test_state_tracks_productive_rate_and_repeated_blocker(self) -> None:
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
+        )
+        prior = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T11:00:00-06:00",
+                    "valueClass": "no-op",
+                    "progress": {"dominantBlocker": None},
+                }
+            ]
+        }
+
+        state = loop._update_state(payload, existing=prior)
+
+        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["rolling10"]["productiveRunRate"], 0.0)
+        self.assertEqual(state["rolling10"]["consecutiveNoProgressRuns"], 2)
+
+    def test_knowledge_run_is_plain_markdown_with_structured_properties(self) -> None:
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
+        )
+        state = loop._update_state(payload, existing={})
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                patch.object(loop, "KNOWLEDGE_RUNS_DIR", root / "runs"),
+                patch.object(loop, "KNOWLEDGE_LESSONS_DIR", root / "lessons"),
+                patch.object(loop, "KNOWLEDGE_CURRENT_FILE", root / "Current Loop State.md"),
+            ):
+                loop._save_knowledge(payload, state)
+
+            current = (root / "Current Loop State.md").read_text(encoding="utf-8")
+            self.assertIn("type: \"agent-loop-run\"", current)
+            self.assertIn("[[Loop Optimization Principles]]", current)
+            self.assertIn("live_trading_allowed: false", current)
 
 
 if __name__ == "__main__":

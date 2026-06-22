@@ -18,7 +18,9 @@ Strict contract:
 import argparse
 import hashlib
 import json
+import re
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -41,11 +43,18 @@ FAST_PAPER_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
 PERFORMANCE_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 PAPER_VELOCITY_FILE = DATA_DIR / "inferno_paper_velocity.json"
+SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
+
+KNOWLEDGE_DIR = ROOT / "knowledge" / "agent-loop"
+KNOWLEDGE_RUNS_DIR = KNOWLEDGE_DIR / "runs"
+KNOWLEDGE_LESSONS_DIR = KNOWLEDGE_DIR / "lessons"
+KNOWLEDGE_CURRENT_FILE = KNOWLEDGE_DIR / "Current Loop State.md"
 
 SAFE_AUTHORITY_LEVELS = {"paper-evidence-only"}
 MAX_STATE_RUNS = 30
 DEFAULT_MAX_ITERATIONS = 2
 DEFAULT_TIMEOUT_SECONDS = 600
+DEFAULT_DUPLICATE_COOLDOWN_MINUTES = 60
 
 PRECHECK_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("process compliance precheck", ("python3", "inferno_process_compliance.py", "build")),
@@ -69,6 +78,7 @@ ARTIFACT_PATHS: dict[str, Path] = {
     "performance": PERFORMANCE_FILE,
     "strategyLab": STRATEGY_LAB_FILE,
     "paperVelocity": PAPER_VELOCITY_FILE,
+    "scenarioEvidence": SCENARIO_EVIDENCE_FILE,
 }
 
 
@@ -85,6 +95,7 @@ def run_command(
 ) -> dict[str, Any]:
     """Run one isolated loop command and capture a bounded diagnostic."""
     started = local_now()
+    monotonic_started = time.monotonic()
     try:
         completed = subprocess.run(
             list(argv),
@@ -99,6 +110,7 @@ def run_command(
             "argv": list(argv),
             "startedAt": started.isoformat(),
             "finishedAt": local_now().isoformat(),
+            "durationSeconds": round(time.monotonic() - monotonic_started, 3),
             "ok": completed.returncode == 0,
             "returnCode": completed.returncode,
             "stdoutTail": _tail(completed.stdout),
@@ -110,6 +122,7 @@ def run_command(
             "argv": list(argv),
             "startedAt": started.isoformat(),
             "finishedAt": local_now().isoformat(),
+            "durationSeconds": round(time.monotonic() - monotonic_started, 3),
             "ok": False,
             "returnCode": None,
             "timedOut": True,
@@ -122,6 +135,7 @@ def run_command(
             "argv": list(argv),
             "startedAt": started.isoformat(),
             "finishedAt": local_now().isoformat(),
+            "durationSeconds": round(time.monotonic() - monotonic_started, 3),
             "ok": False,
             "returnCode": None,
             "error": f"{type(exc).__name__}: {exc}",
@@ -236,13 +250,49 @@ def verify_cycle(
     }
 
 
-def progress_snapshot(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _number(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _dominant_blocker(performance: dict[str, Any]) -> tuple[str | None, int]:
+    categories = performance.get("blockReasonCategories") or {}
+    ranked = sorted(
+        (
+            (str(name), int(_number((details or {}).get("count"))))
+            for name, details in categories.items()
+        ),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return ranked[0] if ranked else (None, 0)
+
+
+def progress_snapshot(
+    artifacts: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     """Extract the small state vector that determines whether the loop moved."""
+    current = now or local_now()
     performance = artifacts.get("performance") or {}
     paper_loop = artifacts.get("paperEvidenceLoop") or {}
     fast_paper = artifacts.get("fastPaper") or {}
     strategy_lab = artifacts.get("strategyLab") or {}
     velocity = artifacts.get("paperVelocity") or {}
+    scenario_evidence = artifacts.get("scenarioEvidence") or {}
+    fast_counts = fast_paper.get("counts") or {}
+    scenario_counts = scenario_evidence.get("counts") or {}
+    dominant_blocker, dominant_blocker_count = _dominant_blocker(performance)
+    exit_dates = sorted(
+        str(item.get("exitEligibleDate"))
+        for item in fast_paper.get("openSlate") or []
+        if item.get("exitEligibleDate")
+    )
+    eligible_fast_exits = sum(
+        1 for exit_date in exit_dates if exit_date <= current.date().isoformat()
+    )
     return {
         "scoredPaperTickets": int(
             ((performance.get("closedMetrics") or {}).get("scoredCount")) or 0
@@ -252,10 +302,127 @@ def progress_snapshot(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
         ),
         "paperLoopVerdict": paper_loop.get("verdict"),
         "fastPaperVerdict": fast_paper.get("verdict"),
-        "fastPaperCounts": fast_paper.get("counts") or {},
+        "fastPaperCounts": fast_counts,
+        "fastPaperClosedLifetime": int(
+            _number(fast_counts.get("closedLifetime", fast_counts.get("lifetimeClosed")))
+        ),
+        "fastPaperOpen": int(_number(fast_counts.get("open"))),
+        "eligibleFastPaperExits": eligible_fast_exits,
+        "nextFastPaperExitEligibleDate": exit_dates[0] if exit_dates else None,
+        "scenarioObservationsClosed": int(_number(scenario_counts.get("closed"))),
+        "scenarioObservationsOpen": int(_number(scenario_counts.get("open"))),
         "strategyLabVerdict": (strategy_lab.get("deskVerdict") or {}).get("level"),
         "weeklyCloseRate": (velocity.get("velocity") or {}).get("weeklyRate30dWindow"),
+        "projectedWeeksToPromotion": (velocity.get("velocity") or {}).get(
+            "projectedWeeksToPromotion"
+        ),
+        "dominantBlocker": dominant_blocker,
+        "dominantBlockerCount": dominant_blocker_count,
     }
+
+
+def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """Score only outcome changes that a fixed evaluator can verify."""
+    scored_delta = int(_number(after.get("scoredPaperTickets"))) - int(
+        _number(before.get("scoredPaperTickets"))
+    )
+    remaining_reduction = int(_number(before.get("remainingForPromotion"))) - int(
+        _number(after.get("remainingForPromotion"))
+    )
+    promotion_evidence_delta = max(0, scored_delta, remaining_reduction)
+    fast_closed_delta = max(
+        0,
+        int(_number(after.get("fastPaperClosedLifetime")))
+        - int(_number(before.get("fastPaperClosedLifetime"))),
+    )
+    scenario_closed_delta = max(
+        0,
+        int(_number(after.get("scenarioObservationsClosed")))
+        - int(_number(before.get("scenarioObservationsClosed"))),
+    )
+    blocker_reduction = 0
+    if (
+        before.get("dominantBlocker")
+        and before.get("dominantBlocker") == after.get("dominantBlocker")
+    ):
+        blocker_reduction = max(
+            0,
+            int(_number(before.get("dominantBlockerCount")))
+            - int(_number(after.get("dominantBlockerCount"))),
+        )
+    weekly_rate_delta = round(
+        _number(after.get("weeklyCloseRate")) - _number(before.get("weeklyCloseRate")),
+        4,
+    )
+    accepted_points = (
+        promotion_evidence_delta * 100
+        + fast_closed_delta * 25
+        + min(scenario_closed_delta, 10)
+        + min(blocker_reduction, 10)
+    )
+    return {
+        "scoredPaperTicketsDelta": scored_delta,
+        "remainingForPromotionReduction": remaining_reduction,
+        "promotionEvidenceDelta": promotion_evidence_delta,
+        "fastPaperClosedDelta": fast_closed_delta,
+        "scenarioObservationsClosedDelta": scenario_closed_delta,
+        "dominantBlockerReduction": blocker_reduction,
+        "weeklyCloseRateDelta": weekly_rate_delta,
+        "acceptedProgressPoints": accepted_points,
+    }
+
+
+def work_signature(snapshot: dict[str, Any], *, now: datetime | None = None) -> str:
+    """Hash only state that can create new useful work for the next cycle."""
+    current = now or local_now()
+    payload = {
+        "localDate": current.date().isoformat(),
+        "scoredPaperTickets": snapshot.get("scoredPaperTickets"),
+        "remainingForPromotion": snapshot.get("remainingForPromotion"),
+        "fastPaperVerdict": snapshot.get("fastPaperVerdict"),
+        "fastPaperClosedLifetime": snapshot.get("fastPaperClosedLifetime"),
+        "fastPaperOpen": snapshot.get("fastPaperOpen"),
+        "eligibleFastPaperExits": snapshot.get("eligibleFastPaperExits"),
+        "nextFastPaperExitEligibleDate": snapshot.get("nextFastPaperExitEligibleDate"),
+        "scenarioObservationsClosed": snapshot.get("scenarioObservationsClosed"),
+        "scenarioObservationsOpen": snapshot.get("scenarioObservationsOpen"),
+        "dominantBlocker": snapshot.get("dominantBlocker"),
+        "dominantBlockerCount": snapshot.get("dominantBlockerCount"),
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def _artifact_repairs(
+    before: dict[str, dict[str, Any]],
+    after: dict[str, dict[str, Any]],
+    *,
+    now: datetime,
+) -> list[str]:
+    return [
+        name
+        for name in ARTIFACT_PATHS
+        if (
+            not before.get(name)
+            or not _artifact_fresh(before.get(name) or {}, now=now)
+        )
+        and after.get(name)
+        and _artifact_fresh(after.get(name) or {}, now=now)
+    ]
+
+
+def classify_value(
+    verification: dict[str, Any],
+    delta: dict[str, Any],
+    repairs: list[str],
+) -> str:
+    if verification.get("passed") is not True:
+        return "blocked"
+    if int(_number(delta.get("acceptedProgressPoints"))) > 0:
+        return "productive"
+    if repairs:
+        return "maintenance"
+    return "no-op"
 
 
 def progress_fingerprint(
@@ -283,15 +450,53 @@ def _run_commands(
     ]
 
 
+def _recent_duplicate_run(
+    state: dict[str, Any],
+    *,
+    signature: str,
+    now: datetime,
+    cooldown_minutes: int,
+) -> bool:
+    if cooldown_minutes <= 0:
+        return False
+    runs = state.get("runs") or []
+    if not runs:
+        return False
+    last = runs[-1]
+    if last.get("workSignature") != signature:
+        return False
+    if last.get("verificationPassed") is not True:
+        return False
+    generated_raw = str(last.get("generatedAt") or "")
+    try:
+        generated = datetime.fromisoformat(generated_raw)
+    except ValueError:
+        return False
+    if generated.tzinfo is None and now.tzinfo is not None:
+        generated = generated.replace(tzinfo=now.tzinfo)
+    age_seconds = (now - generated).total_seconds()
+    return 0 <= age_seconds < cooldown_minutes * 60
+
+
+def _command_duration(results: list[dict[str, Any]]) -> float:
+    return round(sum(_number(result.get("durationSeconds")) for result in results), 3)
+
+
 def build_goal_loop(
     *,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    duplicate_cooldown_minutes: int = DEFAULT_DUPLICATE_COOLDOWN_MINUTES,
     command_runner: Callable[..., dict[str, Any]] = run_command,
     artifact_loader: Callable[[], dict[str, dict[str, Any]]] = load_artifacts,
+    state_loader: Callable[[], dict[str, Any]] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Run the bounded evidence loop and return its complete audit payload."""
-    started = local_now()
+    started = now or local_now()
+    monotonic_started = time.monotonic()
+    load_state = state_loader or (lambda: load_json_file(GOAL_LOOP_STATE_FILE) or {})
+    prior_state = load_state()
     precheck_commands = _run_commands(
         PRECHECK_COMMANDS,
         timeout_seconds=timeout_seconds,
@@ -316,47 +521,112 @@ def build_goal_loop(
     last_fingerprint: str | None = None
     final_artifacts = precheck_artifacts
     final_verification = precheck
+    baseline_progress = progress_snapshot(precheck_artifacts, now=started)
+    final_progress = baseline_progress
+    delta = progress_delta(baseline_progress, final_progress)
+    repairs: list[str] = []
+    value_class = "blocked"
+    signature = work_signature(baseline_progress, now=started)
 
     if precheck.get("passed"):
-        verdict = "stopped-iteration-cap"
-        stop_reason = f"reached {max_iterations} iteration(s)"
-        for iteration_number in range(1, max(1, max_iterations) + 1):
-            results = _run_commands(
-                CYCLE_COMMANDS,
-                timeout_seconds=timeout_seconds,
-                command_runner=command_runner,
+        all_fresh = all(
+            payload and _artifact_fresh(payload, now=started)
+            for payload in precheck_artifacts.values()
+        )
+        duplicate = _recent_duplicate_run(
+            prior_state,
+            signature=signature,
+            now=started,
+            cooldown_minutes=duplicate_cooldown_minutes,
+        )
+        useful_work_ready = int(
+            _number(baseline_progress.get("eligibleFastPaperExits"))
+        ) > 0
+        if duplicate and all_fresh and not useful_work_ready:
+            verdict = "skipped-duplicate-work"
+            stop_reason = (
+                "meaningful state is unchanged inside the duplicate-work cooldown"
             )
-            artifacts = artifact_loader()
-            verification = verify_cycle(artifacts, results)
-            fingerprint = progress_fingerprint(artifacts, verification)
-            progress = progress_snapshot(artifacts)
-            iterations.append(
-                {
-                    "iteration": iteration_number,
-                    "commands": results,
-                    "verification": verification,
-                    "progress": progress,
-                    "fingerprint": fingerprint,
-                }
-            )
-            final_artifacts = artifacts
-            final_verification = verification
-            if verification.get("passed"):
-                verdict = "cycle-complete"
-                stop_reason = "all objective verifier gates passed"
-                break
-            if fingerprint == last_fingerprint:
-                verdict = "stopped-no-progress"
-                stop_reason = "two consecutive failed iterations produced identical state"
-                break
-            last_fingerprint = fingerprint
+            value_class = "skipped"
+            final_verification = verify_cycle(precheck_artifacts, [], now=started)
+        else:
+            verdict = "stopped-iteration-cap"
+            stop_reason = f"reached {max_iterations} iteration(s)"
+            for iteration_number in range(1, max(1, max_iterations) + 1):
+                results = _run_commands(
+                    CYCLE_COMMANDS,
+                    timeout_seconds=timeout_seconds,
+                    command_runner=command_runner,
+                )
+                artifacts = artifact_loader()
+                verification = verify_cycle(artifacts, results, now=started)
+                fingerprint = progress_fingerprint(artifacts, verification)
+                progress = progress_snapshot(artifacts, now=started)
+                iteration_delta = progress_delta(baseline_progress, progress)
+                iteration_repairs = _artifact_repairs(
+                    precheck_artifacts,
+                    artifacts,
+                    now=started,
+                )
+                iteration_value = classify_value(
+                    verification,
+                    iteration_delta,
+                    iteration_repairs,
+                )
+                iterations.append(
+                    {
+                        "iteration": iteration_number,
+                        "commands": results,
+                        "commandDurationSeconds": _command_duration(results),
+                        "verification": verification,
+                        "progress": progress,
+                        "progressDelta": iteration_delta,
+                        "artifactRepairs": iteration_repairs,
+                        "valueClass": iteration_value,
+                        "fingerprint": fingerprint,
+                    }
+                )
+                final_artifacts = artifacts
+                final_verification = verification
+                final_progress = progress
+                delta = iteration_delta
+                repairs = iteration_repairs
+                value_class = iteration_value
+                signature = work_signature(progress, now=started)
+                if verification.get("passed"):
+                    verdict = iteration_value
+                    if iteration_value == "productive":
+                        stop_reason = (
+                            "fixed evaluator accepted measurable evidence progress"
+                        )
+                    elif iteration_value == "maintenance":
+                        stop_reason = (
+                            "artifact freshness was restored without accepted evidence progress"
+                        )
+                    else:
+                        stop_reason = (
+                            "cycle was safe and fresh but produced no accepted progress"
+                        )
+                    break
+                if fingerprint == last_fingerprint:
+                    verdict = "stopped-no-progress"
+                    stop_reason = (
+                        "two consecutive failed iterations produced identical state"
+                    )
+                    break
+                last_fingerprint = fingerprint
 
     decision = (final_artifacts.get("authority") or {}).get("decision") or {}
+    all_command_results = list(precheck_commands)
+    for iteration in iterations:
+        all_command_results.extend(iteration.get("commands") or [])
+    duration_seconds = round(time.monotonic() - monotonic_started, 3)
     return {
-        "generatedAt": local_now().isoformat(),
+        "generatedAt": (now or local_now()).isoformat(),
         "startedAt": started.isoformat(),
         "stage": GOAL_LOOP_STAGE,
         "verdict": verdict,
+        "valueClass": value_class,
         "stopReason": stop_reason,
         "researchOnly": True,
         "promotable": False,
@@ -366,17 +636,29 @@ def build_goal_loop(
         "goal": "Complete a fresh paper-evidence cycle while preserving process and authority gates.",
         "maxIterations": max(1, max_iterations),
         "timeoutSecondsPerCommand": timeout_seconds,
+        "duplicateCooldownMinutes": max(0, duplicate_cooldown_minutes),
+        "durationSeconds": duration_seconds,
+        "commandDurationSeconds": _command_duration(all_command_results),
+        "commandsExecuted": len(all_command_results),
         "precheckCommands": precheck_commands,
         "precheck": precheck,
         "iterations": iterations,
         "iterationCount": len(iterations),
         "verification": final_verification,
-        "progress": progress_snapshot(final_artifacts),
+        "baselineProgress": baseline_progress,
+        "progress": final_progress,
+        "progressDelta": delta,
+        "artifactRepairs": repairs,
+        "workSignature": signature,
         "authorityLevel": decision.get("authorityLevel"),
         "nextAction": (
-            "Wait for the next scheduled cycle."
-            if verdict == "cycle-complete"
-            else "Inspect verifier errors; the loop stopped without widening authority."
+            "Continue the scheduled evidence cadence."
+            if verdict == "productive"
+            else (
+                "Wait for new market eligibility or evidence state before repeating."
+                if verdict in {"maintenance", "no-op", "skipped-duplicate-work"}
+                else "Inspect verifier errors; the loop stopped without widening authority."
+            )
         ),
     }
 
@@ -385,13 +667,17 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
     """Render the latest loop outcome as an operator-readable memo."""
     verification = payload.get("verification") or {}
     progress = payload.get("progress") or {}
+    delta = payload.get("progressDelta") or {}
     lines = [
         "Inferno Evidence Goal Loop",
         "",
         f"Generated: {payload.get('generatedAt')}",
         f"Verdict: {payload.get('verdict')}",
+        f"Value class: {payload.get('valueClass')}",
         f"Stop reason: {payload.get('stopReason')}",
         f"Iterations: {payload.get('iterationCount')} / {payload.get('maxIterations')}",
+        f"Duration: {payload.get('durationSeconds', 0)}s",
+        f"Commands executed: {payload.get('commandsExecuted', 0)}",
         f"Authority: {payload.get('authorityLevel')}",
         "Authority contract: research-only; broker submit OFF; live trading OFF",
         "",
@@ -400,7 +686,17 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- remaining for promotion: {progress.get('remainingForPromotion')}",
         f"- paper loop: {progress.get('paperLoopVerdict')}",
         f"- fast paper: {progress.get('fastPaperVerdict')}",
+        f"- fast-paper closed lifetime: {progress.get('fastPaperClosedLifetime')}",
+        f"- scenario observations closed: {progress.get('scenarioObservationsClosed')}",
+        f"- dominant blocker: {progress.get('dominantBlocker')} ({progress.get('dominantBlockerCount')})",
         f"- strategy lab: {progress.get('strategyLabVerdict')}",
+        "",
+        "Fixed-evaluator delta:",
+        f"- promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
+        f"- fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
+        f"- scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
+        f"- blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
+        f"- accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
         "",
         "Verifier:",
         f"- passed: {verification.get('passed')}",
@@ -416,47 +712,254 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _update_state(payload: dict[str, Any]) -> dict[str, Any]:
-    """Append a bounded run summary so future cycles retain compact state."""
-    existing = load_json_file(GOAL_LOOP_STATE_FILE) or {}
-    runs = list(existing.get("runs") or [])
-    runs.append(
-        {
-            "generatedAt": payload.get("generatedAt"),
-            "verdict": payload.get("verdict"),
-            "stopReason": payload.get("stopReason"),
-            "iterationCount": payload.get("iterationCount"),
-            "progress": payload.get("progress"),
-            "verificationPassed": (payload.get("verification") or {}).get("passed"),
-        }
-    )
+def _run_summary(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "version": 1,
+        "generatedAt": payload.get("generatedAt"),
+        "verdict": payload.get("verdict"),
+        "valueClass": payload.get("valueClass"),
+        "stopReason": payload.get("stopReason"),
+        "iterationCount": payload.get("iterationCount"),
+        "durationSeconds": payload.get("durationSeconds"),
+        "commandDurationSeconds": payload.get("commandDurationSeconds"),
+        "commandsExecuted": payload.get("commandsExecuted"),
+        "progress": payload.get("progress"),
+        "progressDelta": payload.get("progressDelta"),
+        "artifactRepairs": payload.get("artifactRepairs"),
+        "workSignature": payload.get("workSignature"),
+        "verificationPassed": (payload.get("verification") or {}).get("passed"),
+    }
+
+
+def _update_state(
+    payload: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Append a bounded run summary so future cycles retain compact state."""
+    prior = existing if existing is not None else load_json_file(GOAL_LOOP_STATE_FILE) or {}
+    runs = list(prior.get("runs") or [])
+    runs.append(_run_summary(payload))
+    runs = runs[-MAX_STATE_RUNS:]
+    classified_runs = [
+        run
+        for run in runs
+        if run.get("valueClass")
+        in {"productive", "maintenance", "no-op", "skipped", "verification", "blocked"}
+    ]
+    rolling = classified_runs[-10:]
+    productive_runs = sum(
+        1 for run in rolling if run.get("valueClass") == "productive"
+    )
+    consecutive_no_progress = 0
+    for run in reversed(runs):
+        if run.get("valueClass") in {"no-op", "maintenance", "skipped"}:
+            consecutive_no_progress += 1
+        else:
+            break
+    dominant = (payload.get("progress") or {}).get("dominantBlocker")
+    repeated_blocker_runs = 0
+    if dominant:
+        for run in reversed(runs):
+            if (run.get("progress") or {}).get("dominantBlocker") == dominant:
+                repeated_blocker_runs += 1
+            else:
+                break
+    return {
+        "version": 2,
         "updatedAt": payload.get("generatedAt"),
         "lastVerdict": payload.get("verdict"),
+        "lastValueClass": payload.get("valueClass"),
         "lastStopReason": payload.get("stopReason"),
-        "runs": runs[-MAX_STATE_RUNS:],
+        "rolling10": {
+            "runs": len(rolling),
+            "productiveRuns": productive_runs,
+            "productiveRunRate": round(productive_runs / len(rolling), 4)
+            if rolling
+            else 0.0,
+            "consecutiveNoProgressRuns": consecutive_no_progress,
+        },
+        "repeatedBlocker": {
+            "name": dominant,
+            "consecutiveRuns": repeated_blocker_runs,
+        },
+        "runs": runs,
     }
+
+
+def _yaml_scalar(value: Any) -> str:
+    if value is None:
+        return '""'
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value))
+
+
+def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
+    progress = payload.get("progress") or {}
+    delta = payload.get("progressDelta") or {}
+    rolling = state.get("rolling10") or {}
+    frontmatter = {
+        "type": "agent-loop-run",
+        "generated": payload.get("generatedAt"),
+        "verdict": payload.get("verdict"),
+        "value_class": payload.get("valueClass"),
+        "verification_passed": (payload.get("verification") or {}).get("passed"),
+        "accepted_progress_points": delta.get("acceptedProgressPoints", 0),
+        "promotion_evidence_delta": delta.get("promotionEvidenceDelta", 0),
+        "duration_seconds": payload.get("durationSeconds", 0),
+        "commands_executed": payload.get("commandsExecuted", 0),
+        "dominant_blocker": progress.get("dominantBlocker"),
+        "remaining_for_promotion": progress.get("remainingForPromotion"),
+        "research_only": True,
+        "live_trading_allowed": False,
+    }
+    lines = ["---"]
+    lines.extend(f"{key}: {_yaml_scalar(value)}" for key, value in frontmatter.items())
+    lines.extend(
+        [
+            "tags:",
+            "  - inferno",
+            "  - agent-loop",
+            "  - research-only",
+            "---",
+            "",
+            f"# Agent loop run — {payload.get('generatedAt')}",
+            "",
+            "Links: [[Loop Optimization Principles]] · [[Evidence Bottleneck]] · [[Authority Boundary]]",
+            "",
+            "## Outcome",
+            "",
+            f"- Verdict: **{payload.get('verdict')}**",
+            f"- Value class: **{payload.get('valueClass')}**",
+            f"- Stop reason: {payload.get('stopReason')}",
+            f"- Accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
+            f"- Rolling productive-run rate: {rolling.get('productiveRunRate', 0):.0%}",
+            "",
+            "## Evidence delta",
+            "",
+            f"- Promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
+            f"- Fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
+            f"- Scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
+            f"- Dominant blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
+            "",
+            "## Current state",
+            "",
+            f"- Scored paper outcomes: {progress.get('scoredPaperTickets')}",
+            f"- Remaining for promotion: {progress.get('remainingForPromotion')}",
+            f"- Fast-paper open / closed: {progress.get('fastPaperOpen')} / {progress.get('fastPaperClosedLifetime')}",
+            f"- Scenario observations open / closed: {progress.get('scenarioObservationsOpen')} / {progress.get('scenarioObservationsClosed')}",
+            f"- Dominant blocker: {progress.get('dominantBlocker')} ({progress.get('dominantBlockerCount')})",
+            f"- Next fast-paper exit eligibility: {progress.get('nextFastPaperExitEligibleDate')}",
+            "",
+            "## Cost trace",
+            "",
+            f"- Total duration: {payload.get('durationSeconds', 0)} seconds",
+            f"- Command duration: {payload.get('commandDurationSeconds', 0)} seconds",
+            f"- Commands executed: {payload.get('commandsExecuted', 0)}",
+            "",
+            "Authority remained paper-evidence-only. Live trading and broker submission remained disabled.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _lesson_guidance(blocker: str) -> str:
+    guidance = {
+        "approval-missing": (
+            "Do not route around human approval. Concentrate unattended work on "
+            "fast-paper and scenario evidence, and keep operator decisions on `./today.sh`."
+        ),
+        "size-cap-violation": (
+            "Reject oversize structures before expensive downstream evaluation and "
+            "prefer bounded-risk alternatives that fit existing policy."
+        ),
+        "wide-spread": (
+            "Treat liquidity as an early candidate gate; avoid repeatedly pricing "
+            "contracts that cannot satisfy the spread threshold."
+        ),
+        "reward-risk-floor": (
+            "Move reward/risk screening earlier so invalid structures do not consume "
+            "the rest of the evaluation loop."
+        ),
+    }
+    return guidance.get(
+        blocker,
+        "Keep this blocker explicit in the evaluator and only change the loop when a tested intervention reduces its measured count.",
+    )
+
+
+def _save_knowledge(payload: dict[str, Any], state: dict[str, Any]) -> None:
+    KNOWLEDGE_RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    KNOWLEDGE_LESSONS_DIR.mkdir(parents=True, exist_ok=True)
+    generated = str(payload.get("generatedAt") or "unknown")
+    slug = re.sub(r"[^0-9A-Za-z._-]+", "-", generated).strip("-")
+    run_text = _knowledge_run_text(payload, state)
+    atomic_write_text(KNOWLEDGE_RUNS_DIR / f"{slug}.md", run_text)
+    atomic_write_text(KNOWLEDGE_CURRENT_FILE, run_text)
+
+    repeated = state.get("repeatedBlocker") or {}
+    blocker = str(repeated.get("name") or "")
+    count = int(_number(repeated.get("consecutiveRuns")))
+    if blocker and count >= 2:
+        lesson = "\n".join(
+            [
+                "---",
+                "type: agent-loop-lesson",
+                f"blocker: {_yaml_scalar(blocker)}",
+                f"consecutive_runs: {count}",
+                f"updated: {_yaml_scalar(payload.get('generatedAt'))}",
+                "status: active",
+                "tags:",
+                "  - inferno",
+                "  - agent-loop",
+                "  - lesson",
+                "---",
+                "",
+                f"# Repeated blocker — {blocker}",
+                "",
+                "Links: [[Current Loop State]] · [[Evidence Bottleneck]] · [[Loop Optimization Principles]]",
+                "",
+                f"Observed as the dominant blocker for **{count} consecutive runs**.",
+                "",
+                "## Durable guidance",
+                "",
+                _lesson_guidance(blocker),
+                "",
+                "This note is generated from deterministic run state. It is not authority to change risk policy or submit orders.",
+                "",
+            ]
+        )
+        atomic_write_text(KNOWLEDGE_LESSONS_DIR / f"{blocker}.md", lesson)
 
 
 def save_goal_loop(payload: dict[str, Any]) -> None:
     """Persist the loop result, bounded state, and text report."""
     ensure_dirs()
+    existing_state = load_json_file(GOAL_LOOP_STATE_FILE) or {}
+    state = _update_state(payload, existing=existing_state)
     atomic_write_json(GOAL_LOOP_FILE, payload)
-    atomic_write_json(GOAL_LOOP_STATE_FILE, _update_state(payload))
+    atomic_write_json(GOAL_LOOP_STATE_FILE, state)
     atomic_write_text(GOAL_LOOP_TEXT_FILE, goal_loop_text(payload))
+    _save_knowledge(payload, state)
 
 
 def build_verification_only() -> dict[str, Any]:
     """Run the verifier without triggering any evidence mutation."""
+    started = local_now()
     artifacts = load_artifacts()
-    verification = verify_cycle(artifacts, [])
+    verification = verify_cycle(artifacts, [], now=started)
     decision = (artifacts.get("authority") or {}).get("decision") or {}
+    progress = progress_snapshot(artifacts, now=started)
+    delta = progress_delta(progress, progress)
     return {
         "generatedAt": local_now().isoformat(),
-        "startedAt": local_now().isoformat(),
+        "startedAt": started.isoformat(),
         "stage": GOAL_LOOP_STAGE,
         "verdict": "verify-clean" if verification.get("passed") else "verify-blocked",
+        "valueClass": "verification" if verification.get("passed") else "blocked",
         "stopReason": "verification-only command",
         "researchOnly": True,
         "promotable": False,
@@ -466,12 +969,20 @@ def build_verification_only() -> dict[str, Any]:
         "goal": "Verify the existing paper-evidence state without running actions.",
         "maxIterations": 0,
         "timeoutSecondsPerCommand": 0,
+        "duplicateCooldownMinutes": 0,
+        "durationSeconds": 0.0,
+        "commandDurationSeconds": 0.0,
+        "commandsExecuted": 0,
         "precheckCommands": [],
         "precheck": verify_precheck(artifacts),
         "iterations": [],
         "iterationCount": 0,
         "verification": verification,
-        "progress": progress_snapshot(artifacts),
+        "baselineProgress": progress,
+        "progress": progress,
+        "progressDelta": delta,
+        "artifactRepairs": [],
+        "workSignature": work_signature(progress, now=started),
         "authorityLevel": decision.get("authorityLevel"),
         "nextAction": (
             "Existing loop state is clean."
@@ -501,6 +1012,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_TIMEOUT_SECONDS,
     )
+    parser.add_argument(
+        "--duplicate-cooldown-minutes",
+        type=int,
+        default=DEFAULT_DUPLICATE_COOLDOWN_MINUTES,
+    )
     return parser.parse_args()
 
 
@@ -519,6 +1035,7 @@ def main() -> int:
         payload = build_goal_loop(
             max_iterations=max(1, args.max_iterations),
             timeout_seconds=max(1, args.timeout_seconds),
+            duplicate_cooldown_minutes=max(0, args.duplicate_cooldown_minutes),
         )
     save_goal_loop(payload)
     # Refresh after saving so the command center reads this run, not the prior
@@ -529,7 +1046,14 @@ def main() -> int:
         timeout_seconds=max(1, args.timeout_seconds),
     )
     print(goal_loop_text(payload), end="")
-    return 0 if payload.get("verdict") in {"cycle-complete", "verify-clean"} else 2
+    healthy_verdicts = {
+        "productive",
+        "maintenance",
+        "no-op",
+        "skipped-duplicate-work",
+        "verify-clean",
+    }
+    return 0 if payload.get("verdict") in healthy_verdicts else 2
 
 
 if __name__ == "__main__":

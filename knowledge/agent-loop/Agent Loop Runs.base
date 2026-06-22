@@ -1,0 +1,17 @@
+filters:
+  and:
+    - 'file.inFolder("agent-loop/runs")'
+views:
+  - type: table
+    name: Runs
+    order:
+      - generated
+      - verdict
+      - value_class
+      - accepted_progress_points
+      - promotion_evidence_delta
+      - dominant_blocker
+      - remaining_for_promotion
+      - duration_seconds
+      - commands_executed
+

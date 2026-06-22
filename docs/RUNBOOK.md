@@ -1167,11 +1167,13 @@ times on weekdays only. Default times are 06:30 (after dawn cycle) and 16:30
 
 The evidence goal loop wraps the paper/fast-paper harvest in the controls that
 make a recurring automation safe: process and authority prechecks, persistent
-state, command isolation, an independent artifact verifier, a per-command
-timeout, a two-iteration cap, and stop-on-no-progress behavior.
+state, command isolation, independent safety/execution/value graders, a
+per-command timeout, a two-iteration cap, duplicate-work suppression, and
+stop-on-no-progress behavior.
 
 ```bash
 ./run_inferno_evidence_goal_loop.sh run
+./run_inferno_evidence_goal_loop.sh run --duplicate-cooldown-minutes 60
 ./run_inferno_evidence_goal_loop.sh verify
 python3 inferno_evidence_goal_loop.py status
 
@@ -1184,6 +1186,19 @@ The default schedule is 13:40 local on weekdays, after the 13:30 action pulse
 and before the U.S. equity close. It cannot approve tickets, submit orders,
 change the universe, or widen authority. Any authority drift or process breach
 stops the cycle before paper evidence is mutated.
+
+Run verdicts are intentionally outcome-specific:
+
+- `productive` — the fixed evaluator accepted evidence or blocker progress.
+- `maintenance` — stale artifacts were repaired without evidence gain.
+- `no-op` — the cycle was safe and fresh but changed no accepted metric.
+- `skipped-duplicate-work` — meaningful state was unchanged inside the
+  cooldown.
+
+Each saved run writes an Obsidian-compatible Markdown note under
+`knowledge/agent-loop/runs/`. Open `knowledge/` as an Obsidian vault and use
+`Agent Loop Runs.base` to review structured run properties. JSON remains the
+machine source of truth.
 
 ### Backup before editing source
 

@@ -1531,7 +1531,14 @@ def main() -> int:
     evidence_goal_loop_verification = evidence_goal_loop.get("verification") or {}
     evidence_goal_loop_ok = (
         evidence_goal_loop_today
-        and evidence_goal_loop_verdict in {"cycle-complete", "verify-clean"}
+        and evidence_goal_loop_verdict
+        in {
+            "productive",
+            "maintenance",
+            "no-op",
+            "skipped-duplicate-work",
+            "verify-clean",
+        }
         and evidence_goal_loop_verification.get("passed") is True
         and evidence_goal_loop.get("liveTradingAllowed") is False
         and evidence_goal_loop.get("brokerSubmitAllowed") is False
@@ -1539,6 +1546,7 @@ def main() -> int:
     evidence_goal_loop_detail = (
         f"{evidence_goal_loop_verdict} | iterations "
         f"{evidence_goal_loop.get('iterationCount', 0)} | "
+        f"value {evidence_goal_loop.get('valueClass')} | "
         f"authority {evidence_goal_loop.get('authorityLevel')}"
         if evidence_goal_loop_today
         else json.dumps(
