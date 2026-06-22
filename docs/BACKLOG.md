@@ -126,127 +126,99 @@ These nine items distill the 2026-06-22 deep research on strategy, sizing,
 positioning, taking profits, moving on quickly, and emotion. Ranked by
 expected leverage. Each one is small, owned, and has a clean done signal.
 
-### #9 — IV Rank surfaced on approval-queue candidates
-- **Owner:** codex (lives in strike-side / paper-director artifacts)
-- **Why:** Lane A (debit/long-vol) and Lane B (credit) should be picked with
-  awareness of IV rank. Current approval queue shows readiness score but
-  not IVR. Operator can't sanity-check strategy fit at decision time.
-- **Done signal:** `data/inferno_approval_queue.json` items gain an
-  `ivRank` field (52-week percentile from Schwab option chain); `today.sh`
-  prints it next to readiness. Lane mismatch (e.g., debit pick at IVR>60)
-  shows a one-line yellow flag, not a block.
-- **Estimate:** ~50 lines.
-- **Status:** pending. Research: see §3 of discipline doc.
+### #9 — Volatility context on approval candidates
+- **Owner:** codex
+- **Why:** IV rank or percentile can provide context, but a single threshold
+  cannot choose debit versus credit by itself. The candidate also needs term
+  structure, event proximity, expected realized movement, and net Greeks.
+- **Done signal:** approval candidates show available IV context plus an
+  explicit `volatilityThesis`; missing history is labeled unknown rather than
+  inferred. No automatic debit/credit block is tied to one IV threshold.
+- **Estimate:** ~80 lines + tests.
+- **Status:** pending.
 
-### #10 — 21 DTE force-close verdict in trade-management auditor
-- **Owner:** codex (owns `inferno_trade_management.py`)
-- **Why:** tastytrade research across 200k+ trades shows holding past 21 DTE
-  has the worst theta/gamma trade-off in the option lifecycle. Current
-  time-stop only fires at DTE ≤ 2 (hard) or ≤ 3 (when flat). Adding a
-  "trim at 21 DTE for Lane B credit" and "review at 21 DTE for Lane A"
-  verdict captures the bulk of the evidence-backed exit edge.
-- **Done signal:** trade-management auditor emits `trim-21-dte` (Lane B
-  credit) and `review-21-dte` (Lane A) verdicts in addition to existing
-  ladder; tests pin the threshold.
-- **Estimate:** ~40 lines + tests.
-- **Status:** pending. Research: see §4 of discipline doc.
+### #10 — DTE review trigger and cohort analysis
+- **Owner:** codex
+- **Why:** theta and gamma become more acute near expiration, but 21 DTE is a
+  useful review hypothesis rather than a universal force-close rule.
+- **Done signal:** trade management emits a `review-dte-policy` reminder and
+  a report compares net R and drawdown by strategy, entry DTE, and exit DTE.
+- **Estimate:** ~80 lines + tests.
+- **Status:** pending.
 
-### #11 — "No averaging down" rule in trade-management playbook
-- **Owner:** claude (docs only)
-- **Why:** 68% of retail traders who add to losing positions see losses 2.8x
-  greater than initial risk. The desk has never proposed averaging down,
-  but the rule needs to be a binding line in the playbook before the
-  temptation arrives. Pre-commitment is the only working defense.
-- **Done signal:** `docs/TRADE_MANAGEMENT_PLAYBOOK.md` gains a "Binding:
-  no averaging down" section. `today.sh` shows the rule as a one-liner
-  when MTM shows a position at -50% or worse.
-- **Estimate:** ~10 lines doc + ~15 lines today.py.
-- **Status:** pending. Research: see §5 of discipline doc.
-
-### #12 — Tight de-risker: -2% drawdown OR 2 consecutive losses → halve cap
-- **Owner:** codex (owns risk-policy / capital-scaling lane)
-- **Why:** current drawdown stepper fires at 10/20/30% tiers — too wide for
-  a $1,600 account where two $300 losses puts us at -38%. Research-backed
-  protocol: after 2 consecutive losses OR -2% drawdown, halve the
-  per-ticket cap for the next 5 tickets. Resume normal sizing when balance
-  returns to peak.
-- **Done signal:** `inferno_capital_scaling.py` adds an early-warning
-  multiplier (separate from the 10/20/30 stepper); tests pin the trigger
-  and recovery conditions.
-- **Estimate:** ~60 lines + tests.
-- **Status:** pending. Research: see §2 of discipline doc.
-
-### #13 — Two-field decision journal on approve/reject
+### #11 — Binding no-averaging-down rule for options
 - **Owner:** claude
-- **Why:** `data/operator_decisions.csv` currently logs decisions but not
-  *why*. Adding a one-sentence rationale and 1-10 confidence prompt at
-  approve/reject time creates a learnable feedback dataset for monthly
-  review. Pre-trade checklist trades outperform by 15-30% profit factor
-  per research; the act of pausing to articulate is the value.
-- **Done signal:** `today.py` prompts for `rationale:` and `confidence:`
-  fields on approve. CSV gains two columns. Display unchanged.
-- **Estimate:** ~25 lines.
-- **Status:** pending. Research: see §6 of discipline doc.
-
-### #14 — Lane A retirement debate (decision item)
-- **Owner:** operator (needs explicit call)
-- **Why:** SSRN 2024 backtest of S&P 500 earnings straddles 2011-2021 shows
-  -9% average return after transaction costs. Apple straddles: 41% win
-  rate, -1.3% avg annual. Inferno desk runs long-vol-into-earnings as Lane
-  A. MOD's -$350 close was expected outcome, not bad luck. Either retire
-  Lane A or restrict it to specific narrow filters (IVR<25 at entry; only
-  post-earnings vol-expansion plays; no day-before-earnings entries).
-- **Done signal:** explicit operator decision logged in
-  `coordination/model_notes.jsonl` — "retire Lane A" / "restrict Lane A
-  to filter X" / "keep Lane A; willing to lose -9% avg as cost of
-  optionality on tail moves."
-- **Estimate:** decision only; if "restrict", ~30 lines of strategy-lab
-  filter code.
-- **Status:** pending operator. Research: see §1 of discipline doc.
-
-### #15 — Default DTE preference 35-50 for auto-paper
-- **Owner:** codex (owns strategy lab)
-- **Why:** tastytrade 200k-trade research shows 45 DTE entry / 21 DTE exit
-  is the best risk-adjusted return window across credit spreads. Current
-  strategy lab picks shorter (often 7-21 DTE around earnings). Shifting
-  the default preference to 35-50 DTE captures the theta/gamma sweet
-  spot.
-- **Done signal:** strategy lab's expiration-selection logic prefers 35-50
-  DTE when no event window forces otherwise; falls back to shorter only
-  when the trade-around-event filter requires it.
+- **Why:** adding to a losing options trade changes the original maximum loss
+  and makes thesis failure harder to recognize. A later share purchase can
+  still occur, but only as a separate portfolio decision with fresh sizing.
+- **Done signal:** the trade-management playbook and decision card state the
+  distinction; the auditor flags increases in risk on an open losing ticket.
 - **Estimate:** ~40 lines + tests.
-- **Status:** pending. Research: see §4 of discipline doc.
+- **Status:** pending.
 
-### #16 — Wheel lane scaffold (CSP on conviction names)
-- **Owner:** claude (research-only scaffold first; operator decides activation)
-- **Why:** wheel strategy on conviction holds (TE/IREN/HIVE/CLSK) is the
-  cleanest historical edge for a small account — 1-3%/month on deployed
-  capital with no blow-up risk because you wanted the shares anyway. This
-  is the operationalized harvest mechanism from CAPITAL_FLOW_POLICY but in
-  reverse: instead of harvesting options profits to buy shares, you sell
-  options to collect premium while you hold them.
-- **Done signal:** `inferno_wheel_advisor.py` reads conviction holds, finds
-  ~30 delta OTM puts at 30-45 DTE on each, computes premium-yield-on-cash
-  and breakeven-vs-current-price, writes
-  `reports/wheel_advisor_latest.txt`. Research-only, no orders.
-- **Estimate:** ~120 lines. Blocked on: nothing technical; blocked on
-  operator desire (current sleeve is at 62% conviction vs 50% target, so
-  the wheel would tilt MORE long, which may be wrong now).
-- **Status:** pending operator. Research: see §1 of discipline doc.
+### #12 — Process-breach circuit breaker
+- **Owner:** codex
+- **Why:** two losing outcomes can be ordinary variance. An unplanned entry,
+  ignored exit, or sizing breach is direct evidence that the operating process
+  failed and should halt new entries for the session.
+- **Done signal:** a research-only compliance artifact records process
+  breaches and emits a stop-new-entries recommendation without changing
+  broker authority.
+- **Estimate:** ~80 lines + tests.
+- **Status:** pending.
 
-### #17 — Expectancy ledger per strategy family
+### #13 — Precommitted decision card and journal
+- **Owner:** claude
+- **Why:** the desk records decisions but needs the contemporaneous thesis,
+  disconfirming evidence, max loss, exit plan, confidence, and net Greeks.
+  This is a process-control experiment, not a promised profit-factor boost.
+- **Done signal:** no paper comparison entry is accepted without a complete
+  card; the result is appended only after the pre-trade fields are frozen.
+- **Estimate:** ~80 lines + tests.
+- **Status:** pending.
+
+### #14 — Long-vol premium-hurdle gate
+- **Owner:** codex
+- **Why:** the desk's 96-observation ledger has a 31.25% move-hurdle beat rate
+  and -11.45 percentage points mean realized-minus-implied move. This supports
+  restriction, not automatic retirement.
+- **Done signal:** each long-vol candidate records implied move, forecast
+  realized move, IV-change scenario, break-even, and friction; missing or
+  negative edge remains shadow-only.
+- **Estimate:** ~90 lines + tests.
+- **Status:** pending.
+
+### #15 — Turnover and disposition-effect audit
+- **Owner:** codex
+- **Why:** academic evidence links heavy retail trading to lower net returns
+  and documents selling winners faster than losers. The desk needs to know
+  whether faster paper cycles improve evidence or merely increase activity.
+- **Done signal:** a monthly report shows turnover, decisions per session,
+  gross versus net R, winner/loser hold time, exit exceptions, and same-ticker
+  re-entry intervals.
+- **Estimate:** ~100 lines + tests.
+- **Status:** pending.
+
+### #16 — Wheel feasibility shadow
+- **Owner:** claude
+- **Why:** cash-secured puts require capital for 100 shares, retain substantial
+  downside, and would increase long exposure while the share sleeve is above
+  target. The wheel is a structure to compare, not a return promise.
+- **Done signal:** a shadow-only report shows assignment capital, downside
+  stress, after-spread yield, covered-call opportunity cost, and comparison
+  with a share limit order. No ticket staging.
+- **Estimate:** ~120 lines.
+- **Status:** pending; blocked on fresh options data.
+
+### #17 — Net-R expectancy ledger per strategy family
 - **Owner:** codex (lives in performance-analytics lane)
-- **Why:** expectancy = (WinRate × AvgWin) − (LossRate × AvgLoss). Need 30+
-  outcomes for meaning, 100+ for reliability. We have 1. Starting the
-  ledger now means we have real data the moment we hit 30. Currently
-  performance_analytics shows expectancy as `None` until counts exist —
-  the addition is to break it out per strategy family (Lane A debit /
-  Lane B credit / Lane B debit / wheel) so we can compare families
-  separately.
-- **Done signal:** `reports/expectancy_ledger_latest.txt` has per-family
-  rows with the 5-tuple `count, wins, losses, avgWin, avgLoss, expectancy`.
-- **Estimate:** ~50 lines.
-- **Status:** pending. Research: see §2 of discipline doc.
+- **Why:** raw dollars cannot compare structures with different maximum loss,
+  and gross P/L hides spread/slippage. The desk has only one scored outcome,
+  so all sizing conclusions remain provisional.
+- **Done signal:** the report shows count, gross R, friction, net R, win rate,
+  average win/loss, expectancy, drawdown, and confidence interval by family.
+- **Estimate:** ~80 lines + tests.
+- **Status:** pending.
 
 ---
 

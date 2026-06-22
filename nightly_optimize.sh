@@ -78,6 +78,7 @@ run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
 run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
+run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
 
 # 4) meta surfaces
 run_step "central command"       "$PYTHON" inferno_model_command_center.py

@@ -83,6 +83,7 @@ MATH_VERIFY_FILE = DATA_DIR / "inferno_math_verify.json"
 TOS_FORMULA_AUDIT_FILE = DATA_DIR / "inferno_tos_formula_audit.json"
 TOS_CUSTOM_METRICS_FILE = DATA_DIR / "inferno_tos_custom_metrics.json"
 TOS_METRIC_THEORY_AUDIT_FILE = DATA_DIR / "inferno_tos_metric_theory_audit.json"
+MARKET_MASTERY_PLAN_FILE = DATA_DIR / "inferno_market_mastery_plan.json"
 
 
 REPORTING_MAP: tuple[dict[str, str], ...] = (
@@ -325,6 +326,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "Is the per-ticket cap correctly sized for current NLV, or do we need to ack a new formula state?",
         "artifact": "reports/capital_scaling_latest.txt",
         "owner": "shared",
+    },
+    {
+        "lane": "market-mastery",
+        "question": "Which strategy, sizing, exit, and discipline improvements should the desk do next?",
+        "artifact": "reports/market_mastery_next_actions_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "briefing",
@@ -652,6 +659,7 @@ def build_command_center() -> dict[str, Any]:
     tos_metric_theory = load_json_file(TOS_METRIC_THEORY_AUDIT_FILE) or {}
     schwab_price_history = load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {}
     schwab_tos_metrics_sync = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
+    market_mastery = load_json_file(MARKET_MASTERY_PLAN_FILE) or {}
 
     missions = load_active_missions()
     notes = load_notes(limit=12)
@@ -665,6 +673,7 @@ def build_command_center() -> dict[str, Any]:
     deployable_cash_arg = command_cash_arg((capital_readiness.get("guardrails") or {}).get("deployableCash"))
 
     next_actions: list[str] = []
+    next_actions.extend((market_mastery.get("nextActions") or [])[:3])
     next_actions.extend((account_optimization.get("nextActions") or [])[:2])
     next_actions.extend(live_book_packet.get("unlockChecklist") or [])
     next_actions.extend(live_review.get("nextActions") or [])
@@ -721,6 +730,10 @@ def build_command_center() -> dict[str, Any]:
         "tosMetricTheoryAudit": artifact_summary(TOS_METRIC_THEORY_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "checked", "postureCounts")),
         "schwabPriceHistory": artifact_summary(SCHWAB_PRICE_HISTORY_FILE, keys=("stage", "status", "generatedAt", "configured", "symbolCount")),
         "schwabTosMetricsSync": artifact_summary(SCHWAB_TOS_METRICS_SYNC_FILE, keys=("stage", "sourceStatus", "generatedAt", "customMetricsVerdict", "metricValueCount")),
+        "marketMasteryPlan": artifact_summary(
+            MARKET_MASTERY_PLAN_FILE,
+            keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable"),
+        ),
     }
     strategy_alt_pricing_ranked = sorted(
         [item for item in strategy_alt_pricing.get("items") or [] if isinstance(item, dict)],
@@ -954,6 +967,7 @@ def build_command_center() -> dict[str, Any]:
             f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
             "./run_inferno_risk_gate_audit.sh",
             "./run_inferno_conviction_research.sh",
+            "./run_inferno_market_mastery_plan.sh",
         ],
         "recommendedReads": [
             str(ROOT / "reports/usage_optimizer_latest.txt"),
@@ -991,6 +1005,8 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/live_position_review_latest.txt"),
             str(ROOT / "reports/trade_conviction_audit_latest.txt"),
             str(ROOT / "reports/blowup_guardrails_latest.txt"),
+            str(ROOT / "reports/market_mastery_next_actions_latest.txt"),
+            str(ROOT / "docs/TRADING_DISCIPLINE_RESEARCH_2026-06-22.md"),
         ],
         "nextActions": next_actions[:12],
         "activeMissions": missions,
@@ -1058,6 +1074,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- TOS formula audit: {status_value(status.get('tosFormulaAudit') or {})}",
             f"- TOS custom metrics: {status_value(status.get('tosCustomMetrics') or {})}",
             f"- Conviction research: {status_value(status.get('convictionResearch') or {}, key='stage')}",
+            f"- Market mastery plan: {status_value(status.get('marketMasteryPlan') or {})}",
             "",
             "Headline metrics:",
             f"- Account source: {metrics.get('accountDataSource') or '-'}",

@@ -265,6 +265,21 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_market_mastery_plan.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:07:30-06:00",
+                        "stage": "market-mastery-research-only",
+                        "verdict": "research-plan-ready",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "nextActions": [
+                            "M01: Restore fresh Schwab account and option truth - Refresh account data."
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             patches = [
                 ("ROOT", root),
@@ -298,6 +313,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("EDGE_RESEARCH_FILE", data_dir / "inferno_edge_research.json"),
                 ("CONVICTION_RESEARCH_FILE", data_dir / "inferno_conviction_research.json"),
                 ("MATH_VERIFY_FILE", data_dir / "inferno_math_verify.json"),
+                ("MARKET_MASTERY_PLAN_FILE", data_dir / "inferno_market_mastery_plan.json"),
             ]
             with ExitStack() as stack:
                 for name, value in patches:
@@ -333,6 +349,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["mathVerifyVerdict"], "clean")
             self.assertEqual(payload["headlineMetrics"]["mathViolations"], 0)
             self.assertEqual(payload["systemStatus"]["mathVerify"]["verdict"], "clean")
+            self.assertEqual(payload["systemStatus"]["marketMasteryPlan"]["verdict"], "research-plan-ready")
             self.assertEqual(payload["systemStatus"]["strategyLab"]["verdict"], "insufficient-data")
             self.assertEqual(payload["systemStatus"]["schwabAccountSync"]["verdict"], "healthy")
             self.assertEqual(payload["headlineMetrics"]["accountDataSource"], "schwab-account-api")
@@ -349,6 +366,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
             self.assertIn("Resolve GDS before sizing new capital.", payload["nextActions"])
+            self.assertTrue(payload["nextActions"][0].startswith("M01:"))
             text_report = (reports_dir / "model_command_center_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Inferno Model Command Center", text_report)
             self.assertIn("Deploy preflight: ready-for-pilot", text_report)
@@ -372,6 +390,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Scenario backtest evidence: 4", text_report)
             self.assertIn("Scenario backtest focus: FLNC, THR, MOD", text_report)
             self.assertIn("Math verify: clean", text_report)
+            self.assertIn("Market mastery plan: research-plan-ready", text_report)
             self.assertIn("Math violations: 0", text_report)
             self.assertIn("Canonical report map:", text_report)
             self.assertIn("reports/paper_bottleneck_reducer_latest.csv", text_report)
@@ -383,6 +402,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
             self.assertIn("reports/trade_management_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)
+            self.assertIn("reports/market_mastery_next_actions_latest.txt", text_report)
             self.assertIn("Conviction giants: NVDA, AVGO", text_report)
             self.assertIn("Conviction balanced: NVDA, MOD", text_report)
 
