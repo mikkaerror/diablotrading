@@ -36,6 +36,40 @@ needed for the architecture decision and were not treated as evaluator inputs.
 The loop adopts the mechanisms that can be independently tested in this
 repository.
 
+### Economic eligibility and comprehension control
+
+Codez’s
+[“Loop engineering: the 14-step roadmap from prompter to loop designer”](https://x.com/0xCodez/status/2064374643729773029)
+adds a useful precondition test: the task should repeat, bad output must be
+machine-rejectable, resource use must be bounded, and the agent must be able to
+run what it changes. It also argues that cost per accepted change matters more
+than scheduled runs or attempted work.
+
+The core framing is consistent with Addy Osmani’s primary
+[loop-engineering essay](https://addyosmani.com/blog/loop-engineering/) and
+Anthropic’s measured warning that increased code volume is not equivalent to
+the same increase in productivity in
+[“When AI builds itself”](https://www.anthropic.com/institute/recursive-self-improvement).
+
+Applied here:
+
+- every run records whether the automation still passes its eligibility and
+  governance conditions;
+- skipped invocations do not inflate full-run acceptance metrics;
+- the rolling window records full-run acceptance rate, total run seconds, and
+  seconds per accepted progress point;
+- fewer than three full runs is labeled insufficient evidence;
+- below 50% accepted full runs is labeled inefficient and keeps adaptive
+  throttling active;
+- authority permissions are re-audited every run, which is stricter than a
+  monthly permission review;
+- lifestyle goals and emotional urgency cannot alter authority, risk policy,
+  or evidence standards.
+
+The article’s broad security statistics and third-party tool claims were not
+used as evaluator inputs because they were unnecessary to implement the
+testable controls.
+
 ### Fixed evaluators and keep/discard discipline
 
 Andrej Karpathy’s [autoresearch](https://github.com/karpathy/autoresearch) constrains the agent to a narrow editable surface, a fixed time budget, and a ground-truth metric. Its operating instructions establish a baseline, log every experiment, keep improvements, and discard regressions. The evaluator is not part of the agent’s editable scope.
@@ -152,6 +186,8 @@ Each run records:
 - verifier result;
 - dominant blocker;
 - rolling productive-run rate.
+- full-run acceptance rate and cost per accepted progress unit;
+- loop eligibility, authority, and permission-scope governance.
 
 Each saved run also becomes an Obsidian-compatible note. A blocker that dominates consecutive runs creates or updates a deterministic lesson note. This is bounded episodic memory, not free-form autonomous policy generation.
 

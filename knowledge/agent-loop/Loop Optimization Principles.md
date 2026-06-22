@@ -36,3 +36,5 @@ Increase verified paper and research evidence per unit of time without widening 
 Artifact refreshes are maintenance. A safe run with none of these changes is a no-op.
 
 Related: [[Evidence Bottleneck]] · [[Authority Boundary]] · [[Current Loop State]]
+
+Wealth and emotional urgency never alter this control logic. See [[Wealth Objective Boundary]].

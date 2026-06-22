@@ -1206,6 +1206,17 @@ eligibility caps the wait. `knowledge/agent-loop/Loop Beliefs.md` consolidates
 recent traces into explicit claims with falsifiers so memory becomes smaller
 and more decision-useful instead of only growing.
 
+The state file also reports loop economics. Full runs are productive,
+maintenance, no-op, or blocked executions; cheap duplicate skips do not count
+as accepted work. After three full runs, an acceptance rate below 50% is
+labeled `inefficient` and supports stronger throttling or better eligibility
+detection. The loop records seconds per accepted progress point when accepted
+progress exists.
+
+`knowledge/agent-loop/Wealth Objective Boundary.md` is a fixed guardrail:
+financial or emotional urgency cannot widen risk, replace evidence, or enable
+live authority.
+
 ### Backup before editing source
 
 ```bash

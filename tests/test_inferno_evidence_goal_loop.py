@@ -240,11 +240,13 @@ class EvidenceGoalLoopTests(unittest.TestCase):
 
         state = loop._update_state(payload, existing=prior)
 
-        self.assertEqual(state["version"], 3)
+        self.assertEqual(state["version"], 4)
         self.assertEqual(state["rolling10"]["productiveRunRate"], 0.0)
         self.assertEqual(state["rolling10"]["consecutiveNoProgressRuns"], 2)
         self.assertEqual(state["cadence"]["intervalMinutes"], 60)
         self.assertEqual(state["beliefs"][0]["status"], "active")
+        self.assertTrue(state["governance"]["passed"])
+        self.assertEqual(state["economics"]["verdict"], "insufficient-sample")
 
     def test_adaptive_cadence_exponentially_backs_off_no_progress(self) -> None:
         prior = {
@@ -351,6 +353,58 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertEqual(beliefs[0]["status"], "active")
         self.assertIn("falsifier", beliefs[0])
         self.assertEqual(beliefs[-1]["evidenceRuns"], 2)
+
+    def test_loop_economics_excludes_skips_and_flags_low_acceptance(self) -> None:
+        runs = [
+            {
+                "valueClass": "no-op",
+                "durationSeconds": 10,
+                "progressDelta": {"acceptedProgressPoints": 0},
+            },
+            {
+                "valueClass": "maintenance",
+                "durationSeconds": 20,
+                "progressDelta": {"acceptedProgressPoints": 0},
+            },
+            {
+                "valueClass": "productive",
+                "durationSeconds": 30,
+                "progressDelta": {"acceptedProgressPoints": 100},
+            },
+            {
+                "valueClass": "skipped",
+                "durationSeconds": 1,
+                "progressDelta": {"acceptedProgressPoints": 0},
+            },
+        ]
+
+        economics = loop.loop_economics(runs)
+
+        self.assertEqual(economics["windowFullRuns"], 3)
+        self.assertEqual(economics["fullRunAcceptanceRate"], 0.3333)
+        self.assertEqual(economics["secondsPerAcceptedProgressPoint"], 0.6)
+        self.assertEqual(economics["verdict"], "inefficient")
+
+    def test_governance_pins_emotional_urgency_outside_authority(self) -> None:
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
+        )
+
+        self.assertTrue(payload["governance"]["passed"])
+        self.assertFalse(
+            payload["governance"]["wealthUrgencyCanChangeAuthority"]
+        )
+        self.assertTrue(
+            payload["governance"]["conditions"][
+                "humanGateBeforeIrreversibleAction"
+            ]
+        )
 
     def test_knowledge_run_is_plain_markdown_with_structured_properties(self) -> None:
         payload = loop.build_goal_loop(

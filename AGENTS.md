@@ -8,6 +8,7 @@ Read `CLAUDE.md`, `docs/SYSTEM_MAP.md`, and the latest command-center report bef
 - Never enable `liveTradingAllowed`, `brokerSubmitAllowed`, or `submit_live_order`.
 - Never approve, reject, close, or promote a paper ticket for the operator.
 - Never change risk constants or the eligible universe autonomously.
+- Wealth targets, lifestyle goals, fear, urgency, or emotional distress are context—not authorization to widen risk, bypass evidence, or change authority.
 - Autonomous optimization may refresh data, recompute research artifacts, run tests, and improve paper/shadow evidence tooling.
 
 ## Agent-loop standard
@@ -19,6 +20,7 @@ Read `CLAUDE.md`, `docs/SYSTEM_MAP.md`, and the latest command-center report bef
 - Suppress duplicate work when the meaningful state is unchanged.
 - Use bounded adaptive backoff after repeated no-progress runs; skipped checks must not extend the gate indefinitely.
 - Record run cost, outcome, blocker, and accepted progress in the loop state and `knowledge/agent-loop/`.
+- Track full-run acceptance rate and cost per accepted progress unit; throttle loops that generate activity without accepted outcomes.
 - After the same failure or blocker repeats, add a durable rule, test, or deterministic lesson.
 - Consolidate recent traces into explicit beliefs with measurable evidence and a falsifier.
 - Retrieve only the notes relevant to the current blocker; do not load the whole memory store into context.

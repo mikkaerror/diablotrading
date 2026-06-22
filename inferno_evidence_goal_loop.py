@@ -615,6 +615,97 @@ def _command_duration(results: list[dict[str, Any]]) -> float:
     return round(sum(_number(result.get("durationSeconds")) for result in results), 3)
 
 
+def automation_governance(payload: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate whether this automation still satisfies its design contract."""
+    command_results = list(payload.get("precheckCommands") or [])
+    for iteration in payload.get("iterations") or []:
+        command_results.extend(iteration.get("commands") or [])
+    conditions = {
+        "repetitiveTask": True,
+        "objectiveVerification": bool(payload.get("verification")),
+        "runnableEnvironment": all(
+            result.get("ok") is True for result in command_results
+        ),
+        "boundedResourceUse": (
+            int(_number(payload.get("maxIterations"))) >= 0
+            and int(_number(payload.get("timeoutSecondsPerCommand"))) >= 0
+        ),
+        "persistentState": True,
+        "humanGateBeforeIrreversibleAction": (
+            payload.get("liveTradingAllowed") is False
+            and payload.get("brokerSubmitAllowed") is False
+        ),
+        "costTraceAvailable": payload.get("durationSeconds") is not None,
+    }
+    return {
+        "passed": all(conditions.values()),
+        "conditions": conditions,
+        "permissionAudit": {
+            "checkedThisRun": True,
+            "authorityLevel": payload.get("authorityLevel"),
+            "liveTradingAllowed": payload.get("liveTradingAllowed"),
+            "brokerSubmitAllowed": payload.get("brokerSubmitAllowed"),
+        },
+        "wealthUrgencyCanChangeAuthority": False,
+    }
+
+
+def loop_economics(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Measure cost per accepted result without counting cheap skips as work."""
+    full_runs = [
+        run
+        for run in runs
+        if run.get("valueClass")
+        in {"productive", "maintenance", "no-op", "blocked"}
+    ][-10:]
+    productive_runs = [
+        run for run in full_runs if run.get("valueClass") == "productive"
+    ]
+    total_seconds = round(
+        sum(_number(run.get("durationSeconds")) for run in full_runs),
+        3,
+    )
+    accepted_points = sum(
+        int(_number((run.get("progressDelta") or {}).get("acceptedProgressPoints")))
+        for run in full_runs
+    )
+    acceptance_rate = (
+        round(len(productive_runs) / len(full_runs), 4) if full_runs else None
+    )
+    seconds_per_productive_run = (
+        round(total_seconds / len(productive_runs), 3)
+        if productive_runs
+        else None
+    )
+    seconds_per_accepted_point = (
+        round(total_seconds / accepted_points, 3) if accepted_points > 0 else None
+    )
+    if len(full_runs) < 3:
+        verdict = "insufficient-sample"
+        recommendation = "Collect at least three evaluated full runs."
+    elif acceptance_rate is not None and acceptance_rate >= 0.5:
+        verdict = "economically-viable"
+        recommendation = "Keep the current cadence and continue measuring."
+    else:
+        verdict = "inefficient"
+        recommendation = (
+            "Keep adaptive throttling active; improve eligibility detection or "
+            "the evidence process before increasing run frequency."
+        )
+    return {
+        "windowFullRuns": len(full_runs),
+        "productiveFullRuns": len(productive_runs),
+        "fullRunAcceptanceRate": acceptance_rate,
+        "totalFullRunSeconds": total_seconds,
+        "acceptedProgressPoints": accepted_points,
+        "secondsPerProductiveRun": seconds_per_productive_run,
+        "secondsPerAcceptedProgressPoint": seconds_per_accepted_point,
+        "targetAcceptanceRate": 0.5,
+        "verdict": verdict,
+        "recommendation": recommendation,
+    }
+
+
 def build_goal_loop(
     *,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
@@ -766,7 +857,7 @@ def build_goal_loop(
             else None
         ),
     )
-    return {
+    payload = {
         "generatedAt": generated.isoformat(),
         "startedAt": started.isoformat(),
         "stage": GOAL_LOOP_STAGE,
@@ -807,6 +898,10 @@ def build_goal_loop(
             )
         ),
     }
+    payload["governance"] = automation_governance(payload)
+    prior_runs = list(prior_state.get("runs") or [])
+    payload["economics"] = loop_economics([*prior_runs, _run_summary(payload)])
+    return payload
 
 
 def goal_loop_text(payload: dict[str, Any]) -> str:
@@ -814,6 +909,8 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
     verification = payload.get("verification") or {}
     progress = payload.get("progress") or {}
     delta = payload.get("progressDelta") or {}
+    economics = payload.get("economics") or {}
+    governance = payload.get("governance") or {}
     lines = [
         "Inferno Evidence Goal Loop",
         "",
@@ -845,6 +942,12 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
         f"- accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
         "",
+        "Loop economics:",
+        f"- governance passed: {governance.get('passed')}",
+        f"- full-run acceptance rate: {economics.get('fullRunAcceptanceRate')}",
+        f"- cost per accepted progress point: {economics.get('secondsPerAcceptedProgressPoint')}",
+        f"- economics verdict: {economics.get('verdict')}",
+        "",
         "Verifier:",
         f"- passed: {verification.get('passed')}",
         f"- authority intact: {verification.get('authorityIntact')}",
@@ -874,6 +977,7 @@ def _run_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "artifactRepairs": payload.get("artifactRepairs"),
         "workSignature": payload.get("workSignature"),
         "cadence": payload.get("cadence"),
+        "governance": payload.get("governance"),
         "verificationPassed": (payload.get("verification") or {}).get("passed"),
     }
 
@@ -927,6 +1031,29 @@ def consolidate_beliefs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "falsifier": "At least half of the next ten evaluated runs are productive.",
         },
     ]
+    economics = loop_economics(recent)
+    if economics.get("windowFullRuns", 0) >= 3:
+        beliefs.append(
+            {
+                "id": "loop-economics",
+                "statement": (
+                    "The full evidence loop is below the target accepted-run rate."
+                    if economics.get("verdict") == "inefficient"
+                    else "The full evidence loop meets the target accepted-run rate."
+                ),
+                "status": (
+                    "active"
+                    if economics.get("verdict") == "inefficient"
+                    else "supported"
+                ),
+                "evidenceRuns": economics.get("windowFullRuns"),
+                "evidenceValue": economics.get("fullRunAcceptanceRate"),
+                "falsifier": (
+                    "The rolling full-run acceptance rate reaches at least 50% "
+                    "with objective progress deltas."
+                ),
+            }
+        )
 
     last_progress = recent[-1].get("progress") or {}
     blocker = str(last_progress.get("dominantBlocker") or "")
@@ -990,8 +1117,9 @@ def _update_state(
             else:
                 break
     cadence = payload.get("cadence") or prior.get("cadence") or {}
+    economics = loop_economics(runs)
     return {
-        "version": 3,
+        "version": 4,
         "updatedAt": payload.get("generatedAt"),
         "lastVerdict": payload.get("verdict"),
         "lastValueClass": payload.get("valueClass"),
@@ -1009,6 +1137,8 @@ def _update_state(
             "consecutiveRuns": repeated_blocker_runs,
         },
         "cadence": cadence,
+        "governance": payload.get("governance") or {},
+        "economics": economics,
         "beliefs": consolidate_beliefs(runs),
         "runs": runs,
     }
@@ -1029,6 +1159,8 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
     delta = payload.get("progressDelta") or {}
     rolling = state.get("rolling10") or {}
     cadence = payload.get("cadence") or {}
+    economics = state.get("economics") or payload.get("economics") or {}
+    governance = payload.get("governance") or {}
     frontmatter = {
         "type": "agent-loop-run",
         "generated": payload.get("generatedAt"),
@@ -1056,7 +1188,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             "",
             f"# Agent loop run — {payload.get('generatedAt')}",
             "",
-            "Links: [[Loop Optimization Principles]] · [[Loop Beliefs]] · [[Evidence Bottleneck]] · [[Authority Boundary]]",
+            "Links: [[Loop Optimization Principles]] · [[Loop Beliefs]] · [[Wealth Objective Boundary]] · [[Evidence Bottleneck]] · [[Authority Boundary]]",
             "",
             "## Outcome",
             "",
@@ -1066,6 +1198,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             f"- Accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
             f"- Rolling productive-run rate: {rolling.get('productiveRunRate', 0):.0%}",
             f"- Next adaptive check: {cadence.get('nextCheckAt')}",
+            f"- Governance passed: {governance.get('passed')}",
             "",
             "## Evidence delta",
             "",
@@ -1088,6 +1221,9 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             f"- Total duration: {payload.get('durationSeconds', 0)} seconds",
             f"- Command duration: {payload.get('commandDurationSeconds', 0)} seconds",
             f"- Commands executed: {payload.get('commandsExecuted', 0)}",
+            f"- Full-run acceptance rate: {economics.get('fullRunAcceptanceRate')}",
+            f"- Seconds per accepted progress point: {economics.get('secondsPerAcceptedProgressPoint')}",
+            f"- Economics verdict: {economics.get('verdict')}",
             "",
             "Authority remained paper-evidence-only. Live trading and broker submission remained disabled.",
             "",
@@ -1227,7 +1363,7 @@ def build_verification_only() -> dict[str, Any]:
     decision = (artifacts.get("authority") or {}).get("decision") or {}
     progress = progress_snapshot(artifacts, now=started)
     delta = progress_delta(progress, progress)
-    return {
+    payload = {
         "generatedAt": local_now().isoformat(),
         "startedAt": started.isoformat(),
         "stage": GOAL_LOOP_STAGE,
@@ -1263,6 +1399,12 @@ def build_verification_only() -> dict[str, Any]:
             else "Inspect verifier errors; no actions were run."
         ),
     }
+    payload["governance"] = automation_governance(payload)
+    state = load_json_file(GOAL_LOOP_STATE_FILE) or {}
+    payload["economics"] = loop_economics(
+        [*(state.get("runs") or []), _run_summary(payload)]
+    )
+    return payload
 
 
 def parse_args() -> argparse.Namespace:
