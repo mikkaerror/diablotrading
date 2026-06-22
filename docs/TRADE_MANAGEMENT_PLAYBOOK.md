@@ -181,6 +181,42 @@ Existing daily-cap rule applies: max $150 of new max-loss exposure per trading d
 
 If a fourth opportunity arrives that day, you wait — the constraint is not the number of opportunities, it's the desk's daily statistical-independence budget.
 
+### 5.4 BINDING: never average down on a losing position
+
+This is the only rule in this playbook stated as a hard prohibition. Every
+other rule has an "unless" clause. This one does not.
+
+If an open position is showing unrealized loss, the response options are:
+
+1. **Close** — take the loss, free the capital, log the outcome.
+2. **Roll** — close the current expiration and open the next one at the same
+   or wider strikes (Lane B only, for credit structures with thesis intact
+   and DTE ≤ 14). Always reduces a loss, never adds new max-loss.
+3. **Hold** — only if the stop-loss verdict has not fired and the original
+   thesis is intact. Time is allowed to do its work. New money is not added.
+
+**What is forbidden:** adding new contracts, buying down the cost basis,
+buying a "second tranche to average," opening an "offsetting" position
+that is really just doubling the exposure. None of these.
+
+Why this is binding:
+
+- A 5,000-trader retail study found 68% of traders who added to losing
+  positions saw losses 2.8× greater than their initial risk
+  (see `docs/TRADING_DISCIPLINE_RESEARCH_2026-06-22.md` §5).
+- The mechanism is sunk-cost fallacy combined with loss aversion. Both are
+  universal cognitive biases, not character flaws — every trader experiences
+  them and the only working defense is pre-committing to a rule when calm.
+- "Lower your cost basis" *feels* mathematical but operationally it's
+  tripling down on a thesis the market is rejecting.
+
+If you find yourself wanting to add to a loser, the correct interpretation
+is: the original sizing was wrong, not the current price. Close, take the
+loss, log it, move on. The next trade is independent.
+
+This rule applies to paper positions identically — the discipline is the
+muscle memory, and you can't grow it by exempting paper.
+
 ---
 
 ## 6. Connection back to the system

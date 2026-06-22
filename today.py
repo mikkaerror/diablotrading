@@ -155,6 +155,34 @@ def print_money_header(*, now: _dt.datetime | None = None) -> bool:
     return fresh
 
 
+def _discipline_reminder_if_loss(positions: list) -> str | None:
+    """Return a one-line reminder when any position is sitting at -20% or worse.
+
+    The point isn't drama; it's the pre-committed rule. Per
+    `docs/TRADE_MANAGEMENT_PLAYBOOK.md` §5.4: never average down on a losing
+    position. The right action is close or roll, never add. This line exists
+    so the operator sees the rule at the moment they're most tempted to
+    break it (when something is bleeding).
+    """
+    worst_pct = None
+    for p in positions or []:
+        pct = p.get("plPercent")
+        try:
+            if pct is None:
+                continue
+            v = float(pct)
+            if worst_pct is None or v < worst_pct:
+                worst_pct = v
+        except (TypeError, ValueError):
+            continue
+    if worst_pct is None or worst_pct > -20.0:
+        return None
+    return (
+        "  Reminder: when a position is in loss, the options are close or "
+        "roll. Never add. (playbook §5.4)"
+    )
+
+
 def print_holdings_section(*, now: _dt.datetime | None = None) -> None:
     """Show the legacy book in dollar terms: position value, unrealized P/L.
 
@@ -210,6 +238,9 @@ def print_holdings_section(*, now: _dt.datetime | None = None) -> None:
             f"  total   {_money(total_mv)}  "
             f"({sign}${abs(total_pl):,.2f} unrealized)"
         )
+    reminder = _discipline_reminder_if_loss(positions)
+    if reminder:
+        print(reminder)
     print()
 
 
@@ -244,22 +275,74 @@ def _candidate_line(item: dict) -> str:
     )
 
 
-def _log_decision(ticker: str, action: str, note: str = "") -> None:
-    """Append-only audit trail of operator decisions."""
+def _log_decision(
+    ticker: str,
+    action: str,
+    note: str = "",
+    rationale: str = "",
+    confidence: str = "",
+) -> None:
+    """Append-only audit trail of operator decisions.
+
+    Six columns: timestamp, ticker, action, note, rationale, confidence.
+    rationale + confidence are the decision-journal fields (item #13 of
+    docs/BACKLOG.md). They're empty for reject/skip; populated on approve.
+    They exist so a monthly review can correlate stated thesis quality with
+    realized outcomes. Per
+    `docs/TRADING_DISCIPLINE_RESEARCH_2026-06-22.md` §6, checklist trades
+    outperform by 15-30% profit factor — the act of articulating is the
+    value, the form is secondary.
+
+    Pre-existing rows (4 columns) are still readable; new rows have 6.
+    """
     DECISIONS_LOG.parent.mkdir(parents=True, exist_ok=True)
     new_file = not DECISIONS_LOG.exists()
     with DECISIONS_LOG.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if new_file:
-            w.writerow(["timestamp", "ticker", "action", "note"])
+            w.writerow(
+                ["timestamp", "ticker", "action", "note", "rationale", "confidence"]
+            )
         w.writerow(
             [
                 _dt.datetime.now().isoformat(timespec="seconds"),
                 ticker,
                 action,
                 note,
+                rationale,
+                confidence,
             ]
         )
+
+
+def _prompt_decision_journal() -> tuple[str, str]:
+    """Two-field journal prompt fired only on approve.
+
+    Keeps the prompt minimal and skippable — pressing enter on either
+    leaves the field empty. The friction is intentional: pausing for 5
+    seconds to articulate the thesis is the discipline; the captured text
+    is the bonus.
+    """
+    try:
+        rationale = input(
+            "    one-sentence why? (enter to skip): "
+        ).strip()
+    except EOFError:
+        rationale = ""
+    try:
+        confidence = input(
+            "    confidence 1-10? (enter to skip): "
+        ).strip()
+    except EOFError:
+        confidence = ""
+    # accept only 1-10; silently drop garbage
+    if confidence:
+        try:
+            n = int(confidence)
+            confidence = str(n) if 1 <= n <= 10 else ""
+        except ValueError:
+            confidence = ""
+    return rationale, confidence
 
 
 def _approve_via_queue(ticker: str) -> int:
@@ -291,12 +374,25 @@ def run_one(item: dict) -> str:
     print(_candidate_line(item))
     answer = _prompt("    paper-trade this? [y]es / [n]o / [s]kip / [q]uit: ")
     if answer in ("y", "yes"):
+        rationale, confidence = _prompt_decision_journal()
         rc = _approve_via_queue(ticker)
         if rc == 0:
-            _log_decision(ticker, "approve", "via today.py")
+            _log_decision(
+                ticker,
+                "approve",
+                "via today.py",
+                rationale=rationale,
+                confidence=confidence,
+            )
             print(f"    -> approved {ticker}")
             return "approve"
-        _log_decision(ticker, "approve-failed", f"queue rc={rc}")
+        _log_decision(
+            ticker,
+            "approve-failed",
+            f"queue rc={rc}",
+            rationale=rationale,
+            confidence=confidence,
+        )
         print(f"    -> approval queue returned {rc}; check inferno_approval_queue status")
         return "approve-failed"
     if answer in ("n", "no", "reject"):
