@@ -34,10 +34,13 @@ class NightlyOptimizeServiceTests(unittest.TestCase):
             root = Path(temp_dir)
             wrapper = root / "bin" / "nightly.sh"
             entrypoint = root / "nightly_optimize.sh"
+            service_entrypoint = root / "bin" / "nightly_optimize.sh"
+            entrypoint.write_text("#!/usr/bin/env bash\necho nightly\n", encoding="utf-8")
             with (
                 patch.object(service, "ROOT", root),
                 patch.object(service, "SERVICE_BIN_DIR", wrapper.parent),
                 patch.object(service, "SERVICE_WRAPPER", wrapper),
+                patch.object(service, "SERVICE_ENTRYPOINT", service_entrypoint),
                 patch.object(service, "ENTRYPOINT", entrypoint),
                 patch.object(service, "backtest_python", return_value="/tmp/python"),
             ):
@@ -45,8 +48,15 @@ class NightlyOptimizeServiceTests(unittest.TestCase):
 
             text = wrapper.read_text(encoding="utf-8")
             self.assertIn('export INFERNO_PYTHON="/tmp/python"', text)
-            self.assertIn(f'exec /bin/bash "{entrypoint}"', text)
+            self.assertIn(f'export INFERNO_ROOT="{root}"', text)
+            self.assertIn("export INFERNO_NIGHTLY_LOG=", text)
+            self.assertIn(f'exec /bin/bash "{service_entrypoint}" "$@"', text)
             self.assertEqual(wrapper.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(
+                service_entrypoint.read_text(encoding="utf-8"),
+                entrypoint.read_text(encoding="utf-8"),
+            )
+            self.assertEqual(service_entrypoint.stat().st_mode & 0o777, 0o755)
 
     def test_plist_payload_is_serializable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -120,6 +120,16 @@ one-use, and a later authorization can invalidate an earlier grant.
 
 Schwab controls the refresh-token lifetime. Access-token refresh can be
 automated, but a broker-required full OAuth restart cannot be bypassed.
+`inferno_doctor.py` reports OAuth separately from account-data freshness and
+raises a conservative restart advisory when the current consent grant reaches
+five days old. This is an internal lead-time policy, not a claim that Schwab
+reported a token expiry.
+
+The registered callback is currently `https://127.0.0.1`, which implies
+privileged local port 443. Fully automatic callback capture would require a
+one-time Schwab app callback change to an approved high port plus a local TLS
+listener. Until then, the only manual step is completing Schwab consent and
+pasting the newest redirect URL into `restart`.
 
 ## Account API Companion
 

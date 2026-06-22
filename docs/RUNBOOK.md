@@ -297,6 +297,10 @@ python3 inferno_schwab_oauth.py restart
 Complete Schwab consent once and paste only the newest full redirect URL. A
 full restart is a broker authorization boundary; the desk can make it a
 single clear step but cannot automate around Schwab's required re-consent.
+The doctor begins warning at consent-grant age five days so this can be done
+proactively rather than after a morning data failure. That threshold is a desk
+lead-time policy because Schwab does not report refresh-token expiry in the
+current token response.
 
 To inspect the paper execution ledger without rebuilding:
 

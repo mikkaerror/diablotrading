@@ -27,7 +27,7 @@
 #
 
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "${INFERNO_ROOT:-$(dirname "$0")}"
 
 DRY_RUN=0
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -36,10 +36,11 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 PYTHON="${INFERNO_PYTHON:-python3}"
-RUN_LOG="data/nightly_optimize_run.log"
+RUN_LOG="${INFERNO_NIGHTLY_LOG:-data/nightly_optimize_run.log}"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 mkdir -p data reports
+mkdir -p "$(dirname "$RUN_LOG")"
 
 echo "" >> "$RUN_LOG"
 echo "=== nightly_optimize run $TIMESTAMP ===" >> "$RUN_LOG"
@@ -118,7 +119,7 @@ if [[ "$DRY_RUN" == "0" ]]; then
   "$PYTHON" inferno_model_command_center.py note \
     --author automation \
     --title "nightly optimize loop ran" \
-    --body "Daily research-only refresh complete. See data/nightly_optimize_run.log for per-step exit codes. No authority touched, no tickets approved." \
+    --body "Daily research-only refresh complete. See $RUN_LOG for per-step exit codes. No authority touched, no tickets approved." \
     --tags nightly-optimize,research-only,automation \
     >> "$RUN_LOG" 2>&1 || true
 fi

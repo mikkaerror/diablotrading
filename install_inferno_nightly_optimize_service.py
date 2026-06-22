@@ -16,6 +16,7 @@ PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
 LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_nightly_optimize_service.sh"
+SERVICE_ENTRYPOINT = SERVICE_BIN_DIR / "inferno_nightly_optimize.sh"
 ENTRYPOINT = ROOT / "nightly_optimize.sh"
 DEFAULT_HOUR = 18
 DEFAULT_MINUTE = 30
@@ -59,9 +60,11 @@ def plist_payload(hour: int, minute: int) -> dict:
 
 
 def ensure_wrapper() -> None:
-    """Write the launchd wrapper with the repo's configured Python runtime."""
+    """Deploy the job outside Documents and write its launchd wrapper."""
     runner_python = backtest_python()
     SERVICE_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    SERVICE_ENTRYPOINT.write_text(ENTRYPOINT.read_text(encoding="utf-8"), encoding="utf-8")
+    SERVICE_ENTRYPOINT.chmod(0o755)
     SERVICE_WRAPPER.write_text(
         "\n".join(
             [
@@ -70,7 +73,9 @@ def ensure_wrapper() -> None:
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
                 f'export INFERNO_PYTHON="{runner_python}"',
-                f'exec /bin/bash "{ENTRYPOINT}"',
+                f'export INFERNO_ROOT="{ROOT}"',
+                f'export INFERNO_NIGHTLY_LOG="{LOG_DIR / "nightly_optimize_run.log"}"',
+                f'exec /bin/bash "{SERVICE_ENTRYPOINT}" "$@"',
                 "",
             ]
         ),

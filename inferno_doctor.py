@@ -27,6 +27,8 @@ from inferno_config import (
 )
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
+from inferno_schwab_oauth import load_config as load_schwab_oauth_config
+from inferno_schwab_oauth import token_status as load_schwab_oauth_status
 from server import (
     DATA_DIR,
     EXECUTION_QUEUE_FILE,
@@ -105,6 +107,7 @@ ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
 DOCTOR_ARTIFACT_FILE = DATA_DIR / "inferno_doctor.json"
 DOCTOR_TEXT_FILE = REPORTS_DIR / "doctor_latest.txt"
+SCHWAB_REFRESH_RESTART_ADVISORY_DAYS = 5.0
 
 
 def load_env_file(path: Path) -> None:
@@ -959,6 +962,35 @@ def schwab_account_sync_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_oauth_status(status: dict) -> tuple[bool, str]:
+    """Evaluate local OAuth continuity without printing secret material."""
+    configured = bool(status.get("clientIdConfigured")) and bool(
+        status.get("clientSecretConfigured")
+    )
+    if not configured:
+        return True, "not configured"
+    if status.get("reauthorizationRequired"):
+        return False, "reauthorization required; run inferno_schwab_oauth.py restart"
+    if not status.get("accessTokenPresent") or not status.get("refreshTokenPresent"):
+        return False, "access or refresh token missing"
+
+    age_seconds = status.get("refreshTokenAgeSeconds")
+    age_days = float(age_seconds) / 86_400 if age_seconds is not None else None
+    if age_days is not None and age_days >= SCHWAB_REFRESH_RESTART_ADVISORY_DAYS:
+        return (
+            False,
+            f"restart advisory | consent grant age={age_days:.1f}d | "
+            "renew before the next trading session",
+        )
+
+    age_detail = f"{age_days:.1f}d" if age_days is not None else "unknown"
+    return (
+        True,
+        f"ready | consent grant age={age_detail} | "
+        f"access refresh needed={bool(status.get('accessTokenNeedsRefresh'))}",
+    )
+
+
 def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> tuple[bool, str]:
     """Evaluate paper-test readiness with a shadow-evidence fallback.
 
@@ -1374,6 +1406,19 @@ def main() -> int:
     schwab_edge_ok, schwab_edge_detail = schwab_edge_signals_status(schwab_edge)
     lines.append(summarize_status("Schwab edge signals", schwab_edge_ok, schwab_edge_detail))
     if not schwab_edge_ok:
+        warnings += 1
+
+    try:
+        schwab_oauth = load_schwab_oauth_status(load_schwab_oauth_config())
+    except Exception as exc:  # noqa: BLE001 - doctor should render the failure.
+        schwab_oauth = {
+            "clientIdConfigured": True,
+            "clientSecretConfigured": True,
+            "lastRefreshError": str(exc),
+        }
+    schwab_oauth_ok, schwab_oauth_detail = schwab_oauth_status(schwab_oauth)
+    lines.append(summarize_status("Schwab OAuth", schwab_oauth_ok, schwab_oauth_detail))
+    if not schwab_oauth_ok:
         warnings += 1
 
     schwab_account = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}

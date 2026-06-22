@@ -21,6 +21,7 @@ from inferno_doctor import (
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
+    schwab_oauth_status,
     trade_management_status,
 )
 
@@ -157,6 +158,38 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("runs=0", detail)
         self.assertIn("last exit code=(never exited)", detail)
+
+    def test_schwab_oauth_status_warns_before_consent_grant_gets_old(self) -> None:
+        ok, detail = schwab_oauth_status(
+            {
+                "clientIdConfigured": True,
+                "clientSecretConfigured": True,
+                "accessTokenPresent": True,
+                "refreshTokenPresent": True,
+                "refreshTokenAgeSeconds": 5.25 * 86_400,
+                "reauthorizationRequired": False,
+            }
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("restart advisory", detail)
+        self.assertIn("5.2d", detail)
+
+    def test_schwab_oauth_status_accepts_fresh_grant(self) -> None:
+        ok, detail = schwab_oauth_status(
+            {
+                "clientIdConfigured": True,
+                "clientSecretConfigured": True,
+                "accessTokenPresent": True,
+                "refreshTokenPresent": True,
+                "refreshTokenAgeSeconds": 2 * 86_400,
+                "accessTokenNeedsRefresh": False,
+                "reauthorizationRequired": False,
+            }
+        )
+
+        self.assertTrue(ok)
+        self.assertIn("consent grant age=2.0d", detail)
 
     def test_paper_mark_to_market_status_accepts_disabled_fetch(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

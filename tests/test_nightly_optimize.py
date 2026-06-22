@@ -38,6 +38,12 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertIn('"$PYTHON" inferno_live_account_sync.py', text)
         self.assertNotIn("inferno_live_account_sync.py --quiet", text)
 
+    def test_deployed_copy_can_use_repo_root(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('cd "${INFERNO_ROOT:-$(dirname "$0")}"', text)
+        self.assertIn('RUN_LOG="${INFERNO_NIGHTLY_LOG:-data/nightly_optimize_run.log}"', text)
+
 
 if __name__ == "__main__":
     unittest.main()
