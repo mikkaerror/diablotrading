@@ -164,6 +164,10 @@ def refresh_access_token_if_possible(env_path: Path = ENV_FILE) -> dict[str, Any
         status = token_status(config)
         if not status.get("refreshTokenPresent"):
             return {"attempted": False, "refreshed": False, "reason": "missing-refresh-token"}
+        if status.get("reauthorizationRequired"):
+            return {"attempted": False, "refreshed": False, "reason": "reauthorization-required"}
+        if not status.get("accessTokenNeedsRefresh"):
+            return {"attempted": False, "refreshed": False, "reason": "access-token-fresh"}
         refresh_access_token(config)
         return {"attempted": True, "refreshed": True, "reason": None}
     except Exception as exc:  # noqa: BLE001
@@ -493,6 +497,13 @@ def main() -> int:
     refresh_status = None
     if fixtures is None and not args.skip_refresh:
         refresh_status = refresh_access_token_if_possible()
+        if refresh_status.get("reason") == "reauthorization-required":
+            if not args.quiet:
+                print(
+                    "Schwab reauthorization is required. Run "
+                    "`python3 inferno_schwab_oauth.py restart` once."
+                )
+            return 1
     report = build_report(symbols, fixture_payloads=fixtures, symbol_limit=args.limit)
     if refresh_status is not None:
         report["refreshStatus"] = refresh_status

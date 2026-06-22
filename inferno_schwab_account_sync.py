@@ -191,7 +191,12 @@ def schwab_get(
 def refresh_token_if_possible(config: dict[str, Any], *, skip_refresh: bool) -> dict[str, Any]:
     """Refresh OAuth if possible and return safe token status."""
     status = token_status(config)
-    if skip_refresh or not status.get("refreshTokenPresent"):
+    if (
+        skip_refresh
+        or not status.get("refreshTokenPresent")
+        or not status.get("accessTokenNeedsRefresh")
+        or status.get("reauthorizationRequired")
+    ):
         return status
     try:
         refresh_access_token(config)
@@ -545,6 +550,13 @@ def build_schwab_account_sync(
         report["verdict"] = "not-configured"
         report["message"] = "Schwab access token is missing"
         report["nextActions"] = ["Run the Schwab OAuth helper and consent to read-only account access."]
+        return report
+    if status.get("reauthorizationRequired"):
+        report["verdict"] = "reauthorization-required"
+        report["message"] = "Schwab rejected the stored refresh token"
+        report["nextActions"] = [
+            "Run `python3 inferno_schwab_oauth.py restart` once, then rerun account sync."
+        ]
         return report
 
     token = load_access_token(config)

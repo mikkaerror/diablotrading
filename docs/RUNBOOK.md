@@ -277,6 +277,27 @@ each chain into `tradable-research`, `paper-ready`, `manual-review`, or
 Use it before strike selection if you want the latest broker-grade spread,
 liquidity, IV, Greek, and expected-move checks.
 
+OAuth lifecycle:
+
+```bash
+python3 inferno_schwab_oauth.py status
+python3 inferno_schwab_oauth.py ensure
+```
+
+`ensure` reuses a healthy access token and serializes refreshes across the
+desk. Account, option-chain, price-history, and TOS-metric jobs should not
+require separate operator refreshes.
+
+If status says `reauthorizationRequired: True`, run:
+
+```bash
+python3 inferno_schwab_oauth.py restart
+```
+
+Complete Schwab consent once and paste only the newest full redirect URL. A
+full restart is a broker authorization boundary; the desk can make it a
+single clear step but cannot automate around Schwab's required re-consent.
+
 To inspect the paper execution ledger without rebuilding:
 
 ```bash

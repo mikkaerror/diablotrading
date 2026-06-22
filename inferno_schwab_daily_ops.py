@@ -16,12 +16,20 @@ Safety contract:
 import argparse
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from inferno_io import atomic_write_json, atomic_write_text
-from inferno_schwab_oauth import ENV_FILE, load_config, parse_env_file, refresh_access_token, token_status
+from inferno_schwab_oauth import (
+    ENV_FILE,
+    SchwabOAuthError,
+    load_config,
+    parse_env_file,
+    refresh_access_token,
+    token_status,
+)
 from server import (
     APPROVAL_QUEUE_FILE,
     DATA_DIR,
@@ -376,8 +384,19 @@ def live_chain_report(symbols: list[str], *, fixture: Path | None = None, skip_r
         try:
             config = load_config()
             status = token_status(config)
-            if status.get("refreshTokenPresent"):
+            if status.get("reauthorizationRequired"):
+                raise SchwabOAuthError(
+                    "Schwab reauthorization is required. Run "
+                    "`python3 inferno_schwab_oauth.py restart` once."
+                )
+            if (
+                status.get("refreshTokenPresent")
+                and status.get("accessTokenNeedsRefresh")
+                and not status.get("reauthorizationRequired")
+            ):
                 refresh_access_token(config)
+        except SchwabOAuthError:
+            raise
         except Exception:  # noqa: BLE001 - chain fetch still reports if token is stale.
             pass
 
@@ -402,7 +421,15 @@ def main() -> int:
     args = parse_args()
     load_schwab_env()
     symbols = unique_symbols(args.symbols) if args.symbols else default_symbol_universe()
-    chain_report = live_chain_report(symbols, fixture=args.fixture, skip_refresh=args.skip_refresh)
+    try:
+        chain_report = live_chain_report(
+            symbols,
+            fixture=args.fixture,
+            skip_refresh=args.skip_refresh,
+        )
+    except SchwabOAuthError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     payload = build_ops_report(chain_report, symbols=symbols)
     save_ops_report(payload)
     if not args.quiet:

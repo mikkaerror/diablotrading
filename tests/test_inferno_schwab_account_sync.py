@@ -145,6 +145,33 @@ class SchwabAccountSyncTests(unittest.TestCase):
 
         self.assertEqual(url, "https://api.schwabapi.com/trader/v1/accounts?fields=positions")
 
+    @patch("inferno_schwab_account_sync.schwab_account_enabled", return_value=True)
+    @patch(
+        "inferno_schwab_account_sync.refresh_token_if_possible",
+        return_value={
+            "envFileExists": True,
+            "clientIdConfigured": True,
+            "clientSecretConfigured": True,
+            "tokenFileExists": True,
+            "accessTokenPresent": True,
+            "refreshTokenPresent": True,
+            "reauthorizationRequired": True,
+        },
+    )
+    @patch("inferno_schwab_account_sync.load_config", return_value={})
+    def test_reauthorization_required_fails_before_account_api_call(
+        self,
+        _load_config,
+        _refresh,
+        _enabled,
+    ) -> None:
+        with patch("inferno_schwab_account_sync.schwab_get") as schwab_get:
+            report = schwab_account.build_schwab_account_sync()
+
+        self.assertEqual(report["verdict"], "reauthorization-required")
+        self.assertIn("oauth.py restart", report["nextActions"][0])
+        schwab_get.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

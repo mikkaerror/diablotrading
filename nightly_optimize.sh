@@ -59,10 +59,30 @@ run_step() {
 }
 
 # 1) data sources (research-only, read-only)
-run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --quiet
+#
+# One OAuth preflight owns the refresh. Downstream jobs reuse the resulting
+# access token and skip their own refresh attempts.
+SCHWAB_READY=0
+if [[ "$DRY_RUN" == "1" ]]; then
+  run_step "schwab oauth preflight" "$PYTHON" inferno_schwab_oauth.py ensure
+  SCHWAB_READY=1
+else
+  echo "  -> schwab oauth preflight" | tee -a "$RUN_LOG"
+  if "$PYTHON" inferno_schwab_oauth.py ensure >> "$RUN_LOG" 2>&1; then
+    SCHWAB_READY=1
+    echo "     exit=0" >> "$RUN_LOG"
+  else
+    echo "     exit=1" >> "$RUN_LOG"
+    echo "     Schwab-dependent refreshes skipped; run OAuth restart once." >> "$RUN_LOG"
+  fi
+fi
+
+if [[ "$SCHWAB_READY" == "1" ]]; then
+  run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
+  run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
+fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
-run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --quiet
-run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --quiet
 
 # 2) evidence harvest (research-only; no approval or staging mutation)
 #

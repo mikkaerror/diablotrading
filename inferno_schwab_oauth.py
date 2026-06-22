@@ -17,6 +17,7 @@ thinkorswim desktop exports do all the work.
 
 import argparse
 import base64
+from contextlib import contextmanager
 import gzip
 import json
 import os
@@ -24,7 +25,7 @@ import ssl
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -38,6 +39,11 @@ DEFAULT_AUTH_BASE_URL = "https://api.schwabapi.com/v1/oauth"
 DEFAULT_API_BASE_URL = "https://api.schwabapi.com"
 DEFAULT_REDIRECT_URI = "https://127.0.0.1"
 DEFAULT_TOKEN_FILE = ROOT / ".secrets" / "schwab_token.json"
+ACCESS_TOKEN_REFRESH_BUFFER_SECONDS = 300
+
+
+class SchwabOAuthError(RuntimeError):
+    """Recoverable OAuth failure for library callers and CLI rendering."""
 
 
 def https_context() -> ssl.SSLContext:
@@ -202,10 +208,51 @@ def request_token(config: dict[str, Any], form: dict[str, str]) -> dict[str, Any
         if description:
             detail += f" | {description}"
         detail += " | Generate a fresh auth URL and exchange the redirect URL immediately; codes are one-use and short-lived."
-        raise SystemExit(detail) from exc
+        raise SchwabOAuthError(detail) from exc
 
 
-def enrich_token_payload(payload: dict[str, Any], previous: dict[str, Any] | None = None) -> dict[str, Any]:
+def parse_timestamp(value: Any) -> datetime | None:
+    """Parse one OAuth timestamp into UTC."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def seconds_remaining(value: Any, *, now: datetime | None = None) -> float | None:
+    """Return seconds until an OAuth timestamp, or None when unknown."""
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    return (parsed - current).total_seconds()
+
+
+def access_token_needs_refresh(
+    payload: dict[str, Any],
+    *,
+    now: datetime | None = None,
+    buffer_seconds: int = ACCESS_TOKEN_REFRESH_BUFFER_SECONDS,
+) -> bool:
+    """Refresh only when the access token is missing or near expiration."""
+    if not payload.get("access_token"):
+        return True
+    remaining = seconds_remaining(payload.get("expires_at"), now=now)
+    return remaining is None or remaining <= buffer_seconds
+
+
+def enrich_token_payload(
+    payload: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+    *,
+    fresh_authorization: bool = False,
+) -> dict[str, Any]:
     """Add local expiry metadata while preserving refresh tokens on refresh.
 
     Access tokens expire quickly, so the metadata lets the desk know whether the
@@ -225,6 +272,17 @@ def enrich_token_payload(payload: dict[str, Any], previous: dict[str, Any] | Non
         enriched["refresh_token_expires_at"] = (
             now + timedelta(seconds=refresh_expires_in)
         ).isoformat()
+    refresh_rotated = bool(
+        payload.get("refresh_token")
+        and previous
+        and payload.get("refresh_token") != previous.get("refresh_token")
+    )
+    if fresh_authorization or refresh_rotated or not enriched.get("refresh_token_issued_at"):
+        enriched["refresh_token_issued_at"] = now.isoformat()
+        enriched["refresh_token_issued_at_estimated"] = not fresh_authorization
+    enriched.pop("last_refresh_error", None)
+    enriched.pop("last_refresh_error_at", None)
+    enriched["reauthorization_required"] = False
     enriched["token_obtained_at"] = now.isoformat()
     return enriched
 
@@ -249,6 +307,49 @@ def write_token_file(config: dict[str, Any], payload: dict[str, Any]) -> Path:
     return path
 
 
+@contextmanager
+def token_refresh_lock(config: dict[str, Any]) -> Iterator[None]:
+    """Serialize token refreshes across launch agents and manual commands."""
+    import fcntl
+
+    token_file: Path = config["token_file"]
+    lock_path = token_file.with_suffix(token_file.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(lock_path.parent, stat.S_IRWXU)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def refresh_error_requires_reauthorization(error: Exception) -> bool:
+    """Identify Schwab's terminal refresh-token failures."""
+    detail = str(error).lower()
+    return (
+        "invalid_grant" in detail
+        or "refresh token is invalid" in detail
+        or "refresh token is expired" in detail
+        or "refresh token is invalid, expired or revoked" in detail
+    )
+
+
+def record_refresh_error(
+    config: dict[str, Any],
+    existing: dict[str, Any],
+    error: Exception,
+) -> None:
+    """Persist safe failure metadata without exposing or deleting tokens."""
+    updated = dict(existing)
+    updated["last_refresh_error"] = str(error)
+    updated["last_refresh_error_at"] = datetime.now(timezone.utc).isoformat()
+    if refresh_error_requires_reauthorization(error):
+        updated["reauthorization_required"] = True
+    write_token_file(config, updated)
+
+
 def exchange_code(config: dict[str, Any], code_or_url: str) -> Path:
     """Exchange a Schwab redirect code for local access/refresh tokens."""
     code = extract_authorization_code(code_or_url)
@@ -260,31 +361,61 @@ def exchange_code(config: dict[str, Any], code_or_url: str) -> Path:
             "redirect_uri": config["redirect_uri"],
         },
     )
-    enriched = enrich_token_payload(payload)
+    enriched = enrich_token_payload(payload, fresh_authorization=True)
     return write_token_file(config, enriched)
 
 
-def refresh_access_token(config: dict[str, Any]) -> Path:
-    """Refresh the access token using the stored refresh token."""
-    existing = read_token_file(config["token_file"])
-    refresh_token = str(existing.get("refresh_token") or "").strip()
-    if not refresh_token:
-        raise SystemExit("No refresh_token found. Run the authorization exchange first.")
-    payload = request_token(
-        config,
-        {
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        },
-    )
-    enriched = enrich_token_payload(payload, previous=existing)
-    return write_token_file(config, enriched)
+def refresh_access_token(config: dict[str, Any], *, force: bool = False) -> Path:
+    """Refresh once when needed, serialized across every desk process."""
+    with token_refresh_lock(config):
+        existing = read_token_file(config["token_file"])
+        if not force and not access_token_needs_refresh(existing):
+            return config["token_file"]
+        if existing.get("reauthorization_required"):
+            raise SchwabOAuthError(
+                "Schwab reauthorization is required. Run the OAuth restart once "
+                "and exchange only the newest redirect URL."
+            )
+        refresh_token = str(existing.get("refresh_token") or "").strip()
+        if not refresh_token:
+            raise SchwabOAuthError(
+                "No refresh_token found. Run the authorization exchange first."
+            )
+        try:
+            payload = request_token(
+                config,
+                {
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                },
+            )
+        except Exception as exc:
+            record_refresh_error(config, existing, exc)
+            raise
+        enriched = enrich_token_payload(payload, previous=existing)
+        return write_token_file(config, enriched)
 
 
 def token_status(config: dict[str, Any]) -> dict[str, Any]:
     """Return safe token/config health without exposing secrets."""
     token_file: Path = config["token_file"]
     payload = read_token_file(token_file)
+    now = datetime.now(timezone.utc)
+    access_remaining = seconds_remaining(payload.get("expires_at"), now=now)
+    refresh_issued_at = payload.get("refresh_token_issued_at")
+    refresh_issued_estimated = bool(payload.get("refresh_token_issued_at_estimated"))
+    if not refresh_issued_at and payload.get("token_obtained_at"):
+        refresh_issued_at = payload.get("token_obtained_at")
+        refresh_issued_estimated = True
+    refresh_expires_at = payload.get("refresh_token_expires_at")
+    issued_at = parse_timestamp(refresh_issued_at)
+    refresh_age_seconds = (
+        (now - issued_at).total_seconds() if issued_at is not None else None
+    )
+    refresh_remaining = seconds_remaining(refresh_expires_at, now=now)
+    reauthorization_required = bool(payload.get("reauthorization_required")) or (
+        refresh_remaining is not None and refresh_remaining <= 0
+    )
     return {
         "envFile": str(ENV_FILE),
         "envFileExists": ENV_FILE.exists(),
@@ -296,7 +427,23 @@ def token_status(config: dict[str, Any]) -> dict[str, Any]:
         "accessTokenPresent": bool(payload.get("access_token")),
         "refreshTokenPresent": bool(payload.get("refresh_token")),
         "accessTokenExpiresAt": payload.get("expires_at"),
-        "refreshTokenExpiresAt": payload.get("refresh_token_expires_at"),
+        "accessTokenSecondsRemaining": (
+            round(access_remaining, 1) if access_remaining is not None else None
+        ),
+        "accessTokenNeedsRefresh": access_token_needs_refresh(payload, now=now),
+        "refreshTokenIssuedAt": refresh_issued_at,
+        "refreshTokenIssuedAtEstimated": refresh_issued_estimated,
+        "refreshTokenAgeSeconds": (
+            round(refresh_age_seconds, 1) if refresh_age_seconds is not None else None
+        ),
+        "refreshTokenExpiresAt": refresh_expires_at,
+        "refreshTokenExpiryReportedBySchwab": bool(refresh_expires_at),
+        "refreshTokenSecondsRemaining": (
+            round(refresh_remaining, 1) if refresh_remaining is not None else None
+        ),
+        "reauthorizationRequired": reauthorization_required,
+        "lastRefreshErrorAt": payload.get("last_refresh_error_at"),
+        "lastRefreshError": payload.get("last_refresh_error"),
     }
 
 
@@ -311,7 +458,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Schwab OAuth helper for read-only option-chain data.")
     parser.add_argument(
         "command",
-        choices=("auth-url", "exchange", "refresh", "status"),
+        choices=("auth-url", "exchange", "restart", "refresh", "ensure", "status"),
         help="OAuth action to run.",
     )
     parser.add_argument(
@@ -321,20 +468,35 @@ def main() -> int:
     args = parser.parse_args()
 
     config = load_config()
-    if args.command == "auth-url":
-        print(authorization_url(config))
+    try:
+        if args.command == "auth-url":
+            print(authorization_url(config))
+            return 0
+        if args.command in {"exchange", "restart"}:
+            if args.command == "restart":
+                print("Open this URL and complete Schwab consent:")
+                print(authorization_url(config))
+            code_or_url = args.code or input(
+                "Paste the newest full Schwab redirect URL or code: "
+            ).strip()
+            path = exchange_code(config, code_or_url)
+            print(f"Schwab token saved safely to {path}")
+            print_status(token_status(config))
+            return 0
+        if args.command == "refresh":
+            path = refresh_access_token(config, force=True)
+            print(f"Schwab token refreshed safely at {path}")
+            print_status(token_status(config))
+            return 0
+        if args.command == "ensure":
+            path = refresh_access_token(config)
+            print(f"Schwab token is ready at {path}")
+            print_status(token_status(config))
+            return 0
+        print_status(token_status(config))
         return 0
-    if args.command == "exchange":
-        code_or_url = args.code or input("Paste the full Schwab redirect URL or code: ").strip()
-        path = exchange_code(config, code_or_url)
-        print(f"Schwab token saved safely to {path}")
-        return 0
-    if args.command == "refresh":
-        path = refresh_access_token(config)
-        print(f"Schwab token refreshed safely at {path}")
-        return 0
-    print_status(token_status(config))
-    return 0
+    except SchwabOAuthError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

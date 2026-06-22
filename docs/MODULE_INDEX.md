@@ -90,6 +90,7 @@ Safety            — authority, risk, secrets
 | `inferno_market_mastery_plan.py` | Source-ranked strategy, sizing, exit, behavior, and Browser learning action register | `reports/market_mastery_next_actions_latest.txt` |
 | `inferno_portfolio_heat.py` | Total-NLV economic-theme heat across live shares and open paper maximum loss | `reports/portfolio_heat_latest.txt` |
 | `inferno_wheel_shadow.py` | Capital, assignment, lot-size, yield, and downside-stress feasibility for wheel structures | `reports/wheel_shadow_latest.txt` |
+| `run_inferno_daily_model_refresh.sh` | One research-only refresh sequence for tracker, Schwab truth, TOS metrics, evidence, alternatives, capital, and health | terminal + canonical reports |
 
 ## Breathing (is the system alive?)
 

@@ -85,12 +85,41 @@ The local helper:
 - opens Schwab's authorization URL
 - captures the redirect code
 - exchanges code for access/refresh tokens
-- refreshes access tokens before expiry
+- refreshes access tokens only when they are within five minutes of expiry
+- serializes refreshes across launch agents so account, options, and
+  price-history jobs cannot refresh concurrently
+- records terminal `invalid_grant` responses as `reauthorizationRequired`
+  instead of retrying the dead token in every downstream job
+- tracks refresh-token issuance age and explicit expiry metadata when Schwab
+  supplies it
 - stores tokens in `.secrets/schwab_token.json`
 - reports token health without printing secrets
 
 This helper is still intentionally narrow: it does not call account, order,
 preview, cancel, or replace endpoints.
+
+Normal daily operation:
+
+```bash
+python3 inferno_schwab_oauth.py ensure
+```
+
+`ensure` is idempotent. It reuses a healthy access token and performs at most
+one serialized refresh when the access token is near expiry.
+
+When status reports `reauthorizationRequired: True`, run one OAuth restart:
+
+```bash
+python3 inferno_schwab_oauth.py restart
+```
+
+Open the printed Schwab URL, complete consent once, and paste only the newest
+redirect URL into that same prompt. Do not generate a second authorization
+code before exchanging the first; authorization codes are short-lived and
+one-use, and a later authorization can invalidate an earlier grant.
+
+Schwab controls the refresh-token lifetime. Access-token refresh can be
+automated, but a broker-required full OAuth restart cannot be bypassed.
 
 ## Account API Companion
 
