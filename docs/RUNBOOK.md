@@ -1200,6 +1200,12 @@ Each saved run writes an Obsidian-compatible Markdown note under
 `Agent Loop Runs.base` to review structured run properties. JSON remains the
 machine source of truth.
 
+The cooldown is an initial floor, not a fixed cadence. Consecutive no-progress
+runs back off exponentially up to 24 hours, while known fast-paper exit
+eligibility caps the wait. `knowledge/agent-loop/Loop Beliefs.md` consolidates
+recent traces into explicit claims with falsifiers so memory becomes smaller
+and more decision-useful instead of only growing.
+
 ### Backup before editing source
 
 ```bash

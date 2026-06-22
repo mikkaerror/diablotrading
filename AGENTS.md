@@ -17,8 +17,10 @@ Read `CLAUDE.md`, `docs/SYSTEM_MAP.md`, and the latest command-center report bef
 - Use fixed evaluators and record measurable deltas before calling a run productive.
 - Keep evaluator and authority code outside any unattended self-modification scope.
 - Suppress duplicate work when the meaningful state is unchanged.
+- Use bounded adaptive backoff after repeated no-progress runs; skipped checks must not extend the gate indefinitely.
 - Record run cost, outcome, blocker, and accepted progress in the loop state and `knowledge/agent-loop/`.
 - After the same failure or blocker repeats, add a durable rule, test, or deterministic lesson.
+- Consolidate recent traces into explicit beliefs with measurable evidence and a falsifier.
 - Retrieve only the notes relevant to the current blocker; do not load the whole memory store into context.
 
 ## Definition of done
@@ -28,4 +30,3 @@ Read `CLAUDE.md`, `docs/SYSTEM_MAP.md`, and the latest command-center report bef
 - `git diff --check` is clean.
 - Research-only and broker-submit-off invariants remain verified.
 - Documentation and the Obsidian-compatible knowledge layer reflect material loop changes.
-

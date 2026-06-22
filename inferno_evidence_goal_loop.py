@@ -21,7 +21,7 @@ import json
 import re
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -49,12 +49,14 @@ KNOWLEDGE_DIR = ROOT / "knowledge" / "agent-loop"
 KNOWLEDGE_RUNS_DIR = KNOWLEDGE_DIR / "runs"
 KNOWLEDGE_LESSONS_DIR = KNOWLEDGE_DIR / "lessons"
 KNOWLEDGE_CURRENT_FILE = KNOWLEDGE_DIR / "Current Loop State.md"
+KNOWLEDGE_BELIEFS_FILE = KNOWLEDGE_DIR / "Loop Beliefs.md"
 
 SAFE_AUTHORITY_LEVELS = {"paper-evidence-only"}
 MAX_STATE_RUNS = 30
 DEFAULT_MAX_ITERATIONS = 2
 DEFAULT_TIMEOUT_SECONDS = 600
 DEFAULT_DUPLICATE_COOLDOWN_MINUTES = 60
+MAX_ADAPTIVE_INTERVAL_MINUTES = 24 * 60
 
 PRECHECK_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("process compliance precheck", ("python3", "inferno_process_compliance.py", "build")),
@@ -450,32 +452,163 @@ def _run_commands(
     ]
 
 
-def _recent_duplicate_run(
+def _parse_datetime(value: Any, *, fallback_tz: Any = None) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or ""))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None and fallback_tz is not None:
+        parsed = parsed.replace(tzinfo=fallback_tz)
+    return parsed
+
+
+def _matching_verified_run(
+    state: dict[str, Any],
+    *,
+    signature: str,
+) -> dict[str, Any] | None:
+    runs = state.get("runs") or []
+    if not runs:
+        return None
+    last = runs[-1]
+    if last.get("workSignature") != signature:
+        return None
+    if last.get("verificationPassed") is not True:
+        return None
+    return last
+
+
+def _cadence_gate(
     state: dict[str, Any],
     *,
     signature: str,
     now: datetime,
-    cooldown_minutes: int,
-) -> bool:
-    if cooldown_minutes <= 0:
-        return False
-    runs = state.get("runs") or []
-    if not runs:
-        return False
-    last = runs[-1]
-    if last.get("workSignature") != signature:
-        return False
-    if last.get("verificationPassed") is not True:
-        return False
-    generated_raw = str(last.get("generatedAt") or "")
-    try:
-        generated = datetime.fromisoformat(generated_raw)
-    except ValueError:
-        return False
-    if generated.tzinfo is None and now.tzinfo is not None:
-        generated = generated.replace(tzinfo=now.tzinfo)
+    fallback_cooldown_minutes: int,
+) -> dict[str, Any]:
+    if fallback_cooldown_minutes <= 0:
+        return {"blocked": False, "reason": None, "nextCheckAt": None}
+    last = _matching_verified_run(state, signature=signature)
+    if not last:
+        return {"blocked": False, "reason": None, "nextCheckAt": None}
+
+    cadence = state.get("cadence") or {}
+    next_check = _parse_datetime(cadence.get("nextCheckAt"), fallback_tz=now.tzinfo)
+    if next_check and now < next_check:
+        return {
+            "blocked": True,
+            "reason": "adaptive cadence has not reached its next check",
+            "nextCheckAt": next_check.isoformat(),
+        }
+
+    generated = _parse_datetime(last.get("generatedAt"), fallback_tz=now.tzinfo)
+    if not generated:
+        return {"blocked": False, "reason": None, "nextCheckAt": None}
     age_seconds = (now - generated).total_seconds()
-    return 0 <= age_seconds < cooldown_minutes * 60
+    fallback_next = generated + timedelta(minutes=fallback_cooldown_minutes)
+    if 0 <= age_seconds < fallback_cooldown_minutes * 60:
+        return {
+            "blocked": True,
+            "reason": "meaningful state is unchanged inside the fallback cooldown",
+            "nextCheckAt": fallback_next.isoformat(),
+        }
+    return {"blocked": False, "reason": None, "nextCheckAt": None}
+
+
+def _prior_no_progress_streak(state: dict[str, Any]) -> int:
+    streak = 0
+    for run in reversed(state.get("runs") or []):
+        if run.get("valueClass") in {"no-op", "maintenance", "skipped"}:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def adaptive_cadence(
+    prior_state: dict[str, Any],
+    *,
+    value_class: str,
+    progress: dict[str, Any],
+    generated_at: datetime,
+    minimum_minutes: int,
+    preserve_next_check: str | None = None,
+) -> dict[str, Any]:
+    """Choose the next useful check using bounded outcome-driven backoff."""
+    if preserve_next_check:
+        preserved = _parse_datetime(
+            preserve_next_check,
+            fallback_tz=generated_at.tzinfo,
+        )
+        if preserved and preserved > generated_at:
+            interval = max(
+                0,
+                round((preserved - generated_at).total_seconds() / 60),
+            )
+            return {
+                "mode": "adaptive",
+                "intervalMinutes": interval,
+                "nextCheckAt": preserved.isoformat(),
+                "reason": "preserved current adaptive gate; skipped checks do not extend it",
+                "noProgressStreak": _prior_no_progress_streak(prior_state) + 1,
+            }
+
+    prior_streak = _prior_no_progress_streak(prior_state)
+    if value_class == "productive":
+        interval = max(15, min(minimum_minutes, 60))
+        streak = 0
+        reason = "progress detected; keep a short follow-up interval"
+    elif value_class == "maintenance":
+        streak = prior_streak + 1
+        interval = max(minimum_minutes, 60)
+        reason = "maintenance completed; wait for meaningful state change"
+    elif value_class in {"no-op", "skipped"}:
+        streak = prior_streak + 1
+        base = max(15, minimum_minutes)
+        interval = min(
+            MAX_ADAPTIVE_INTERVAL_MINUTES,
+            base * (2 ** max(0, streak - 1)),
+        )
+        reason = "no accepted progress; exponentially back off repeated checks"
+    elif value_class == "verification":
+        streak = prior_streak
+        interval = 0
+        reason = "verification-only run does not change action cadence"
+    else:
+        streak = 0
+        interval = max(240, minimum_minutes)
+        reason = "blocked run; leave time for diagnosis or external state change"
+
+    next_check = generated_at + timedelta(minutes=interval)
+    eligible_raw = str(progress.get("nextFastPaperExitEligibleDate") or "")
+    try:
+        eligible_date = datetime.fromisoformat(eligible_raw).date()
+    except ValueError:
+        eligible_date = None
+    if eligible_date and eligible_date > generated_at.date():
+        eligibility_check = generated_at.replace(
+            year=eligible_date.year,
+            month=eligible_date.month,
+            day=eligible_date.day,
+            hour=9,
+            minute=35,
+            second=0,
+            microsecond=0,
+        )
+        if eligibility_check < next_check:
+            next_check = eligibility_check
+            interval = max(
+                0,
+                round((next_check - generated_at).total_seconds() / 60),
+            )
+            reason += "; cap wait at the next known fast-paper eligibility"
+
+    return {
+        "mode": "adaptive",
+        "intervalMinutes": interval,
+        "nextCheckAt": next_check.isoformat(),
+        "reason": reason,
+        "noProgressStreak": streak,
+    }
 
 
 def _command_duration(results: list[dict[str, Any]]) -> float:
@@ -527,26 +660,25 @@ def build_goal_loop(
     repairs: list[str] = []
     value_class = "blocked"
     signature = work_signature(baseline_progress, now=started)
+    cadence_gate = {"blocked": False, "reason": None, "nextCheckAt": None}
 
     if precheck.get("passed"):
         all_fresh = all(
             payload and _artifact_fresh(payload, now=started)
             for payload in precheck_artifacts.values()
         )
-        duplicate = _recent_duplicate_run(
+        cadence_gate = _cadence_gate(
             prior_state,
             signature=signature,
             now=started,
-            cooldown_minutes=duplicate_cooldown_minutes,
+            fallback_cooldown_minutes=duplicate_cooldown_minutes,
         )
         useful_work_ready = int(
             _number(baseline_progress.get("eligibleFastPaperExits"))
         ) > 0
-        if duplicate and all_fresh and not useful_work_ready:
+        if cadence_gate.get("blocked") and all_fresh and not useful_work_ready:
             verdict = "skipped-duplicate-work"
-            stop_reason = (
-                "meaningful state is unchanged inside the duplicate-work cooldown"
-            )
+            stop_reason = str(cadence_gate.get("reason"))
             value_class = "skipped"
             final_verification = verify_cycle(precheck_artifacts, [], now=started)
         else:
@@ -621,8 +753,21 @@ def build_goal_loop(
     for iteration in iterations:
         all_command_results.extend(iteration.get("commands") or [])
     duration_seconds = round(time.monotonic() - monotonic_started, 3)
+    generated = now or local_now()
+    cadence = adaptive_cadence(
+        prior_state,
+        value_class=value_class,
+        progress=final_progress,
+        generated_at=generated,
+        minimum_minutes=max(0, duplicate_cooldown_minutes),
+        preserve_next_check=(
+            str(cadence_gate.get("nextCheckAt") or "")
+            if verdict == "skipped-duplicate-work"
+            else None
+        ),
+    )
     return {
-        "generatedAt": (now or local_now()).isoformat(),
+        "generatedAt": generated.isoformat(),
         "startedAt": started.isoformat(),
         "stage": GOAL_LOOP_STAGE,
         "verdict": verdict,
@@ -650,6 +795,7 @@ def build_goal_loop(
         "progressDelta": delta,
         "artifactRepairs": repairs,
         "workSignature": signature,
+        "cadence": cadence,
         "authorityLevel": decision.get("authorityLevel"),
         "nextAction": (
             "Continue the scheduled evidence cadence."
@@ -678,6 +824,7 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"Iterations: {payload.get('iterationCount')} / {payload.get('maxIterations')}",
         f"Duration: {payload.get('durationSeconds', 0)}s",
         f"Commands executed: {payload.get('commandsExecuted', 0)}",
+        f"Next adaptive check: {(payload.get('cadence') or {}).get('nextCheckAt')}",
         f"Authority: {payload.get('authorityLevel')}",
         "Authority contract: research-only; broker submit OFF; live trading OFF",
         "",
@@ -726,8 +873,86 @@ def _run_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "progressDelta": payload.get("progressDelta"),
         "artifactRepairs": payload.get("artifactRepairs"),
         "workSignature": payload.get("workSignature"),
+        "cadence": payload.get("cadence"),
         "verificationPassed": (payload.get("verification") or {}).get("passed"),
     }
+
+
+def consolidate_beliefs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Distill recent traces into compact claims with explicit falsifiers."""
+    classified = [
+        run
+        for run in runs
+        if run.get("valueClass")
+        in {"productive", "maintenance", "no-op", "skipped", "blocked"}
+    ]
+    recent = classified[-10:]
+    if not recent:
+        return []
+
+    promotion_gain = sum(
+        int(_number((run.get("progressDelta") or {}).get("promotionEvidenceDelta")))
+        for run in recent
+    )
+    no_progress_runs = sum(
+        1
+        for run in recent
+        if run.get("valueClass") in {"maintenance", "no-op", "skipped"}
+    )
+    beliefs = [
+        {
+            "id": "promotion-evidence-velocity",
+            "statement": (
+                "Promotion evidence is stalled across the recent evaluated run window."
+                if promotion_gain == 0
+                else "Promotion evidence is moving in the recent evaluated run window."
+            ),
+            "status": "active" if promotion_gain == 0 else "challenged",
+            "evidenceRuns": len(recent),
+            "evidenceValue": promotion_gain,
+            "falsifier": "A future run records promotionEvidenceDelta greater than zero.",
+        },
+        {
+            "id": "invocation-efficiency",
+            "statement": (
+                "Most recent invocations produce no accepted progress and should remain adaptively throttled."
+                if no_progress_runs * 2 >= len(recent)
+                else "Recent invocation cadence is producing accepted progress often enough to avoid stronger backoff."
+            ),
+            "status": (
+                "active" if no_progress_runs * 2 >= len(recent) else "challenged"
+            ),
+            "evidenceRuns": len(recent),
+            "evidenceValue": no_progress_runs,
+            "falsifier": "At least half of the next ten evaluated runs are productive.",
+        },
+    ]
+
+    last_progress = recent[-1].get("progress") or {}
+    blocker = str(last_progress.get("dominantBlocker") or "")
+    blocker_streak = 0
+    if blocker:
+        for run in reversed(recent):
+            if (run.get("progress") or {}).get("dominantBlocker") == blocker:
+                blocker_streak += 1
+            else:
+                break
+        beliefs.append(
+            {
+                "id": "dominant-blocker",
+                "statement": f"The dominant measured blocker is {blocker}.",
+                "status": "active" if blocker_streak >= 2 else "provisional",
+                "evidenceRuns": blocker_streak,
+                "evidenceValue": int(
+                    _number(last_progress.get("dominantBlockerCount"))
+                ),
+                "falsifier": (
+                    "The dominant blocker changes or its measured count declines "
+                    "after a tested intervention."
+                ),
+            }
+        )
+    return beliefs
 
 
 def _update_state(
@@ -764,8 +989,9 @@ def _update_state(
                 repeated_blocker_runs += 1
             else:
                 break
+    cadence = payload.get("cadence") or prior.get("cadence") or {}
     return {
-        "version": 2,
+        "version": 3,
         "updatedAt": payload.get("generatedAt"),
         "lastVerdict": payload.get("verdict"),
         "lastValueClass": payload.get("valueClass"),
@@ -782,6 +1008,8 @@ def _update_state(
             "name": dominant,
             "consecutiveRuns": repeated_blocker_runs,
         },
+        "cadence": cadence,
+        "beliefs": consolidate_beliefs(runs),
         "runs": runs,
     }
 
@@ -800,6 +1028,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
     progress = payload.get("progress") or {}
     delta = payload.get("progressDelta") or {}
     rolling = state.get("rolling10") or {}
+    cadence = payload.get("cadence") or {}
     frontmatter = {
         "type": "agent-loop-run",
         "generated": payload.get("generatedAt"),
@@ -827,7 +1056,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             "",
             f"# Agent loop run — {payload.get('generatedAt')}",
             "",
-            "Links: [[Loop Optimization Principles]] · [[Evidence Bottleneck]] · [[Authority Boundary]]",
+            "Links: [[Loop Optimization Principles]] · [[Loop Beliefs]] · [[Evidence Bottleneck]] · [[Authority Boundary]]",
             "",
             "## Outcome",
             "",
@@ -836,6 +1065,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             f"- Stop reason: {payload.get('stopReason')}",
             f"- Accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
             f"- Rolling productive-run rate: {rolling.get('productiveRunRate', 0):.0%}",
+            f"- Next adaptive check: {cadence.get('nextCheckAt')}",
             "",
             "## Evidence delta",
             "",
@@ -863,6 +1093,48 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             "",
         ]
     )
+    return "\n".join(lines)
+
+
+def _beliefs_text(state: dict[str, Any]) -> str:
+    beliefs = state.get("beliefs") or []
+    lines = [
+        "---",
+        "type: agent-loop-beliefs",
+        f"updated: {_yaml_scalar(state.get('updatedAt'))}",
+        f"belief_count: {len(beliefs)}",
+        "tags:",
+        "  - inferno",
+        "  - agent-loop",
+        "  - beliefs",
+        "---",
+        "",
+        "# Loop Beliefs",
+        "",
+        "These claims are deterministically consolidated from recent evaluated runs. Each claim includes a condition that can falsify it.",
+        "",
+        "Links: [[Current Loop State]] · [[Loop Optimization Principles]] · [[Evidence Bottleneck]]",
+        "",
+    ]
+    for belief in beliefs:
+        lines.extend(
+            [
+                f"## {belief.get('id')}",
+                "",
+                f"- Status: **{belief.get('status')}**",
+                f"- Claim: {belief.get('statement')}",
+                f"- Evidence window: {belief.get('evidenceRuns')} run(s)",
+                f"- Evidence value: {belief.get('evidenceValue')}",
+                f"- Falsifier: {belief.get('falsifier')}",
+                "",
+            ]
+        )
+    if not beliefs:
+        lines.extend(["No evaluated run history is available yet.", ""])
+    lines.append(
+        "These beliefs guide research prioritization only. They cannot change authority, risk policy, or broker state."
+    )
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -899,6 +1171,7 @@ def _save_knowledge(payload: dict[str, Any], state: dict[str, Any]) -> None:
     run_text = _knowledge_run_text(payload, state)
     atomic_write_text(KNOWLEDGE_RUNS_DIR / f"{slug}.md", run_text)
     atomic_write_text(KNOWLEDGE_CURRENT_FILE, run_text)
+    atomic_write_text(KNOWLEDGE_BELIEFS_FILE, _beliefs_text(state))
 
     repeated = state.get("repeatedBlocker") or {}
     blocker = str(repeated.get("name") or "")

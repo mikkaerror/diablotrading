@@ -240,9 +240,117 @@ class EvidenceGoalLoopTests(unittest.TestCase):
 
         state = loop._update_state(payload, existing=prior)
 
-        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["version"], 3)
         self.assertEqual(state["rolling10"]["productiveRunRate"], 0.0)
         self.assertEqual(state["rolling10"]["consecutiveNoProgressRuns"], 2)
+        self.assertEqual(state["cadence"]["intervalMinutes"], 60)
+        self.assertEqual(state["beliefs"][0]["status"], "active")
+
+    def test_adaptive_cadence_exponentially_backs_off_no_progress(self) -> None:
+        prior = {
+            "runs": [
+                {"valueClass": "no-op"},
+                {"valueClass": "skipped"},
+            ]
+        }
+
+        cadence = loop.adaptive_cadence(
+            prior,
+            value_class="no-op",
+            progress={},
+            generated_at=NOW,
+            minimum_minutes=60,
+        )
+
+        self.assertEqual(cadence["noProgressStreak"], 3)
+        self.assertEqual(cadence["intervalMinutes"], 240)
+
+    def test_adaptive_gate_uses_state_next_check_and_does_not_extend_on_skip(self) -> None:
+        artifacts = safe_artifacts()
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        next_check = "2026-06-22T17:00:00-06:00"
+        state = {
+            "cadence": {"nextCheckAt": next_check},
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T11:00:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ],
+        }
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "skipped-duplicate-work")
+        self.assertEqual(payload["cadence"]["nextCheckAt"], next_check)
+        self.assertIn("do not extend", payload["cadence"]["reason"])
+
+    def test_zero_cooldown_explicitly_bypasses_adaptive_gate(self) -> None:
+        artifacts = safe_artifacts()
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        state = {
+            "cadence": {"nextCheckAt": "2026-06-22T17:00:00-06:00"},
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:00:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ],
+        }
+
+        payload = loop.build_goal_loop(
+            duplicate_cooldown_minutes=0,
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "no-op")
+        self.assertEqual(payload["iterationCount"], 1)
+
+    def test_belief_consolidation_is_falsifiable(self) -> None:
+        runs = [
+            {
+                "valueClass": "no-op",
+                "progressDelta": {"promotionEvidenceDelta": 0},
+                "progress": {
+                    "dominantBlocker": "approval-missing",
+                    "dominantBlockerCount": 10,
+                },
+            },
+            {
+                "valueClass": "skipped",
+                "progressDelta": {"promotionEvidenceDelta": 0},
+                "progress": {
+                    "dominantBlocker": "approval-missing",
+                    "dominantBlockerCount": 10,
+                },
+            },
+        ]
+
+        beliefs = loop.consolidate_beliefs(runs)
+
+        self.assertEqual(beliefs[0]["status"], "active")
+        self.assertIn("falsifier", beliefs[0])
+        self.assertEqual(beliefs[-1]["evidenceRuns"], 2)
 
     def test_knowledge_run_is_plain_markdown_with_structured_properties(self) -> None:
         payload = loop.build_goal_loop(
@@ -261,13 +369,17 @@ class EvidenceGoalLoopTests(unittest.TestCase):
                 patch.object(loop, "KNOWLEDGE_RUNS_DIR", root / "runs"),
                 patch.object(loop, "KNOWLEDGE_LESSONS_DIR", root / "lessons"),
                 patch.object(loop, "KNOWLEDGE_CURRENT_FILE", root / "Current Loop State.md"),
+                patch.object(loop, "KNOWLEDGE_BELIEFS_FILE", root / "Loop Beliefs.md"),
             ):
                 loop._save_knowledge(payload, state)
 
             current = (root / "Current Loop State.md").read_text(encoding="utf-8")
+            beliefs = (root / "Loop Beliefs.md").read_text(encoding="utf-8")
             self.assertIn("type: \"agent-loop-run\"", current)
             self.assertIn("[[Loop Optimization Principles]]", current)
             self.assertIn("live_trading_allowed: false", current)
+            self.assertIn("# Loop Beliefs", beliefs)
+            self.assertIn("Falsifier:", beliefs)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ Increase verified paper and research evidence per unit of time without widening 
 5. Store compact outcomes and lessons; retrieve only what the current blocker requires.
 6. Keep evaluator, authority, and live-broker boundaries outside unattended code mutation.
 7. Prefer small, reversible experiments with explicit keep/discard criteria.
+8. Back off after repeated no-progress runs, but never let skipped checks extend the gate forever.
+9. Consolidate traces into falsifiable beliefs; retire or challenge beliefs when evidence changes.
 
 ## Accepted progress
 
@@ -34,4 +36,3 @@ Increase verified paper and research evidence per unit of time without widening 
 Artifact refreshes are maintenance. A safe run with none of these changes is a no-op.
 
 Related: [[Evidence Bottleneck]] · [[Authority Boundary]] · [[Current Loop State]]
-

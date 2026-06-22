@@ -20,6 +20,22 @@ For Inferno, “the commands ran” is not success. The primary objective is ver
 
 ## What the strongest systems have in common
 
+### Trigger, process, verification, stop, and memory
+
+CyrilXBT’s article
+[“Loops: The Quiet Skill Behind Every AI System That Actually Scales in 2026”](https://x.com/cyrilXBT/status/2068850474384609543)
+frames loop engineering as five practical concerns: explicit triggers, narrowly
+scoped process steps, structurally separate verification, bounded stop and
+escalation states, and memory across cycles. Its most useful additions to this
+implementation are dynamic intervals, periodic consolidation, explicit
+falsifiable belief tracking, and the warning that skipped checks must not
+silently become unbounded retries.
+
+The article also contains current vendor and benchmark claims that are not
+needed for the architecture decision and were not treated as evaluator inputs.
+The loop adopts the mechanisms that can be independently tested in this
+repository.
+
 ### Fixed evaluators and keep/discard discipline
 
 Andrej Karpathy’s [autoresearch](https://github.com/karpathy/autoresearch) constrains the agent to a narrow editable surface, a fixed time budget, and a ground-truth metric. Its operating instructions establish a baseline, log every experiment, keep improvements, and discard regressions. The evaluator is not part of the agent’s editable scope.
@@ -108,6 +124,12 @@ Obsidian’s [CLI](https://obsidian.md/help/cli) may later support operator work
 - `skipped-duplicate-work`: meaningful state was unchanged inside the cooldown.
 - `blocked`: safety, command, or verification failure.
 
+The duplicate cooldown is now only the minimum interval. Repeated no-progress
+runs use bounded exponential backoff up to 24 hours, capped when a known
+fast-paper exit becomes eligible. A skipped invocation preserves the existing
+next-check timestamp instead of extending it, preventing a busy caller from
+starving the loop indefinitely.
+
 ### Accepted progress score
 
 The score weights evidence by proximity to the promotion objective:
@@ -132,6 +154,12 @@ Each run records:
 - rolling productive-run rate.
 
 Each saved run also becomes an Obsidian-compatible note. A blocker that dominates consecutive runs creates or updates a deterministic lesson note. This is bounded episodic memory, not free-form autonomous policy generation.
+
+Recent evaluated traces are also consolidated into `Loop Beliefs.md`. Each
+belief has a status, evidence window, evidence value, and explicit falsifier.
+Examples include promotion-evidence stall, invocation inefficiency, and the
+current dominant blocker. These beliefs prioritize research only; they cannot
+change authority or trading policy.
 
 ## Next safe optimization phases
 
