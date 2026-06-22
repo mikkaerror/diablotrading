@@ -1163,6 +1163,28 @@ times on weekdays only. Default times are 06:30 (after dawn cycle) and 16:30
 - `logs/inferno_daily_loop.stdout.log`
 - `logs/inferno_daily_loop.stderr.log`
 
+### Run and schedule the bounded evidence goal loop
+
+The evidence goal loop wraps the paper/fast-paper harvest in the controls that
+make a recurring automation safe: process and authority prechecks, persistent
+state, command isolation, an independent artifact verifier, a per-command
+timeout, a two-iteration cap, and stop-on-no-progress behavior.
+
+```bash
+./run_inferno_evidence_goal_loop.sh run
+./run_inferno_evidence_goal_loop.sh verify
+python3 inferno_evidence_goal_loop.py status
+
+python3 install_inferno_evidence_goal_loop_service.py install
+python3 install_inferno_evidence_goal_loop_service.py status
+python3 install_inferno_evidence_goal_loop_service.py uninstall
+```
+
+The default schedule is 13:40 local on weekdays, after the 13:30 action pulse
+and before the U.S. equity close. It cannot approve tickets, submit orders,
+change the universe, or widen authority. Any authority drift or process breach
+stops the cycle before paper evidence is mutated.
+
 ### Backup before editing source
 
 ```bash

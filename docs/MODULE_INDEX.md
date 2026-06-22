@@ -102,6 +102,8 @@ Safety            — authority, risk, secrets
 | `inferno_skills_audit.py` | Stale-skill auditor across every inferno_*.py module | `reports/skills_audit_latest.txt` |
 | `inferno_night_prep.py` | **NEW** Bedside check that every layer is ready for tomorrow morning, now including Schwab/TOS source posture | `reports/night_prep_latest.txt` |
 | `install_inferno_nightly_optimize_service.py` | Installs the weekday 18:30 research-only refresh loop in launchd | local LaunchAgent |
+| `inferno_evidence_goal_loop.py` | Bounded paper-evidence heartbeat with persistent state, independent verification, and hard stop rules | `reports/evidence_goal_loop_latest.txt` |
+| `install_inferno_evidence_goal_loop_service.py` | Installs the weekday 13:40 bounded evidence loop in launchd | local LaunchAgent |
 | `inferno_housekeeping.py` | Prune stale artifacts after they exceed retention | side-effects on `data/` |
 
 ## Thinking (math, hypotheses, proof)

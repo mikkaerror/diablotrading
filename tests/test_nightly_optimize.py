@@ -11,19 +11,23 @@ SCRIPT = ROOT / "nightly_optimize.sh"
 
 
 class NightlyOptimizeTests(unittest.TestCase):
-    """Keep evidence summaries downstream of the evidence harvest."""
+    """Keep evidence summaries downstream of the bounded evidence loop."""
 
-    def test_evidence_harvest_precedes_summary_recomputes(self) -> None:
+    def test_evidence_goal_loop_precedes_summary_recomputes(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 
-        harvest = text.index('run_step "paper evidence harvest"')
+        goal_loop = text.index('run_step "evidence goal loop"')
         performance = text.index('run_step "performance analytics"')
         strategy = text.index('run_step "strategy lab"')
         velocity = text.index('run_step "paper velocity"')
 
-        self.assertLess(harvest, performance)
+        self.assertLess(goal_loop, performance)
         self.assertLess(performance, strategy)
         self.assertLess(strategy, velocity)
+        self.assertNotIn(
+            'run_step "paper evidence harvest" ./run_inferno_paper_evidence_harvest.sh',
+            text,
+        )
 
     def test_nightly_loop_does_not_approve_or_stage_tickets(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")

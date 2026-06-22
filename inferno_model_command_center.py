@@ -55,6 +55,7 @@ RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 FAST_PAPER_COHORT_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
+EVIDENCE_GOAL_LOOP_FILE = DATA_DIR / "inferno_evidence_goal_loop.json"
 PAPER_MTM_FILE = DATA_DIR / "inferno_paper_mark_to_market.json"
 TRADE_MANAGEMENT_FILE = DATA_DIR / "inferno_trade_management.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
@@ -164,6 +165,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "How many option simulations are cycling for rapid exploratory evidence?",
         "artifact": "reports/fast_paper_cohort_latest.txt",
         "owner": "shared",
+    },
+    {
+        "lane": "evidence-goal-loop",
+        "question": "Did the bounded automated evidence cycle pass its verifier?",
+        "artifact": "reports/evidence_goal_loop_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "paper-mtm",
@@ -646,6 +653,7 @@ def build_executive_summary(
         (
             "Evidence: "
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
+            f"goal-loop={metrics.get('evidenceGoalLoopVerdict')}; "
             f"fast-paper={metrics.get('fastPaperVerdict')}; "
             f"fast closed={metrics.get('fastPaperClosedLifetime', 0)}; "
             f"scenarios={metrics.get('paperScenarioCount', 0)}; "
@@ -680,6 +688,7 @@ def build_command_center() -> dict[str, Any]:
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
+    evidence_goal_loop = load_json_file(EVIDENCE_GOAL_LOOP_FILE) or {}
     paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
     trade_management = load_json_file(TRADE_MANAGEMENT_FILE) or {}
     scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
@@ -747,6 +756,10 @@ def build_command_center() -> dict[str, Any]:
         "fastPaperCohort": artifact_summary(
             FAST_PAPER_COHORT_FILE,
             keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable"),
+        ),
+        "evidenceGoalLoop": artifact_summary(
+            EVIDENCE_GOAL_LOOP_FILE,
+            keys=("stage", "verdict", "generatedAt", "iterationCount", "authorityLevel"),
         ),
         "paperMarkToMarket": artifact_summary(PAPER_MTM_FILE, keys=("stage", "verdict", "fetchStatus", "generatedAt", "researchOnly", "promotable", "openPositionCount")),
         "tradeManagement": artifact_summary(TRADE_MANAGEMENT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "openPositionCount", "actionableCount")),
@@ -832,6 +845,8 @@ def build_command_center() -> dict[str, Any]:
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
         "fastPaperVerdict": fast_paper.get("verdict"),
+        "evidenceGoalLoopVerdict": evidence_goal_loop.get("verdict"),
+        "evidenceGoalLoopIterations": evidence_goal_loop.get("iterationCount", 0),
         "fastPaperSelectedToday": (fast_paper.get("counts") or {}).get("selectedToday", 0),
         "fastPaperClosedToday": (fast_paper.get("counts") or {}).get("closedToday", 0),
         "fastPaperOpen": (fast_paper.get("counts") or {}).get("open", 0),
@@ -1126,6 +1141,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Fast paper cohort: {status_value(status.get('fastPaperCohort') or {})}",
+            f"- Evidence goal loop: {status_value(status.get('evidenceGoalLoop') or {})}",
             f"- Paper mark-to-market: {status_value(status.get('paperMarkToMarket') or {})}",
             f"- Trade management: {status_value(status.get('tradeManagement') or {})}",
             f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
@@ -1167,6 +1183,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"open {metrics.get('fastPaperOpen', 0)} | "
             f"lifetime closed {metrics.get('fastPaperClosedLifetime', 0)} | "
             "promotion credit off",
+            f"- Evidence goal loop: {metrics.get('evidenceGoalLoopVerdict') or '-'} | "
+            f"iterations {metrics.get('evidenceGoalLoopIterations', 0)}",
             f"- Paper MTM: {metrics.get('paperMtmFetchStatus') or '-'} | "
             f"open {metrics.get('paperMtmOpenPositions')} | "
             f"marked {metrics.get('paperMtmMarkedTickets')}",

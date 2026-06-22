@@ -85,12 +85,13 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
 fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
 
-# 2) evidence harvest (research-only; no approval or staging mutation)
+# 2) bounded evidence goal loop (research-only; no approval or live mutation)
 #
-# This must run before performance/strategy/velocity. Otherwise a newly closed
-# paper outcome can sit in the ledger while the nightly summaries still report
-# yesterday's count.
-run_step "paper evidence harvest" ./run_inferno_paper_evidence_harvest.sh
+# This wraps the harvest in process/authority prechecks, persistent state, an
+# independent verifier, bounded retries, and stop-on-no-progress behavior.
+# It must run before performance/strategy/velocity so newly closed outcomes are
+# included in the nightly summaries.
+run_step "evidence goal loop" "$PYTHON" inferno_evidence_goal_loop.py run --max-iterations 2
 
 # 3) recommenders (research-only)
 run_step "capital scaling"       "$PYTHON" inferno_capital_scaling.py

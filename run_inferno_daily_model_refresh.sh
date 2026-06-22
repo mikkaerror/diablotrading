@@ -56,8 +56,8 @@ echo "8/15 Live account and position review"
 run_advisory "live account sync" python3 inferno_live_account_sync.py build
 run_advisory "live position review" python3 inferno_live_position_review.py build
 
-echo "9/15 Paper and fast-paper evidence harvest"
-run_advisory "paper evidence harvest" ./run_inferno_paper_evidence_harvest.sh
+echo "9/15 Bounded paper-evidence goal loop"
+run_advisory "evidence goal loop" ./run_inferno_evidence_goal_loop.sh run --max-iterations 2
 
 echo "10/15 Research, expected-move, and calibration cycle"
 run_advisory "research cycle" ./run_inferno_research_cycle.sh

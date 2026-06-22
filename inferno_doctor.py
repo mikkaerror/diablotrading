@@ -68,6 +68,7 @@ DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
 PAPER_VELOCITY_FILE = ROOT / "data" / "inferno_paper_velocity.json"
 FAST_PAPER_COHORT_FILE = ROOT / "data" / "inferno_fast_paper_cohort.json"
+EVIDENCE_GOAL_LOOP_FILE = ROOT / "data" / "inferno_evidence_goal_loop.json"
 CAPITAL_SCALING_FILE = ROOT / "data" / "inferno_capital_scaling.json"
 PAPER_MTM_FILE = ROOT / "data" / "inferno_paper_mark_to_market.json"
 TRADE_MANAGEMENT_FILE = ROOT / "data" / "inferno_trade_management.json"
@@ -105,6 +106,7 @@ SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
+EVIDENCE_GOAL_LOOP_LABEL = "io.diablotrading.inferno-evidence-goal-loop"
 DOCTOR_ARTIFACT_FILE = DATA_DIR / "inferno_doctor.json"
 DOCTOR_TEXT_FILE = REPORTS_DIR / "doctor_latest.txt"
 SCHWAB_REFRESH_RESTART_ADVISORY_DAYS = 5.0
@@ -1113,6 +1115,21 @@ def main() -> int:
     if not action_pulse_ok:
         warnings += 1
 
+    goal_loop_agent_ok, goal_loop_agent_detail = launch_agent_status(
+        EVIDENCE_GOAL_LOOP_LABEL
+    )
+    lines.append(
+        summarize_status(
+            "Evidence goal-loop agent",
+            goal_loop_agent_ok,
+            f"weekdays 13:40 | {goal_loop_agent_detail}"
+            if goal_loop_agent_ok
+            else goal_loop_agent_detail,
+        )
+    )
+    if not goal_loop_agent_ok:
+        warnings += 1
+
     sched_text = pmset_sched_text()
     wake_label = f"{WAKE_HOUR:02d}:{WAKE_MINUTE:02d}"
     wake_phrase = f"wakepoweron at {WAKE_HOUR if WAKE_HOUR % 12 else 12}:{WAKE_MINUTE:02d}AM"
@@ -1503,6 +1520,42 @@ def main() -> int:
     fast_paper_ok, fast_paper_detail = fast_paper_cohort_status(fast_paper)
     lines.append(summarize_status("Fast paper cohort", fast_paper_ok, fast_paper_detail))
     if not fast_paper_ok:
+        warnings += 1
+
+    evidence_goal_loop = load_json_file(EVIDENCE_GOAL_LOOP_FILE) or {}
+    evidence_goal_loop_today = in_current_service_cycle(
+        str(evidence_goal_loop.get("generatedAt", "")),
+        now=now,
+    )
+    evidence_goal_loop_verdict = str(evidence_goal_loop.get("verdict") or "")
+    evidence_goal_loop_verification = evidence_goal_loop.get("verification") or {}
+    evidence_goal_loop_ok = (
+        evidence_goal_loop_today
+        and evidence_goal_loop_verdict in {"cycle-complete", "verify-clean"}
+        and evidence_goal_loop_verification.get("passed") is True
+        and evidence_goal_loop.get("liveTradingAllowed") is False
+        and evidence_goal_loop.get("brokerSubmitAllowed") is False
+    )
+    evidence_goal_loop_detail = (
+        f"{evidence_goal_loop_verdict} | iterations "
+        f"{evidence_goal_loop.get('iterationCount', 0)} | "
+        f"authority {evidence_goal_loop.get('authorityLevel')}"
+        if evidence_goal_loop_today
+        else json.dumps(
+            {
+                "generatedAt": evidence_goal_loop.get("generatedAt"),
+                "verdict": evidence_goal_loop_verdict,
+            }
+        )
+    )
+    lines.append(
+        summarize_status(
+            "Evidence goal loop",
+            evidence_goal_loop_ok,
+            evidence_goal_loop_detail,
+        )
+    )
+    if not evidence_goal_loop_ok:
         warnings += 1
 
     paper_mtm = load_json_file(PAPER_MTM_FILE) or {}

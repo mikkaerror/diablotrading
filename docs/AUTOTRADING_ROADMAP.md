@@ -27,6 +27,9 @@ The bot may only gain authority when the desk can prove:
 3. `Paper Ledger`
    - Status: active
    - Records staged, blocked, rejected, closed, and reviewed paper tickets.
+   - The bounded evidence goal loop runs process/authority prechecks, harvests
+     isolated paper evidence, verifies the resulting artifacts, persists state,
+     and stops on safety drift, no progress, timeout, or iteration cap.
 
 4. `Broker Preview`
    - Status: active
