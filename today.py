@@ -36,6 +36,7 @@ DATA = ROOT / "data"
 
 LIVE_SYNC = DATA / "inferno_live_account_sync.json"
 SCALING_STATE = DATA / "inferno_capital_scaling_state.json"
+SCALING_REPORT = DATA / "inferno_capital_scaling.json"
 DIRECTOR = DATA / "inferno_paper_test_director.json"
 LIVE_POSITIONS = DATA / "inferno_live_position_review.json"
 DECISIONS_LOG = DATA / "operator_decisions.csv"
@@ -153,6 +154,35 @@ def print_money_header(*, now: _dt.datetime | None = None) -> bool:
         print("  Refresh broker truth: ./run_inferno_schwab_account_sync.sh --json")
     print()
     return fresh
+
+
+def _drawdown_banner_if_needed() -> str | None:
+    """Top-of-screen warning when the drawdown stepper is past `normal`.
+
+    BACKLOG #5. Reads the capital_scaling artifact for the stepper level
+    (`normal` / `step-1-half` / `step-2-quarter` / `paused`) and returns a
+    one-line banner only when the level is not `normal`. Silent at normal
+    so the screen stays quiet 99% of the time.
+    """
+    payload = _load_json(SCALING_REPORT)
+    dd = payload.get("drawdownState") or {}
+    level = (dd.get("level") or "").strip().lower()
+    if not level or level == "normal":
+        return None
+    dd_pct = dd.get("drawdownFraction")
+    pct_str = f"{dd_pct * 100:.1f}%" if isinstance(dd_pct, (int, float)) else "?"
+    cap_mult = dd.get("capMultiplier")
+    mult_str = f"{cap_mult:.2f}x" if isinstance(cap_mult, (int, float)) else "?"
+    allows = dd.get("newEntriesAllowed", True)
+    if level in ("paused", "step-3-paused"):
+        verb = "PAUSED — no new entries until NLV recovers above peak − 30%"
+    elif level == "step-2-quarter":
+        verb = f"step-2-quarter: cap × {mult_str}, new entries " + ("ok" if allows else "blocked")
+    elif level == "step-1-half":
+        verb = f"step-1-half: cap × {mult_str}, new entries " + ("ok" if allows else "blocked")
+    else:
+        verb = f"{level}: cap × {mult_str}"
+    return f"⚠  Drawdown {pct_str} from peak — {verb}  (playbook §5.2)"
 
 
 def _discipline_reminder_if_loss(positions: list) -> str | None:
@@ -281,19 +311,17 @@ def _log_decision(
     note: str = "",
     rationale: str = "",
     confidence: str = "",
+    seconds_to_decide: str = "",
 ) -> None:
     """Append-only audit trail of operator decisions.
 
-    Six columns: timestamp, ticker, action, note, rationale, confidence.
-    rationale + confidence are the decision-journal fields (item #13 of
-    docs/BACKLOG.md). They're empty for reject/skip; populated on approve.
-    They exist so a monthly review can correlate stated thesis quality with
-    realized outcomes. Per
-    `docs/TRADING_DISCIPLINE_RESEARCH_2026-06-22.md` §6, checklist trades
-    outperform by 15-30% profit factor — the act of articulating is the
-    value, the form is secondary.
+    Seven columns: timestamp, ticker, action, note, rationale, confidence,
+    seconds_to_decide. rationale + confidence are the decision-journal
+    fields (BACKLOG #13). seconds_to_decide is friction telemetry
+    (BACKLOG #4) — wall-clock time between the candidate appearing and
+    the operator pressing a key.
 
-    Pre-existing rows (4 columns) are still readable; new rows have 6.
+    Pre-existing rows (4 or 6 columns) are still readable; new rows have 7.
     """
     DECISIONS_LOG.parent.mkdir(parents=True, exist_ok=True)
     new_file = not DECISIONS_LOG.exists()
@@ -301,7 +329,15 @@ def _log_decision(
         w = csv.writer(f)
         if new_file:
             w.writerow(
-                ["timestamp", "ticker", "action", "note", "rationale", "confidence"]
+                [
+                    "timestamp",
+                    "ticker",
+                    "action",
+                    "note",
+                    "rationale",
+                    "confidence",
+                    "seconds_to_decide",
+                ]
             )
         w.writerow(
             [
@@ -311,6 +347,7 @@ def _log_decision(
                 note,
                 rationale,
                 confidence,
+                seconds_to_decide,
             ]
         )
 
@@ -369,10 +406,18 @@ def _prompt(message: str) -> str:
 
 
 def run_one(item: dict) -> str:
-    """Show one candidate, take one decision, log it. Returns action taken."""
+    """Show one candidate, take one decision, log it. Returns action taken.
+
+    Friction telemetry (BACKLOG #4): wall-clock seconds between candidate
+    line printed and the operator pressing a key. Long hesitation is
+    signal — either the candidate is unclear, the data is missing, or the
+    operator doesn't trust the surface.
+    """
     ticker = item.get("ticker", "")
     print(_candidate_line(item))
+    t_start = _dt.datetime.now()
     answer = _prompt("    paper-trade this? [y]es / [n]o / [s]kip / [q]uit: ")
+    elapsed = f"{(_dt.datetime.now() - t_start).total_seconds():.1f}"
     if answer in ("y", "yes"):
         rationale, confidence = _prompt_decision_journal()
         rc = _approve_via_queue(ticker)
@@ -383,6 +428,7 @@ def run_one(item: dict) -> str:
                 "via today.py",
                 rationale=rationale,
                 confidence=confidence,
+                seconds_to_decide=elapsed,
             )
             print(f"    -> approved {ticker}")
             return "approve"
@@ -392,27 +438,34 @@ def run_one(item: dict) -> str:
             f"queue rc={rc}",
             rationale=rationale,
             confidence=confidence,
+            seconds_to_decide=elapsed,
         )
         print(f"    -> approval queue returned {rc}; check inferno_approval_queue status")
         return "approve-failed"
     if answer in ("n", "no", "reject"):
         rc = _reject_via_queue(ticker)
         if rc == 0:
-            _log_decision(ticker, "reject", "via today.py")
+            _log_decision(ticker, "reject", "via today.py", seconds_to_decide=elapsed)
             print(f"    -> rejected {ticker}")
             return "reject"
-        _log_decision(ticker, "reject-failed", f"queue rc={rc}")
+        _log_decision(
+            ticker, "reject-failed", f"queue rc={rc}", seconds_to_decide=elapsed
+        )
         print(f"    -> rejection queue returned {rc}; check inferno_approval_queue status")
         return "reject-failed"
     if answer in ("q", "quit"):
         return "quit"
     # "s", "skip", "" -- defer, no change to queue
-    _log_decision(ticker, "skip", "via today.py")
+    _log_decision(ticker, "skip", "via today.py", seconds_to_decide=elapsed)
     print(f"    -> skipped {ticker} (will reappear tomorrow)")
     return "skip"
 
 
 def main() -> int:
+    banner = _drawdown_banner_if_needed()
+    if banner:
+        print(banner)
+        print()
     print_money_header()
     print_holdings_section()
 
