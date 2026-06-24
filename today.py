@@ -461,7 +461,23 @@ def run_one(item: dict) -> str:
     return "skip"
 
 
+def _is_quiet_mode() -> bool:
+    """Detect --quiet / -q flag for cron / scripted invocation.
+
+    BACKLOG #6. Per CLAUDE.md §7 the constraint is "only one flag, and it
+    only suppresses prompts" — quiet mode prints the screen (money +
+    holdings + candidates summary) and exits 0 without ever calling
+    `input()`. No approve / reject / skip is performed; the queue is left
+    untouched. This makes today.sh safe to invoke from
+    nightly_optimize.sh or any scheduled refresh that wants to capture
+    "what would the morning screen look like" without operator input.
+    """
+    args = set(sys.argv[1:])
+    return "--quiet" in args or "-q" in args
+
+
 def main() -> int:
+    quiet = _is_quiet_mode()
     banner = _drawdown_banner_if_needed()
     if banner:
         print(banner)
@@ -475,6 +491,18 @@ def main() -> int:
         verdict = director.get("verdict") or "no-data"
         print(f"Today: no candidates to approve.  (desk verdict: {verdict})")
         print("Nothing to do.  Run your dawn cycle to refresh and try again.")
+        return 0
+
+    if quiet:
+        # Cron / scripted invocation: print the candidate list, do not prompt.
+        # The queue is not mutated; operator picks up changes on next
+        # interactive run.
+        print(f"Today: {len(items)} candidate(s) waiting on you.")
+        print()
+        for it in items:
+            print(_candidate_line(it))
+        print()
+        print("Done. (--quiet: no decisions taken; run ./today.sh to act.)")
         return 0
 
     print(f"Today: {len(items)} candidate(s) waiting on you.")
