@@ -47,6 +47,7 @@ Generated artifacts beat durable docs when they disagree.
 | Formula integrity | `reports/math_verify_latest.txt` |
 | Secret hygiene | `reports/secret_hygiene_latest.txt` |
 | Paper bottleneck | `reports/paper_bottleneck_reducer_latest.txt` |
+| Paper blocker diagnosis | `reports/paper_blocker_swarm_latest.txt` |
 | Scenario learning | `reports/scenario_backtest_latest.txt` |
 | Live book posture | `reports/live_position_review_latest.txt` |
 | Capital readiness | `reports/capital_deployment_readiness_latest.txt` |

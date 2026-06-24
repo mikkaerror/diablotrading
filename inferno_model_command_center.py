@@ -53,6 +53,7 @@ CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
 ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 FAST_PAPER_COHORT_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
 EVIDENCE_GOAL_LOOP_FILE = DATA_DIR / "inferno_evidence_goal_loop.json"
@@ -159,6 +160,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "What paper evidence is next?",
         "artifact": "reports/paper_test_director_latest.txt",
         "owner": "shared",
+    },
+    {
+        "lane": "paper-blocker-swarm",
+        "question": "Which independent blocker lane is preventing paper progress?",
+        "artifact": "reports/paper_blocker_swarm_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "fast-paper",
@@ -653,6 +660,7 @@ def build_executive_summary(
         (
             "Evidence: "
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
+            f"blocker-swarm={metrics.get('paperBlockerSwarmVerdict')}; "
             f"goal-loop={metrics.get('evidenceGoalLoopVerdict')}; "
             f"fast-paper={metrics.get('fastPaperVerdict')}; "
             f"fast closed={metrics.get('fastPaperClosedLifetime', 0)}; "
@@ -686,6 +694,7 @@ def build_command_center() -> dict[str, Any]:
     account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
     evidence_goal_loop = load_json_file(EVIDENCE_GOAL_LOOP_FILE) or {}
@@ -735,6 +744,7 @@ def build_command_center() -> dict[str, Any]:
     next_actions.extend(live_book_packet.get("unlockChecklist") or [])
     next_actions.extend(live_review.get("nextActions") or [])
     next_actions.extend(paper_director.get("nextActions") or [])
+    next_actions.extend(paper_blocker_swarm.get("nextActions") or [])
     next_actions.extend(paper_loop.get("actions") or [])
     if not next_actions:
         next_actions.append("No explicit next actions were found; review the latest artifacts manually.")
@@ -752,6 +762,10 @@ def build_command_center() -> dict[str, Any]:
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
+        "paperBlockerSwarm": artifact_summary(
+            PAPER_BLOCKER_SWARM_FILE,
+            keys=("stage", "verdict", "generatedAt", "dominantLane", "researchOnly", "promotable"),
+        ),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
         "fastPaperCohort": artifact_summary(
             FAST_PAPER_COHORT_FILE,
@@ -843,6 +857,17 @@ def build_command_center() -> dict[str, Any]:
         "paperStageable": paper_counts.get("stageableNow", 0),
         "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
+        "paperBlockerSwarmVerdict": paper_blocker_swarm.get("verdict"),
+        "paperBlockerSwarmDominantLane": paper_blocker_swarm.get("dominantLane"),
+        "paperBlockerSwarmFixableByTooling": (
+            paper_blocker_swarm.get("counts") or {}
+        ).get("fixableByTooling", 0),
+        "paperBlockerSwarmFallbacks": (
+            paper_blocker_swarm.get("counts") or {}
+        ).get("strategyFallbackSuggested", 0),
+        "paperBlockerSwarmOutcomeReward": (
+            paper_blocker_swarm.get("rewards") or {}
+        ).get("outcomeReward"),
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
         "fastPaperVerdict": fast_paper.get("verdict"),
         "evidenceGoalLoopVerdict": evidence_goal_loop.get("verdict"),
@@ -1008,6 +1033,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_strike_cycle.sh",
             "./run_inferno_ops_maintenance.sh",
             "./run_inferno_paper_evidence_harvest.sh",
+            "./run_inferno_paper_blocker_swarm.sh",
             "./run_inferno_fast_paper_cohort.sh",
             "./run_inferno_paper_mark_to_market.sh",
             "./run_inferno_trade_management.sh",
@@ -1058,6 +1084,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
             str(ROOT / "reports/account_optimization_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
+            str(ROOT / "reports/paper_blocker_swarm_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
             str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
@@ -1139,6 +1166,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
+            f"- Paper blocker swarm: {status_value(status.get('paperBlockerSwarm') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Fast paper cohort: {status_value(status.get('fastPaperCohort') or {})}",
             f"- Evidence goal loop: {status_value(status.get('evidenceGoalLoop') or {})}",
@@ -1176,6 +1204,11 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper stageable: {metrics.get('paperStageable', 0)}",
             f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
+            f"- Paper blocker swarm: {metrics.get('paperBlockerSwarmVerdict') or '-'} | "
+            f"dominant {metrics.get('paperBlockerSwarmDominantLane') or '-'} | "
+            f"tooling-fixable {metrics.get('paperBlockerSwarmFixableByTooling', 0)} | "
+            f"fallbacks {metrics.get('paperBlockerSwarmFallbacks', 0)} | "
+            f"outcome reward {metrics.get('paperBlockerSwarmOutcomeReward')}",
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
             f"- Fast paper: {metrics.get('fastPaperVerdict') or '-'} | "
             f"opened {metrics.get('fastPaperSelectedToday', 0)} | "

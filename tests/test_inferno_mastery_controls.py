@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
+from datetime import date, datetime
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from inferno_dte_policy_analysis import build_dte_policy_analysis
 from inferno_expectancy_ledger import build_expectancy_ledger
@@ -269,7 +271,11 @@ class RiskControlTests(unittest.TestCase):
                 }
             ]
         }
-        payload = build_wheel_shadow(account=account, options=options)
+        with patch(
+            "inferno_wheel_shadow.local_now",
+            return_value=datetime(2026, 6, 22, 12, 0, tzinfo=ZoneInfo("America/Denver")),
+        ):
+            payload = build_wheel_shadow(account=account, options=options)
         row = payload["rows"][0]
         self.assertFalse(row["coveredCallEligible"])
         self.assertEqual(row["verdict"], "shadow-candidate")

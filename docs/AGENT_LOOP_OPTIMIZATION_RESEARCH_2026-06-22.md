@@ -70,6 +70,47 @@ The article’s broad security statistics and third-party tool claims were not
 used as evaluator inputs because they were unnecessary to implement the
 testable controls.
 
+### June 23 quant-loop application
+
+Roan's June 23, 2026 X post and linked article
+[“How To Use Loop Engineering To Build A Self-Improving Quant Trading System”](https://x.com/RohOnChain/article/2069056530960490835)
+adds a useful implementation pressure: keep the trading loop scoped to a small
+strategy surface, make signal generation and verification separate stages, and
+use hard stop criteria rather than model self-judgment.
+
+Applied here, the evidence goal loop now includes the universe cap-fit audit
+and paper-test director in the scheduled cycle. That turns candidate discovery
+into a verified loop stage instead of a separate ad hoc report. The value
+grader still refuses to count command success or artifact refresh as progress;
+it accepts only measurable paper-candidate discovery, hard-blocker reduction,
+closed exploratory evidence, or scored paper outcomes.
+
+### June 24 swarm application
+
+Moonshot/Kimi's K2.5 Agent Swarm work adds one useful principle for this desk:
+parallelism is only valuable when the orchestrator decomposes real independent
+work, each lane finishes, and the outcome reward stays tied to the end goal.
+The relevant reward split is:
+
+- coverage/instantiation reward: avoid collapsing back to one serial pass;
+- finish reward: avoid spawning pseudo-lanes that do not return verdicts;
+- outcome reward: count only whether the end goal actually improved.
+
+Inferno now applies that to paper evidence as `inferno_paper_blocker_swarm.py`.
+It is not a trading swarm. It is a blocker-diagnostic swarm over the paper
+director's blocked candidates. Lanes separately classify operator approval,
+data freshness, liquidity, strike construction, premium/evidence hurdles,
+capital fit, bounded fallback structures, and concentration/process warnings.
+The command center and doctor surface the result, while the evidence goal loop
+still awards accepted progress only for external fixed-evaluator deltas.
+
+Current application to the live paper bottleneck: MEI is not blocked because
+the universe is too expensive. The cap-fit audit says bounded structures fit.
+The blocker swarm instead separates the actionable research path: refresh the
+divergent tracker/Schwab data, keep poor quote-quality chains out of staging,
+and audit current-cap bounded alternatives without changing risk constants,
+the eligible universe, approval state, or broker authority.
+
 ### Fixed evaluators and keep/discard discipline
 
 Andrej Karpathy’s [autoresearch](https://github.com/karpathy/autoresearch) constrains the agent to a narrow editable surface, a fixed time budget, and a ground-truth metric. Its operating instructions establish a baseline, log every experiment, keep improvements, and discard regressions. The evaluator is not part of the agent’s editable scope.
@@ -169,11 +210,14 @@ starving the loop indefinitely.
 The score weights evidence by proximity to the promotion objective:
 
 - scored promotion outcome: 100 points;
+- newly verified stageable, auto-paper-selected, or approval-only paper candidate: 50 points;
 - fast-paper closure: 25 points;
 - scenario closure: 1 point, capped per cycle;
+- paper hard-blocker reduction: 1 point, capped per cycle;
 - dominant-blocker reduction: 1 point, capped per cycle.
 
-The score is diagnostic, not authority-bearing. Scenario or fast-paper points cannot satisfy the 30 scored-outcome promotion gate.
+The score is diagnostic, not authority-bearing. Candidate-discovery, scenario,
+or fast-paper points cannot satisfy the 30 scored-outcome promotion gate.
 
 ### Memory and feedback
 

@@ -22,6 +22,16 @@ liquidation prices. Its ledger is isolated from the true paper ledger. These
 trades accelerate exploratory learning but never reduce the 30-trade promotion
 gap.
 
+The scheduled evidence goal loop also runs the universe cap-fit audit,
+paper-test director, and paper blocker swarm. The swarm decomposes failed paper
+candidates into independent lanes: operator action, data freshness, liquidity,
+strike construction, premium hurdle, capital fit, alternative structure, and
+concentration/process. Its coverage and finish rewards are diagnostic only; the
+outcome reward remains zero until the fixed evaluator sees real paper progress.
+A run is productive only when that evaluator sees a real delta such as a newly
+verified paper candidate, a hard-blocker reduction, a closed fast-paper ticket,
+a closed scenario observation, or a scored paper outcome.
+
 2. Refresh the strike lane when the options plan itself needs rebuilding.
 
 ```bash
@@ -32,6 +42,7 @@ gap.
 
 ```bash
 ./run_inferno_paper_test_director.sh
+./run_inferno_paper_blocker_swarm.sh
 ./run_inferno_paper_bottleneck_reducer.sh
 ./run_inferno_fast_paper_cohort.sh
 ./run_inferno_scenario_evidence.sh
@@ -99,6 +110,12 @@ python3 inferno_doctor.py
 - `approval-bottleneck`: viable candidate exists, approval is missing.
 - `research-watch`: no clean ticket, but names are worth monitoring.
 - `no-viable-paper-tests`: slate is too weak, expensive, illiquid, or broken.
+- `fixable-blockers-present`: blocker swarm found a research/tooling route,
+  such as refreshing divergent data or auditing bounded fallback structures.
+- `operator-action-required`: blocker swarm found only human approval work;
+  unattended code must not approve or reject.
+- `market-quality-blocked`: blocker swarm found liquidity or premium-quality
+  blockers that should remain out of paper staging.
 - `scenario-slate-ready`: reducer produced the daily paper/shadow evidence slate.
 - `scenario-slate-thin`: reducer ran, but the tracker did not have enough clean
   non-Avoid rows to reach the scenario target.
@@ -108,6 +125,7 @@ python3 inferno_doctor.py
 ## Canonical Artifacts
 
 - [reports/paper_test_director_latest.txt](../reports/paper_test_director_latest.txt)
+- [reports/paper_blocker_swarm_latest.txt](../reports/paper_blocker_swarm_latest.txt)
 - [reports/paper_bottleneck_reducer_latest.txt](../reports/paper_bottleneck_reducer_latest.txt)
 - [reports/scenario_evidence_latest.txt](../reports/scenario_evidence_latest.txt)
 - [reports/scenario_backtest_latest.txt](../reports/scenario_backtest_latest.txt)

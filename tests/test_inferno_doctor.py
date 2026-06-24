@@ -17,6 +17,7 @@ from inferno_doctor import (
     launch_agent_status,
     live_position_review_status,
     model_command_center_status,
+    paper_blocker_swarm_status,
     paper_mark_to_market_status,
     paper_test_director_status,
     action_pulse_status,
@@ -217,6 +218,41 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                 }
             )
         self.assertFalse(ok)
+
+    def test_paper_blocker_swarm_status_accepts_fixable_research_payload(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = paper_blocker_swarm_status(
+                {
+                    "generatedAt": "2026-06-24T09:30:00-06:00",
+                    "verdict": "fixable-blockers-present",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "dominantLane": "data_freshness",
+                    "counts": {"fixableByTooling": 1},
+                    "rewards": {"outcomeReward": 0.0},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("fixable-blockers-present", detail)
+        self.assertIn("dominant=data_freshness", detail)
+        self.assertIn("tooling-fixable=1", detail)
+
+    def test_paper_blocker_swarm_status_rejects_outcome_reward_drift(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = paper_blocker_swarm_status(
+                {
+                    "generatedAt": "2026-06-24T09:30:00-06:00",
+                    "verdict": "fixable-blockers-present",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "counts": {"fixableByTooling": 1},
+                    "rewards": {"outcomeReward": 1.0},
+                }
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("outcome-reward=1.0", detail)
 
     def test_trade_management_status_accepts_actions_recommended(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

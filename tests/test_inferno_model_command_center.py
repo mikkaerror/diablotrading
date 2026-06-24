@@ -153,6 +153,25 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 json.dumps({"generatedAt": "2026-05-10T10:03:00-06:00", "verdict": "auto-paper-selected", "counts": {"stageableNow": 0, "autoPaperSelected": 2, "approvalOnly": 1}, "nextActions": ["Stage FLNC in paper only."]}),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_paper_blocker_swarm.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:05-06:00",
+                        "stage": "paper-blocker-swarm-research-only",
+                        "verdict": "fixable-blockers-present",
+                        "dominantLane": "data_freshness",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "counts": {
+                            "fixableByTooling": 1,
+                            "strategyFallbackSuggested": 1,
+                        },
+                        "rewards": {"outcomeReward": 0.0},
+                        "nextActions": ["Refresh divergent paper candidate data."],
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_paper_bottleneck_reducer.json").write_text(
                 json.dumps(
                     {
@@ -302,6 +321,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("CAPITAL_SCENARIO_MATRIX_FILE", data_dir / "inferno_capital_scenario_matrix.json"),
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
+                ("PAPER_BLOCKER_SWARM_FILE", data_dir / "inferno_paper_blocker_swarm.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
                 ("PAPER_MTM_FILE", data_dir / "inferno_paper_mark_to_market.json"),
                 ("TRADE_MANAGEMENT_FILE", data_dir / "inferno_trade_management.json"),
@@ -333,6 +353,10 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["whileAwayVerdict"], "monitor-only")
             self.assertEqual(payload["headlineMetrics"]["paperAutoSelected"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
+            self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmVerdict"], "fixable-blockers-present")
+            self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmDominantLane"], "data_freshness")
+            self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmFixableByTooling"], 1)
+            self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmFallbacks"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
             self.assertEqual(payload["headlineMetrics"]["paperMtmFetchStatus"], "disabled")
             self.assertEqual(payload["headlineMetrics"]["paperMtmOpenPositions"], 2)
@@ -366,12 +390,14 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
             self.assertIn("reports/while_away_latest.txt", "\n".join(payload["recommendedReads"]))
+            self.assertIn("reports/paper_blocker_swarm_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertIn("reports/paper_mark_to_market_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertIn("reports/trade_management_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertEqual(len(payload["activeMissions"]), 1)
             self.assertEqual(len(payload["recentNotes"]), 1)
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
             self.assertIn("Resolve GDS before sizing new capital.", payload["nextActions"])
+            self.assertIn("Refresh divergent paper candidate data.", payload["nextActions"])
             self.assertTrue(payload["nextActions"][0].startswith("M01:"))
             text_report = (reports_dir / "model_command_center_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Inferno Model Command Center", text_report)
@@ -385,6 +411,8 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Capital scenario matrix: all-blocked", text_report)
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
+            self.assertIn("Paper blocker swarm: fixable-blockers-present", text_report)
+            self.assertIn("dominant data_freshness", text_report)
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", text_report)
             self.assertIn("Paper mark-to-market: disabled", text_report)
             self.assertIn("Paper MTM: disabled | open 2 | marked 2", text_report)
@@ -405,6 +433,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/while_away_latest.txt", text_report)
             self.assertIn("reports/capital_scenario_matrix_latest.txt", text_report)
+            self.assertIn("reports/paper_blocker_swarm_latest.txt", text_report)
             self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
             self.assertIn("reports/trade_management_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)

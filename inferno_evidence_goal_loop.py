@@ -39,11 +39,14 @@ GOAL_LOOP_STAGE = "paper-evidence-goal-loop-research-only"
 AUTHORITY_FILE = DATA_DIR / "inferno_authority_manifest.json"
 PROCESS_FILE = DATA_DIR / "inferno_process_compliance.json"
 PAPER_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
+PAPER_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
 FAST_PAPER_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
 PERFORMANCE_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 PAPER_VELOCITY_FILE = DATA_DIR / "inferno_paper_velocity.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
+UNIVERSE_CAP_FIT_FILE = DATA_DIR / "inferno_universe_cap_fit.json"
 
 KNOWLEDGE_DIR = ROOT / "knowledge" / "agent-loop"
 KNOWLEDGE_RUNS_DIR = KNOWLEDGE_DIR / "runs"
@@ -68,6 +71,9 @@ CYCLE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("performance analytics", ("python3", "inferno_performance_analytics.py", "build")),
     ("strategy lab", ("python3", "inferno_strategy_lab.py", "build")),
     ("paper velocity", ("python3", "inferno_paper_velocity.py", "run")),
+    ("universe cap-fit audit", ("python3", "inferno_universe_cap_fit.py", "run")),
+    ("paper test director", ("python3", "inferno_paper_test_director.py", "build")),
+    ("paper blocker swarm", ("python3", "inferno_paper_blocker_swarm.py", "run")),
     ("process compliance verification", ("python3", "inferno_process_compliance.py", "build")),
     ("authority verification", ("python3", "inferno_authority_controller.py", "build")),
 )
@@ -76,11 +82,14 @@ ARTIFACT_PATHS: dict[str, Path] = {
     "authority": AUTHORITY_FILE,
     "processCompliance": PROCESS_FILE,
     "paperEvidenceLoop": PAPER_LOOP_FILE,
+    "paperDirector": PAPER_DIRECTOR_FILE,
+    "paperBlockerSwarm": PAPER_BLOCKER_SWARM_FILE,
     "fastPaper": FAST_PAPER_FILE,
     "performance": PERFORMANCE_FILE,
     "strategyLab": STRATEGY_LAB_FILE,
     "paperVelocity": PAPER_VELOCITY_FILE,
     "scenarioEvidence": SCENARIO_EVIDENCE_FILE,
+    "universeCapFit": UNIVERSE_CAP_FIT_FILE,
 }
 
 
@@ -240,6 +249,19 @@ def verify_cycle(
         if fast_paper.get("brokerSubmitAllowed") is not False:
             errors.append("fast-paper artifact lost brokerSubmitAllowed=false")
 
+    paper_swarm = artifacts.get("paperBlockerSwarm") or {}
+    if paper_swarm:
+        if paper_swarm.get("researchOnly") is not True:
+            errors.append("paper-blocker-swarm artifact lost researchOnly=true")
+        if paper_swarm.get("promotable") is not False:
+            errors.append("paper-blocker-swarm artifact lost promotable=false")
+        if paper_swarm.get("liveTradingAllowed") is not False:
+            errors.append("paper-blocker-swarm artifact lost liveTradingAllowed=false")
+        if paper_swarm.get("brokerSubmitAllowed") is not False:
+            errors.append("paper-blocker-swarm artifact lost brokerSubmitAllowed=false")
+        if _number((paper_swarm.get("rewards") or {}).get("outcomeReward")) != 0:
+            errors.append("paper-blocker-swarm outcomeReward must remain zero")
+
     return {
         "passed": not errors,
         "errors": errors,
@@ -280,10 +302,15 @@ def progress_snapshot(
     current = now or local_now()
     performance = artifacts.get("performance") or {}
     paper_loop = artifacts.get("paperEvidenceLoop") or {}
+    paper_director = artifacts.get("paperDirector") or {}
+    paper_blocker_swarm = artifacts.get("paperBlockerSwarm") or {}
     fast_paper = artifacts.get("fastPaper") or {}
     strategy_lab = artifacts.get("strategyLab") or {}
     velocity = artifacts.get("paperVelocity") or {}
     scenario_evidence = artifacts.get("scenarioEvidence") or {}
+    universe_cap_fit = artifacts.get("universeCapFit") or {}
+    paper_director_counts = paper_director.get("counts") or {}
+    paper_swarm_counts = paper_blocker_swarm.get("counts") or {}
     fast_counts = fast_paper.get("counts") or {}
     scenario_counts = scenario_evidence.get("counts") or {}
     dominant_blocker, dominant_blocker_count = _dominant_blocker(performance)
@@ -303,6 +330,28 @@ def progress_snapshot(
             ((paper_loop.get("counts") or {}).get("remainingForPromotion")) or 0
         ),
         "paperLoopVerdict": paper_loop.get("verdict"),
+        "paperDirectorVerdict": paper_director.get("verdict"),
+        "paperStageableNow": int(_number(paper_director_counts.get("stageableNow"))),
+        "paperAutoSelected": int(_number(paper_director_counts.get("autoPaperSelected"))),
+        "paperApprovalOnly": int(_number(paper_director_counts.get("approvalOnly"))),
+        "paperHardBlocked": int(_number(paper_director_counts.get("hardBlocked"))),
+        "paperBlockerSwarmVerdict": paper_blocker_swarm.get("verdict"),
+        "paperBlockerSwarmDominantLane": paper_blocker_swarm.get("dominantLane"),
+        "paperBlockerSwarmFixableByTooling": int(
+            _number(paper_swarm_counts.get("fixableByTooling"))
+        ),
+        "paperBlockerSwarmMarketDataBlocked": int(
+            _number(paper_swarm_counts.get("marketDataBlocked"))
+        ),
+        "paperBlockerSwarmFallbacks": int(
+            _number(paper_swarm_counts.get("strategyFallbackSuggested"))
+        ),
+        "paperBlockerSwarmOutcomeReward": _number(
+            (paper_blocker_swarm.get("rewards") or {}).get("outcomeReward")
+        ),
+        "verifiedPaperCandidates": int(_number(paper_director_counts.get("stageableNow")))
+        + int(_number(paper_director_counts.get("autoPaperSelected")))
+        + int(_number(paper_director_counts.get("approvalOnly"))),
         "fastPaperVerdict": fast_paper.get("verdict"),
         "fastPaperCounts": fast_counts,
         "fastPaperClosedLifetime": int(
@@ -318,6 +367,10 @@ def progress_snapshot(
         "projectedWeeksToPromotion": (velocity.get("velocity") or {}).get(
             "projectedWeeksToPromotion"
         ),
+        "capFitVerdict": universe_cap_fit.get("verdict"),
+        "capFitAnyFits": int(_number((universe_cap_fit.get("counts") or {}).get("anyFits"))),
+        "capFitTotal": int(_number((universe_cap_fit.get("counts") or {}).get("total"))),
+        "capFitRate": universe_cap_fit.get("fitRate"),
         "dominantBlocker": dominant_blocker,
         "dominantBlockerCount": dominant_blocker_count,
     }
@@ -342,6 +395,16 @@ def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, A
         int(_number(after.get("scenarioObservationsClosed")))
         - int(_number(before.get("scenarioObservationsClosed"))),
     )
+    verified_candidate_delta = max(
+        0,
+        int(_number(after.get("verifiedPaperCandidates")))
+        - int(_number(before.get("verifiedPaperCandidates"))),
+    )
+    paper_hard_blocked_reduction = max(
+        0,
+        int(_number(before.get("paperHardBlocked")))
+        - int(_number(after.get("paperHardBlocked"))),
+    )
     blocker_reduction = 0
     if (
         before.get("dominantBlocker")
@@ -360,6 +423,8 @@ def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, A
         promotion_evidence_delta * 100
         + fast_closed_delta * 25
         + min(scenario_closed_delta, 10)
+        + verified_candidate_delta * 50
+        + min(paper_hard_blocked_reduction, 10)
         + min(blocker_reduction, 10)
     )
     return {
@@ -368,6 +433,8 @@ def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, A
         "promotionEvidenceDelta": promotion_evidence_delta,
         "fastPaperClosedDelta": fast_closed_delta,
         "scenarioObservationsClosedDelta": scenario_closed_delta,
+        "verifiedPaperCandidateDelta": verified_candidate_delta,
+        "paperHardBlockedReduction": paper_hard_blocked_reduction,
         "dominantBlockerReduction": blocker_reduction,
         "weeklyCloseRateDelta": weekly_rate_delta,
         "acceptedProgressPoints": accepted_points,
@@ -384,10 +451,24 @@ def work_signature(snapshot: dict[str, Any], *, now: datetime | None = None) -> 
         "fastPaperVerdict": snapshot.get("fastPaperVerdict"),
         "fastPaperClosedLifetime": snapshot.get("fastPaperClosedLifetime"),
         "fastPaperOpen": snapshot.get("fastPaperOpen"),
+        "paperDirectorVerdict": snapshot.get("paperDirectorVerdict"),
+        "verifiedPaperCandidates": snapshot.get("verifiedPaperCandidates"),
+        "paperHardBlocked": snapshot.get("paperHardBlocked"),
+        "paperBlockerSwarmVerdict": snapshot.get("paperBlockerSwarmVerdict"),
+        "paperBlockerSwarmDominantLane": snapshot.get("paperBlockerSwarmDominantLane"),
+        "paperBlockerSwarmFixableByTooling": snapshot.get(
+            "paperBlockerSwarmFixableByTooling"
+        ),
+        "paperBlockerSwarmMarketDataBlocked": snapshot.get(
+            "paperBlockerSwarmMarketDataBlocked"
+        ),
+        "paperBlockerSwarmFallbacks": snapshot.get("paperBlockerSwarmFallbacks"),
         "eligibleFastPaperExits": snapshot.get("eligibleFastPaperExits"),
         "nextFastPaperExitEligibleDate": snapshot.get("nextFastPaperExitEligibleDate"),
         "scenarioObservationsClosed": snapshot.get("scenarioObservationsClosed"),
         "scenarioObservationsOpen": snapshot.get("scenarioObservationsOpen"),
+        "capFitAnyFits": snapshot.get("capFitAnyFits"),
+        "capFitTotal": snapshot.get("capFitTotal"),
         "dominantBlocker": snapshot.get("dominantBlocker"),
         "dominantBlockerCount": snapshot.get("dominantBlockerCount"),
     }
@@ -929,16 +1010,30 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- scored paper tickets: {progress.get('scoredPaperTickets')}",
         f"- remaining for promotion: {progress.get('remainingForPromotion')}",
         f"- paper loop: {progress.get('paperLoopVerdict')}",
+        f"- paper director: {progress.get('paperDirectorVerdict')} | "
+        f"verified candidates {progress.get('verifiedPaperCandidates')} "
+        f"(stageable {progress.get('paperStageableNow')}, "
+        f"auto {progress.get('paperAutoSelected')}, "
+        f"approval {progress.get('paperApprovalOnly')})",
+        f"- paper blocker swarm: {progress.get('paperBlockerSwarmVerdict')} | "
+        f"dominant {progress.get('paperBlockerSwarmDominantLane')} | "
+        f"tooling-fixable {progress.get('paperBlockerSwarmFixableByTooling')} | "
+        f"fallbacks {progress.get('paperBlockerSwarmFallbacks')} | "
+        f"outcome reward {progress.get('paperBlockerSwarmOutcomeReward')}",
         f"- fast paper: {progress.get('fastPaperVerdict')}",
         f"- fast-paper closed lifetime: {progress.get('fastPaperClosedLifetime')}",
         f"- scenario observations closed: {progress.get('scenarioObservationsClosed')}",
+        f"- universe cap fit: {progress.get('capFitVerdict')} | "
+        f"{progress.get('capFitAnyFits')}/{progress.get('capFitTotal')} fit",
         f"- dominant blocker: {progress.get('dominantBlocker')} ({progress.get('dominantBlockerCount')})",
         f"- strategy lab: {progress.get('strategyLabVerdict')}",
         "",
         "Fixed-evaluator delta:",
         f"- promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
+        f"- verified paper candidates: +{delta.get('verifiedPaperCandidateDelta', 0)}",
         f"- fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
         f"- scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
+        f"- paper hard-blocked reduction: {delta.get('paperHardBlockedReduction', 0)}",
         f"- blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
         f"- accepted progress points: {delta.get('acceptedProgressPoints', 0)}",
         "",
@@ -1119,7 +1214,7 @@ def _update_state(
     cadence = payload.get("cadence") or prior.get("cadence") or {}
     economics = loop_economics(runs)
     return {
-        "version": 4,
+        "version": 6,
         "updatedAt": payload.get("generatedAt"),
         "lastVerdict": payload.get("verdict"),
         "lastValueClass": payload.get("valueClass"),
@@ -1169,6 +1264,7 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
         "verification_passed": (payload.get("verification") or {}).get("passed"),
         "accepted_progress_points": delta.get("acceptedProgressPoints", 0),
         "promotion_evidence_delta": delta.get("promotionEvidenceDelta", 0),
+        "verified_paper_candidate_delta": delta.get("verifiedPaperCandidateDelta", 0),
         "duration_seconds": payload.get("durationSeconds", 0),
         "commands_executed": payload.get("commandsExecuted", 0),
         "dominant_blocker": progress.get("dominantBlocker"),
@@ -1203,16 +1299,21 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             "## Evidence delta",
             "",
             f"- Promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
+            f"- Verified paper candidates: +{delta.get('verifiedPaperCandidateDelta', 0)}",
             f"- Fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
             f"- Scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
+            f"- Paper hard-blocked reduction: {delta.get('paperHardBlockedReduction', 0)}",
             f"- Dominant blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
             "",
             "## Current state",
             "",
             f"- Scored paper outcomes: {progress.get('scoredPaperTickets')}",
             f"- Remaining for promotion: {progress.get('remainingForPromotion')}",
+            f"- Paper director: {progress.get('paperDirectorVerdict')} with {progress.get('verifiedPaperCandidates')} verified candidates",
+            f"- Paper blocker swarm: {progress.get('paperBlockerSwarmVerdict')} | dominant lane {progress.get('paperBlockerSwarmDominantLane')} | tooling-fixable {progress.get('paperBlockerSwarmFixableByTooling')}",
             f"- Fast-paper open / closed: {progress.get('fastPaperOpen')} / {progress.get('fastPaperClosedLifetime')}",
             f"- Scenario observations open / closed: {progress.get('scenarioObservationsOpen')} / {progress.get('scenarioObservationsClosed')}",
+            f"- Universe cap fit: {progress.get('capFitAnyFits')}/{progress.get('capFitTotal')} fit ({progress.get('capFitVerdict')})",
             f"- Dominant blocker: {progress.get('dominantBlocker')} ({progress.get('dominantBlockerCount')})",
             f"- Next fast-paper exit eligibility: {progress.get('nextFastPaperExitEligibleDate')}",
             "",

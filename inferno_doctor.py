@@ -96,6 +96,7 @@ MARKET_CONTEXT_AUDIT_FILE = ROOT / "data" / "inferno_market_context_audit.json"
 TICKER_UNIVERSE_AUDIT_FILE = ROOT / "data" / "inferno_ticker_universe_audit.json"
 DATA_READINESS_AUDIT_FILE = ROOT / "data" / "inferno_data_readiness_audit.json"
 PAPER_TEST_DIRECTOR_FILE = ROOT / "data" / "inferno_paper_test_director.json"
+PAPER_BLOCKER_SWARM_FILE = ROOT / "data" / "inferno_paper_blocker_swarm.json"
 PAPER_BOTTLENECK_REDUCER_FILE = ROOT / "data" / "inferno_paper_bottleneck_reducer.json"
 PAPER_EVIDENCE_LOOP_FILE = ROOT / "data" / "inferno_paper_evidence_loop.json"
 PAPER_EXIT_AUDIT_FILE = ROOT / "data" / "inferno_paper_exit_audit.json"
@@ -570,6 +571,13 @@ def _research_module_status(report: dict, ok_verdicts: set[str], label_keys: tup
     return ok, detail
 
 
+def _float_value(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def outcome_attribution_status(report: dict) -> tuple[bool, str]:
     return _research_module_status(
         report,
@@ -753,6 +761,38 @@ def paper_velocity_status(report: dict) -> tuple[bool, str]:
             "on-track",
             "promotion-ready",
         },
+    )
+
+
+def paper_blocker_swarm_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the paper blocker swarm diagnostic.
+
+    All published verdicts are research outcomes. The doctor checks freshness,
+    non-promotable posture, and the outcome-reward boundary; it does not treat
+    market-quality or no-tooling-fix blockers as system failures.
+    """
+    if not report:
+        return False, "missing"
+    ok, detail = _research_module_status(
+        report,
+        ok_verdicts={
+            "no-blocked-candidates",
+            "fixable-blockers-present",
+            "operator-action-required",
+            "market-data-blocked",
+            "market-quality-blocked",
+            "structure-blocked",
+            "no-tooling-fix",
+        },
+    )
+    outcome_reward = (report.get("rewards") or {}).get("outcomeReward")
+    if _float_value(outcome_reward) != 0:
+        return False, f"{detail} | outcome-reward={outcome_reward}"
+    counts = report.get("counts") or {}
+    return (
+        ok,
+        f"{detail} | dominant={report.get('dominantLane')} | "
+        f"tooling-fixable={counts.get('fixableByTooling', 0)}",
     )
 
 
@@ -1821,6 +1861,12 @@ def main() -> int:
     paper_director_ok, paper_director_detail = paper_test_director_status(paper_test_director, paper_reducer, now)
     lines.append(summarize_status("Paper test director", paper_director_ok, paper_director_detail))
     if paper_test_director and not paper_director_ok:
+        warnings += 1
+
+    paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
+    paper_blocker_swarm_ok, paper_blocker_swarm_detail = paper_blocker_swarm_status(paper_blocker_swarm)
+    lines.append(summarize_status("Paper blocker swarm", paper_blocker_swarm_ok, paper_blocker_swarm_detail))
+    if paper_blocker_swarm and not paper_blocker_swarm_ok:
         warnings += 1
 
     paper_reducer_ok = paper_reducer_today and paper_reducer.get("verdict") in {

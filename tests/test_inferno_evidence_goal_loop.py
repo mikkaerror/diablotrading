@@ -35,6 +35,31 @@ def safe_artifacts() -> dict:
             "verdict": "evidence-building",
             "counts": {"remainingForPromotion": 29},
         },
+        "paperDirector": {
+            "generatedAt": generated,
+            "verdict": "no-viable-paper-tests",
+            "counts": {
+                "stageableNow": 0,
+                "autoPaperSelected": 0,
+                "approvalOnly": 0,
+                "hardBlocked": 2,
+            },
+        },
+        "paperBlockerSwarm": {
+            "generatedAt": generated,
+            "verdict": "fixable-blockers-present",
+            "dominantLane": "data_freshness",
+            "counts": {
+                "fixableByTooling": 1,
+                "marketDataBlocked": 1,
+                "strategyFallbackSuggested": 1,
+            },
+            "rewards": {"outcomeReward": 0.0},
+            "researchOnly": True,
+            "promotable": False,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+        },
         "fastPaper": {
             "generatedAt": generated,
             "verdict": "cycled-and-seeded",
@@ -60,6 +85,12 @@ def safe_artifacts() -> dict:
             "generatedAt": generated,
             "counts": {"open": 2, "closed": 10},
         },
+        "universeCapFit": {
+            "generatedAt": generated,
+            "verdict": "universe-well-suited-to-cap",
+            "counts": {"anyFits": 146, "total": 146},
+            "fitRate": 1.0,
+        },
     }
 
 
@@ -80,6 +111,15 @@ class EvidenceGoalLoopTests(unittest.TestCase):
 
         self.assertFalse(result["passed"])
         self.assertIn("liveTradingAllowed is not hard-false", result["errors"])
+
+    def test_verifier_rejects_paper_swarm_outcome_reward_drift(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["paperBlockerSwarm"]["rewards"]["outcomeReward"] = 1.0
+
+        result = loop.verify_cycle(artifacts, [], now=NOW)
+
+        self.assertFalse(result["passed"])
+        self.assertIn("paper-blocker-swarm outcomeReward must remain zero", result["errors"])
 
     def test_precheck_requires_paper_evidence_authority(self) -> None:
         artifacts = safe_artifacts()
@@ -190,6 +230,30 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertEqual(payload["progressDelta"]["promotionEvidenceDelta"], 1)
         self.assertEqual(payload["progressDelta"]["acceptedProgressPoints"], 100)
 
+    def test_goal_loop_marks_verified_paper_candidate_gain_productive(self) -> None:
+        baseline = safe_artifacts()
+        improved = safe_artifacts()
+        improved["paperDirector"]["verdict"] = "auto-paper-selected"
+        improved["paperDirector"]["counts"]["autoPaperSelected"] = 1
+        improved["paperDirector"]["counts"]["hardBlocked"] = 1
+        loads = iter([baseline, improved])
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=lambda: next(loads),
+            state_loader=lambda: {},
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "productive")
+        self.assertEqual(payload["valueClass"], "productive")
+        self.assertEqual(payload["progressDelta"]["verifiedPaperCandidateDelta"], 1)
+        self.assertEqual(payload["progressDelta"]["paperHardBlockedReduction"], 1)
+        self.assertEqual(payload["progressDelta"]["acceptedProgressPoints"], 51)
+
     def test_goal_loop_skips_recent_duplicate_when_no_useful_work_is_ready(self) -> None:
         artifacts = safe_artifacts()
         snapshot = loop.progress_snapshot(artifacts, now=NOW)
@@ -240,7 +304,7 @@ class EvidenceGoalLoopTests(unittest.TestCase):
 
         state = loop._update_state(payload, existing=prior)
 
-        self.assertEqual(state["version"], 4)
+        self.assertEqual(state["version"], 6)
         self.assertEqual(state["rolling10"]["productiveRunRate"], 0.0)
         self.assertEqual(state["rolling10"]["consecutiveNoProgressRuns"], 2)
         self.assertEqual(state["cadence"]["intervalMinutes"], 60)
