@@ -39,6 +39,7 @@ SCALING_STATE = DATA / "inferno_capital_scaling_state.json"
 SCALING_REPORT = DATA / "inferno_capital_scaling.json"
 DIRECTOR = DATA / "inferno_paper_test_director.json"
 LIVE_POSITIONS = DATA / "inferno_live_position_review.json"
+FUNNEL_DIAG = DATA / "inferno_funnel_diagnostic.json"
 DECISIONS_LOG = DATA / "operator_decisions.csv"
 BROKER_TRUTH_MAX_AGE_HOURS = 36.0
 
@@ -461,6 +462,36 @@ def run_one(item: dict) -> str:
     return "skip"
 
 
+def _funnel_context_lines() -> list[str]:
+    """One-block explainer when the funnel produced zero candidates.
+
+    Reads `data/inferno_funnel_diagnostic.json` (shipped by
+    `inferno_funnel_diagnostic.py`, runs in `nightly_optimize.sh`).
+    Surfaces the bias verdict and missed-opportunity counts so the
+    operator sees WHY there are no candidates, not just that there
+    aren't any. Silent when the diagnostic isn't present.
+    """
+    fd = _load_json(FUNNEL_DIAG)
+    if not fd:
+        return []
+    verdict = fd.get("biasVerdict")
+    counts = fd.get("counts") or {}
+    cs = counts.get("creditSpread") or 0
+    wh = counts.get("wheel") or 0
+    ss = counts.get("sweetSpot") or 0
+    if not verdict:
+        return []
+    lines = [f"Funnel: {verdict}"]
+    if cs or wh or ss:
+        lines.append(
+            f"  Missed in universe: {cs} credit-spread / {wh} wheel / {ss} sweet-spot (7-14 DTE)"
+        )
+        lines.append(
+            "  See reports/funnel_diagnostic_latest.txt for the per-ticker list."
+        )
+    return lines
+
+
 def _is_quiet_mode() -> bool:
     """Detect --quiet / -q flag for cron / scripted invocation.
 
@@ -490,6 +521,8 @@ def main() -> int:
         director = _load_json(DIRECTOR)
         verdict = director.get("verdict") or "no-data"
         print(f"Today: no candidates to approve.  (desk verdict: {verdict})")
+        for line in _funnel_context_lines():
+            print(line)
         print("Nothing to do.  Run your dawn cycle to refresh and try again.")
         return 0
 

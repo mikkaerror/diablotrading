@@ -106,6 +106,7 @@ run_step "DTE policy analysis"   "$PYTHON" inferno_dte_policy_analysis.py build
 run_step "behavior audit"        "$PYTHON" inferno_trading_behavior_audit.py build
 run_step "portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
 run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
+run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
 run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
 
 # 4) meta surfaces
