@@ -216,6 +216,27 @@ EXECUTION_ALLOWED_SETUPS = (
     "Iron Condor",
 )
 
+# ---------------------------------------------------------------------------
+# Candidate conviction gates — single source of truth.
+#
+# These thresholds decide which tracker rows are "live-quality" candidates.
+# They were previously redefined byte-for-byte in both
+# inferno_paper_bootstrap.py and inferno_operator_briefing.py and kept in sync
+# by hand (the modules carried "must match" comments). That manual-sync smell
+# is removed by importing from here. Defaults are unchanged.
+#
+# CANDIDATE_MIN_READINESS is a threshold on the 0–100 ``readiness`` percent
+# (derived upstream via ``score_to_percent(readyScore, ceiling=2.5)``), NOT on
+# the raw ``readyScore`` column from the sheet (which is on a 0–~4 scale).
+#
+# The frontend mirror lives in frontend/modules/dataProcessor.js convictionConfig;
+# keep that JS copy in sync with these values until it can consume them directly.
+# ---------------------------------------------------------------------------
+CANDIDATE_MIN_READINESS = int(os.environ.get("INFERNO_MIN_READY_SCORE", "72"))
+CANDIDATE_MIN_CONFIDENCE = int(os.environ.get("INFERNO_MIN_CONFIDENCE", "2"))
+CANDIDATE_MAX_DAYS_UNTIL_EARNINGS = int(os.environ.get("INFERNO_MAX_DAYS_UNTIL_EARNINGS", "21"))
+CANDIDATE_BANNED_SETUPS = frozenset({"Avoid"})
+
 AUTOMATION_WINDOW_START = "05:55"
 AUTOMATION_WINDOW_END = "09:00"
 WATCHDOG_WINDOW_END = "09:30"

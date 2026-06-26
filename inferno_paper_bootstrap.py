@@ -86,7 +86,13 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from inferno_config import local_now
+from inferno_config import (
+    CANDIDATE_BANNED_SETUPS,
+    CANDIDATE_MAX_DAYS_UNTIL_EARNINGS,
+    CANDIDATE_MIN_CONFIDENCE,
+    CANDIDATE_MIN_READINESS,
+    local_now,
+)
 from inferno_io import atomic_write_json, atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
@@ -102,16 +108,15 @@ MAX_BOOTSTRAP_TICKETS_PER_RUN = int(os.environ.get("INFERNO_PB_MAX_PER_RUN", "5"
 MAX_OPEN_BOOTSTRAP_TICKETS = int(os.environ.get("INFERNO_PB_MAX_OPEN", "10"))
 BOOTSTRAP_TICKET_DOLLARS = float(os.environ.get("INFERNO_PB_TICKET_DOLLARS", "50.0"))
 
-# Live conviction gates — kept identical to inferno_operator_briefing so the
-# scoring stays consistent. Loosening these here would only loosen *paper*
-# seeding; live gating is unchanged.
-# MIN_READY_SCORE is a threshold on the 0–100 ``readiness`` percent (derived
-# upstream via ``score_to_percent(readyScore, ceiling=2.5)``), NOT on the raw
-# ``readyScore`` column from the sheet (which is on a 0–~4 scale).
-MIN_READY_SCORE = 72
-MIN_CONFIDENCE = 2
-MAX_DAYS_UNTIL_EARNINGS = 21
-BANNED_SETUPS = frozenset({"Avoid"})
+# Live conviction gates — imported from inferno_config (single source of
+# truth) so paper seeding and the operator briefing can never silently drift
+# apart. Loosening these would only loosen *paper* seeding; live gating is
+# unchanged. See inferno_config.CANDIDATE_* for the definitions and the note
+# on the 0–100 readiness percent scale.
+MIN_READY_SCORE = CANDIDATE_MIN_READINESS
+MIN_CONFIDENCE = CANDIDATE_MIN_CONFIDENCE
+MAX_DAYS_UNTIL_EARNINGS = CANDIDATE_MAX_DAYS_UNTIL_EARNINGS
+BANNED_SETUPS = CANDIDATE_BANNED_SETUPS
 
 
 # ---------------------------------------------------------------------------

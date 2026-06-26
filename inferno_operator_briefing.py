@@ -39,7 +39,13 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
 
-from inferno_config import local_now
+from inferno_config import (
+    CANDIDATE_BANNED_SETUPS,
+    CANDIDATE_MAX_DAYS_UNTIL_EARNINGS,
+    CANDIDATE_MIN_CONFIDENCE,
+    CANDIDATE_MIN_READINESS,
+    local_now,
+)
 from inferno_io import atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
@@ -48,14 +54,14 @@ OPERATOR_BRIEFING_TEXT_FILE = REPORTS_DIR / "operator_briefing_latest.txt"
 OPERATOR_BRIEFING_HTML_FILE = REPORTS_DIR / "operator_briefing_latest.html"
 OPERATOR_BRIEFING_STAGE = "operator-briefing-research-only"
 
-# Conviction gates — must match frontend/modules/dataProcessor.js convictionConfig.
-# MIN_READY_SCORE is a threshold on the 0–100 ``readiness`` percent (derived
-# upstream via ``score_to_percent(readyScore, ceiling=2.5)``), NOT on the raw
-# ``readyScore`` column from the sheet (which is on a 0–~4 scale).
-MIN_READY_SCORE = 72
-MIN_CONFIDENCE = 2
-MAX_DAYS_UNTIL_EARNINGS = 21
-BANNED_SETUPS = frozenset({"Avoid"})
+# Conviction gates — imported from inferno_config (single source of truth).
+# Still must match frontend/modules/dataProcessor.js convictionConfig until the
+# JS can consume these directly. See inferno_config.CANDIDATE_* for definitions
+# and the note on the 0–100 readiness percent scale.
+MIN_READY_SCORE = CANDIDATE_MIN_READINESS
+MIN_CONFIDENCE = CANDIDATE_MIN_CONFIDENCE
+MAX_DAYS_UNTIL_EARNINGS = CANDIDATE_MAX_DAYS_UNTIL_EARNINGS
+BANNED_SETUPS = CANDIDATE_BANNED_SETUPS
 
 DEFAULT_CASH = float(os.environ.get("INFERNO_OPERATOR_CASH", "1050"))
 DEFAULT_MAX_TICKETS = int(os.environ.get("INFERNO_OPERATOR_MAX_TICKETS", "5"))

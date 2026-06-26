@@ -52,6 +52,7 @@ STRATEGY_ALTERNATIVE_PRICING_STAGE = "strategy-alternative-pricing-research-only
 
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
+PAPER_VARIANT_SCANNER_FILE = DATA_DIR / "inferno_paper_variant_scanner.json"
 
 DEFAULT_LIMIT = 4
 DEFAULT_VARIANTS_PER_TICKER = 2
@@ -171,11 +172,45 @@ def priceable_strategy_rows(item: dict[str, Any], *, variants_per_ticker: int = 
     return rows
 
 
+def scanner_candidate_rows(paper_variant_scanner: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return scanner candidates normalized to the scorer candidate shape."""
+    if not paper_variant_scanner:
+        return []
+    rows = [
+        item
+        for item in paper_variant_scanner.get("pricingCandidates") or []
+        if isinstance(item, dict) and norm(item.get("recommendedStrategy")) in PRICEABLE_RECOMMENDATIONS
+    ]
+    rows.sort(
+        key=lambda item: (
+            -(number(item.get("sourceAlternativeScore"), 0.0) or 0.0),
+            norm(item.get("ticker")),
+        )
+    )
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(rows, start=1):
+        normalized.append(
+            {
+                **item,
+                "recommendedStrategy": norm(item.get("recommendedStrategy")),
+                "sourceRecommendedStrategy": text(item.get("sourceRecommendedStrategy")) or "PAPER_VARIANT_SCANNER",
+                "recommendationVerdict": text(item.get("recommendationVerdict")) or "paper-variant-research",
+                "recommendationReason": text(item.get("recommendationReason")) or "paper variant scanner candidate",
+                "candidateStrategyRank": int(number(item.get("candidateStrategyRank"), idx) or idx),
+                "fallbackVariant": bool(item.get("fallbackVariant", False)),
+                "sourceAlternativeWarnings": item.get("sourceAlternativeWarnings") or [],
+                "paperVariantOnly": True,
+            }
+        )
+    return normalized
+
+
 def source_candidates(
     scorer: dict[str, Any],
     *,
     limit: int = DEFAULT_LIMIT,
     variants_per_ticker: int = 1,
+    paper_variant_scanner: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Return prioritized non-call strategy variants for pricing."""
     rows = [item for item in scorer.get("scorecards") or [] if isinstance(item, dict)]
@@ -186,8 +221,34 @@ def source_candidates(
     ]
     priceable_scorecards.sort(key=scorecard_priority)
     candidates: list[dict[str, Any]] = []
+    selected_tickers: set[str] = set()
+    selected_keys: set[tuple[str, str]] = set()
     for item in priceable_scorecards[: max(0, limit)]:
-        candidates.extend(priceable_strategy_rows(item, variants_per_ticker=variants_per_ticker))
+        ticker = norm(item.get("ticker"))
+        rows_for_ticker = priceable_strategy_rows(item, variants_per_ticker=variants_per_ticker)
+        if rows_for_ticker and ticker:
+            selected_tickers.add(ticker)
+        for row in rows_for_ticker:
+            key = (norm(row.get("ticker")), norm(row.get("recommendedStrategy")))
+            if key[0] and key[1] and key not in selected_keys:
+                selected_keys.add(key)
+                candidates.append(row)
+    remaining_ticker_slots = max(0, limit - len(selected_tickers))
+    if remaining_ticker_slots <= 0:
+        return candidates
+
+    added_scanner_tickers: set[str] = set()
+    for row in scanner_candidate_rows(paper_variant_scanner):
+        ticker = norm(row.get("ticker"))
+        strategy = norm(row.get("recommendedStrategy"))
+        key = (ticker, strategy)
+        if not ticker or not strategy or key in selected_keys or ticker in selected_tickers:
+            continue
+        if len(added_scanner_tickers) >= remaining_ticker_slots:
+            break
+        selected_keys.add(key)
+        added_scanner_tickers.add(ticker)
+        candidates.append(row)
     return candidates
 
 
@@ -200,12 +261,20 @@ def trend_label(value: Any) -> str:
 def intent_from_candidate(candidate: dict[str, Any], reducer_item: dict[str, Any] | None) -> dict[str, Any]:
     """Build an in-memory strike-selector intent from scorer/reducer context."""
     reducer_item = reducer_item or {}
-    market = dict(reducer_item.get("marketContextSummary") or {})
-    trend = trend_label(candidate.get("trend") or market.get("trend"))
+    reducer_market = dict(reducer_item.get("marketContextSummary") or {})
+    candidate_market = dict(candidate.get("marketContextSummary") or {})
+    trend = trend_label(reducer_market.get("trend") or candidate_market.get("trend") or candidate.get("trend"))
     price = number(reducer_item.get("price") or reducer_item.get("baselineUnderlyingPrice"))
     if price is None:
-        price = number(candidate.get("baselineUnderlyingPrice"))
-    atr_percent = number(candidate.get("atrPercent") or market.get("atrPercent"))
+        price = number(candidate.get("price") or candidate.get("baselineUnderlyingPrice"))
+    atr_percent = number(
+        reducer_market.get("atrPercent")
+        or candidate_market.get("atrPercent")
+        or candidate.get("atrPercent")
+    )
+    days_until_earnings = reducer_item.get("daysUntilEarnings")
+    if days_until_earnings is None:
+        days_until_earnings = candidate.get("daysUntilEarnings")
     return {
         "ticker": norm(candidate.get("ticker")),
         "setupRec": "Alternative Research",
@@ -213,19 +282,27 @@ def intent_from_candidate(candidate: dict[str, Any], reducer_item: dict[str, Any
         "intentBlocks": [],
         "approvalStatus": "research-only",
         "price": price,
-        "daysUntilEarnings": reducer_item.get("daysUntilEarnings"),
+        "daysUntilEarnings": days_until_earnings,
         "riskUnits": 0,
-        "ivRank": number(market.get("ivRank")),
+        "ivRank": number(reducer_market.get("ivRank") or candidate_market.get("ivRank") or candidate.get("ivRank")),
         "atrPercent": atr_percent,
         "atr20Day": (price * atr_percent / 100.0) if price and atr_percent else None,
         "marketContext": {
             "trend": {"label": trend},
-            "rvol": market.get("rvol"),
-            "support": market.get("support"),
-            "resistance": market.get("resistance"),
-            "distanceToSupportPct": market.get("distanceToSupportPct"),
-            "distanceToResistancePct": market.get("distanceToResistancePct"),
-            "atrExpansion": market.get("atrExpansion") or market.get("atrZScore"),
+            "rvol": reducer_market.get("rvol") or candidate_market.get("rvol") or candidate.get("rvol"),
+            "support": reducer_market.get("support") or candidate_market.get("support") or candidate.get("support"),
+            "resistance": reducer_market.get("resistance") or candidate_market.get("resistance") or candidate.get("resistance"),
+            "distanceToSupportPct": (
+                reducer_market.get("distanceToSupportPct")
+                or candidate_market.get("distanceToSupportPct")
+                or candidate.get("distanceToSupportPct")
+            ),
+            "distanceToResistancePct": (
+                reducer_market.get("distanceToResistancePct")
+                or candidate_market.get("distanceToResistancePct")
+                or candidate.get("distanceToResistancePct")
+            ),
+            "atrExpansion": reducer_market.get("atrExpansion") or reducer_market.get("atrZScore"),
         },
     }
 
@@ -724,7 +801,8 @@ def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[st
         "researchOnly": True,
         "diagnosticOnly": True,
         "variantFamily": f"priced-{text(plan.get('strategy')).lower().replace('_', '-')}",
-        "variantForStrategy": "pressured-long-vol",
+        "variantForStrategy": candidate.get("sourceFamily") or "pressured-long-vol",
+        "sourcePaperVariant": bool(candidate.get("paperVariantOnly")),
         "variantReason": candidate.get("recommendationReason"),
         "sourceRecommendationVerdict": candidate.get("recommendationVerdict"),
         "sourceRecommendedStrategy": candidate.get("sourceRecommendedStrategy"),
@@ -930,6 +1008,7 @@ def build_strategy_alternative_pricing(
     *,
     scorer: dict[str, Any] | None = None,
     reducer: dict[str, Any] | None = None,
+    paper_variant_scanner: dict[str, Any] | None = None,
     limit: int = DEFAULT_LIMIT,
     variants_per_ticker: int = DEFAULT_VARIANTS_PER_TICKER,
     ticker_factory: Callable[[str], Any] = yf.Ticker,
@@ -937,10 +1016,18 @@ def build_strategy_alternative_pricing(
 ) -> dict[str, Any]:
     """Build the research-only alternative pricing artifact."""
     ensure_dirs()
+    should_load_scanner = scorer is None and paper_variant_scanner is None
     scorer = scorer if scorer is not None else (load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {})
     reducer = reducer if reducer is not None else (load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
+    if should_load_scanner:
+        paper_variant_scanner = load_json_file(PAPER_VARIANT_SCANNER_FILE) or {}
     reducer_by_ticker = reducer_lookup(reducer)
-    candidates = source_candidates(scorer, limit=limit, variants_per_ticker=variants_per_ticker)
+    candidates = source_candidates(
+        scorer,
+        limit=limit,
+        variants_per_ticker=variants_per_ticker,
+        paper_variant_scanner=paper_variant_scanner,
+    )
     schwab_index = load_schwab_options_index() if schwab_options_index is None else schwab_options_index
     generated_at = local_now().isoformat()
     items = [
@@ -977,6 +1064,7 @@ def build_strategy_alternative_pricing(
             "tickerGroups": len({norm(item.get("ticker")) for item in candidates if norm(item.get("ticker"))}),
             "variantsPerTicker": variants_per_ticker,
             "fallbackVariants": sum(1 for item in candidates if item.get("fallbackVariant")),
+            "scannerCandidates": sum(1 for item in candidates if item.get("paperVariantOnly")),
             "requestedByStrategy": {
                 strategy: sum(1 for item in candidates if item.get("recommendedStrategy") == strategy)
                 for strategy in sorted({text(item.get("recommendedStrategy")) for item in candidates if text(item.get("recommendedStrategy"))})
@@ -1066,6 +1154,7 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         f"- ticker groups: {counts.get('tickerGroups', 0)}",
         f"- variants per ticker: {counts.get('variantsPerTicker', 0)}",
         f"- fallback variants: {counts.get('fallbackVariants', 0)}",
+        f"- scanner candidates: {counts.get('scannerCandidates', 0)}",
         f"- requested by strategy: {json.dumps(counts.get('requestedByStrategy') or {})}",
         f"- priced: {counts.get('priced', 0)}",
         f"- combined passed: {counts.get('riskPassed', 0)}",

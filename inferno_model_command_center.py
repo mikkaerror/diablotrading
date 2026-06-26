@@ -62,6 +62,7 @@ TRADE_MANAGEMENT_FILE = DATA_DIR / "inferno_trade_management.json"
 SCENARIO_EVIDENCE_FILE = DATA_DIR / "inferno_scenario_evidence.json"
 SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
+SCORE_THRESHOLD_AUDIT_FILE = DATA_DIR / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
@@ -213,6 +214,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "score-calibration",
         "question": "Do readiness/scenario scores behave like useful ranks?",
         "artifact": "reports/score_calibration_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "score-threshold-audit",
+        "question": "Are scores, thresholds, assumptions, and limits being used consistently?",
+        "artifact": "reports/score_threshold_audit_latest.txt",
         "owner": "shared",
     },
     {
@@ -668,6 +675,7 @@ def build_executive_summary(
             f"scenario evidence={metrics.get('scenarioClosedEvidenceCount', 0)}; "
             f"scenario observations={metrics.get('scenarioClosedObservationCount', 0)}; "
             f"calibration={metrics.get('scoreCalibrationVerdict')}; "
+            f"threshold-audit={metrics.get('scoreThresholdAuditVerdict')}; "
             f"expected move={metrics.get('expectedMoveVerdict')}; "
             f"alternatives={metrics.get('strategyAlternativeVerdict')}; "
             f"alt pricing={metrics.get('strategyAlternativePricingVerdict')}; "
@@ -703,6 +711,7 @@ def build_command_center() -> dict[str, Any]:
     scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
     scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
     score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
+    score_threshold_audit = load_json_file(SCORE_THRESHOLD_AUDIT_FILE) or {}
     expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
     strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
     strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
@@ -780,6 +789,7 @@ def build_command_center() -> dict[str, Any]:
         "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
         "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
         "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "scoreThresholdAudit": artifact_summary(SCORE_THRESHOLD_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyAlternativePricing": artifact_summary(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
@@ -900,6 +910,8 @@ def build_command_center() -> dict[str, Any]:
         "scoreCalibrationVerdict": score_calibration.get("verdict"),
         "scoreCalibrationClosedObservations": (score_calibration.get("counts") or {}).get("closedScenarioObservations"),
         "scoreCalibrationScenarioScoreRows": (score_calibration.get("counts") or {}).get("scenarioScoreRows"),
+        "scoreThresholdAuditVerdict": score_threshold_audit.get("verdict"),
+        "scoreThresholdAuditCounts": score_threshold_audit.get("counts") or {},
         "expectedMoveVerdict": expected_move.get("verdict"),
         "expectedMoveClosedLongVol": (expected_move.get("counts") or {}).get("closedLongVolRecords"),
         "expectedMoveCurrentLongVol": (expected_move.get("counts") or {}).get("currentLongVolCandidates"),
@@ -1040,6 +1052,7 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_scenario_evidence.sh",
             "./run_inferno_scenario_backtest.sh",
             "./run_inferno_score_calibration.sh",
+            "./run_inferno_score_threshold_audit.sh",
             "./run_inferno_expected_move_ledger.sh",
             "./run_inferno_tos_formula_audit.sh --limit 20",
             "./run_inferno_tos_custom_metrics.sh --init-registry",
@@ -1175,6 +1188,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Scenario evidence: {status_value(status.get('scenarioEvidence') or {}, key='stage')}",
             f"- Scenario backtest: {status_value(status.get('scenarioBacktest') or {}, key='stage')}",
             f"- Score calibration: {status_value(status.get('scoreCalibration') or {})}",
+            f"- Score threshold audit: {status_value(status.get('scoreThresholdAudit') or {})}",
             f"- Expected move ledger: {status_value(status.get('expectedMoveLedger') or {})}",
             f"- Strategy alternative scorer: {status_value(status.get('strategyAlternativeScorer') or {})}",
             f"- Strategy alternative pricing: {status_value(status.get('strategyAlternativePricing') or {})}",
@@ -1235,6 +1249,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Score calibration: {metrics.get('scoreCalibrationVerdict')} | "
             f"closed observations {metrics.get('scoreCalibrationClosedObservations')} | "
             f"score rows {metrics.get('scoreCalibrationScenarioScoreRows')}",
+            f"- Score threshold audit: {metrics.get('scoreThresholdAuditVerdict')} | "
+            f"counts {json.dumps(metrics.get('scoreThresholdAuditCounts') or {})}",
             f"- Expected move ledger: {metrics.get('expectedMoveVerdict')} | "
             f"closed long-vol {metrics.get('expectedMoveClosedLongVol')} | "
             f"current long-vol {metrics.get('expectedMoveCurrentLongVol')} | "

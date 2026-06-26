@@ -65,6 +65,48 @@ def reducer_item() -> dict:
     }
 
 
+def scanner_payload() -> dict:
+    return {
+        "pricingCandidates": [
+            {
+                "ticker": "DDD",
+                "sourceFamily": "wheel-proxy",
+                "paperVariantOnly": True,
+                "recommendedStrategy": "PUT_CREDIT_SPREAD",
+                "sourceRecommendedStrategy": "PAPER_VARIANT_SCANNER",
+                "recommendationVerdict": "paper-variant-research",
+                "recommendationReason": "cheap high-IV signal name",
+                "candidateStrategyRank": 1,
+                "fallbackVariant": False,
+                "sourceAlternativeScore": 74.5,
+                "sourceAlternativeWarnings": ["current setupRec remains premium-buy"],
+                "price": 12.5,
+                "baselineUnderlyingPrice": 12.5,
+                "daysUntilEarnings": 21,
+                "ivRank": 62,
+                "atrPercent": 4,
+                "marketContextSummary": {
+                    "trend": "Bullish",
+                    "rvol": 0.7,
+                    "support": 11.2,
+                    "resistance": 15.5,
+                    "distanceToSupportPct": 10.4,
+                    "distanceToResistancePct": 24,
+                    "atrPercent": 4,
+                    "ivRank": 62,
+                },
+            },
+            {
+                "ticker": "BBB",
+                "sourceFamily": "credit-spread",
+                "paperVariantOnly": True,
+                "recommendedStrategy": "PUT_CREDIT_SPREAD",
+                "sourceAlternativeScore": 99,
+            },
+        ]
+    }
+
+
 class StrategyAlternativePricingTests(unittest.TestCase):
     """Alternative pricing should not mutate authority or operational queues."""
 
@@ -145,6 +187,28 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertEqual(rows[1]["recommendationVerdict"], pricing.FALLBACK_RECOMMENDATION_VERDICT)
         self.assertIn("range premium backup", rows[1]["recommendationReason"])
 
+    def test_source_candidates_backfill_scanner_when_slots_remain(self) -> None:
+        rows = pricing.source_candidates(
+            scorer_payload(),
+            limit=3,
+            paper_variant_scanner=scanner_payload(),
+        )
+
+        self.assertEqual([row["ticker"] for row in rows], ["BBB", "AAA", "DDD"])
+        self.assertTrue(rows[2]["paperVariantOnly"])
+        self.assertEqual(rows[2]["sourceRecommendedStrategy"], "PAPER_VARIANT_SCANNER")
+        self.assertEqual(rows[2]["sourceFamily"], "wheel-proxy")
+
+    def test_source_candidates_do_not_backfill_when_scorer_fills_slots(self) -> None:
+        rows = pricing.source_candidates(
+            scorer_payload(),
+            limit=2,
+            paper_variant_scanner=scanner_payload(),
+        )
+
+        self.assertEqual([row["ticker"] for row in rows], ["BBB", "AAA"])
+        self.assertFalse(any(row.get("paperVariantOnly") for row in rows))
+
     def test_intent_from_candidate_carries_market_context(self) -> None:
         candidate = pricing.source_candidates(scorer_payload(), limit=1)[0]
         intent = pricing.intent_from_candidate(candidate, reducer_item())
@@ -154,6 +218,22 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertEqual(intent["approvalStatus"], "research-only")
         self.assertEqual(intent["marketContext"]["trend"]["label"], "Bullish")
         self.assertEqual(intent["atrPercent"], 5.0)
+
+    def test_intent_from_scanner_candidate_uses_candidate_context_without_reducer(self) -> None:
+        candidate = next(
+            item
+            for item in pricing.scanner_candidate_rows(scanner_payload())
+            if item.get("ticker") == "DDD"
+        )
+        intent = pricing.intent_from_candidate(candidate, None)
+
+        self.assertEqual(intent["ticker"], "DDD")
+        self.assertEqual(intent["price"], 12.5)
+        self.assertEqual(intent["daysUntilEarnings"], 21)
+        self.assertEqual(intent["ivRank"], 62.0)
+        self.assertEqual(intent["atrPercent"], 4.0)
+        self.assertEqual(intent["marketContext"]["support"], 11.2)
+        self.assertEqual(intent["marketContext"]["trend"]["label"], "Bullish")
 
     def test_put_credit_ladder_ranks_combined_passes_before_optimizer_blocks(self) -> None:
         pricing_intent = {

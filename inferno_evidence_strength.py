@@ -110,14 +110,51 @@ def sample_size_strength(n: int, target: int = TARGET_SAMPLES) -> float:
     return _clamp(n / target)
 
 
-def wilson_strength(w_lower: float) -> float:
-    """``S_w`` — how far above coinflip is the Wilson lower bound?
+def empirical_breakeven(samples: list[float]) -> float | None:
+    """Breakeven win rate implied by the realized win/loss magnitudes.
 
-    Maps ``[0.5, 1.0]`` to ``[0.0, 1.0]`` linearly. Below 0.5 returns 0.
+    For a payoff of ``avg_win : avg_loss`` (both in R units), a strategy
+    breaks even at a hit rate of ``avg_loss / (avg_win + avg_loss)``.
+
+    Why this matters: the desk trades asymmetric structures (long
+    straddles, debit spreads) that *win less than half the time by
+    design* yet are positive expectancy. Anchoring the win-rate axis at a
+    flat 0.5 coinflip silently labels every one of those "no edge". That
+    is precisely the kind of assumption that costs the desk real,
+    profitable setups. Anchoring at the payoff-implied breakeven removes
+    that bias: a symmetric 1:1 payoff still gives 0.5, while a 3:1 winner
+    breaks even at 0.25.
+
+    Returns ``None`` when breakeven cannot be derived (the sample has no
+    wins or no losses) so the caller falls back to the 0.5 default rather
+    than inventing a number from one-sided data.
     """
-    if w_lower <= 0.5:
+    wins = [r for r in samples if r > 0]
+    losses = [-r for r in samples if r < 0]
+    if not wins or not losses:
+        return None
+    avg_win = sum(wins) / len(wins)
+    avg_loss = sum(losses) / len(losses)
+    denom = avg_win + avg_loss
+    if denom <= 0:
+        return None
+    return _clamp(avg_loss / denom, 0.0, 0.999)
+
+
+def wilson_strength(w_lower: float, breakeven: float = 0.5) -> float:
+    """``S_w`` — how far above breakeven is the Wilson lower bound?
+
+    Maps ``[breakeven, 1.0]`` to ``[0.0, 1.0]`` linearly; at or below the
+    breakeven anchor it returns 0. The anchor defaults to ``0.5`` (the
+    classic coinflip, preserved for backward compatibility), but
+    ``build_strength`` passes the payoff-implied breakeven from
+    :func:`empirical_breakeven` so asymmetric-payoff strategies are not
+    penalised for an honest sub-50% hit rate.
+    """
+    anchor = _clamp(breakeven, 0.0, 0.999)
+    if w_lower <= anchor:
         return 0.0
-    return _clamp((w_lower - 0.5) / 0.5)
+    return _clamp((w_lower - anchor) / (1.0 - anchor))
 
 
 def expectancy_strength(m_lower: float, target: float = TARGET_EXPECTANCY_R) -> float:
@@ -259,10 +296,27 @@ def build_strength(
         strategies_total = 0
         da_verdict = "missing"
 
+    breakeven = empirical_breakeven(samples)
+    wilson_anchor = breakeven if breakeven is not None else 0.5
+    s_w = wilson_strength(w_lower, wilson_anchor)
+    s_e = expectancy_strength(m_lower)
+    # Confirm-rescue: when the win rate clears its payoff-implied breakeven
+    # *and* the bootstrap expectancy lower bound is positive, both axes agree
+    # the strategy is profitable. The win-rate magnitude is noisy at realistic
+    # sample sizes, so do not let it veto — via the geometric mean's weakest-
+    # component behaviour — a strategy the expectancy axis already supports.
+    # We never rescue when the win rate is below breakeven or expectancy is
+    # non-positive, so genuine losers stay fully penalised.
+    win_rate_confirms = (
+        breakeven is not None and w_lower > wilson_anchor and m_lower > 0
+    )
+    if win_rate_confirms:
+        s_w = max(s_w, s_e)
+
     components: dict[str, float | None] = {
         "sampleSize": sample_size_strength(n_total),
-        "wilsonLower": wilson_strength(w_lower),
-        "expectancyLower": expectancy_strength(m_lower),
+        "wilsonLower": s_w,
+        "expectancyLower": s_e,
         "falsification": falsification_strength(edges_holding, strategies_total),
     }
     strength, active = composite_strength(components)
@@ -324,6 +378,9 @@ def build_strength(
         "losses": losses,
         "wilsonLower": round(w_lower, 4),
         "wilsonUpper": round(w_upper, 4),
+        "winRateBreakeven": round(wilson_anchor, 4),
+        "winRateBreakevenSource": "payoff-implied" if breakeven is not None else "coinflip-default",
+        "winRateConfirmsEdge": win_rate_confirms,
         "expectancyMean": round(m_mean, 4),
         "expectancyLower": round(m_lower, 4),
         "expectancyUpper": round(m_upper, 4),
@@ -354,6 +411,8 @@ def strength_text(payload: dict[str, Any]) -> str:
         f"wins={payload.get('wins')}  "
         f"losses={payload.get('losses')}",
         f"Win-rate Wilson: [{payload.get('wilsonLower')}, {payload.get('wilsonUpper')}]",
+        f"Win-rate breakeven anchor: {payload.get('winRateBreakeven')} "
+        f"({payload.get('winRateBreakevenSource')}; confirms-edge={payload.get('winRateConfirmsEdge')})",
         f"Mean R bootstrap: [{payload.get('expectancyLower')}, {payload.get('expectancyMean')}, {payload.get('expectancyUpper')}]",
         f"Falsification: {payload.get('edgesHolding')}/{payload.get('strategiesTotal')} strategies hold "
         f"(devil's advocate verdict: {payload.get('devilsAdvocateVerdict')})",

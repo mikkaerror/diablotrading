@@ -299,6 +299,19 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_score_threshold_audit.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:08:00-06:00",
+                        "stage": "score-threshold-audit-research-only",
+                        "verdict": "calibrate-scores-do-not-loosen-gates",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "counts": {"thresholdsCataloged": 21, "findings": 8, "p1Findings": 4, "p2Findings": 4},
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             patches = [
                 ("ROOT", root),
@@ -334,6 +347,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("CONVICTION_RESEARCH_FILE", data_dir / "inferno_conviction_research.json"),
                 ("MATH_VERIFY_FILE", data_dir / "inferno_math_verify.json"),
                 ("MARKET_MASTERY_PLAN_FILE", data_dir / "inferno_market_mastery_plan.json"),
+                ("SCORE_THRESHOLD_AUDIT_FILE", data_dir / "inferno_score_threshold_audit.json"),
                 ("EXPECTANCY_LEDGER_FILE", data_dir / "inferno_expectancy_ledger.json"),
                 ("DTE_POLICY_ANALYSIS_FILE", data_dir / "inferno_dte_policy_analysis.json"),
                 ("TRADING_BEHAVIOR_AUDIT_FILE", data_dir / "inferno_trading_behavior_audit.json"),
@@ -380,6 +394,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["mathViolations"], 0)
             self.assertEqual(payload["systemStatus"]["mathVerify"]["verdict"], "clean")
             self.assertEqual(payload["systemStatus"]["marketMasteryPlan"]["verdict"], "research-plan-ready")
+            self.assertEqual(payload["systemStatus"]["scoreThresholdAudit"]["verdict"], "calibrate-scores-do-not-loosen-gates")
+            self.assertEqual(payload["headlineMetrics"]["scoreThresholdAuditVerdict"], "calibrate-scores-do-not-loosen-gates")
+            self.assertEqual(payload["headlineMetrics"]["scoreThresholdAuditCounts"]["thresholdsCataloged"], 21)
             self.assertEqual(payload["systemStatus"]["strategyLab"]["verdict"], "insufficient-data")
             self.assertEqual(payload["systemStatus"]["schwabAccountSync"]["verdict"], "healthy")
             self.assertEqual(payload["headlineMetrics"]["accountDataSource"], "schwab-account-api")
@@ -425,6 +442,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Scenario backtest focus: FLNC, THR, MOD", text_report)
             self.assertIn("Math verify: clean", text_report)
             self.assertIn("Market mastery plan: research-plan-ready", text_report)
+            self.assertIn("Score threshold audit: calibrate-scores-do-not-loosen-gates", text_report)
             self.assertIn("Math violations: 0", text_report)
             self.assertIn("Canonical report map:", text_report)
             self.assertIn("reports/paper_bottleneck_reducer_latest.csv", text_report)

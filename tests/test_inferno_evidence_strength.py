@@ -187,6 +187,66 @@ class BuildStrengthTests(unittest.TestCase):
         self.assertEqual(payload["weakestComponent"], "falsification")
 
 
+def asymmetric_records(win_count: int, loss_count: int, win_r: float, loss_r: float) -> list[dict]:
+    """Closed records with explicit asymmetric R payoffs (win_r > 0, loss_r < 0)."""
+    return closed_records([win_r] * win_count + [loss_r] * loss_count)
+
+
+class BreakevenAnchorTests(unittest.TestCase):
+    """The win-rate axis must be anchored at the payoff-implied breakeven,
+    not a flat 0.5 coinflip — otherwise asymmetric positive-expectancy
+    structures (long premium, debit spreads) are wrongly labelled no-edge."""
+
+    def test_empirical_breakeven_symmetric_is_half(self) -> None:
+        self.assertAlmostEqual(es.empirical_breakeven([1.0, -1.0, 1.0, -1.0]), 0.5)
+
+    def test_empirical_breakeven_three_to_one(self) -> None:
+        # avg_win 3, avg_loss 1 -> breakeven 1/(1+3) = 0.25
+        self.assertAlmostEqual(es.empirical_breakeven([3.0, 3.0, -1.0, -1.0]), 0.25)
+
+    def test_empirical_breakeven_one_sided_returns_none(self) -> None:
+        self.assertIsNone(es.empirical_breakeven([1.0, 1.0, 1.0]))
+        self.assertIsNone(es.empirical_breakeven([-1.0, -1.0]))
+        self.assertIsNone(es.empirical_breakeven([]))
+
+    def test_wilson_strength_default_anchor_unchanged(self) -> None:
+        # Backward compatible: no breakeven arg keeps the 0.5 coinflip map.
+        self.assertEqual(es.wilson_strength(0.5), 0.0)
+        self.assertAlmostEqual(es.wilson_strength(0.75), 0.5)
+
+    def test_wilson_strength_breakeven_anchor_rewards_sub_half(self) -> None:
+        # A 0.30 Wilson lower is no-edge at a 0.5 anchor but positive at 0.25.
+        self.assertEqual(es.wilson_strength(0.30, 0.5), 0.0)
+        self.assertGreater(es.wilson_strength(0.30, 0.25), 0.0)
+
+    def test_asymmetric_winner_not_labelled_insufficient(self) -> None:
+        # 40 wins at +3R, 60 losses at -1R: 40% hit rate but +0.6R expectancy.
+        # Under the old 0.5 anchor this collapsed to "insufficient"; with the
+        # payoff-implied breakeven (0.25) it must read as real evidence.
+        records = asymmetric_records(40, 60, 3.0, -1.0)
+        payload = es.build_strength(
+            shadow_loader=lambda: records,
+            devils_advocate_loader=lambda: None,
+        )
+        self.assertEqual(payload["winRateBreakeven"], 0.25)
+        self.assertEqual(payload["winRateBreakevenSource"], "payoff-implied")
+        self.assertTrue(payload["winRateConfirmsEdge"])
+        self.assertNotEqual(payload["verdict"], "insufficient")
+        self.assertGreater(payload["strength"], 0.3)
+
+    def test_genuine_loser_is_not_rescued(self) -> None:
+        # Symmetric 1:1 payoff, 20% win rate, strongly negative expectancy.
+        # breakeven is 0.5, win rate is far below it -> no rescue, no edge.
+        records = asymmetric_records(20, 80, 1.0, -1.0)
+        payload = es.build_strength(
+            shadow_loader=lambda: records,
+            devils_advocate_loader=lambda: None,
+        )
+        self.assertAlmostEqual(payload["winRateBreakeven"], 0.5)
+        self.assertFalse(payload["winRateConfirmsEdge"])
+        self.assertEqual(payload["verdict"], "insufficient")
+
+
 class TextRenderTests(unittest.TestCase):
     def test_text_contains_sections(self) -> None:
         records = closed_records([1.0] * 80)

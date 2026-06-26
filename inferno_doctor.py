@@ -59,6 +59,7 @@ OUTCOME_ATTRIBUTION_FILE = ROOT / "data" / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = ROOT / "data" / "inferno_rule_edge_decay.json"
 SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
 SCORE_CALIBRATION_FILE = ROOT / "data" / "inferno_score_calibration.json"
+SCORE_THRESHOLD_AUDIT_FILE = ROOT / "data" / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
@@ -658,6 +659,13 @@ def score_calibration_status(report: dict) -> tuple[bool, str]:
     return _research_module_status(
         report,
         ok_verdicts={"insufficient-data", "calibration-building", "calibration-watch"},
+    )
+
+
+def score_threshold_audit_status(report: dict) -> tuple[bool, str]:
+    return _research_module_status(
+        report,
+        ok_verdicts={"calibrate-scores-do-not-loosen-gates"},
     )
 
 
@@ -1506,6 +1514,12 @@ def main() -> int:
     score_calibration_ok, score_calibration_detail = score_calibration_status(score_calibration)
     lines.append(summarize_status("Score calibration", score_calibration_ok, score_calibration_detail))
     if not score_calibration_ok:
+        warnings += 1
+
+    score_threshold_audit = load_json_file(SCORE_THRESHOLD_AUDIT_FILE) or {}
+    score_threshold_ok, score_threshold_detail = score_threshold_audit_status(score_threshold_audit)
+    lines.append(summarize_status("Score threshold audit", score_threshold_ok, score_threshold_detail))
+    if not score_threshold_ok:
         warnings += 1
 
     expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
