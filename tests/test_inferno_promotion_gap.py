@@ -28,6 +28,11 @@ def strategy_summary(**overrides) -> dict:
         "lossCount": 0,
         "scoredCount": 0,
         "winRateLowerBound": None,
+        "payoffRatio": None,
+        "winRateLowerBoundTarget": None,
+        "winRateLowerBoundTargetSource": None,
+        "winRateBreakeven": None,
+        "winRateBreakevenMargin": None,
         "expectancyPerRiskConfidence": {"lower": None},
         "profitFactor": None,
         "falsePositiveRate": 1.0,
@@ -54,10 +59,11 @@ class PromotionGapTests(unittest.TestCase):
     def test_promotable_strategy_clears_all_gates(self) -> None:
         result = analyze_strategy(
             strategy_summary(
-                winCount=20,
-                lossCount=10,
+                winCount=25,
+                lossCount=5,
                 scoredCount=30,
                 winRateLowerBound=0.55,
+                payoffRatio=1.0,
                 expectancyPerRiskConfidence={"lower": 0.1},
                 profitFactor=1.6,
                 falsePositiveRate=0.2,
@@ -67,6 +73,31 @@ class PromotionGapTests(unittest.TestCase):
         self.assertTrue(result["promotable"])
         self.assertEqual(result["gatesOpen"], result["gatesTotal"])
         self.assertEqual(result["scoredCountGap"], 0)
+        self.assertEqual(result["tradesToWinRateFloor"], 0)
+        self.assertEqual(result["winRateLowerBoundTarget"], 0.53)
+
+    def test_analyze_strategy_uses_payoff_aware_winrate_target(self) -> None:
+        result = analyze_strategy(
+            strategy_summary(
+                winCount=27,
+                lossCount=33,
+                scoredCount=60,
+                winRateLowerBound=0.331,
+                payoffRatio=2.5,
+                expectancyPerRiskConfidence={"lower": 0.1},
+                profitFactor=2.0,
+                falsePositiveRate=0.2,
+                maxDrawdownRiskUnits=-2.0,
+            )
+        )
+
+        self.assertTrue(result["promotable"])
+        self.assertEqual(result["winRateBreakeven"], 0.2857)
+        self.assertEqual(result["winRateLowerBoundTarget"], 0.3157)
+        self.assertEqual(
+            result["winRateLowerBoundTargetSource"],
+            "payoff-implied-breakeven-plus-margin",
+        )
         self.assertEqual(result["tradesToWinRateFloor"], 0)
 
     def test_trades_to_winrate_floor_returns_zero_when_already_clear(self) -> None:

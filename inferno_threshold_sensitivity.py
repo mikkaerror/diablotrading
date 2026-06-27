@@ -32,7 +32,9 @@ from inferno_strategy_lab import (
     MIN_SCORED_TRADES_FOR_PROMOTION,
     MIN_WIN_RATE_LOWER_BOUND,
     STRATEGY_LAB_FILE,
+    WIN_RATE_BREAKEVEN_MARGIN,
     build_strategy_lab,
+    win_rate_floor_from_payoff,
 )
 from inferno_strategy_replay import normalize_shadow_item
 from inferno_shadow_evidence import SHADOW_EVIDENCE_FILE
@@ -55,6 +57,8 @@ def default_threshold_profiles() -> list[dict[str, Any]]:
             "description": "Current committed strategy-lab thresholds.",
             "minScored": MIN_SCORED_TRADES_FOR_PROMOTION,
             "minWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
+            "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
+            "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
             "minExpectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "minProfitFactor": MIN_PROFIT_FACTOR,
             "maxFalsePositiveRate": MAX_FALSE_POSITIVE_RATE,
@@ -65,6 +69,8 @@ def default_threshold_profiles() -> list[dict[str, Any]]:
             "description": "Halved sample requirement, otherwise identical.",
             "minScored": max(10, MIN_SCORED_TRADES_FOR_PROMOTION // 2),
             "minWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
+            "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
+            "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
             "minExpectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "minProfitFactor": MIN_PROFIT_FACTOR,
             "maxFalsePositiveRate": MAX_FALSE_POSITIVE_RATE,
@@ -78,6 +84,8 @@ def default_threshold_profiles() -> list[dict[str, Any]]:
             ),
             "minScored": 10,
             "minWinRateLowerBound": 0.35,
+            "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
+            "winRateBreakevenMargin": 0.0,
             "minExpectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "minProfitFactor": 1.10,
             "maxFalsePositiveRate": 0.6,
@@ -91,6 +99,8 @@ def default_threshold_profiles() -> list[dict[str, Any]]:
             ),
             "minScored": 5,
             "minWinRateLowerBound": 0.30,
+            "winRateFloorMode": "fixed-lower-bound",
+            "winRateBreakevenMargin": None,
             "minExpectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "minProfitFactor": 1.00,
             "maxFalsePositiveRate": 0.7,
@@ -107,6 +117,37 @@ def number(value: Any, default: float | None = None) -> float | None:
         return default
 
 
+def win_rate_requirement(strategy: dict[str, Any], thresholds: dict[str, Any]) -> dict[str, Any]:
+    """Return the win-rate lower-bound requirement under one profile."""
+    fixed_floor = number(thresholds.get("minWinRateLowerBound"), MIN_WIN_RATE_LOWER_BOUND)
+    mode = str(thresholds.get("winRateFloorMode") or "fixed-lower-bound")
+    if mode != "payoff-implied-breakeven-plus-margin":
+        return {
+            "required": fixed_floor,
+            "source": "fixed-lower-bound",
+            "breakeven": None,
+            "margin": thresholds.get("winRateBreakevenMargin"),
+        }
+
+    payoff = number(strategy.get("payoffRatio"))
+    floor = win_rate_floor_from_payoff(payoff)
+    breakeven = number(floor.get("winRateBreakeven"))
+    margin = number(thresholds.get("winRateBreakevenMargin"), WIN_RATE_BREAKEVEN_MARGIN)
+    if breakeven is None:
+        return {
+            "required": fixed_floor,
+            "source": "fixed-fallback",
+            "breakeven": None,
+            "margin": margin,
+        }
+    return {
+        "required": round(min(0.999, breakeven + (margin or 0.0)), 4),
+        "source": "payoff-implied-breakeven-plus-margin",
+        "breakeven": breakeven,
+        "margin": margin,
+    }
+
+
 def gate_distances(strategy: dict[str, Any], thresholds: dict[str, Any]) -> list[dict[str, Any]]:
     """Return pass/fail distance for every threshold in a profile.
 
@@ -117,6 +158,8 @@ def gate_distances(strategy: dict[str, Any], thresholds: dict[str, Any]) -> list
     """
     scored = int(strategy.get("scoredCount") or 0)
     win_lower = number(strategy.get("winRateLowerBound"))
+    win_required = win_rate_requirement(strategy, thresholds)
+    required_win = win_required["required"]
     expectancy_lower = number((strategy.get("expectancyPerRiskConfidence") or {}).get("lower"))
     profit_factor = number(strategy.get("profitFactor"))
     drawdown = number(strategy.get("maxDrawdownRiskUnits"))
@@ -149,14 +192,17 @@ def gate_distances(strategy: dict[str, Any], thresholds: dict[str, Any]) -> list
             "gate": "win-rate-lower-bound",
             "kind": "blocker",
             "current": win_lower,
-            "required": thresholds["minWinRateLowerBound"],
-            "passes": win_lower is not None and win_lower >= thresholds["minWinRateLowerBound"],
+            "required": required_win,
+            "passes": win_lower is not None and required_win is not None and win_lower >= required_win,
             "gap": (
                 None
-                if win_lower is None
-                else round(max(0.0, thresholds["minWinRateLowerBound"] - win_lower), 4)
+                if win_lower is None or required_win is None
+                else round(max(0.0, required_win - win_lower), 4)
             ),
             "unit": "probability",
+            "source": win_required["source"],
+            "breakeven": win_required["breakeven"],
+            "margin": win_required["margin"],
         },
         {
             "gate": "profit-factor",
@@ -248,6 +294,8 @@ def verdict_under_thresholds(strategy: dict[str, Any], thresholds: dict[str, Any
     """Recompute a promotion verdict for one strategy using a custom threshold set."""
     scored = int(strategy.get("scoredCount") or 0)
     win_lower = strategy.get("winRateLowerBound")
+    win_required = win_rate_requirement(strategy, thresholds)
+    required_win = win_required["required"]
     expectancy_lower = (strategy.get("expectancyPerRiskConfidence") or {}).get("lower")
     profit_factor = strategy.get("profitFactor")
     drawdown = strategy.get("maxDrawdownRiskUnits")
@@ -260,8 +308,8 @@ def verdict_under_thresholds(strategy: dict[str, Any], thresholds: dict[str, Any
         blockers.append(f"need {thresholds['minScored'] - scored} more scored trades")
     if expectancy_lower is None or expectancy_lower <= thresholds["minExpectancyLowerBound"]:
         blockers.append("expectancy lower bound not positive")
-    if win_lower is None or win_lower < thresholds["minWinRateLowerBound"]:
-        blockers.append(f"win-rate lower bound below {thresholds['minWinRateLowerBound']}")
+    if win_lower is None or required_win is None or win_lower < required_win:
+        blockers.append(f"win-rate lower bound below {required_win} ({win_required['source']})")
     if profit_factor is None or profit_factor < thresholds["minProfitFactor"]:
         blockers.append(f"profit factor below {thresholds['minProfitFactor']}")
     if drawdown is not None and drawdown < thresholds["maxDrawdownRiskUnits"]:
@@ -381,7 +429,8 @@ def sensitivity_text(report: dict[str, Any]) -> str:
     for profile in report.get("profiles") or []:
         lines.append(
             f"- {profile['name']}: scored>={profile['minScored']} | "
-            f"WRlow>={profile['minWinRateLowerBound']} | "
+            f"WRlow={profile.get('winRateFloorMode', 'fixed-lower-bound')} "
+            f"(fallback {profile['minWinRateLowerBound']}, margin {profile.get('winRateBreakevenMargin')}) | "
             f"PF>={profile['minProfitFactor']} | "
             f"FPR<={profile['maxFalsePositiveRate']} | "
             f"DD>={profile['maxDrawdownRiskUnits']}"

@@ -9,7 +9,12 @@ deterministic, and unwilling to promote tiny samples.
 
 import unittest
 
-from inferno_strategy_lab import build_strategy_lab, summarize_strategy, wilson_lower_bound
+from inferno_strategy_lab import (
+    build_strategy_lab,
+    summarize_strategy,
+    verdict_for_metrics,
+    wilson_lower_bound,
+)
 
 
 def closed_ticket(index: int, pnl: float, strategy: str = "TEST_EDGE") -> dict[str, object]:
@@ -66,6 +71,59 @@ class StrategyLabTests(unittest.TestCase):
         )
         self.assertIn("PROMOTABLE_EDGE", lab["promotionCandidates"])
         self.assertEqual(lab["deskVerdict"]["level"], "review-for-promotion")
+
+    def test_convex_payoff_edge_uses_payoff_aware_win_floor(self) -> None:
+        """A low-hit-rate convex strategy can clear the corrected win-rate gate."""
+        tickets = []
+        idx = 0
+        for _ in range(6):
+            tickets.append(closed_ticket(idx, 25.0, strategy="CONVEX_EDGE"))
+            idx += 1
+            tickets.append(closed_ticket(idx, -10.0, strategy="CONVEX_EDGE"))
+            idx += 1
+            tickets.append(closed_ticket(idx, -10.0, strategy="CONVEX_EDGE"))
+            idx += 1
+        for _ in range(21):
+            tickets.append(closed_ticket(idx, 25.0, strategy="CONVEX_EDGE"))
+            idx += 1
+            tickets.append(closed_ticket(idx, -10.0, strategy="CONVEX_EDGE"))
+            idx += 1
+
+        summary = summarize_strategy("CONVEX_EDGE", tickets)
+
+        self.assertEqual(summary["scoredCount"], 60)
+        self.assertEqual(summary["winCount"], 27)
+        self.assertEqual(summary["lossCount"], 33)
+        self.assertEqual(summary["payoffRatio"], 2.5)
+        self.assertEqual(summary["winRateBreakeven"], 0.2857)
+        self.assertEqual(summary["winRateLowerBoundTarget"], 0.3157)
+        self.assertEqual(
+            summary["winRateLowerBoundTargetSource"],
+            "payoff-implied-breakeven-plus-margin",
+        )
+        self.assertGreaterEqual(summary["winRateLowerBound"], summary["winRateLowerBoundTarget"])
+        self.assertEqual(summary["verdict"]["level"], "promotable")
+
+    def test_symmetric_payoff_requires_above_coinflip_floor(self) -> None:
+        """The payoff-aware floor is stricter than 0.42 for 1:1 strategies."""
+        verdict = verdict_for_metrics(
+            {
+                "scoredCount": 60,
+                "winRateLowerBound": 0.49,
+                "winRateLowerBoundTarget": 0.53,
+                "winRateLowerBoundTargetSource": "payoff-implied-breakeven-plus-margin",
+                "expectancyPerRiskConfidence": {"lower": 0.1},
+                "profitFactor": 1.6,
+                "maxDrawdownRiskUnits": -2.0,
+                "falsePositiveRate": 0.2,
+            }
+        )
+
+        self.assertFalse(verdict["promotable"])
+        self.assertIn(
+            "win-rate lower bound below 0.53 (payoff-implied-breakeven-plus-margin)",
+            verdict["blockers"],
+        )
 
     def test_drawdown_forces_cooldown(self) -> None:
         """A severe losing run should force cooldown regardless of sample count."""

@@ -19,6 +19,7 @@ from inferno_strategy_lab import (
     MIN_PROFIT_FACTOR,
     MIN_SCORED_TRADES_FOR_PROMOTION,
     MIN_WIN_RATE_LOWER_BOUND,
+    WIN_RATE_BREAKEVEN_MARGIN,
 )
 from inferno_threshold_sensitivity import (
     SENSITIVITY_FILE,
@@ -40,6 +41,7 @@ def strategy_summary(
     win_lower: float | None = None,
     expectancy_lower: float | None = None,
     profit_factor: float | None = None,
+    payoff_ratio: float | None = None,
     false_positive: float | None = 1.0,
     drawdown: float | None = None,
 ) -> dict:
@@ -47,6 +49,7 @@ def strategy_summary(
         "strategy": name,
         "scoredCount": scored,
         "winRateLowerBound": win_lower,
+        "payoffRatio": payoff_ratio,
         "expectancyPerRiskConfidence": {"lower": expectancy_lower},
         "profitFactor": profit_factor,
         "falsePositiveRate": false_positive,
@@ -67,6 +70,8 @@ class ThresholdSensitivityTests(unittest.TestCase):
         production = next(p for p in profiles if p["name"] == "production")
         self.assertEqual(production["minScored"], MIN_SCORED_TRADES_FOR_PROMOTION)
         self.assertEqual(production["minWinRateLowerBound"], MIN_WIN_RATE_LOWER_BOUND)
+        self.assertEqual(production["winRateFloorMode"], "payoff-implied-breakeven-plus-margin")
+        self.assertEqual(production["winRateBreakevenMargin"], WIN_RATE_BREAKEVEN_MARGIN)
         self.assertEqual(production["minExpectancyLowerBound"], MIN_EXPECTANCY_LOWER_BOUND)
         self.assertEqual(production["minProfitFactor"], MIN_PROFIT_FACTOR)
         self.assertEqual(production["maxFalsePositiveRate"], MAX_FALSE_POSITIVE_RATE)
@@ -81,7 +86,7 @@ class ThresholdSensitivityTests(unittest.TestCase):
     def test_strong_evidence_passes_production_profile(self) -> None:
         strong = strategy_summary(
             scored=40, win_lower=0.55, expectancy_lower=0.1,
-            profit_factor=1.6, false_positive=0.2, drawdown=-2.0,
+            profit_factor=1.6, payoff_ratio=1.0, false_positive=0.2, drawdown=-2.0,
         )
         profiles = default_threshold_profiles()
         production = next(p for p in profiles if p["name"] == "production")
@@ -96,7 +101,7 @@ class ThresholdSensitivityTests(unittest.TestCase):
         """
         strong = strategy_summary(
             scored=40, win_lower=0.55, expectancy_lower=0.1,
-            profit_factor=1.6, false_positive=0.2, drawdown=-2.0,
+            profit_factor=1.6, payoff_ratio=1.0, false_positive=0.2, drawdown=-2.0,
         )
         result = sweep_strategy(strong, default_threshold_profiles())
         self.assertEqual(set(result["promotedUnder"]),

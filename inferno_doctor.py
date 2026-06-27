@@ -243,14 +243,26 @@ def in_current_service_cycle(
     if not stamp:
         return False
     current = now or local_now()
-    if any(stamp.startswith(day) for day in cycle_days(current, service_hour=service_hour)):
-        try:
-            generated = datetime.fromisoformat(stamp)
-        except ValueError:
-            return True
-        age_seconds = (current - generated).total_seconds()
-        return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
-    return False
+    try:
+        generated = datetime.fromisoformat(stamp)
+    except ValueError:
+        return any(stamp.startswith(day) for day in cycle_days(current, service_hour=service_hour))
+    if generated.tzinfo is not None and current.tzinfo is not None:
+        generated_for_age = generated
+        generated_for_cycle = generated.astimezone(current.tzinfo)
+    else:
+        generated_for_age = (
+            generated.replace(tzinfo=current.tzinfo)
+            if current.tzinfo is not None
+            else generated
+        )
+        generated_for_cycle = generated
+    if generated_for_cycle.date().isoformat() not in cycle_days(
+        current, service_hour=service_hour
+    ):
+        return False
+    age_seconds = (current - generated_for_age).total_seconds()
+    return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
 
 
 def latest_emailed_run_for_cycle(

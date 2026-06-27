@@ -57,6 +57,7 @@ from inferno_strategy_lab import (
     MIN_PROFIT_FACTOR,
     MIN_SCORED_TRADES_FOR_PROMOTION,
     MIN_WIN_RATE_LOWER_BOUND,
+    WIN_RATE_BREAKEVEN_MARGIN,
 )
 from inferno_threshold_sensitivity import build_sensitivity
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -167,11 +168,15 @@ def threshold_catalog() -> list[dict[str, Any]]:
         {
             "area": "promotion_evidence",
             "metric": "Wilson lower win rate",
-            "threshold": f">= {MIN_WIN_RATE_LOWER_BOUND}",
+            "threshold": (
+                ">= payoff-implied breakeven "
+                f"+ {WIN_RATE_BREAKEVEN_MARGIN} margin "
+                f"(fixed fallback {MIN_WIN_RATE_LOWER_BOUND})"
+            ),
             "scale": "probability",
             "source": "inferno_strategy_lab.py",
-            "use": "Lower-confidence win-rate gate.",
-            "assumption": "Win-rate point estimates should not promote authority.",
+            "use": "Lower-confidence payoff-aware win-rate gate.",
+            "assumption": "Win-rate point estimates should not promote authority, and win rate must be judged against payoff shape.",
         },
         {
             "area": "promotion_evidence",

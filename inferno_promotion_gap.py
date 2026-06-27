@@ -27,6 +27,8 @@ from inferno_strategy_lab import (
     MIN_SCORED_TRADES_FOR_PROMOTION,
     MIN_WIN_RATE_LOWER_BOUND,
     STRATEGY_LAB_FILE,
+    WIN_RATE_BREAKEVEN_MARGIN,
+    win_rate_floor_from_payoff,
     wilson_lower_bound,
 )
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -93,6 +95,22 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     loss_count = int(strategy.get("lossCount") or 0)
     scored_count = int(strategy.get("scoredCount") or 0)
     win_rate_lower = _safe_float(strategy.get("winRateLowerBound"))
+    payoff_ratio = _safe_float(strategy.get("payoffRatio"))
+    floor = win_rate_floor_from_payoff(payoff_ratio)
+    win_rate_target = _safe_float(
+        strategy.get("winRateLowerBoundTarget")
+        if strategy.get("winRateLowerBoundTarget") is not None
+        else floor.get("winRateLowerBoundTarget")
+    )
+    win_rate_target_source = (
+        strategy.get("winRateLowerBoundTargetSource")
+        or floor.get("winRateLowerBoundTargetSource")
+    )
+    win_rate_breakeven = _safe_float(
+        strategy.get("winRateBreakeven")
+        if strategy.get("winRateBreakeven") is not None
+        else floor.get("winRateBreakeven")
+    )
     expectancy = (strategy.get("expectancyPerRiskConfidence") or {}).get("lower")
     expectancy_lower = _safe_float(expectancy)
     profit_factor = _safe_float(strategy.get("profitFactor"))
@@ -101,7 +119,7 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
 
     cleared = {
         "scoredCount": scored_count >= MIN_SCORED_TRADES_FOR_PROMOTION,
-        "winRateLowerBound": (win_rate_lower or 0.0) >= MIN_WIN_RATE_LOWER_BOUND,
+        "winRateLowerBound": (win_rate_lower or 0.0) >= (win_rate_target or MIN_WIN_RATE_LOWER_BOUND),
         "expectancyLowerBound": (expectancy_lower if expectancy_lower is not None else -1.0)
         >= MIN_EXPECTANCY_LOWER_BOUND,
         "profitFactor": (profit_factor or 0.0) >= MIN_PROFIT_FACTOR,
@@ -113,7 +131,11 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     gates_open = sum(1 for value in cleared.values() if value)
     gates_total = len(cleared)
 
-    projected_extra_for_winrate = trades_to_winrate_floor(win_count, win_count + loss_count)
+    projected_extra_for_winrate = trades_to_winrate_floor(
+        win_count,
+        win_count + loss_count,
+        target=win_rate_target or MIN_WIN_RATE_LOWER_BOUND,
+    )
 
     return {
         "strategy": strategy.get("strategy"),
@@ -121,8 +143,12 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         "scoredCountTarget": MIN_SCORED_TRADES_FOR_PROMOTION,
         "scoredCountGap": max(0, MIN_SCORED_TRADES_FOR_PROMOTION - scored_count),
         "winRateLowerBound": win_rate_lower,
-        "winRateLowerBoundTarget": MIN_WIN_RATE_LOWER_BOUND,
-        "winRateLowerBoundGap": _gap(MIN_WIN_RATE_LOWER_BOUND, win_rate_lower),
+        "winRateLowerBoundTarget": win_rate_target,
+        "winRateLowerBoundGap": _gap(win_rate_target, win_rate_lower),
+        "winRateLowerBoundTargetSource": win_rate_target_source,
+        "winRateBreakeven": win_rate_breakeven,
+        "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
+        "payoffRatio": payoff_ratio,
         "expectancyLowerBound": expectancy_lower,
         "expectancyLowerBoundTarget": MIN_EXPECTANCY_LOWER_BOUND,
         "expectancyLowerBoundGap": _gap(MIN_EXPECTANCY_LOWER_BOUND, expectancy_lower),
@@ -153,7 +179,9 @@ def build_promotion_gap(lab: dict[str, Any] | None = None) -> dict[str, Any]:
         "sourceLabGeneratedAt": lab.get("generatedAt"),
         "thresholds": {
             "scoredTradesForPromotion": MIN_SCORED_TRADES_FOR_PROMOTION,
-            "winRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
+            "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
+            "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
+            "legacyFixedWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
             "expectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "profitFactor": MIN_PROFIT_FACTOR,
             "falsePositiveRateCap": MAX_FALSE_POSITIVE_RATE,
@@ -185,7 +213,9 @@ def gap_text(gap: dict[str, Any]) -> str:
         f"- scored trades:        {overall.get('scoredCount')}/{overall.get('scoredCountTarget')} "
         f"(gap {overall.get('scoredCountGap')})",
         f"- win-rate lower bound: {overall.get('winRateLowerBound')} vs {overall.get('winRateLowerBoundTarget')} "
-        f"(gap {overall.get('winRateLowerBoundGap')})",
+        f"(gap {overall.get('winRateLowerBoundGap')}; {overall.get('winRateLowerBoundTargetSource')})",
+        f"- payoff breakeven:     {overall.get('winRateBreakeven')} + margin "
+        f"{overall.get('winRateBreakevenMargin')} | payoff ratio {overall.get('payoffRatio')}",
         f"- expectancy lower:     {overall.get('expectancyLowerBound')} vs {overall.get('expectancyLowerBoundTarget')} "
         f"(gap {overall.get('expectancyLowerBoundGap')})",
         f"- profit factor:        {overall.get('profitFactor')} vs {overall.get('profitFactorTarget')} "

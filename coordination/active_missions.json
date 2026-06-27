@@ -66,5 +66,23 @@
       "vegas-window",
       "done"
     ]
+  },
+  {
+    "id": "mission-a4ffbfc9",
+    "createdAt": "2026-06-27T00:36:43.330173+00:00",
+    "updatedAt": "2026-06-26T18:43:08.758701-06:00",
+    "title": "Implemented promotion-gate payoff-aware win-rate floor",
+    "body": "Operator chose Option A on 2026-06-27. Codex implemented payoff-implied breakeven + 0.03 margin for the strategy-lab win-rate lower-bound gate, mirrored the target in promotion_gap, and updated threshold-sensitivity plus score-threshold diagnostics. This is a calibration of the paper-evidence promotion gate only; no live authority, broker submit, risk constants, universe, approvals, tickets, or broker actions changed.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "promotion-gate",
+      "win-rate-floor",
+      "option-a",
+      "implemented",
+      "research-only",
+      "safety"
+    ]
   }
 ]

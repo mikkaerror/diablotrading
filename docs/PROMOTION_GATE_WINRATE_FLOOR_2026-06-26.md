@@ -2,11 +2,16 @@
 
 - **Date:** 2026-06-26
 - **Author:** Claude (research lane)
-- **Stage:** research-only — proposal, not a change
+- **Stage:** research-only — decision memo and implemented calibration
 - **Authority:** unchanged. `liveTradingAllowed=false`, `brokerSubmitAllowed=false`,
   no risk constant edited, no approval, no broker action. A risk-gate change
   requires explicit operator approval and Codex-lane implementation.
 - **For:** the Claude/Codex sync on next steps after commit `db25fbb`.
+- **Implementation status:** operator chose Option A on 2026-06-27. Codex
+  implemented payoff-implied breakeven + `0.03` margin in
+  `inferno_strategy_lab.py`, mirrored it in `inferno_promotion_gap.py`, and
+  updated the threshold-sensitivity / score-threshold diagnostics. This remains
+  paper-evidence-only; no broker authority or live submit flag changed.
 
 ## TL;DR
 
@@ -152,11 +157,14 @@ a familiar guard; Option A keeps a win-rate guard while making it correct.
    returns that truncated/convex option P&L violates. Well-mitigated; note, not
    alarm.
 
-## Open decisions for the operator
+## Operator decision
 
-1. **Option A or Option B?** (A keeps a corrected win-rate guard; B removes it.)
-2. **If A: what margin?** `0.03` recommended.
-3. **Should `MIN_WILSON_LOWER_FOR_EDGE (0.42)` in `math_config` move the same way?**
+1. **Chosen:** Option A — payoff-implied breakeven anchor.
+2. **Margin:** `0.03`.
+3. **Not changed:** `MIN_WILSON_LOWER_FOR_EDGE (0.42)` in `math_config`; that
+   remains a separate follow-up decision if the desk wants the broader math
+   edge helper to move from fixed floor to margin-over-breakeven.
 
-Nothing here changes until the operator picks a direction and Codex implements it
-in the risk lane. This memo is research-only.
+The implemented change calibrates the promotion win-rate gate. It does not
+approve any ticket, change risk constants, modify the eligible universe, or
+alter broker authority.

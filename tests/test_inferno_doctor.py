@@ -57,6 +57,16 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         )
 
+    def test_in_current_service_cycle_normalizes_utc_date_boundary(self) -> None:
+        now = datetime.fromisoformat("2026-06-26T18:44:00-06:00")
+        self.assertTrue(
+            in_current_service_cycle(
+                "2026-06-27T00:44:28+00:00",
+                now=now,
+                service_hour=6,
+            )
+        )
+
     def test_live_position_review_status_accepts_review_as_healthy_lane(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):
             ok, detail = live_position_review_status(

@@ -33,6 +33,7 @@ STRATEGY_LAB_TEXT_FILE = REPORTS_DIR / "strategy_lab_latest.txt"
 CONFIDENCE_Z = 1.96
 MIN_SCORED_TRADES_FOR_PROMOTION = 30
 MIN_WIN_RATE_LOWER_BOUND = 0.42
+WIN_RATE_BREAKEVEN_MARGIN = 0.03
 MIN_EXPECTANCY_LOWER_BOUND = 0.0
 MIN_PROFIT_FACTOR = 1.25
 MAX_FALSE_POSITIVE_RATE = 0.45
@@ -139,6 +140,36 @@ def payoff_ratio(wins: list[float], losses: list[float]) -> float | None:
     return round(avg_win / avg_loss, 4)
 
 
+def payoff_implied_breakeven(payoff: float | None) -> float | None:
+    """Return the win rate needed to break even for a payoff ratio."""
+    if payoff is None or payoff <= 0:
+        return None
+    return round(1.0 / (1.0 + payoff), 4)
+
+
+def win_rate_floor_from_payoff(payoff: float | None) -> dict[str, Any]:
+    """Return the payoff-aware Wilson lower-bound target for promotion.
+
+    The old fixed 0.42 floor remains as a conservative fallback when the desk
+    cannot derive a payoff ratio. When payoff is known, the target becomes the
+    strategy's own breakeven win rate plus the operator-approved margin.
+    """
+    breakeven = payoff_implied_breakeven(payoff)
+    if breakeven is None:
+        return {
+            "winRateBreakeven": None,
+            "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
+            "winRateLowerBoundTarget": MIN_WIN_RATE_LOWER_BOUND,
+            "winRateLowerBoundTargetSource": "fixed-fallback",
+        }
+    return {
+        "winRateBreakeven": breakeven,
+        "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
+        "winRateLowerBoundTarget": round(min(0.999, breakeven + WIN_RATE_BREAKEVEN_MARGIN), 4),
+        "winRateLowerBoundTargetSource": "payoff-implied-breakeven-plus-margin",
+    }
+
+
 def kelly_from_returns(win_rate: float | None, payoff: float | None) -> float | None:
     """Return a plain Kelly fraction from win rate and payoff ratio."""
     if win_rate is None or payoff is None or payoff <= 0:
@@ -205,6 +236,11 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     scored = int(metrics.get("scoredCount") or 0)
     expectancy_lower = metrics.get("expectancyPerRiskConfidence", {}).get("lower")
     win_lower = metrics.get("winRateLowerBound")
+    win_target = metrics.get("winRateLowerBoundTarget")
+    if win_target is None:
+        win_target = win_rate_floor_from_payoff(metrics.get("payoffRatio")).get("winRateLowerBoundTarget")
+    win_target = number(win_target, MIN_WIN_RATE_LOWER_BOUND)
+    win_target_source = metrics.get("winRateLowerBoundTargetSource") or "fixed-fallback"
     pf = metrics.get("profitFactor")
     dd = metrics.get("maxDrawdownRiskUnits")
     fpr = metrics.get("falsePositiveRate")
@@ -217,8 +253,8 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         )
     if expectancy_lower is None or expectancy_lower <= MIN_EXPECTANCY_LOWER_BOUND:
         blockers.append("expectancy lower bound is not positive")
-    if win_lower is None or win_lower < MIN_WIN_RATE_LOWER_BOUND:
-        blockers.append(f"win-rate lower bound below {MIN_WIN_RATE_LOWER_BOUND}")
+    if win_lower is None or win_lower < win_target:
+        blockers.append(f"win-rate lower bound below {win_target} ({win_target_source})")
     if pf is None or pf < MIN_PROFIT_FACTOR:
         blockers.append(f"profit factor below {MIN_PROFIT_FACTOR}")
     if dd is not None and dd < MAX_DRAWDOWN_RISK_UNITS:
@@ -263,6 +299,7 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, An
     payoff = payoff_ratio(wins, losses)
     kelly = kelly_from_returns(win_rate, payoff)
     confidence = confidence_interval(returns)
+    win_floor = win_rate_floor_from_payoff(payoff)
     metrics = {
         "strategy": name,
         "ticketCount": len(tickets),
@@ -276,6 +313,7 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, An
         "expectancyPerRiskConfidence": confidence,
         "profitFactor": profit_factor(returns),
         "payoffRatio": payoff,
+        **win_floor,
         "kellyFraction": kelly,
         "maxDrawdownRiskUnits": max_drawdown(returns),
         "falsePositiveRate": false_positive_rate(tickets),
@@ -315,7 +353,9 @@ def build_strategy_lab(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
         "stage": "strategy-evidence-lab",
         "thresholds": {
             "minScoredTradesForPromotion": MIN_SCORED_TRADES_FOR_PROMOTION,
-            "minWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
+            "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
+            "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
+            "legacyFixedMinWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
             "minExpectancyLowerBound": MIN_EXPECTANCY_LOWER_BOUND,
             "minProfitFactor": MIN_PROFIT_FACTOR,
             "maxFalsePositiveRate": MAX_FALSE_POSITIVE_RATE,
@@ -349,9 +389,12 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         "",
         "Overall evidence:",
         f"- scored trades: {overall.get('scoredCount', 0)}",
-        f"- win rate: {overall.get('winRate')} | Wilson lower: {overall.get('winRateLowerBound')}",
+        f"- win rate: {overall.get('winRate')} | Wilson lower: {overall.get('winRateLowerBound')} "
+        f"| target: {overall.get('winRateLowerBoundTarget')} ({overall.get('winRateLowerBoundTargetSource')})",
         f"- expectancy/risk mean: {confidence.get('mean')} | lower: {confidence.get('lower')}",
         f"- profit factor: {overall.get('profitFactor')}",
+        f"- payoff ratio: {overall.get('payoffRatio')} | breakeven: {overall.get('winRateBreakeven')} "
+        f"| margin: {overall.get('winRateBreakevenMargin')}",
         f"- max drawdown risk units: {overall.get('maxDrawdownRiskUnits')}",
         f"- verdict: {overall_verdict.get('level')} | risk cap {overall.get('riskUnitCap')}",
         "",
@@ -364,7 +407,7 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         item_confidence = item.get("expectancyPerRiskConfidence") or {}
         lines.append(
             f"- {item.get('strategy')}: {item.get('scoredCount')} scored | "
-            f"win LB {item.get('winRateLowerBound')} | "
+            f"win LB {item.get('winRateLowerBound')}/{item.get('winRateLowerBoundTarget')} | "
             f"exp LB {item_confidence.get('lower')} | "
             f"PF {item.get('profitFactor')} | "
             f"{item_verdict.get('level')} | cap {item.get('riskUnitCap')}"
