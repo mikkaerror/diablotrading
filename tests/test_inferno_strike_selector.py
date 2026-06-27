@@ -20,6 +20,7 @@ from inferno_strike_selector import (
     SETUP_CONCENTRATION_LIMIT,
     apply_setup_concentration_governor,
     build_text_report,
+    build_strike_plan_for_intent,
     cap_aware_long_strangle_plan,
     effective_intent_for_pricing,
     put_credit_spread_plan,
@@ -143,6 +144,37 @@ class SetupConcentrationGovernorTests(unittest.TestCase):
         # 3 Straddles + 1 Vertical Call survive primary => 0.75/0.25
         self.assertAlmostEqual(summary["postDemotionShares"]["Straddle"], 0.75, places=4)
         self.assertAlmostEqual(summary["postDemotionShares"]["Vertical Call"], 0.25, places=4)
+
+
+class StrikePlanScoreContextTests(unittest.TestCase):
+    """Verify strike items retain entry-time score context for later ledgers."""
+
+    def test_failed_intent_still_preserves_score_context(self) -> None:
+        plan = build_strike_plan_for_intent(
+            {
+                "rank": 2,
+                "ticker": "CTX",
+                "setupRec": "Vertical Call",
+                "routeFamily": "defined-risk directional",
+                "primaryRoute": "CALL_DEBIT_SPREAD",
+                "secondaryRoute": "STAND_ASIDE",
+                "readiness": 88,
+                "confidence": 2,
+                "priority": 7.25,
+                "scenarioScore": 73.4,
+                "price": 0,
+                "approvalStatus": "pending",
+                "intentStatus": "blocked",
+            },
+            schwab_options_index={},
+        )
+
+        self.assertFalse(plan["ok"])
+        self.assertEqual(plan["readiness"], 88)
+        self.assertEqual(plan["priorityScore"], 7.25)
+        self.assertEqual(plan["scenarioScore"], 73.4)
+        self.assertEqual(plan["setupFamily"], "defined-risk directional")
+        self.assertEqual(plan["primaryRoute"], "CALL_DEBIT_SPREAD")
 
 
 class StrikeSelectorRedundancyTests(unittest.TestCase):

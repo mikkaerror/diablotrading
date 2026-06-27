@@ -23,7 +23,7 @@ from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_doctor import in_current_service_cycle
 from inferno_outcome_reviewer import estimate_expiration_pnl, latest_underlying_price, parse_date
-from inferno_paper_execution import ledger_leg_symbols, strategy_cost, ticket_hash
+from inferno_paper_execution import entry_score_context, ledger_leg_symbols, strategy_cost, ticket_hash
 from inferno_risk_policy import evaluate_strike_item
 from inferno_strike_selector import STRIKE_PLAN_FILE, build_strike_plan, save_strike_plan
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -243,8 +243,7 @@ def build_shadow_entry(
         "underlyingPrice": item.get("price"),
         "daysUntilEarnings": item.get("daysUntilEarnings"),
         "riskUnits": item.get("riskUnits"),
-        "readiness": item.get("readiness"),
-        "priorityScore": item.get("priorityScore"),
+        **entry_score_context(item),
         "expiration": strike_plan.get("expiration"),
         "entryCostType": cost_type,
         "entryLimit": round(cost, 4),

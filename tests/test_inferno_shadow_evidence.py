@@ -61,6 +61,27 @@ class ShadowEvidenceTests(unittest.TestCase):
         self.assertFalse(entry["brokerSubmitAllowed"])
         self.assertFalse(entry["authorityEligible"])
 
+    def test_entry_preserves_score_context_for_option_calibration(self) -> None:
+        """Shadow option outcomes should keep their entry-time rank context."""
+        item = {
+            **strike_item(),
+            "readiness": 89,
+            "priority": 5.75,
+            "scenarioScore": 76.2,
+            "routeFamily": "defined-risk directional",
+            "sourceRecommendedStrategy": "PAPER_VARIANT_SCANNER",
+            "sourceAlternativeScore": 73.0,
+        }
+        entry = build_shadow_entry(item, "2026-04-13T07:45:00-06:00", {"items": []})
+
+        self.assertEqual(entry["readiness"], 89)
+        self.assertEqual(entry["priorityScore"], 5.75)
+        self.assertEqual(entry["scenarioScore"], 76.2)
+        self.assertEqual(entry["setupFamily"], "defined-risk directional")
+        self.assertEqual(entry["sourceRecommendedStrategy"], "PAPER_VARIANT_SCANNER")
+        self.assertEqual(entry["sourceAlternativeScore"], 73.0)
+        self.assertFalse(entry["brokerSubmitAllowed"])
+
     def test_build_shadow_evidence_dedupes_same_candidate(self) -> None:
         """Repeated runs refresh the same semantic ticket instead of duplicating."""
         plan = {

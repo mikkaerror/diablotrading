@@ -139,6 +139,75 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
 
         self.assertIsNone(paper_execution.rehearsal_variant_item(item))
 
+    def test_ledger_entry_preserves_entry_score_context(self) -> None:
+        item = {
+            "rank": 3,
+            "ticker": "SMR",
+            "setupRec": "Vertical Call",
+            "ok": True,
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "intentBlocks": ["human approval still required"],
+            "readiness": 91,
+            "confidence": 2,
+            "priority": 6.75,
+            "scenarioScore": 78.5,
+            "routeFamily": "defined-risk directional",
+            "sourceRecommendedStrategy": "PAPER_VARIANT_SCANNER",
+            "sourceAlternativeScore": 74.5,
+            "sourceAlternativeWarnings": ["paper variant source"],
+            "price": 12.0,
+            "ivRank": 62.0,
+            "atrPercent": 4.0,
+            "forecastRealizedMovePct": 8.0,
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "expiration": "2026-08-21",
+                "estimatedDebit": 0.65,
+                "estimatedMaxLoss": 65.0,
+                "estimatedMaxProfit": 35.0,
+                "breakEven": 12.65,
+                "greekSummary": {
+                    "netDelta": 0.2,
+                    "netGamma": 0.01,
+                    "netTheta": -0.01,
+                    "netVega": 0.02,
+                    "greeksComplete": True,
+                },
+                "liquidityNotes": [],
+                "legs": [
+                    {"symbol": "SMR260821C00012000", "instruction": "BUY_TO_OPEN", "ask": 0.8},
+                    {"symbol": "SMR260821C00013000", "instruction": "SELL_TO_OPEN", "bid": 0.15},
+                ],
+            },
+        }
+
+        with patch("inferno_paper_execution.load_json_file", return_value={}):
+            with patch(
+                "inferno_risk_policy.current_single_ticket_cap",
+                return_value={
+                    "effectiveCap": 500.0,
+                    "source": "config-default",
+                    "recommendedCap": None,
+                    "ackedCap": None,
+                    "verdict": None,
+                    "shouldUseRecommendation": False,
+                },
+            ):
+                entry = paper_execution.build_ledger_entry(
+                    item,
+                    strike_plan_generated_at=paper_execution.local_now().isoformat(),
+                    ledger={"items": []},
+                )
+
+        self.assertEqual(entry["readiness"], 91)
+        self.assertEqual(entry["priorityScore"], 6.75)
+        self.assertEqual(entry["scenarioScore"], 78.5)
+        self.assertEqual(entry["setupFamily"], "defined-risk directional")
+        self.assertEqual(entry["sourceRecommendedStrategy"], "PAPER_VARIANT_SCANNER")
+        self.assertEqual(entry["sourceAlternativeScore"], 74.5)
+        self.assertFalse(entry["liveTradingAllowed"])
+
 
 class _FakeVerdict:
     """Minimal stand-in for a risk verdict in auto-paper unit tests."""

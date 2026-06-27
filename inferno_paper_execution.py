@@ -137,6 +137,70 @@ def non_approval_reasons(reasons: list[Any]) -> list[str]:
     return [str(reason or "").strip() for reason in reasons if normalize_reason(reason) not in PAPER_AUTO_APPROVAL_REASONS]
 
 
+def first_present(*values: Any) -> Any:
+    """Return the first non-None value from a loose artifact field list."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def entry_score_context(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize entry-time ranking/provenance fields for paper/shadow records."""
+    strike_plan = item.get("strikePlan") or {}
+    return {
+        "rank": first_present(item.get("rank"), strike_plan.get("rank")),
+        "readiness": first_present(item.get("readiness"), strike_plan.get("readiness")),
+        "confidence": first_present(item.get("confidence"), strike_plan.get("confidence")),
+        "priority": first_present(item.get("priority"), strike_plan.get("priority")),
+        "priorityScore": first_present(
+            item.get("priorityScore"),
+            item.get("priority"),
+            strike_plan.get("priorityScore"),
+            strike_plan.get("priority"),
+        ),
+        "scenarioScore": first_present(item.get("scenarioScore"), strike_plan.get("scenarioScore")),
+        "setupFamily": first_present(
+            item.get("setupFamily"),
+            item.get("routeFamily"),
+            item.get("sourceFamily"),
+            strike_plan.get("setupFamily"),
+            strike_plan.get("variantForStrategy"),
+        ),
+        "routeFamily": first_present(item.get("routeFamily"), strike_plan.get("routeFamily")),
+        "primaryRoute": first_present(item.get("primaryRoute"), strike_plan.get("primaryRoute")),
+        "secondaryRoute": first_present(item.get("secondaryRoute"), strike_plan.get("secondaryRoute")),
+        "sourceLane": first_present(item.get("sourceLane"), strike_plan.get("sourceLane")),
+        "sourceFamily": first_present(
+            item.get("sourceFamily"),
+            strike_plan.get("sourceFamily"),
+            strike_plan.get("variantForStrategy"),
+        ),
+        "sourceRecommendedStrategy": first_present(
+            item.get("sourceRecommendedStrategy"),
+            strike_plan.get("sourceRecommendedStrategy"),
+        ),
+        "sourceAlternativeScore": first_present(
+            item.get("sourceAlternativeScore"),
+            strike_plan.get("sourceAlternativeScore"),
+        ),
+        "sourceAlternativeRawScore": first_present(
+            item.get("sourceAlternativeRawScore"),
+            strike_plan.get("sourceAlternativeRawScore"),
+        ),
+        "sourceAlternativeEdgeVsLongVol": first_present(
+            item.get("sourceAlternativeEdgeVsLongVol"),
+            strike_plan.get("sourceAlternativeEdgeVsLongVol"),
+        ),
+        "sourceAlternativeWarnings": first_present(
+            item.get("sourceAlternativeWarnings"),
+            strike_plan.get("sourceAlternativeWarnings"),
+            [],
+        ),
+        "currentSetupRec": first_present(item.get("currentSetupRec"), strike_plan.get("currentSetupRec")),
+    }
+
+
 def size_cap_only_primary_blocks(item: dict[str, Any]) -> bool:
     """Return whether the primary strike item is blocked only by size limits."""
     blocks = list(((item.get("riskVerdict") or {}).get("blocks") or []))
@@ -323,6 +387,7 @@ def build_ledger_entry(
         "underlyingPrice": item.get("price"),
         "daysUntilEarnings": item.get("daysUntilEarnings"),
         "riskUnits": item.get("riskUnits"),
+        **entry_score_context(item),
         "ivRank": item.get("ivRank"),
         "ivRankChange": item.get("ivRankChange"),
         "atrPercent": item.get("atrPercent"),
