@@ -41,6 +41,7 @@ Generated artifacts beat durable docs when they disagree.
 | Question | Canonical artifact |
 |---|---|
 | Smallest safe handoff | `reports/usage_optimizer_latest.txt` |
+| Compact supervisor picture | `reports/model_command_center_onboard_latest.txt` |
 | Current supervisor picture | `reports/model_command_center_latest.txt` |
 | One-line desk verdict | `reports/central_command_latest.txt` |
 | Health check | `reports/doctor_latest.txt` |

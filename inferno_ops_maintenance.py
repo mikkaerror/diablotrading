@@ -36,6 +36,7 @@ from inferno_paper_evidence_loop import build_audit as build_paper_evidence_loop
 from inferno_paper_mark_to_market import build_paper_mark_to_market, save_paper_mark_to_market
 from inferno_paper_test_director import build_director as build_paper_test_director, save_director as save_paper_test_director
 from inferno_config import DEFAULT_SHEET_NAME, ROOT, default_backtest_root, local_now
+from inferno_doctor import watchdog_run_status
 from inferno_heartbeat import record_heartbeat
 from inferno_data_readiness_audit import run_audit
 from inferno_downloads_watch import run_watch
@@ -73,6 +74,23 @@ def advisory_failures(*reports: tuple[str, dict[str, Any]]) -> list[str]:
     lanes are otherwise healthy.
     """
     return [name for name, report in reports if not bool((report or {}).get("ok"))]
+
+
+def normalize_watchdog_status(
+    status: dict[str, Any],
+    exit_code: int,
+) -> dict[str, Any]:
+    """Preserve raw watchdog output while applying market-session semantics."""
+    normalized_ok, detail = watchdog_run_status(status, local_now())
+    normalized = dict(status or {})
+    normalized["rawOk"] = bool((status or {}).get("ok"))
+    normalized["rawExitCode"] = exit_code
+    normalized["ok"] = normalized_ok
+    normalized["status"] = "ok" if normalized_ok else "attention"
+    normalized["detail"] = detail
+    if normalized_ok and not bool((status or {}).get("ok")):
+        normalized["normalizedReason"] = "market-closed-no-dawn-expected"
+    return normalized
 
 
 def load_env_file(path: Path) -> None:
@@ -705,9 +723,13 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
         )
     watchdog = report.get("watchdog") or {}
     if watchdog:
+        suffix = (
+            f" | {watchdog.get('normalizedReason')}"
+            if watchdog.get("normalizedReason")
+            else f" | reasons {len(watchdog.get('reasons') or [])}"
+        )
         lines.append(
-            f"Watchdog: {'ok' if watchdog.get('ok') else 'attention'} | "
-            f"reasons {len(watchdog.get('reasons') or [])}"
+            f"Watchdog: {'ok' if watchdog.get('ok') else 'attention'}{suffix}"
         )
     return "\n".join(lines).rstrip() + "\n"
 
@@ -760,6 +782,7 @@ def run_maintenance(
     model_command_center = refresh_model_command_center()
     research_cycle = refresh_research_cycle()
     watchdog_status, watchdog_exit = run_watchdog_check(send_alerts=False)
+    watchdog = normalize_watchdog_status(watchdog_status, watchdog_exit)
     advisories = advisory_failures(
         ("cloud-control-plane", cloud_control_plane),
         ("cloud-execution-audit", cloud_execution_audit),
@@ -800,7 +823,7 @@ def run_maintenance(
         "livePositionReview": live_position_review,
         "modelCommandCenter": model_command_center,
         "researchCycle": research_cycle,
-        "watchdog": watchdog_status,
+        "watchdog": watchdog,
         "ok": (
             ticker_audit.get("ok")
             and bool(data_audit.get("dailyPrepReady"))
@@ -817,7 +840,7 @@ def run_maintenance(
             and bool(live_position_review.get("ok"))
             and bool(model_command_center.get("ok"))
             and bool(research_cycle.get("ok"))
-            and watchdog_exit == 0
+            and bool(watchdog.get("ok"))
         ),
     }
     save_report(report)
@@ -830,6 +853,8 @@ def run_maintenance(
             "paperScenarios": (paper_bottleneck_reducer.get("counts") or {}).get("scenarios"),
             "researchCycle": research_cycle.get("status"),
             "watchdogExit": watchdog_exit,
+            "watchdogStatus": watchdog.get("status"),
+            "watchdogNormalizedReason": watchdog.get("normalizedReason"),
         },
     )
     return report

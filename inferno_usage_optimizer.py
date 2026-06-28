@@ -34,8 +34,8 @@ LEAN_HANDOFF_TOKEN_BUDGET = 4500
 
 READ_FIRST: tuple[dict[str, str], ...] = (
     {
-        "path": "reports/model_command_center_latest.txt",
-        "why": "current operating truth, next actions, report map",
+        "path": "reports/model_command_center_onboard_latest.txt",
+        "why": "compact command-center truth, safety rails, current next actions",
     },
     {
         "path": "reports/central_command_latest.txt",
@@ -48,6 +48,10 @@ READ_FIRST: tuple[dict[str, str], ...] = (
 )
 
 READ_IF_NEEDED: tuple[dict[str, str], ...] = (
+    {
+        "path": "reports/model_command_center_latest.txt",
+        "why": "full command-center report map; read before broad changes or deep report work",
+    },
     {
         "path": "docs/PROJECT_STATUS.md",
         "why": "stable PM summary; update only when verdict changes",

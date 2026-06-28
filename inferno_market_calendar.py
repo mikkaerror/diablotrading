@@ -62,3 +62,11 @@ def next_market_session(value: date) -> date:
     while not is_market_session(candidate):
         candidate += timedelta(days=1)
     return candidate
+
+
+def previous_market_session(value: date) -> date:
+    """Return the most recent regular market session before ``value``."""
+    candidate = value - timedelta(days=1)
+    while not is_market_session(candidate):
+        candidate -= timedelta(days=1)
+    return candidate

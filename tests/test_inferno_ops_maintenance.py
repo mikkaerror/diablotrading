@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from contextlib import ExitStack
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -112,6 +113,13 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             with ExitStack() as stack:
                 stack.enter_context(patch.object(ops_maintenance, "OPS_MAINTENANCE_FILE", report_file))
                 stack.enter_context(patch.object(ops_maintenance, "OPS_MAINTENANCE_TEXT_FILE", report_text_file))
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "local_now",
+                        return_value=datetime.fromisoformat("2026-06-27T13:00:00-06:00"),
+                    )
+                )
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
@@ -284,7 +292,14 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                     patch.object(
                         ops_maintenance,
                         "run_watchdog_check",
-                        return_value=({"ok": True, "reasons": [], "generatedAt": "2026-05-06T07:10:00-10:00"}, 0),
+                        return_value=(
+                            {
+                                "ok": False,
+                                "reasons": ["no dawn-cycle run is recorded for 2026-06-27"],
+                                "checkedAt": "2026-06-27T13:00:00-06:00",
+                            },
+                            1,
+                        ),
                     )
                 )
                 heartbeat = stack.enter_context(patch.object(ops_maintenance, "record_heartbeat", return_value={}))
@@ -319,6 +334,11 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["modelCommandCenter"]["status"], "ready")
             self.assertEqual(saved["researchCycle"]["status"], "research-refreshed")
             self.assertEqual(saved["researchCycle"]["scenarioCount"], 12)
+            self.assertTrue(saved["watchdog"]["ok"])
+            self.assertFalse(saved["watchdog"]["rawOk"])
+            self.assertEqual(saved["watchdog"]["rawExitCode"], 1)
+            self.assertEqual(saved["watchdog"]["status"], "ok")
+            self.assertEqual(saved["watchdog"]["normalizedReason"], "market-closed-no-dawn-expected")
             self.assertIn("Cloud control plane: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper test director: approval-bottleneck", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", report_text_file.read_text(encoding="utf-8"))
@@ -330,9 +350,42 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Watchdog: ok | market-closed-no-dawn-expected", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("scenarios 12", report_text_file.read_text(encoding="utf-8"))
             heartbeat.assert_called_once()
             self.assertEqual(heartbeat.call_args.args[0], "ops_maintenance")
+
+    def test_normalize_watchdog_status_accepts_no_dawn_on_market_closed_day(self) -> None:
+        with patch.object(ops_maintenance, "local_now", return_value=datetime.fromisoformat("2026-06-27T13:00:00-06:00")):
+            result = ops_maintenance.normalize_watchdog_status(
+                {
+                    "checkedAt": "2026-06-27T13:00:00-06:00",
+                    "ok": False,
+                    "reasons": ["no dawn-cycle run is recorded for 2026-06-27"],
+                },
+                1,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["rawOk"])
+        self.assertEqual(result["rawExitCode"], 1)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["normalizedReason"], "market-closed-no-dawn-expected")
+
+    def test_normalize_watchdog_status_keeps_weekday_missing_dawn_attention(self) -> None:
+        with patch.object(ops_maintenance, "local_now", return_value=datetime.fromisoformat("2026-06-29T13:00:00-06:00")):
+            result = ops_maintenance.normalize_watchdog_status(
+                {
+                    "checkedAt": "2026-06-29T13:00:00-06:00",
+                    "ok": False,
+                    "reasons": ["no dawn-cycle run is recorded for 2026-06-29"],
+                },
+                1,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "attention")
+        self.assertNotIn("normalizedReason", result)
 
     def test_advisory_failures_keep_cloud_noise_visible_without_blocking_core_desk(self) -> None:
         """Cloud refresh failures are advisory so local ops can still proceed."""

@@ -24,6 +24,7 @@ from inferno_doctor import (
     research_cycle_status,
     schwab_oauth_status,
     trade_management_status,
+    watchdog_run_status,
 )
 
 
@@ -35,10 +36,20 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         self.assertEqual(cycle_reference_day(now, service_hour=6), "2026-04-29")
         self.assertEqual(cycle_days(now, service_hour=6), ("2026-04-29", "2026-04-30"))
 
+    def test_cycle_reference_day_uses_previous_market_day_before_monday_service_hour(self) -> None:
+        now = datetime.fromisoformat("2026-06-29T01:30:00-06:00")
+        self.assertEqual(cycle_reference_day(now, service_hour=6), "2026-06-26")
+        self.assertEqual(cycle_days(now, service_hour=6), ("2026-06-26", "2026-06-29"))
+
     def test_cycle_reference_day_uses_today_after_service_hour(self) -> None:
         now = datetime.fromisoformat("2026-04-30T06:30:00-06:00")
         self.assertEqual(cycle_reference_day(now, service_hour=6), "2026-04-30")
         self.assertEqual(cycle_days(now, service_hour=6), ("2026-04-30",))
+
+    def test_cycle_reference_day_uses_previous_market_day_on_weekend(self) -> None:
+        now = datetime.fromisoformat("2026-06-27T13:00:00-06:00")
+        self.assertEqual(cycle_reference_day(now, service_hour=6), "2026-06-26")
+        self.assertEqual(cycle_days(now, service_hour=6), ("2026-06-26", "2026-06-27"))
 
     def test_in_current_service_cycle_accepts_previous_day_overnight(self) -> None:
         now = datetime.fromisoformat("2026-04-30T01:30:00-06:00")
@@ -66,6 +77,44 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                 service_hour=6,
             )
         )
+
+    def test_in_current_service_cycle_accepts_previous_session_on_weekend(self) -> None:
+        now = datetime.fromisoformat("2026-06-27T13:00:00-06:00")
+        self.assertTrue(
+            in_current_service_cycle(
+                "2026-06-26T06:05:00-06:00",
+                now=now,
+                service_hour=6,
+            )
+        )
+
+    def test_watchdog_run_status_accepts_no_dawn_on_market_closed_day(self) -> None:
+        now = datetime.fromisoformat("2026-06-27T13:00:00-06:00")
+        ok, detail = watchdog_run_status(
+            {
+                "checkedAt": "2026-06-27T13:00:00-06:00",
+                "ok": False,
+                "reasons": ["no dawn-cycle run is recorded for 2026-06-27"],
+            },
+            now,
+        )
+
+        self.assertTrue(ok)
+        self.assertIn("market closed", detail)
+
+    def test_watchdog_run_status_warns_on_weekday_missing_dawn(self) -> None:
+        now = datetime.fromisoformat("2026-06-29T13:00:00-06:00")
+        ok, detail = watchdog_run_status(
+            {
+                "checkedAt": "2026-06-29T13:00:00-06:00",
+                "ok": False,
+                "reasons": ["no dawn-cycle run is recorded for 2026-06-29"],
+            },
+            now,
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("no dawn-cycle", detail)
 
     def test_live_position_review_status_accepts_review_as_healthy_lane(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
-from inferno_market_calendar import is_market_session, next_market_session
+from inferno_market_calendar import is_market_session, next_market_session, previous_market_session
 
 
 class InfernoMarketCalendarTests(unittest.TestCase):
@@ -17,3 +17,6 @@ class InfernoMarketCalendarTests(unittest.TestCase):
 
     def test_regular_weekday_is_a_session(self) -> None:
         self.assertTrue(is_market_session(date(2026, 6, 22)))
+
+    def test_previous_market_session_skips_weekends(self) -> None:
+        self.assertEqual(previous_market_session(date(2026, 6, 29)), date(2026, 6, 26))

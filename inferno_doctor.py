@@ -5,7 +5,7 @@ import os
 import re
 import smtplib
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from inferno_config import (
@@ -26,6 +26,7 @@ from inferno_config import (
     WAKE_MINUTE,
 )
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_market_calendar import is_market_session, previous_market_session
 from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
 from inferno_schwab_oauth import load_config as load_schwab_oauth_config
 from inferno_schwab_oauth import token_status as load_schwab_oauth_status
@@ -212,12 +213,15 @@ def cycle_reference_day(now: datetime | None = None, *, service_hour: int = SERV
     """Return the trading-cycle day used for morning artifact freshness.
 
     Before the morning service window completes, yesterday's artifacts are still
-    the active operating baseline. This prevents the doctor from panicking just
-    because the calendar flipped at midnight.
+    the active operating baseline. On weekends and market holidays, the most
+    recent market session remains the baseline. This prevents the doctor from
+    panicking just because the calendar advanced when no desk run was due.
     """
     current = now or local_now()
+    if not is_market_session(current.date()):
+        return previous_market_session(current.date()).isoformat()
     if current.hour < service_hour:
-        return (current.date() - timedelta(days=1)).isoformat()
+        return previous_market_session(current.date()).isoformat()
     return current.date().isoformat()
 
 
@@ -225,8 +229,10 @@ def cycle_days(now: datetime | None = None, *, service_hour: int = SERVICE_HOUR)
     """Return ISO day labels that belong to the current operating cycle."""
     current = now or local_now()
     today = current.date().isoformat()
+    if not is_market_session(current.date()):
+        return (previous_market_session(current.date()).isoformat(), today)
     if current.hour < service_hour:
-        return ((current.date() - timedelta(days=1)).isoformat(), today)
+        return (previous_market_session(current.date()).isoformat(), today)
     return (today,)
 
 
@@ -257,12 +263,39 @@ def in_current_service_cycle(
             else generated
         )
         generated_for_cycle = generated
-    if generated_for_cycle.date().isoformat() not in cycle_days(
-        current, service_hour=service_hour
-    ):
+    generated_day = generated_for_cycle.date().isoformat()
+    if generated_day not in cycle_days(current, service_hour=service_hour):
         return False
     age_seconds = (current - generated_for_age).total_seconds()
+    if generated_day != current.date().isoformat():
+        return age_seconds >= -future_grace_seconds
     return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
+
+
+def watchdog_run_status(status: dict, now: datetime) -> tuple[bool, str]:
+    """Evaluate watchdog freshness without requiring market runs on closed days."""
+    checked_today = in_current_service_cycle(str(status.get("checkedAt", "")), now=now)
+    reasons = [str(reason) for reason in (status.get("reasons") or [])]
+    no_dawn_reason_only = bool(reasons) and all(
+        "no dawn-cycle run is recorded" in reason for reason in reasons
+    )
+    market_closed_no_dawn = (
+        checked_today
+        and not is_market_session(now.date())
+        and not bool(status.get("ok"))
+        and no_dawn_reason_only
+    )
+    if checked_today and bool(status.get("ok")):
+        return True, "watchdog checked in cleanly today"
+    if market_closed_no_dawn:
+        return True, "market closed; no dawn-cycle run expected today"
+    return False, json.dumps(
+        {
+            "checkedAt": status.get("checkedAt"),
+            "ok": status.get("ok"),
+            "reasons": status.get("reasons"),
+        }
+    )
 
 
 def latest_emailed_run_for_cycle(
@@ -1305,15 +1338,7 @@ def main() -> int:
         warnings += 1
 
     watchdog_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
-    watchdog_today = in_current_service_cycle(str(watchdog_status.get("checkedAt", "")), now=now)
-    watchdog_ok = watchdog_today and bool(watchdog_status.get("ok"))
-    watchdog_detail = "watchdog checked in cleanly today" if watchdog_ok else json.dumps(
-        {
-            "checkedAt": watchdog_status.get("checkedAt"),
-            "ok": watchdog_status.get("ok"),
-            "reasons": watchdog_status.get("reasons"),
-        }
-    )
+    watchdog_ok, watchdog_detail = watchdog_run_status(watchdog_status, now)
     lines.append(summarize_status("Watchdog status", watchdog_ok, watchdog_detail))
     if not watchdog_ok:
         warnings += 1

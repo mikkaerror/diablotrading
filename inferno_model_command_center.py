@@ -38,6 +38,7 @@ ACTIVE_MISSIONS_FILE = COORDINATION_DIR / "active_missions.json"
 
 MODEL_COMMAND_CENTER_FILE = DATA_DIR / "inferno_model_command_center.json"
 MODEL_COMMAND_CENTER_TEXT_FILE = REPORTS_DIR / "model_command_center_latest.txt"
+MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE = REPORTS_DIR / "model_command_center_onboard_latest.txt"
 WHILE_AWAY_PACKET_FILE = DATA_DIR / "inferno_while_away_packet.json"
 
 DEPLOY_PREFLIGHT_FILE = DATA_DIR / "inferno_deploy_preflight.json"
@@ -1085,6 +1086,7 @@ def build_command_center() -> dict[str, Any]:
         ],
         "recommendedReads": [
             str(ROOT / "reports/usage_optimizer_latest.txt"),
+            str(ROOT / "reports/model_command_center_onboard_latest.txt"),
             str(ROOT / "reports/model_command_center_latest.txt"),
             str(ROOT / "reports/while_away_latest.txt"),
             str(ROOT / "reports/central_command_latest.txt"),
@@ -1322,6 +1324,7 @@ def save_command_center(payload: dict[str, Any]) -> None:
     ensure_command_center_dirs()
     atomic_write_json(MODEL_COMMAND_CENTER_FILE, payload)
     atomic_write_text(MODEL_COMMAND_CENTER_TEXT_FILE, render_command_center_text(payload))
+    atomic_write_text(MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE, onboard_digest(payload))
 
 
 def parse_tags(raw: str) -> list[str]:
@@ -1408,7 +1411,8 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
         "",
         "Read before doing anything:",
         "- reports/usage_optimizer_latest.txt",
-        "- reports/model_command_center_latest.txt",
+        "- reports/model_command_center_onboard_latest.txt",
+        "- reports/model_command_center_latest.txt before broad changes or report-map work",
         "- reports/central_command_latest.txt",
         "- docs/PROJECT_STATUS.md",
         "- docs/MODEL_COLLABORATION_BRIEF.md",

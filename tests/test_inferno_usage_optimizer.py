@@ -58,6 +58,7 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             for relative in (
+                "reports/model_command_center_onboard_latest.txt",
                 "reports/model_command_center_latest.txt",
                 "reports/central_command_latest.txt",
                 "docs/SYSTEM_MAP.md",
@@ -91,7 +92,9 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertEqual(payload["systemSnapshot"]["commandCenter"], "ready")
             self.assertEqual(payload["systemSnapshot"]["paperRemainingForPromotion"], 30)
             self.assertEqual(payload["nextActions"], ["Keep paper evidence moving."])
+            self.assertEqual(payload["readFirst"][0]["path"], "reports/model_command_center_onboard_latest.txt")
             self.assertEqual(payload["readFirst"][2]["path"], "docs/SYSTEM_MAP.md")
+            self.assertEqual(payload["readIfNeeded"][0]["path"], "reports/model_command_center_latest.txt")
             self.assertLessEqual(
                 payload["budget"]["readFirstEstimatedTokens"],
                 optimizer.LEAN_HANDOFF_TOKEN_BUDGET,

@@ -323,6 +323,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("ACTIVE_MISSIONS_FILE", coordination_dir / "active_missions.json"),
                 ("MODEL_COMMAND_CENTER_FILE", data_dir / "inferno_model_command_center.json"),
                 ("MODEL_COMMAND_CENTER_TEXT_FILE", reports_dir / "model_command_center_latest.txt"),
+                ("MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE", reports_dir / "model_command_center_onboard_latest.txt"),
                 ("DEPLOY_PREFLIGHT_FILE", data_dir / "inferno_deploy_preflight.json"),
                 ("OPS_MAINTENANCE_FILE", data_dir / "inferno_ops_maintenance.json"),
                 ("LIVE_POSITION_REVIEW_FILE", data_dir / "inferno_live_position_review.json"),
@@ -406,6 +407,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
+            self.assertIn("reports/model_command_center_onboard_latest.txt", payload["recommendedReads"][1])
             self.assertIn("reports/while_away_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertIn("reports/paper_blocker_swarm_latest.txt", "\n".join(payload["recommendedReads"]))
             self.assertIn("reports/paper_mark_to_market_latest.txt", "\n".join(payload["recommendedReads"]))
@@ -417,6 +419,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Refresh divergent paper candidate data.", payload["nextActions"])
             self.assertTrue(payload["nextActions"][0].startswith("M01:"))
             text_report = (reports_dir / "model_command_center_latest.txt").read_text(encoding="utf-8")
+            onboard_report = (reports_dir / "model_command_center_onboard_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Inferno Model Command Center", text_report)
             self.assertIn("Deploy preflight: ready-for-pilot", text_report)
             self.assertIn("Schwab account sync: healthy", text_report)
@@ -461,7 +464,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
 
             digest = command_center.onboard_digest(payload)
             self.assertIn("reports/usage_optimizer_latest.txt", digest)
+            self.assertIn("reports/model_command_center_onboard_latest.txt", digest)
             self.assertIn("reports/central_command_latest.txt", digest)
+            self.assertEqual(onboard_report, digest)
 
     def test_note_and_mission_helpers_persist_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -483,6 +488,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("ACTIVE_MISSIONS_FILE", coordination_dir / "active_missions.json"),
                 ("MODEL_COMMAND_CENTER_FILE", data_dir / "inferno_model_command_center.json"),
                 ("MODEL_COMMAND_CENTER_TEXT_FILE", reports_dir / "model_command_center_latest.txt"),
+                ("MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE", reports_dir / "model_command_center_onboard_latest.txt"),
             ]
             with ExitStack() as stack:
                 for name, value in patches:

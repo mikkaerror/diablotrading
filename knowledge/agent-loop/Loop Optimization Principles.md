@@ -26,6 +26,7 @@ Increase verified paper and research evidence per unit of time without widening 
 9. Consolidate traces into falsifiable beliefs; retire or challenge beliefs when evidence changes.
 10. Use swarm-style decomposition only for independent research lanes with machine-readable finishes.
 11. Keep swarm outcome reward separate from accepted progress unless the fixed evaluator records a real evidence delta.
+12. Freshness gates follow market sessions: on weekends and market holidays, the latest regular session plus same-day infrastructure checks are the active cycle.
 
 ## Accepted progress
 

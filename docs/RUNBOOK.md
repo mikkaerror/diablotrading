@@ -1241,6 +1241,11 @@ Two informational lines have been added to `python3 inferno_doctor.py`:
   number of plans demoted to shadow by `apply_setup_concentration_governor`.
   Demotions are evidence the cap is working; this line never bumps warnings.
 
+The doctor and ops-maintenance freshness cycle is market-session aware. On
+weekends and market holidays it treats the latest regular session plus
+same-day infrastructure checks as current, and it does not warn solely because
+no dawn cycle ran on a closed-market day.
+
 The dashboard now exposes these same approval actions directly inside the `Order Intent Desk`, which is the preferred operator flow.
 
 Once a name becomes `approval-ready`, use the desk's `Copy Ticket` action to grab the broker-review blueprint before routing anything inside thinkorswim.

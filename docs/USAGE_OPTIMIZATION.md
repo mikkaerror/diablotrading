@@ -13,11 +13,13 @@ cd "<repo-root>"
 Then give the next model only:
 
 1. `reports/usage_optimizer_latest.txt`
-2. `reports/model_command_center_latest.txt`
+2. `reports/model_command_center_onboard_latest.txt`
 3. The exact failing command output, if anything failed
 
 Files under "read only if the task needs it" are deliberately optional. Do
 not paste them into the next session just because they exist.
+Use `reports/model_command_center_latest.txt` when the task is broad, needs the
+full report map, or may change command-center wiring.
 
 Do not paste old chat history unless the task is specifically about that
 history. The artifacts are the source of truth.
