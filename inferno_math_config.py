@@ -166,8 +166,9 @@ MIN_PAPER_SAMPLES_FOR_PROMOTION: Final[int] = 30
 promotion math can render a verdict that touches authority."""
 
 MIN_WILSON_LOWER_FOR_EDGE: Final[float] = 0.42
-"""Wilson 95% lower bound on the win rate required to call a strategy
-an 'edge'. Below this, the strategy is research-only."""
+"""Legacy fixed Wilson lower-bound fallback used only when a payoff-aware
+strategy promotion target cannot be derived. The live strategy-lab gate uses
+payoff-implied breakeven plus margin when payoff data exists."""
 
 DEVILS_ADVOCATE_HOLD_P: Final[float] = 0.05
 """Sign-flip bootstrap one-sided p-value below which the falsification

@@ -16,6 +16,7 @@ from typing import Any
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_math_config import MIN_WILSON_LOWER_FOR_EDGE
 from inferno_paper_execution import load_ledger
 from inferno_performance_analytics import (
     estimated_pnl,
@@ -32,7 +33,7 @@ STRATEGY_LAB_TEXT_FILE = REPORTS_DIR / "strategy_lab_latest.txt"
 
 CONFIDENCE_Z = 1.96
 MIN_SCORED_TRADES_FOR_PROMOTION = 30
-MIN_WIN_RATE_LOWER_BOUND = 0.42
+MIN_WIN_RATE_LOWER_BOUND = MIN_WILSON_LOWER_FOR_EDGE
 WIN_RATE_BREAKEVEN_MARGIN = 0.03
 MIN_EXPECTANCY_LOWER_BOUND = 0.0
 MIN_PROFIT_FACTOR = 1.25

@@ -35,6 +35,7 @@ from inferno_expected_move_ledger import (
     HURDLE_STRETCH_ATR_MULTIPLE,
 )
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_math_config import OPERATOR_LEVEL, gate_percentile_for_level
 from inferno_paper_bootstrap import (
     DEFAULT_ADMIT_THRESHOLD,
     MAX_DAYS_UNTIL_EARNINGS,
@@ -674,6 +675,161 @@ def constant_drift_findings(
     return findings
 
 
+UNIVERSE_SNAPSHOT_FILE = DATA_DIR / "latest_snapshot.json"
+
+# How far the live admitted fraction may stray from the intended top-percentile
+# band before the gate is flagged as mis-selective. 1.5x of intent in either
+# direction is the tolerance (e.g. intent top-20% -> flag if admitting >30% or
+# <~13%).
+GATE_SELECTIVITY_TOLERANCE = 1.5
+MIN_SELECTIVITY_SAMPLE = 20
+
+
+def _load_universe_readiness() -> list[float]:
+    """Read the readiness column off the latest universe snapshot."""
+    try:
+        payload = json.loads(UNIVERSE_SNAPSHOT_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = payload.get("rows") if isinstance(payload, dict) else payload
+    if not isinstance(rows, list):
+        return []
+    values: list[float] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        raw = row.get("readiness")
+        if isinstance(raw, (int, float)):
+            values.append(float(raw))
+    return values
+
+
+def gate_selectivity_findings(
+    *,
+    readiness_values: list[float] | None = None,
+    gate: float = MIN_READY_SCORE,
+    intended_percentile: float | None = None,
+) -> list[dict[str, Any]]:
+    """Flag when the fixed readiness gate's live selectivity drifts from intent.
+
+    The readiness gate is a fixed number (72), but the desk's stated pickiness
+    lives in ``inferno_math_config.OPERATOR_LEVEL`` as a *percentile* target
+    (default: keep the top 20%). A fixed cutoff silently changes how selective
+    it is as the universe distribution shifts. This check measures where the
+    gate currently sits in the universe and flags material divergence from the
+    intended top-percentile band. Diagnostic only — it does not move the gate.
+    """
+    values = readiness_values if readiness_values is not None else _load_universe_readiness()
+    n = len(values)
+    if n < MIN_SELECTIVITY_SAMPLE:
+        return []
+
+    intended_percentile = (
+        intended_percentile if intended_percentile is not None else gate_percentile_for_level()
+    )
+    admitted = sum(1 for v in values if v >= gate)
+    admitted_frac = admitted / n
+    gate_percentile = round(100.0 * sum(1 for v in values if v < gate) / n, 1)
+    intended_admit_frac = max(1e-9, (100.0 - intended_percentile) / 100.0)
+    ratio = admitted_frac / intended_admit_frac
+
+    if ratio <= GATE_SELECTIVITY_TOLERANCE and ratio >= 1.0 / GATE_SELECTIVITY_TOLERANCE:
+        return []
+
+    too_loose = ratio > 1.0
+    direction = "looser" if too_loose else "stricter"
+    return [
+        finding(
+            "P2",
+            f"Readiness gate selectivity ({direction}) diverges from intended pickiness",
+            (
+                f"gate readiness >= {gate:g} admits {admitted_frac * 100:.0f}% of the "
+                f"{n}-name universe (sits at the {gate_percentile:.0f}th percentile); "
+                f"OPERATOR_LEVEL '{OPERATOR_LEVEL}' intends the top "
+                f"{100.0 - intended_percentile:.0f}%."
+            ),
+            (
+                "A fixed readiness cutoff is "
+                f"{direction} than the desk's stated percentile pickiness and will "
+                "keep drifting as the universe distribution moves."
+            ),
+            (
+                "Express the gate as a percentile target (top "
+                f"{100.0 - intended_percentile:.0f}% via gate_percentile_for_level), "
+                "or recalibrate the fixed value to that percentile. Surface only; "
+                "the gate is operator-owned and unchanged here."
+            ),
+            source="gate_selectivity_scan",
+        )
+    ]
+
+
+SCHWAB_OPTIONS_ROWS_FILE = DATA_DIR / "inferno_schwab_options.json"
+
+
+def _load_schwab_option_rows() -> list[dict[str, Any]]:
+    """Read the per-symbol quote-quality rows off the Schwab option artifact."""
+    try:
+        payload = json.loads(SCHWAB_OPTIONS_ROWS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = payload.get("rows") if isinstance(payload, dict) else payload
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def spread_liquidity_consistency_findings(
+    *, rows: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Flag candidates the spread gate admits but the liquidity model rejects.
+
+    The risk gate blocks an option only when its ATM spread exceeds 35% (the
+    system's own ``wide-atm-spread`` flag). But chain liquidity is judged
+    separately by a blended score (spread + open interest + volume); when no
+    contract clears that bar the chain is flagged ``no-liquid-contracts`` /
+    ``thin-atm-liquidity``. A candidate can therefore have an *acceptable*
+    spread (no ``wide-atm-spread`` flag) yet still be liquidity-rejected — the
+    two criteria disagree, and the spread gate passes something the desk's own
+    liquidity model considers untradeable.
+
+    This keys entirely off the flags the system already emits (no re-hardcoded
+    thresholds). It stays silent when the disagreement is absent — e.g. when
+    every illiquid name is also wide-spread, which is the case in the current
+    snapshot. Diagnostic only.
+    """
+    rows = rows if rows is not None else _load_schwab_option_rows()
+    contested: list[str] = []
+    for row in rows:
+        flags = {str(f) for f in (row.get("qualityFlags") or [])}
+        if "wide-atm-spread" in flags:
+            continue  # spread gate already blocks these — no disagreement
+        if flags & {"no-liquid-contracts", "thin-atm-liquidity"}:
+            contested.append(str(row.get("symbol") or "?"))
+    if not contested:
+        return []
+    listed = ", ".join(sorted(contested)[:8])
+    return [
+        finding(
+            "P2",
+            "Spread gate admits names the liquidity model rejects",
+            (
+                f"{len(contested)} option name(s) clear the 35% ATM-spread gate "
+                f"(no wide-atm-spread flag) yet are liquidity-flagged: {listed}."
+            ),
+            (
+                "The pure-spread block (>35%) and the blended liquidity bar "
+                "(score ≥ 70 over spread + OI + volume) disagree, so the risk gate "
+                "passes chains the desk's own liquidity model calls untradeable."
+            ),
+            (
+                "Gate the risk policy on atmLiquidityScore (the model's own bar), "
+                "not only on the 35% spread ceiling, so the two liquidity criteria "
+                "agree. Surface only; risk gate is operator-owned and unchanged."
+            ),
+            source="spread_liquidity_consistency_scan",
+        )
+    ]
+
+
 def build_score_threshold_audit(
     *,
     artifacts: dict[str, dict[str, Any]] | None = None,
@@ -692,6 +848,8 @@ def build_score_threshold_audit(
     findings.extend(pricing_findings(artifacts.get("strategyAlternativePricing") or {}, artifacts.get("paperVariantScanner") or {}))
     findings.extend(dte_findings(artifacts.get("dtePolicyAnalysis") or {}))
     findings.extend(constant_drift_findings())
+    findings.extend(gate_selectivity_findings())
+    findings.extend(spread_liquidity_consistency_findings())
     findings.sort(key=lambda item: (severity_rank(item.get("severity", "")), item.get("title", "")))
 
     catalog = threshold_catalog()

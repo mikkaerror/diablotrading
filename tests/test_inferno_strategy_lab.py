@@ -9,7 +9,9 @@ deterministic, and unwilling to promote tiny samples.
 
 import unittest
 
+from inferno_math_config import MIN_WILSON_LOWER_FOR_EDGE
 from inferno_strategy_lab import (
+    MIN_WIN_RATE_LOWER_BOUND,
     build_strategy_lab,
     summarize_strategy,
     verdict_for_metrics,
@@ -35,6 +37,10 @@ def closed_ticket(index: int, pnl: float, strategy: str = "TEST_EDGE") -> dict[s
 
 class StrategyLabTests(unittest.TestCase):
     """Verify the evidence lab stays conservative and promotion-safe."""
+
+    def test_fixed_winrate_fallback_is_sourced_from_math_config(self) -> None:
+        """The legacy fixed floor should not drift from the math audit surface."""
+        self.assertEqual(MIN_WIN_RATE_LOWER_BOUND, MIN_WILSON_LOWER_FOR_EDGE)
 
     def test_wilson_lower_bound_penalizes_small_hot_streak(self) -> None:
         """A perfect tiny sample should not be treated as certain edge."""

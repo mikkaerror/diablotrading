@@ -161,9 +161,11 @@ a familiar guard; Option A keeps a win-rate guard while making it correct.
 
 1. **Chosen:** Option A — payoff-implied breakeven anchor.
 2. **Margin:** `0.03`.
-3. **Not changed:** `MIN_WILSON_LOWER_FOR_EDGE (0.42)` in `math_config`; that
-   remains a separate follow-up decision if the desk wants the broader math
-   edge helper to move from fixed floor to margin-over-breakeven.
+3. **Follow-up cleanup, 2026-06-27:** `MIN_WILSON_LOWER_FOR_EDGE (0.42)` in
+   `math_config` remains the legacy fixed fallback, but
+   `inferno_strategy_lab.MIN_WIN_RATE_LOWER_BOUND` now imports that value
+   instead of redefining its own literal. This single-sources the fallback
+   value without changing the payoff-aware promotion gate.
 
 The implemented change calibrates the promotion win-rate gate. It does not
 approve any ticket, change risk constants, modify the eligible universe, or
