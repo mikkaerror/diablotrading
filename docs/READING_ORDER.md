@@ -37,11 +37,14 @@ Read these in order. After them, you can write or operate without breaking
 the safety rails:
 
 1. `reports/usage_optimizer_latest.txt` — smallest safe read list and do-not-paste list.
-2. `reports/model_command_center_latest.txt` — current missions, notes, safety rails, next actions.
+2. `reports/model_command_center_onboard_latest.txt` — compact command-center digest.
 3. [**MISSION_CONTROL.md**](MISSION_CONTROL.md) — durable command brief.
 4. [**PROJECT_STATUS.md**](PROJECT_STATUS.md) — current state, priorities, saved truth, next moves.
 5. [**MODEL_COLLABORATION_BRIEF.md**](MODEL_COLLABORATION_BRIEF.md) — model split, collaboration rules, safety rails.
 6. [**MODEL_THEORY.md**](MODEL_THEORY.md) — how the desk thinks.
+
+Read `reports/model_command_center_latest.txt` before broad changes or when
+you need the full report map.
 
 Use [**MODULE_INDEX.md**](MODULE_INDEX.md) and
 [**ENGINEERING_CONVENTIONS.md**](ENGINEERING_CONVENTIONS.md) when you are
@@ -54,6 +57,7 @@ about to change code.
 9. [**RESEARCH_ROADMAP.md**](RESEARCH_ROADMAP.md) — the three-phase research plan (post-trade learning → portfolio-level → consensus risk). Read before claiming a research mission.
 9a. [**PORTFOLIO_CONSTRUCTION.md**](PORTFOLIO_CONSTRUCTION.md) — correlation, drawdown, capacity, and sizing discipline.
 9b. [**CONSENSUS_AND_CROWDEDNESS.md**](CONSENSUS_AND_CROWDEDNESS.md) — crowdedness, reflexivity, and what the desk still refuses to infer.
+9c. [**MEASUREMENTS_STRATEGIES_HEDGES_THRESHOLDS_2026-06-27.md**](MEASUREMENTS_STRATEGIES_HEDGES_THRESHOLDS_2026-06-27.md) — current research inventory of sensors, structures, hedges, and threshold classes.
 
 ## The day-to-day
 
@@ -95,6 +99,7 @@ about to change code.
 ## Research and playbooks
 
 24. [**HEDGE_FUND_METRICS.md**](HEDGE_FUND_METRICS.md) — the broader math context for promotion decisions.
+24a. [**MEASUREMENTS_STRATEGIES_HEDGES_THRESHOLDS_2026-06-27.md**](MEASUREMENTS_STRATEGIES_HEDGES_THRESHOLDS_2026-06-27.md) — how the current desk separates measurements, strategies, hedges, and hard/advisory thresholds.
 25. [**CAMPAIGN_SIMULATION.md**](CAMPAIGN_SIMULATION.md) — campaign-mode replay framework.
 26. [**PLAYBOOK_EARNINGS.md**](PLAYBOOK_EARNINGS.md) — earnings-catalyst playbook.
 27. [**PLAYBOOK_LONG_TERM.md**](PLAYBOOK_LONG_TERM.md) — long-term holdings playbook.
