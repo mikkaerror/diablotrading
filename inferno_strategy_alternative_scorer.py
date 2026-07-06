@@ -4,8 +4,8 @@ from __future__ import annotations
 
 The expected-move ledger now tells the desk when long-vol premium is demanding
 too much movement. This module takes the next step: for hard/extreme long-vol
-candidates, compare non-call defined-risk structures that could express the
-same thesis with better theta/vega posture.
+candidates, compare defined-risk structures that could express the same thesis
+with cleaner capped risk.
 
 Strict contract:
 - diagnostic-only and research-only
@@ -19,6 +19,7 @@ from typing import Any
 
 from inferno_config import MAX_SINGLE_TICKET_DOLLARS, local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_ticket_cap_policy import current_ticket_cap_policy
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -32,7 +33,7 @@ STRIKE_PLAN_FILE = DATA_DIR / "inferno_strike_plan.json"
 
 PRIMARY_HURDLES = {"hard", "extreme"}
 WATCH_HURDLES = {"stretch"}
-SUPPORTED_ALTERNATIVES = ("PUT_CREDIT_SPREAD", "IRON_CONDOR", "PUT_DEBIT_SPREAD", "STAND_ASIDE")
+SUPPORTED_ALTERNATIVES = ("CALL_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "IRON_CONDOR", "PUT_DEBIT_SPREAD", "STAND_ASIDE")
 
 
 def text(value: Any) -> str:
@@ -56,6 +57,17 @@ def number(value: Any, default: float | None = None) -> float | None:
         return float(raw)
     except ValueError:
         return default
+
+
+def effective_ticket_cap_dollars() -> float:
+    """Return the active hard cap for scoring context, with config fallback."""
+    try:
+        policy = current_ticket_cap_policy() or {}
+        cap = ((policy.get("effectiveBand") or {}).get("hardCapDollars"))
+    except Exception:
+        cap = None
+    parsed = number(cap, float(MAX_SINGLE_TICKET_DOLLARS)) or float(MAX_SINGLE_TICKET_DOLLARS)
+    return float(parsed)
 
 
 def clamp_score(value: float) -> float:
@@ -289,6 +301,86 @@ def put_credit_spread_score(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def call_debit_spread_score(context: dict[str, Any]) -> dict[str, Any]:
+    """Score bullish defined-risk debit via call debit spread."""
+    raw = 42.0
+    reasons: list[str] = []
+    warnings: list[str] = []
+    if bullish_trend(context["trend"]):
+        raw += 22.0
+        reasons.append("bullish/uptrend context supports positive-delta call debit posture")
+    elif calm_trend(context["trend"]):
+        raw += 3.0
+        reasons.append("neutral trend allows a small bullish defined-risk probe")
+    else:
+        raw -= 16.0
+        warnings.append(f"trend {context['trend'] or 'unknown'} does not support bullish call debit")
+
+    resistance_atr = ratio(context.get("distanceToResistancePct"), context.get("atrPercent"))
+    if resistance_atr is None:
+        warnings.append("missing resistance/ATR upside room")
+    elif resistance_atr >= 2.0:
+        raw += 14.0
+        reasons.append(f"resistance room is {resistance_atr:.2f} ATR")
+    elif resistance_atr >= 1.0:
+        raw += 8.0
+        reasons.append(f"resistance room is usable at {resistance_atr:.2f} ATR")
+    elif resistance_atr >= 0.5:
+        raw += 2.0
+        warnings.append(f"resistance room is thin at {resistance_atr:.2f} ATR")
+    else:
+        raw -= 14.0
+        warnings.append(f"resistance room is too tight at {resistance_atr:.2f} ATR")
+
+    rvol = context.get("rvol")
+    if rvol is not None and rvol > 2.0:
+        raw += 7.0
+        reasons.append(f"rvol {rvol:.2f} supports aggressive directional calls")
+    elif rvol is not None and rvol > 1.3:
+        raw += 4.0
+        reasons.append(f"rvol {rvol:.2f} supports directional movement")
+
+    iv_rank = context.get("ivRank")
+    if iv_rank is not None and iv_rank < 35:
+        raw += 5.0
+        reasons.append(f"IV rank {iv_rank:.1f} keeps call debit less punished")
+    elif iv_rank is not None and iv_rank > 60:
+        raw -= 6.0
+        warnings.append(f"IV rank {iv_rank:.1f} makes debit calls expensive")
+
+    if context.get("hurdle") in {"hard", "extreme"}:
+        raw += 6.0
+        reasons.append("call debit keeps the bullish thesis capped when long-vol premium is pressured")
+
+    estimated_loss = context.get("estimatedMaxLoss")
+    ticket_cap = effective_ticket_cap_dollars()
+    if estimated_loss is not None and estimated_loss > ticket_cap:
+        raw += 4.0
+        reasons.append(f"spread construction can cap risk below the original ${ticket_cap:.0f} limit")
+
+    score, quality_notes = score_with_quality(raw, context)
+    warnings.extend(quality_notes)
+    return {
+        "strategy": "CALL_DEBIT_SPREAD",
+        "score": score,
+        "rawScore": clamp_score(raw),
+        "scoreEdgeVsLongVol": round(score - context["longVolPressureScore"], 4),
+        "expectedGreekPosture": {
+            "delta": "positive",
+            "theta": "limited-negative",
+            "vega": "limited-positive",
+            "maxLoss": "defined",
+        },
+        "mathInputs": {
+            "resistanceAtrMultiple": resistance_atr,
+            "ivRank": context.get("ivRank"),
+            "rvol": context.get("rvol"),
+        },
+        "reasons": reasons,
+        "warnings": warnings,
+    }
+
+
 def iron_condor_score(context: dict[str, Any]) -> dict[str, Any]:
     """Score neutral defined-risk short-premium via iron condor."""
     raw = 40.0
@@ -454,9 +546,10 @@ def stand_aside_score(context: dict[str, Any]) -> dict[str, Any]:
         raw += 6.0
         reasons.append("option-chain quality penalty is meaningful")
     estimated_loss = context.get("estimatedMaxLoss")
-    if estimated_loss is not None and estimated_loss > MAX_SINGLE_TICKET_DOLLARS:
+    ticket_cap = effective_ticket_cap_dollars()
+    if estimated_loss is not None and estimated_loss > ticket_cap:
         raw += 6.0
-        reasons.append(f"original long-vol max loss exceeds ${MAX_SINGLE_TICKET_DOLLARS:.0f} cap")
+        reasons.append(f"original long-vol max loss exceeds ${ticket_cap:.0f} cap")
     return {
         "strategy": "STAND_ASIDE",
         "score": clamp_score(raw),
@@ -478,8 +571,9 @@ def stand_aside_score(context: dict[str, Any]) -> dict[str, Any]:
 
 
 def score_alternatives(context: dict[str, Any]) -> list[dict[str, Any]]:
-    """Score the supported non-call alternatives for one candidate."""
+    """Score the supported defined-risk alternatives for one candidate."""
     alternatives = [
+        call_debit_spread_score(context),
         put_credit_spread_score(context),
         iron_condor_score(context),
         put_debit_spread_score(context),
@@ -526,7 +620,7 @@ def recommendation_for(alternatives: list[dict[str, Any]], context: dict[str, An
     return {
         "strategy": "STAND_ASIDE",
         "verdict": "insufficient-alternative-edge",
-        "reason": "no non-call alternative clears the research threshold",
+        "reason": "no defined-risk alternative clears the research threshold",
     }
 
 
@@ -627,7 +721,7 @@ def build_strategy_alternative_scorer(
             ),
         ),
         "rules": [
-            "Only non-call defined-risk alternatives are scored in this pass.",
+            "Only defined-risk alternatives are scored in this pass.",
             "Scores are diagnostic rankings; unpriced alternatives must be priced by strike cycle before staging.",
             "No strategy here can relax paper/live gates or broker-submit authority.",
         ],
@@ -714,7 +808,7 @@ def save_strategy_alternative_scorer(payload: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Score non-call defined-risk alternatives for pressured long-vol candidates.")
+    parser = argparse.ArgumentParser(description="Score defined-risk alternatives for pressured long-vol candidates.")
     parser.add_argument("command", nargs="?", default="run", choices=["run", "status"])
     return parser.parse_args()
 

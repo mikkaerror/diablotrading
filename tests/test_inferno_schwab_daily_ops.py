@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for the Schwab daily operations layer."""
 
 import unittest
+from unittest.mock import patch
 
 import inferno_schwab_daily_ops as ops
 
@@ -96,6 +97,52 @@ class SchwabDailyOpsTests(unittest.TestCase):
         self.assertIn("Daily Schwab values to use", rendered)
         self.assertIn("NVDA: tradable-research", rendered)
         self.assertIn("quoteQualityScore / quoteQualityLabel", rendered)
+
+    def test_top_priority_slate_filters_and_sorts_tracker_rows(self) -> None:
+        symbols = ops.top_priority_slate(
+            {
+                "rows": [
+                    {"ticker": "LATE", "priority": 99, "setupRec": "Straddle", "daysUntilEarnings": 45},
+                    {"ticker": "AVOID", "priority": 98, "setupRec": "Avoid", "daysUntilEarnings": 2},
+                    {"ticker": "AVGO", "priority": 6, "readiness": 90, "setupRec": "Straddle", "daysUntilEarnings": 9},
+                    {"ticker": "KEYS", "priority": 8, "readiness": 80, "setupRec": "Vertical Call", "daysUntilEarnings": 14},
+                    {"ticker": "OTEX", "priority": 8, "readiness": 95, "setupRec": "Iron Condor", "daysUntilEarnings": 18},
+                ]
+            },
+            n=3,
+        )
+
+        self.assertEqual(symbols, ["OTEX", "KEYS", "AVGO"])
+
+    def test_default_symbol_universe_blends_positions_priority_slate_then_backfill(self) -> None:
+        payloads = {
+            ops.LIVE_ACCOUNT_SYNC_FILE: {
+                "positions": [
+                    {"symbol": "TE"},
+                    {"symbol": "HIVE"},
+                ]
+            },
+            ops.SNAPSHOT_FILE: {
+                "rows": [
+                    {"ticker": "AVGO", "priority": 7, "readiness": 85, "setupRec": "Straddle", "daysUntilEarnings": 10},
+                    {"ticker": "LUNR", "priority": 9, "readiness": 70, "setupRec": "Vertical Call", "daysUntilEarnings": 8},
+                    {"ticker": "TE", "priority": 99, "readiness": 99, "setupRec": "Straddle", "daysUntilEarnings": 5},
+                    {"ticker": "OLD", "priority": 95, "readiness": 99, "setupRec": "Straddle", "daysUntilEarnings": 42},
+                    {"ticker": "SKIP", "priority": 94, "readiness": 99, "setupRec": "Avoid", "daysUntilEarnings": 1},
+                ]
+            },
+            ops.EXECUTION_QUEUE_FILE: {
+                "items": [{"ticker": "CCI"}],
+                "readyTickers": ["AEHR"],
+            },
+            ops.APPROVAL_QUEUE_FILE: {"items": [{"symbol": "MRVL"}]},
+            ops.WATCHLIST_INPUT_FILE: {"tickers": ["TXN"]},
+        }
+
+        with patch.object(ops, "load_json_file", side_effect=lambda path: payloads.get(path, {})):
+            symbols = ops.default_symbol_universe(limit=8)
+
+        self.assertEqual(symbols, ["TE", "HIVE", "LUNR", "AVGO", "CCI", "AEHR", "MRVL", "TXN"])
 
 
 if __name__ == "__main__":

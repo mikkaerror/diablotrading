@@ -131,8 +131,31 @@ class StrategyAlternativePricingTests(unittest.TestCase):
             },
         )
         self.cap_patch.start()
+        self.policy_patch = patch(
+            "inferno_strategy_alternative_pricing.current_ticket_cap_policy",
+            return_value={
+                "verdict": "active",
+                "requestedBand": {
+                    "minTicketDollars": 250.0,
+                    "targetTicketDollars": 250.0,
+                    "maxTicketDollars": 500.0,
+                },
+                "effectiveBand": {
+                    "hardCapDollars": 500.0,
+                    "minTargetDollars": 250.0,
+                    "targetTicketDollars": 250.0,
+                    "sourceRiskCapSource": "config-default",
+                },
+                "callOptionsPosture": {
+                    "mode": "aggressive-defined-risk",
+                    "aggressiveCallResearchEnabled": True,
+                },
+            },
+        )
+        self.policy_patch.start()
 
     def tearDown(self) -> None:
+        self.policy_patch.stop()
         self.cap_patch.stop()
         for time_patch in reversed(self.time_patches):
             time_patch.stop()
@@ -187,6 +210,34 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertEqual(rows[1]["recommendationVerdict"], pricing.FALLBACK_RECOMMENDATION_VERDICT)
         self.assertIn("range premium backup", rows[1]["recommendationReason"])
 
+    def test_source_candidates_include_call_debit_spreads(self) -> None:
+        payload = {
+            "scorecards": [
+                {
+                    "ticker": "CALL",
+                    "longVolPressureScore": 40,
+                    "recommendation": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "verdict": "prefer-alternative-research",
+                        "reason": "bullish momentum",
+                    },
+                    "alternatives": [
+                        {"strategy": "CALL_DEBIT_SPREAD", "score": 78, "scoreEdgeVsLongVol": 18},
+                        {"strategy": "PUT_CREDIT_SPREAD", "score": 62, "scoreEdgeVsLongVol": 8},
+                    ],
+                }
+            ],
+        }
+
+        rows = pricing.source_candidates(payload, limit=1, variants_per_ticker=2)
+
+        self.assertEqual(
+            [row["recommendedStrategy"] for row in rows],
+            ["CALL_DEBIT_SPREAD", "PUT_CREDIT_SPREAD"],
+        )
+        self.assertFalse(rows[0]["fallbackVariant"])
+        self.assertTrue(rows[1]["fallbackVariant"])
+
     def test_source_candidates_backfill_scanner_when_slots_remain(self) -> None:
         rows = pricing.source_candidates(
             scorer_payload(),
@@ -218,6 +269,9 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertEqual(intent["approvalStatus"], "research-only")
         self.assertEqual(intent["marketContext"]["trend"]["label"], "Bullish")
         self.assertEqual(intent["atrPercent"], 5.0)
+
+    def test_trend_label_handles_dict_context(self) -> None:
+        self.assertEqual(pricing.trend_label({"label": "Bearish", "tone": "cold"}), "Bearish")
 
     def test_intent_from_scanner_candidate_uses_candidate_context_without_reducer(self) -> None:
         candidate = next(
@@ -372,10 +426,33 @@ class StrategyAlternativePricingTests(unittest.TestCase):
 
         blocks, warnings = pricing.strategy_optimizer_notes(plan)
 
-        self.assertFalse(warnings)
+        self.assertIn("below target ticket band floor", "; ".join(warnings))
         self.assertIn("not positive", "; ".join(blocks))
         self.assertIn("creditRisk", plan)
         self.assertEqual(plan["creditRisk"], 0.0)
+
+    def test_strategy_optimizer_accepts_positive_delta_call_debit(self) -> None:
+        plan = {
+            "strategy": "CALL_DEBIT_SPREAD",
+            "estimatedDebit": 2.6,
+            "estimatedMaxLoss": 260,
+            "estimatedMaxProfit": 240,
+            "breakEven": 52.6,
+            "greekSummary": {
+                "greeksComplete": True,
+                "netDelta": 0.22,
+                "netTheta": -0.01,
+                "netVega": 0.02,
+            },
+        }
+
+        blocks, warnings = pricing.strategy_optimizer_notes(
+            plan,
+            {"marketContext": {"resistance": 56}},
+        )
+
+        self.assertFalse(blocks)
+        self.assertFalse(warnings)
 
     def test_iron_condor_ladder_ranks_range_safe_combined_passes(self) -> None:
         pricing_intent = {
@@ -528,6 +605,7 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["promotable"])
         self.assertFalse(payload["liveTradingAllowed"])
+        self.assertEqual(payload["ticketCapPolicy"]["effectiveBand"]["hardCapDollars"], 500.0)
 
     def test_text_report_renders_priced_and_failed_items(self) -> None:
         payload = {

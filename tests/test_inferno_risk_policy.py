@@ -40,6 +40,8 @@ from inferno_config import (
     MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT,
     MIN_CREDIT_SPREAD_CREDIT_RISK,
     MIN_DEBIT_SPREAD_REWARD_RISK,
+    PAPER_DAILY_BUDGET_DOLLARS,
+    PAPER_TICKET_BUDGET_DOLLARS,
     local_now,
 )
 from inferno_risk_policy import (
@@ -99,6 +101,25 @@ def _clean_item(**overrides):
             "distanceToSupportPct": 4.0,
         },
     }
+    base.update(overrides)
+    return base
+
+
+def _put_credit_item(**overrides):
+    """Return a small defined-risk put credit spread fixture."""
+    base = _clean_item(ticker="FCX")
+    base["strikePlan"] = {
+        "strategy": "PUT_CREDIT_SPREAD",
+        "estimatedCredit": 0.35,
+        "estimatedMaxLoss": 127.0,
+        "estimatedMaxProfit": 35.0,
+        "legs": [
+            {"instruction": "SELL_TO_OPEN", "symbol": "FCX_P_38", "bid": 0.55, "ask": 0.60},
+            {"instruction": "BUY_TO_OPEN", "symbol": "FCX_P_36", "bid": 0.18, "ask": 0.20},
+        ],
+        "liquidityNotes": [],
+    }
+    base["marketContext"]["distanceToSupportPct"] = 8.0
     base.update(overrides)
     return base
 
@@ -370,12 +391,107 @@ class EvaluateStrikeItemTests(unittest.TestCase):
         self.assertFalse(v.passed)
         self.assertTrue(any("liveTradingAllowed" in b for b in v.blocks))
 
+    def test_paper_mode_live_trading_flag_still_blocks(self):
+        v = evaluate_strike_item(
+            _clean_item(liveTradingAllowed=True),
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=[],
+            mode="paper",
+        )
+        self.assertFalse(v.passed)
+        self.assertTrue(any("liveTradingAllowed" in b for b in v.blocks))
+
     def test_oversize_ticket_blocks(self):
         item = _clean_item()
         item["strikePlan"]["estimatedMaxLoss"] = MAX_SINGLE_TICKET_DOLLARS + 1.0
         v = evaluate_strike_item(item, strike_plan_generated_at=_fresh_plan_timestamp())
         self.assertFalse(v.passed)
         self.assertTrue(any("single-ticket cap" in b for b in v.blocks))
+
+    def test_paper_mode_ignores_live_drawdown_pause_cap(self):
+        drawdown_paused_cap = {
+            "effectiveCap": 0.0,
+            "source": "ack",
+            "recommendedCap": 25.0,
+            "ackedCap": 250.0,
+            "verdict": "config-cap-too-high",
+            "shouldUseRecommendation": True,
+            "drawdownLevel": "pause",
+            "drawdownCapMultiplier": 0.0,
+            "newEntriesAllowed": False,
+        }
+        with patch("inferno_risk_policy.current_single_ticket_cap", return_value=drawdown_paused_cap):
+            v = evaluate_strike_item(
+                _put_credit_item(),
+                strike_plan_generated_at=_fresh_plan_timestamp(),
+                ledger_items=[],
+                mode="paper",
+            )
+        self.assertFalse(any("single-ticket cap" in b for b in v.blocks), v.blocks)
+        self.assertEqual(v.metrics["riskMode"], "paper")
+        self.assertEqual(v.metrics["effectiveSingleTicketCap"], PAPER_TICKET_BUDGET_DOLLARS)
+        self.assertEqual(v.metrics["effectiveSingleTicketCapSource"], "paper-budget")
+
+    def test_live_mode_preserves_drawdown_pause_cap_block(self):
+        drawdown_paused_cap = {
+            "effectiveCap": 0.0,
+            "source": "ack",
+            "recommendedCap": 25.0,
+            "ackedCap": 250.0,
+            "verdict": "config-cap-too-high",
+            "shouldUseRecommendation": True,
+            "drawdownLevel": "pause",
+            "drawdownCapMultiplier": 0.0,
+            "newEntriesAllowed": False,
+        }
+        with patch("inferno_risk_policy.current_single_ticket_cap", return_value=drawdown_paused_cap):
+            v = evaluate_strike_item(
+                _put_credit_item(),
+                strike_plan_generated_at=_fresh_plan_timestamp(),
+                ledger_items=[],
+                mode="live",
+            )
+        self.assertFalse(v.passed)
+        self.assertTrue(
+            any("single-ticket cap $0.00" in b and "drawdown pause" in b for b in v.blocks),
+            v.blocks,
+        )
+
+    def test_paper_mode_blocks_above_paper_budget(self):
+        item = _clean_item()
+        item["strikePlan"]["estimatedMaxLoss"] = PAPER_TICKET_BUDGET_DOLLARS + 100.0
+        item["strikePlan"]["estimatedMaxProfit"] = PAPER_TICKET_BUDGET_DOLLARS + 100.0
+        v = evaluate_strike_item(
+            item,
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=[],
+            mode="paper",
+        )
+        self.assertFalse(v.passed)
+        self.assertTrue(
+            any(f"single-ticket cap ${PAPER_TICKET_BUDGET_DOLLARS:.2f} (paper-budget)" in b for b in v.blocks),
+            v.blocks,
+        )
+
+    def test_paper_mode_preserves_paper_hygiene_guards(self):
+        ledger = [
+            {
+                "ticker": "AAA" if i == 0 else f"T{i}",
+                "status": "paper-staged",
+                "outcome": {"status": "open"},
+                "estimatedMaxLoss": 50.0,
+            }
+            for i in range(MAX_OPEN_PAPER_TICKETS)
+        ]
+        v = evaluate_strike_item(
+            _clean_item(),
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=ledger,
+            mode="paper",
+        )
+        self.assertFalse(v.passed)
+        self.assertTrue(any("already has an open paper ticket" in b for b in v.blocks), v.blocks)
+        self.assertTrue(any("open paper ticket cap" in b for b in v.blocks), v.blocks)
 
     def test_daily_cap_blocks(self):
         # Five existing open tickets at $300 + today's $250 = $1750 > $1500.
@@ -542,6 +658,8 @@ class EvaluateStrikeItemTests(unittest.TestCase):
         )
         self.assertEqual(v.metrics["maxSingleTicketDollars"], MAX_SINGLE_TICKET_DOLLARS)
         self.assertEqual(v.metrics["maxDailyTicketDollars"], MAX_DAILY_TICKET_DOLLARS)
+        self.assertEqual(v.metrics["paperTicketBudgetDollars"], PAPER_TICKET_BUDGET_DOLLARS)
+        self.assertEqual(v.metrics["paperDailyBudgetDollars"], PAPER_DAILY_BUDGET_DOLLARS)
         self.assertEqual(v.metrics["maxOpenPaperTickets"], MAX_OPEN_PAPER_TICKETS)
         self.assertEqual(v.metrics["minDebitSpreadRewardRisk"], MIN_DEBIT_SPREAD_REWARD_RISK)
         self.assertEqual(v.metrics["minCreditSpreadCreditRisk"], MIN_CREDIT_SPREAD_CREDIT_RISK)

@@ -253,6 +253,7 @@ def paper_status_for_item(
         item,
         strike_plan_generated_at=strike_plan_generated_at,
         ledger_items=(ledger or {}).get("items", []),
+        mode="paper",
     )
     if not item.get("ok"):
         reasons.append(str(item.get("reason") or "strike plan failed"))

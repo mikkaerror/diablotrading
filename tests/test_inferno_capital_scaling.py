@@ -22,8 +22,11 @@ Pinned invariants:
 from __future__ import annotations
 
 import json
+import sys
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -253,6 +256,28 @@ class AckFlowTests(unittest.TestCase):
         ack_status = payload["ack"]
         self.assertTrue(ack_status["drawdownTrigger"])
         self.assertTrue(ack_status["needsFreshAck"])
+
+    def test_accept_cli_records_cap_using_requested_floor(self) -> None:
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            sync = _write_sync(tmp, nlv=1_000, generated_at=NOW - timedelta(hours=2))
+            ack_file = tmp / "inferno_capital_scaling_ack.json"
+            state_file = tmp / "inferno_capital_scaling_state.json"
+            artifact_file = tmp / "inferno_capital_scaling.json"
+            report_file = tmp / "capital_scaling_latest.txt"
+            argv = ["inferno_capital_scaling.py", "accept", "--floor", "500"]
+            with patch.object(cs, "LIVE_ACCOUNT_SYNC_FILE", sync), \
+                 patch.object(cs, "CAPITAL_SCALING_ACK_FILE", ack_file), \
+                 patch.object(cs, "CAPITAL_SCALING_STATE_FILE", state_file), \
+                 patch.object(cs, "CAPITAL_SCALING_FILE", artifact_file), \
+                 patch.object(cs, "CAPITAL_SCALING_TEXT_FILE", report_file), \
+                 patch.object(sys, "argv", argv):
+                with redirect_stdout(StringIO()):
+                    exit_code = cs.main()
+            self.assertEqual(exit_code, 0)
+            ack = json.loads(ack_file.read_text(encoding="utf-8"))
+            self.assertEqual(ack["acceptedCap"], 500.0)
+            self.assertEqual(ack["floorDollars"], 500.0)
 
 
 class CurrentRecommendedCapAccessorTests(unittest.TestCase):

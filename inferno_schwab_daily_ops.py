@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from inferno_config import CANDIDATE_BANNED_SETUPS, CANDIDATE_MAX_DAYS_UNTIL_EARNINGS
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_schwab_oauth import (
     ENV_FILE,
@@ -33,7 +34,9 @@ from inferno_schwab_oauth import (
 from server import (
     APPROVAL_QUEUE_FILE,
     DATA_DIR,
+    LIVE_ACCOUNT_SYNC_FILE,
     REPORTS_DIR,
+    SNAPSHOT_FILE,
     ensure_dirs,
     load_json_file,
 )
@@ -45,6 +48,7 @@ SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
 SCHWAB_DAILY_OPS_TEXT_FILE = REPORTS_DIR / "schwab_daily_ops_latest.txt"
 SCHWAB_DAILY_OPS_STAGE = "schwab-daily-ops-read-only"
 DEFAULT_SYMBOL_LIMIT = 12
+DEFAULT_PRIORITY_SLATE_LIMIT = 8
 
 HARD_QUALITY_FLAGS = {
     "empty-chain",
@@ -169,18 +173,67 @@ def symbols_from_payload(payload: dict[str, Any], keys: tuple[str, ...]) -> list
     return symbols
 
 
+def symbols_from_positions(payload: dict[str, Any]) -> list[str]:
+    """Extract held symbols from the approved read-only live account sync."""
+    symbols: list[str] = []
+    for item in payload.get("positions") or []:
+        if isinstance(item, dict):
+            symbols.append(clean_symbol(item.get("symbol") or item.get("ticker")))
+        else:
+            symbols.append(clean_symbol(item))
+    return symbols
+
+
+def top_priority_slate(payload: dict[str, Any], *, n: int = DEFAULT_PRIORITY_SLATE_LIMIT) -> list[str]:
+    """Return top tracker candidates that deserve Schwab chain coverage.
+
+    This is a coverage helper, not an eligibility or authority change. It keeps
+    the same catalyst-window and banned-setup filters already used elsewhere,
+    then sorts by tracker priority so daily option chains cover the desk's own
+    highest-ranked candidates.
+    """
+    rows: list[dict[str, Any]] = []
+    for row in payload.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        symbol = clean_symbol(row.get("ticker") or row.get("symbol"))
+        if not symbol:
+            continue
+        setup = str(row.get("setupRec") or "").strip()
+        if setup in CANDIDATE_BANNED_SETUPS:
+            continue
+        if number(row.get("daysUntilEarnings"), 999) > CANDIDATE_MAX_DAYS_UNTIL_EARNINGS:
+            continue
+        rows.append(row)
+
+    rows.sort(
+        key=lambda row: (
+            -number(row.get("priority")),
+            -number(row.get("readiness")),
+            number(row.get("daysUntilEarnings"), 999),
+            clean_symbol(row.get("ticker") or row.get("symbol")),
+        )
+    )
+    return unique_symbols([row.get("ticker") or row.get("symbol") for row in rows], limit=n)
+
+
 def default_symbol_universe(limit: int | None = None) -> list[str]:
     """Choose the daily Schwab pull universe from the current decision slate.
 
-    Order matters: execution/approval names first, then the manually maintained
-    watchlist slot. This keeps API usage focused on names we may actually act on
-    while still allowing new watchlist names to receive chain-quality coverage.
+    Order matters: held names stay monitored first, then the priority slate gets
+    chain coverage before execution/approval/watchlist backfill. This changes
+    market-data coverage only; it does not change eligible tickers, risk gates,
+    authority, or broker permissions.
     """
+    live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    snapshot = load_json_file(SNAPSHOT_FILE) or {}
     execution = load_json_file(EXECUTION_QUEUE_FILE) or {}
     approval = load_json_file(APPROVAL_QUEUE_FILE) or {}
     watchlist = load_json_file(WATCHLIST_INPUT_FILE) or {}
     symbols = (
-        symbols_from_payload(execution, ("items", "readyTickers"))
+        symbols_from_positions(live_sync)
+        + top_priority_slate(snapshot)
+        + symbols_from_payload(execution, ("items", "readyTickers"))
         + symbols_from_payload(approval, ("items",))
         + symbols_from_payload(watchlist, ("tickers", "symbols", "watchlist"))
     )

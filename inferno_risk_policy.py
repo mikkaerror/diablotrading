@@ -19,6 +19,8 @@ from inferno_config import (
     MAX_UNDERLYING_SOURCE_DIVERGENCE_PCT,
     MIN_CREDIT_SPREAD_CREDIT_RISK,
     MIN_DEBIT_SPREAD_REWARD_RISK,
+    PAPER_DAILY_BUDGET_DOLLARS,
+    PAPER_TICKET_BUDGET_DOLLARS,
     local_now,
 )
 
@@ -55,6 +57,9 @@ def current_single_ticket_cap() -> dict[str, Any]:
             "ackedCap": None,
             "verdict": None,
             "shouldUseRecommendation": False,
+            "drawdownLevel": None,
+            "drawdownCapMultiplier": None,
+            "newEntriesAllowed": None,
         }
     effective = info.get("effectiveCap")
     if effective is None or not isinstance(effective, (int, float)):
@@ -66,6 +71,9 @@ def current_single_ticket_cap() -> dict[str, Any]:
         "ackedCap": info.get("ackedCap"),
         "verdict": info.get("verdict"),
         "shouldUseRecommendation": bool(info.get("shouldUseRecommendation")),
+        "drawdownLevel": info.get("drawdownLevel"),
+        "drawdownCapMultiplier": info.get("drawdownCapMultiplier"),
+        "newEntriesAllowed": info.get("newEntriesAllowed"),
     }
 
 
@@ -403,12 +411,18 @@ def evaluate_strike_item(
     *,
     strike_plan_generated_at: str | None = None,
     ledger_items: list[dict[str, Any]] | None = None,
+    mode: str = "live",
 ) -> RiskVerdict:
-    """Evaluate whether a strike ticket can be paper-staged.
+    """Evaluate whether a strike ticket can pass the requested risk lane.
 
-    This is not a live-trading green light. A passing verdict means the ticket is
-    clean enough to enter the paper evidence machine.
+    ``mode="live"`` uses the live capital-scaling cap, including drawdown
+    pauses. ``mode="paper"`` uses a fixed simulated budget so paper evidence can
+    continue while live capital is paused. Neither mode is a live-trading green
+    light.
     """
+    mode = str(mode or "live").lower()
+    if mode not in {"live", "paper"}:
+        mode = "live"
     blocks: list[str] = []
     warnings: list[str] = []
     ticker = str(item.get("ticker", "")).upper()
@@ -433,15 +447,35 @@ def evaluate_strike_item(
         blocks.append(f"{ticker} already has an open paper ticket")
     if len(open_items) >= MAX_OPEN_PAPER_TICKETS:
         blocks.append(f"open paper ticket cap reached ({MAX_OPEN_PAPER_TICKETS})")
-    cap_info = current_single_ticket_cap()
+    if mode == "paper":
+        cap_info = {
+            "effectiveCap": float(PAPER_TICKET_BUDGET_DOLLARS),
+            "source": "paper-budget",
+            "recommendedCap": None,
+            "ackedCap": None,
+            "verdict": "paper-budget",
+            "shouldUseRecommendation": False,
+            "drawdownLevel": None,
+            "drawdownCapMultiplier": None,
+            "newEntriesAllowed": None,
+        }
+        daily_cap = float(PAPER_DAILY_BUDGET_DOLLARS)
+    else:
+        cap_info = current_single_ticket_cap()
+        daily_cap = float(MAX_DAILY_TICKET_DOLLARS)
     effective_cap = cap_info["effectiveCap"]
     if loss > effective_cap:
         cap_source = cap_info.get("source") or "config-default"
+        if effective_cap <= 0 and cap_info.get("drawdownLevel"):
+            cap_source = (
+                f"{cap_source}; drawdown {cap_info.get('drawdownLevel')}; "
+                f"new entries allowed {cap_info.get('newEntriesAllowed')}"
+            )
         blocks.append(
             f"max loss ${loss:.2f} exceeds single-ticket cap ${effective_cap:.2f} ({cap_source})"
         )
-    if projected_loss > MAX_DAILY_TICKET_DOLLARS:
-        blocks.append(f"projected daily max loss ${projected_loss:.2f} exceeds cap ${MAX_DAILY_TICKET_DOLLARS:.2f}")
+    if projected_loss > daily_cap:
+        blocks.append(f"projected daily max loss ${projected_loss:.2f} exceeds cap ${daily_cap:.2f}")
     if rr is not None and rr < MIN_DEBIT_SPREAD_REWARD_RISK:
         blocks.append(f"reward/risk {rr:.2f} is below debit-spread floor {MIN_DEBIT_SPREAD_REWARD_RISK:.2f}")
     if credit_rr is not None and credit_rr < MIN_CREDIT_SPREAD_CREDIT_RISK:
@@ -475,14 +509,21 @@ def evaluate_strike_item(
 
     metrics = {
         "ticker": ticker,
+        "riskMode": mode,
         "maxLossDollars": loss,
         "maxSingleTicketDollars": MAX_SINGLE_TICKET_DOLLARS,
+        "paperTicketBudgetDollars": PAPER_TICKET_BUDGET_DOLLARS,
         "effectiveSingleTicketCap": effective_cap,
         "effectiveSingleTicketCapSource": cap_info.get("source"),
         "scalingRecommendation": cap_info.get("recommendedCap"),
         "scalingVerdict": cap_info.get("verdict"),
+        "drawdownLevel": cap_info.get("drawdownLevel"),
+        "drawdownCapMultiplier": cap_info.get("drawdownCapMultiplier"),
+        "newEntriesAllowed": cap_info.get("newEntriesAllowed"),
         "projectedDailyLossDollars": projected_loss,
         "maxDailyTicketDollars": MAX_DAILY_TICKET_DOLLARS,
+        "paperDailyBudgetDollars": PAPER_DAILY_BUDGET_DOLLARS,
+        "effectiveDailyTicketCap": daily_cap,
         "openPaperTickets": len(open_items),
         "maxOpenPaperTickets": MAX_OPEN_PAPER_TICKETS,
         "strikePlanAgeMinutes": age,

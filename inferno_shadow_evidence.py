@@ -169,6 +169,7 @@ def risk_verdict_for_shadow_item(
             item,
             strike_plan_generated_at=strike_plan_generated_at,
             ledger_items=ledger.get("items", []),
+            mode="paper",
         ).as_dict()
     except Exception as exc:  # noqa: BLE001
         return {

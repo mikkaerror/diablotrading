@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Research-only pricing pass for defined-risk strategy alternatives.
 
-The alternative scorer says which non-call structures deserve comparison.
+The alternative scorer says which defined-risk structures deserve comparison.
 This module asks the stricter question: can the strike selector build a priced
 variant from the option chain, and what does the paper risk policy say?
 
@@ -42,7 +42,9 @@ from inferno_strike_selector import (
     sellable,
     schwab_options_for_intent,
     to_leg,
+    vertical_call_plan,
 )
+from inferno_ticket_cap_policy import current_ticket_cap_policy
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -54,8 +56,8 @@ STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scor
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 PAPER_VARIANT_SCANNER_FILE = DATA_DIR / "inferno_paper_variant_scanner.json"
 
-DEFAULT_LIMIT = 4
-DEFAULT_VARIANTS_PER_TICKER = 2
+DEFAULT_LIMIT = 6
+DEFAULT_VARIANTS_PER_TICKER = 3
 PUT_CREDIT_LADDER_SHORT_LIMIT = 18
 PUT_CREDIT_LADDER_LONG_LIMIT = 8
 PUT_CREDIT_LADDER_REPORT_LIMIT = 12
@@ -64,7 +66,7 @@ IRON_CONDOR_SHORT_LIMIT = 8
 IRON_CONDOR_WING_LIMIT = 3
 IRON_CONDOR_LADDER_REPORT_LIMIT = 12
 IRON_CONDOR_RANGE_SAFE_REPORT_LIMIT = 5
-PRICEABLE_RECOMMENDATIONS = {"PUT_CREDIT_SPREAD", "IRON_CONDOR", "PUT_DEBIT_SPREAD"}
+PRICEABLE_RECOMMENDATIONS = {"CALL_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "IRON_CONDOR", "PUT_DEBIT_SPREAD"}
 FALLBACK_RECOMMENDATION_VERDICT = "fallback-price-check"
 VERDICT_PRIORITY = {
     "prefer-alternative-research": 0,
@@ -96,6 +98,39 @@ def number(value: Any, default: float | None = None) -> float | None:
         return float(raw)
     except ValueError:
         return default
+
+
+def ticket_cap_policy() -> dict[str, Any]:
+    """Return the current ticket-cap policy with a safe config fallback."""
+    try:
+        return current_ticket_cap_policy() or {}
+    except Exception:
+        return {
+            "effectiveBand": {
+                "hardCapDollars": float(MAX_SINGLE_TICKET_DOLLARS),
+                "minTargetDollars": 0.0,
+                "targetTicketDollars": float(MAX_SINGLE_TICKET_DOLLARS),
+                "sourceRiskCapSource": "ticket-policy-unavailable",
+            }
+        }
+
+
+def effective_ticket_cap_dollars() -> float:
+    """Return the research construction hard cap for priced variants."""
+    policy = ticket_cap_policy()
+    construction = (policy.get("constructionBand") or {}).get("hardCapDollars")
+    effective = construction if construction is not None else (policy.get("effectiveBand") or {}).get("hardCapDollars")
+    parsed = number(effective, float(MAX_SINGLE_TICKET_DOLLARS)) or float(MAX_SINGLE_TICKET_DOLLARS)
+    return float(parsed)
+
+
+def target_ticket_floor_dollars() -> float:
+    """Return the research construction target lower band for warnings only."""
+    policy = ticket_cap_policy()
+    construction = (policy.get("constructionBand") or {}).get("minTargetDollars")
+    floor = construction if construction is not None else (policy.get("effectiveBand") or {}).get("minTargetDollars")
+    parsed = number(floor, 0.0) or 0.0
+    return float(parsed)
 
 
 def lookup_by_ticker(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -212,7 +247,7 @@ def source_candidates(
     variants_per_ticker: int = 1,
     paper_variant_scanner: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return prioritized non-call strategy variants for pricing."""
+    """Return prioritized defined-risk strategy variants for pricing."""
     rows = [item for item in scorer.get("scorecards") or [] if isinstance(item, dict)]
     priceable_scorecards = [
         item
@@ -254,6 +289,8 @@ def source_candidates(
 
 def trend_label(value: Any) -> str:
     """Normalize trend text for strike selector market context."""
+    if isinstance(value, dict):
+        return text(value.get("label") or value.get("tone")) or "Neutral"
     raw = text(value)
     return raw or "Neutral"
 
@@ -315,6 +352,8 @@ def plan_for_strategy(
     puts,
 ) -> dict[str, Any] | None:
     """Build the requested strategy from cleaned option chains."""
+    if strategy == "CALL_DEBIT_SPREAD":
+        return vertical_call_plan(pricing_intent, expiration, calls)
     if strategy == "PUT_CREDIT_SPREAD":
         return put_credit_spread_plan(pricing_intent, expiration, puts)
     if strategy == "PUT_DEBIT_SPREAD":
@@ -338,6 +377,7 @@ def put_credit_optimizer_notes(plan: dict[str, Any], pricing_intent: dict[str, A
     credit_risk = number(plan.get("creditRisk"))
     support_cushion = number(plan.get("supportCushionToShortPct"))
     max_loss = number(plan.get("estimatedMaxLoss"), 0.0) or 0.0
+    ticket_cap = effective_ticket_cap_dollars()
     greeks = plan.get("greekSummary") or {}
     support = number((pricing_intent.get("marketContext") or {}).get("support"))
     short_strike = number(plan.get("shortPutStrike"))
@@ -346,8 +386,8 @@ def put_credit_optimizer_notes(plan: dict[str, Any], pricing_intent: dict[str, A
         blocks.append(
             f"credit/risk {credit_risk or 0.0:.2f} is below optimizer floor {MIN_CREDIT_SPREAD_CREDIT_RISK:.2f}"
         )
-    if max_loss > MAX_SINGLE_TICKET_DOLLARS:
-        blocks.append(f"max loss ${max_loss:.2f} exceeds single-ticket cap ${MAX_SINGLE_TICKET_DOLLARS:.2f}")
+    if max_loss > ticket_cap:
+        blocks.append(f"max loss ${max_loss:.2f} exceeds single-ticket cap ${ticket_cap:.2f}")
     if support and short_strike and short_strike >= support:
         blocks.append(f"short put {short_strike:.2f} is at/above support {support:.2f}")
     elif support_cushion is not None and support_cushion < 0.5:
@@ -366,15 +406,31 @@ def strategy_optimizer_notes(plan: dict[str, Any], pricing_intent: dict[str, Any
     strategy = norm(plan.get("strategy"))
     max_loss = number(plan.get("estimatedMaxLoss"), 0.0) or 0.0
     max_profit = number(plan.get("estimatedMaxProfit"), 0.0) or 0.0
+    ticket_cap = effective_ticket_cap_dollars()
+    target_floor = target_ticket_floor_dollars()
     greeks = plan.get("greekSummary") or {}
     context = (pricing_intent or {}).get("marketContext") or {}
 
-    if max_loss > MAX_SINGLE_TICKET_DOLLARS:
-        blocks.append(f"max loss ${max_loss:.2f} exceeds single-ticket cap ${MAX_SINGLE_TICKET_DOLLARS:.2f}")
+    if max_loss > ticket_cap:
+        blocks.append(f"max loss ${max_loss:.2f} exceeds single-ticket cap ${ticket_cap:.2f}")
+    elif target_floor and max_loss < target_floor:
+        warnings.append(f"max loss ${max_loss:.2f} is below target ticket band floor ${target_floor:.2f}")
     if not greeks.get("greeksComplete"):
         warnings.append("Greek estimate is incomplete")
 
-    if strategy == "IRON_CONDOR":
+    if strategy == "CALL_DEBIT_SPREAD":
+        debit = number(plan.get("estimatedDebit"), 0.0) or 0.0
+        break_even = number(plan.get("breakEven"))
+        resistance = number(context.get("resistance"))
+        if debit <= 0:
+            blocks.append(f"call debit spread debit {debit:.2f} is not positive")
+        if max_profit <= 0:
+            blocks.append("call debit spread has no positive max-profit estimate")
+        if number(greeks.get("netDelta"), 0.0) <= 0:
+            blocks.append("call debit spread does not carry positive delta")
+        if resistance and break_even and break_even >= resistance:
+            warnings.append(f"call debit breakeven {break_even:.2f} is at/above resistance {resistance:.2f}")
+    elif strategy == "IRON_CONDOR":
         credit = number(plan.get("estimatedCredit"), 0.0) or 0.0
         credit_risk = round((credit * 100.0) / max_loss, 4) if credit > 0 and max_loss > 0 else 0.0
         plan["creditRisk"] = credit_risk
@@ -409,11 +465,12 @@ def put_credit_ladder_score(plan: dict[str, Any]) -> float:
     credit_risk = number(plan.get("creditRisk"), 0.0) or 0.0
     support_cushion = max(0.0, number(plan.get("supportCushionToShortPct"), 0.0) or 0.0)
     max_spread_pct = number(plan.get("maxLegSpreadPct"), 1.0) or 1.0
-    max_loss = number(plan.get("estimatedMaxLoss"), MAX_SINGLE_TICKET_DOLLARS) or MAX_SINGLE_TICKET_DOLLARS
+    ticket_cap = effective_ticket_cap_dollars()
+    max_loss = number(plan.get("estimatedMaxLoss"), ticket_cap) or ticket_cap
     greeks = plan.get("greekSummary") or {}
     theta = max(0.0, number(greeks.get("netTheta"), 0.0) or 0.0)
     vega_bonus = 4.0 if number(greeks.get("netVega"), 0.0) < 0 else -6.0
-    size_penalty = max(0.0, (max_loss - MAX_SINGLE_TICKET_DOLLARS) / 25.0)
+    size_penalty = max(0.0, (max_loss - ticket_cap) / 25.0)
     score = (
         credit_risk * 120.0
         + min(support_cushion, 8.0) * 2.0
@@ -433,13 +490,14 @@ def iron_condor_ladder_score(plan: dict[str, Any]) -> float:
         number(plan.get("resistanceCushionToShortCallPct"), 0.0) or 0.0,
     ))
     max_spread_pct = number(plan.get("maxLegSpreadPct"), 1.0) or 1.0
-    max_loss = number(plan.get("estimatedMaxLoss"), MAX_SINGLE_TICKET_DOLLARS) or MAX_SINGLE_TICKET_DOLLARS
+    ticket_cap = effective_ticket_cap_dollars()
+    max_loss = number(plan.get("estimatedMaxLoss"), ticket_cap) or ticket_cap
     width_skew = number(plan.get("wingWidthSkewPct"), 0.0) or 0.0
     greeks = plan.get("greekSummary") or {}
     theta = max(0.0, number(greeks.get("netTheta"), 0.0) or 0.0)
     delta_penalty = abs(number(greeks.get("netDelta"), 0.0) or 0.0) * 40.0
     vega_bonus = 4.0 if number(greeks.get("netVega"), 0.0) < 0 else -6.0
-    size_penalty = max(0.0, (max_loss - MAX_SINGLE_TICKET_DOLLARS) / 25.0)
+    size_penalty = max(0.0, (max_loss - ticket_cap) / 25.0)
     score = (
         credit_risk * 125.0
         + min(range_cushion, 8.0) * 2.5
@@ -734,7 +792,7 @@ def build_put_credit_ladder(
                 "expiration": expiration,
                 "strikePlan": plan,
             }
-            risk = evaluate_strike_item(item, strike_plan_generated_at=generated_at).as_dict()
+            risk = evaluate_strike_item(item, strike_plan_generated_at=generated_at, mode="paper").as_dict()
             ladder.append(compact_ladder_row(plan, risk))
     return sorted_put_credit_ladder_rows(ladder)
 
@@ -788,7 +846,7 @@ def build_iron_condor_ladder(
                         "expiration": expiration,
                         "strikePlan": plan,
                     }
-                    risk = evaluate_strike_item(item, strike_plan_generated_at=generated_at).as_dict()
+                    risk = evaluate_strike_item(item, strike_plan_generated_at=generated_at, mode="paper").as_dict()
                     ladder.append(compact_ladder_row(plan, risk))
     return sorted_condor_ladder_rows(ladder)
 
@@ -848,6 +906,8 @@ def build_priced_item(
         "sourcePrice": pricing_intent.get("sourcePrice"),
         "underlyingPriceSource": pricing_intent.get("underlyingPriceSource"),
         "daysUntilEarnings": intent.get("daysUntilEarnings"),
+        "paperVariantOnly": bool(candidate.get("paperVariantOnly")),
+        "paperVariantFamily": candidate.get("sourceFamily"),
         "paperOnly": True,
         "liveTradingAllowed": False,
         "brokerSubmitAllowed": False,
@@ -920,7 +980,7 @@ def build_priced_item(
                 "expiration": expiration,
                 "strikePlan": variant,
             }
-            risk_verdict = evaluate_strike_item(item, strike_plan_generated_at=generated_at).as_dict()
+            risk_verdict = evaluate_strike_item(item, strike_plan_generated_at=generated_at, mode="paper").as_dict()
             item["riskVerdict"] = risk_verdict
             item["optimizerPassed"] = not optimizer_blocks
             item["paperRiskPassed"] = bool(risk_verdict.get("passed"))
@@ -1030,6 +1090,7 @@ def build_strategy_alternative_pricing(
     )
     schwab_index = load_schwab_options_index() if schwab_options_index is None else schwab_options_index
     generated_at = local_now().isoformat()
+    cap_policy = ticket_cap_policy()
     items = [
         build_priced_item(
             candidate=candidate,
@@ -1059,6 +1120,13 @@ def build_strategy_alternative_pricing(
         "promotable": False,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
+        "ticketCapPolicy": {
+            "verdict": cap_policy.get("verdict"),
+            "requestedBand": cap_policy.get("requestedBand") or {},
+            "constructionBand": cap_policy.get("constructionBand") or {},
+            "effectiveBand": cap_policy.get("effectiveBand") or {},
+            "callOptionsPosture": cap_policy.get("callOptionsPosture") or {},
+        },
         "counts": {
             "requested": len(candidates),
             "tickerGroups": len({norm(item.get("ticker")) for item in candidates if norm(item.get("ticker"))}),
@@ -1090,6 +1158,7 @@ def build_strategy_alternative_pricing(
             "This pass prices alternatives only; it does not write the main strike plan.",
             "Combined pass means optimizer and paper-risk quality only, not live authority.",
             "Broker submit remains false and every priced variant requires explicit human review.",
+            "The ticket-cap policy sets a target band; only the hard cap is a blocking optimizer limit.",
         ],
     }
 
@@ -1122,6 +1191,8 @@ def plan_price_summary(plan: dict[str, Any]) -> str:
 def plan_strike_summary(plan: dict[str, Any]) -> str:
     """Render strategy-specific strike details."""
     strategy = norm(plan.get("strategy"))
+    if strategy == "CALL_DEBIT_SPREAD":
+        return f"breakeven {fmt(plan.get('breakEven'))} | width {fmt(plan.get('width'))}"
     if strategy == "PUT_CREDIT_SPREAD":
         return (
             f"short put {plan.get('shortPutStrike')} / long put {plan.get('longPutStrike')} | "
@@ -1141,6 +1212,10 @@ def plan_strike_summary(plan: dict[str, Any]) -> str:
 def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
     """Render the alternative pricing memo."""
     counts = payload.get("counts") or {}
+    cap_policy = payload.get("ticketCapPolicy") or {}
+    construction_band = cap_policy.get("constructionBand") or {}
+    effective_band = cap_policy.get("effectiveBand") or {}
+    posture = cap_policy.get("callOptionsPosture") or {}
     lines = [
         "Inferno Strategy Alternative Pricing",
         "",
@@ -1165,6 +1240,13 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         f"- iron-condor ladder rows retained: {counts.get('ironCondorLadderRows', 0)}",
         f"- range-safe condor rows found: {counts.get('ironCondorRangeSafeRows', 0)}",
         f"- failed/no-plan: {counts.get('failed', 0)} / {counts.get('noPlan', 0)}",
+        (
+            f"- research construction cap: {fmt_money(construction_band.get('hardCapDollars'))} | "
+            f"target floor {fmt_money(construction_band.get('minTargetDollars'))} | "
+            f"simulated paper budget {fmt_money(effective_band.get('hardCapDollars'))} | "
+            f"new entries allowed {effective_band.get('newEntriesAllowed')} | "
+            f"call posture {posture.get('mode') or 'n/a'}"
+        ),
         "",
         "Priced alternatives:",
     ]
@@ -1290,7 +1372,7 @@ def parse_args() -> argparse.Namespace:
         "--variants-per-ticker",
         type=int,
         default=DEFAULT_VARIANTS_PER_TICKER,
-        help="Ranked non-call strategy variants to price per ticker group.",
+        help="Ranked defined-risk strategy variants to price per ticker group.",
     )
     return parser.parse_args()
 

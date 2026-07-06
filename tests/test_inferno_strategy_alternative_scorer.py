@@ -3,6 +3,7 @@ from __future__ import annotations
 """Tests for the research-only defined-risk alternative scorer."""
 
 import unittest
+from unittest.mock import patch
 
 import inferno_strategy_alternative_scorer as scorer
 
@@ -103,6 +104,22 @@ def strike_plan() -> dict:
 class StrategyAlternativeScorerTests(unittest.TestCase):
     """Alternative scoring should stay diagnostic and quality-aware."""
 
+    def setUp(self) -> None:
+        self.cap_patch = patch(
+            "inferno_strategy_alternative_scorer.current_ticket_cap_policy",
+            return_value={
+                "effectiveBand": {
+                    "hardCapDollars": 500.0,
+                    "minTargetDollars": 250.0,
+                    "targetTicketDollars": 250.0,
+                }
+            },
+        )
+        self.cap_patch.start()
+
+    def tearDown(self) -> None:
+        self.cap_patch.stop()
+
     def test_bullish_supportive_context_prefers_put_credit(self) -> None:
         payload = scorer.build_strategy_alternative_scorer(
             expected_move=expected_move(),
@@ -119,6 +136,29 @@ class StrategyAlternativeScorerTests(unittest.TestCase):
         self.assertEqual(bull["recommendation"]["verdict"], "prefer-alternative-research")
         self.assertEqual(bull["alternatives"][0]["expectedGreekPosture"]["theta"], "positive")
         self.assertGreater(bull["alternatives"][0]["scoreEdgeVsLongVol"], 5)
+
+    def test_bullish_momentum_context_can_prefer_call_debit(self) -> None:
+        context = {
+            "ticker": "CALL",
+            "hurdle": "hard",
+            "longVolPressureScore": 55,
+            "trend": "Bullish",
+            "distanceToResistancePct": 18,
+            "distanceToSupportPct": 2,
+            "atrPercent": 5,
+            "ivRank": 22,
+            "rvol": 2.2,
+            "estimatedMaxLoss": 700,
+            "chainQuality": {"chainPriced": True},
+            "chainPenalty": 0,
+            "chainWarnings": [],
+        }
+
+        alternatives = scorer.score_alternatives(context)
+
+        self.assertEqual(alternatives[0]["strategy"], "CALL_DEBIT_SPREAD")
+        self.assertEqual(alternatives[0]["expectedGreekPosture"]["delta"], "positive")
+        self.assertGreater(alternatives[0]["scoreEdgeVsLongVol"], 5)
 
     def test_bad_chain_quality_can_force_stand_aside(self) -> None:
         payload = scorer.build_strategy_alternative_scorer(

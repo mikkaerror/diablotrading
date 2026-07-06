@@ -816,10 +816,15 @@ def main() -> int:
     if args.command == "accept":
         # Compute the current recommendation, then write an ack pinned to it.
         payload = build_capital_scaling()
-        rec = payload.get("recommendation") or {}
         inputs = payload.get("inputs") or {}
-        recommended = _coerce_float(rec.get("recommendedCap"))
         nlv = _coerce_float(inputs.get("netLiquidatingValue"))
+        rec = compute_recommended_cap(
+            nlv,
+            target_pct=args.pct,
+            floor=args.floor,
+            ceiling=args.ceiling,
+        )
+        recommended = _coerce_float(rec.get("recommendedCap"))
         if recommended is None:
             print(
                 "Cannot accept: no recommendation available. "

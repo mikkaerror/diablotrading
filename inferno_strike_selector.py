@@ -984,7 +984,11 @@ def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> lis
     for plan in plans:
         annotated = {
             **plan,
-            "riskVerdict": evaluate_strike_item(plan, strike_plan_generated_at=generated_at).as_dict(),
+            "riskVerdict": evaluate_strike_item(
+                plan,
+                strike_plan_generated_at=generated_at,
+                mode="paper",
+            ).as_dict(),
         }
         variant = annotated.get("paperRehearsalVariant") or {}
         if variant:
@@ -997,6 +1001,7 @@ def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> lis
                 "riskVerdict": evaluate_strike_item(
                     variant_item,
                     strike_plan_generated_at=generated_at,
+                    mode="paper",
                 ).as_dict(),
             }
         alternatives = []
@@ -1011,6 +1016,7 @@ def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> lis
                     "riskVerdict": evaluate_strike_item(
                         alternative_item,
                         strike_plan_generated_at=generated_at,
+                        mode="paper",
                     ).as_dict(),
                 }
             )
