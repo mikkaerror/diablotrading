@@ -69,7 +69,7 @@ FIELD_CATALOG = [
     },
     {
         "field": "atmLiquidityScore / liquidContractCount",
-        "dailyUse": "Fillability/depth proxy; thin chains stay paper-only or avoided.",
+        "dailyUse": "Secondary depth context; paper pass/fail is spread-primary with an OI floor.",
     },
     {
         "field": "atmImpliedMovePct / atmExpectedMoveDollar",
@@ -156,7 +156,44 @@ def load_schwab_env(path: Path = ENV_FILE) -> dict[str, str]:
         # The local env file is the source of truth for scheduled runs; setting
         # it here means LaunchAgents do not have to manually `source` secrets.
         os.environ[key] = value
+    sync_schwab_market_data_config(values)
     return values
+
+
+def _truthy_env(value: str | None) -> bool:
+    """Return the boolean convention used by `inferno_config` env flags."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def sync_schwab_market_data_config(values: dict[str, str]) -> None:
+    """Mirror `.env.schwab` into already-imported read-only Schwab constants."""
+    import inferno_config as config
+
+    updates: dict[str, Any] = {}
+    if "SCHWAB_OPTIONS_ENABLED" in values:
+        updates["SCHWAB_OPTIONS_ENABLED"] = _truthy_env(values.get("SCHWAB_OPTIONS_ENABLED"))
+    if "SCHWAB_TOKEN_FILE" in values:
+        updates["SCHWAB_TOKEN_FILE"] = Path(values["SCHWAB_TOKEN_FILE"]).expanduser()
+    if "SCHWAB_API_BASE_URL" in values:
+        updates["SCHWAB_API_BASE_URL"] = values["SCHWAB_API_BASE_URL"].strip().rstrip("/")
+    if "SCHWAB_OPTIONS_TIMEOUT_SECONDS" in values:
+        updates["SCHWAB_OPTIONS_TIMEOUT_SECONDS"] = float(values["SCHWAB_OPTIONS_TIMEOUT_SECONDS"])
+    if "SCHWAB_OPTIONS_SYMBOL_LIMIT" in values:
+        updates["SCHWAB_OPTIONS_SYMBOL_LIMIT"] = int(values["SCHWAB_OPTIONS_SYMBOL_LIMIT"])
+    if "SCHWAB_OPTIONS_STRIKE_COUNT" in values:
+        updates["SCHWAB_OPTIONS_STRIKE_COUNT"] = int(values["SCHWAB_OPTIONS_STRIKE_COUNT"])
+
+    for key, value in updates.items():
+        setattr(config, key, value)
+
+    options_module = sys.modules.get("inferno_schwab_options")
+    if options_module is not None:
+        for key, value in updates.items():
+            setattr(options_module, key, value)
+        if "SCHWAB_OPTIONS_STRIKE_COUNT" in updates:
+            options_module.DEFAULT_CHAIN_PARAMS = {
+                "strikeCount": updates["SCHWAB_OPTIONS_STRIKE_COUNT"],
+            }
 
 
 def symbols_from_payload(payload: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
@@ -253,29 +290,34 @@ def classify_chain_row(row: dict[str, Any]) -> dict[str, Any]:
     label = str(row.get("quoteQualityLabel") or "unknown")
     flags = [str(flag) for flag in row.get("qualityFlags") or []]
     hard_flags = [flag for flag in flags if flag in HARD_QUALITY_FLAGS]
+    paper_pass = bool(row.get("paperLiquidityPass"))
+    live_pass = bool(row.get("liveLiquidityPass"))
+    paper_block = str(row.get("paperLiquidityBlockReason") or "")
 
     reasons: list[str] = []
     if hard_flags:
         reasons.append("hard quote flags: " + ", ".join(hard_flags))
+    if not paper_pass:
+        reasons.append(f"paper spread/OI gate failed: {paper_block or 'spread/OI gate failed'}")
     if score < 50:
         reasons.append(f"quote quality below paper threshold ({score:.0f}/{label})")
     elif score < 70:
         reasons.append(f"fragile quote quality ({score:.0f}/{label})")
-    if spread_quality in {"wide", "untradeable"}:
+    if spread_quality == "untradeable":
         reasons.append(f"ATM spread is {spread_quality}")
-    if liquidity < 50:
-        reasons.append(f"ATM liquidity too thin ({liquidity:.0f})")
-    elif liquidity < 70:
-        reasons.append(f"ATM liquidity needs review ({liquidity:.0f})")
+    elif spread_quality == "wide" and not paper_pass:
+        reasons.append(f"ATM spread is {spread_quality}")
+    if liquidity < 70:
+        reasons.append(f"ATM liquidity score is secondary ({liquidity:.0f})")
     if "incomplete-greeks" in flags:
         reasons.append("Greeks incomplete")
 
-    if not hard_flags and score >= 80 and liquidity >= 70 and spread_quality in {"tight", "acceptable"}:
+    if live_pass and not hard_flags and score >= 70:
         lane = "tradable-research"
         action = "Allow into strike research; still require risk gates and human confirmation."
-    elif not hard_flags and score >= 70 and liquidity >= 50 and spread_quality in {"tight", "acceptable", "workable"}:
+    elif paper_pass and not hard_flags:
         lane = "paper-ready"
-        action = "Good enough for paper staging; inspect contract legs before sizing."
+        action = "Paper-admissible by spread/OI; charge full ATM spread as modeled friction."
     elif score >= 50 and spread_quality not in {"untradeable"}:
         lane = "manual-review"
         action = "Manual quote review only; do not size up."
@@ -294,6 +336,13 @@ def classify_chain_row(row: dict[str, Any]) -> dict[str, Any]:
         "atmSpreadQuality": spread_quality,
         "atmLiquidityScore": liquidity,
         "atmLiquidityBucket": row.get("atmLiquidityBucket"),
+        "atmWindowMedianSpreadPct": row.get("atmWindowMedianSpreadPct"),
+        "atmWindowOpenInterest": row.get("atmWindowOpenInterest"),
+        "paperLiquidityPass": paper_pass,
+        "paperLiquidityBlockReason": row.get("paperLiquidityBlockReason"),
+        "liveLiquidityPass": live_pass,
+        "liveLiquidityBlockReason": row.get("liveLiquidityBlockReason"),
+        "paperFillFrictionPct": row.get("paperFillFrictionPct"),
         "atmImpliedMovePct": row.get("atmImpliedMovePct"),
         "atmExpectedMoveDollar": row.get("atmExpectedMoveDollar"),
         "atmExpectedMoveBucket": row.get("atmExpectedMoveBucket"),
@@ -395,7 +444,9 @@ def render_ops_report(payload: dict[str, Any]) -> str:
             f"- {row.get('symbol')}: {row.get('lane')} | "
             f"Q {row.get('quoteQualityScore'):.0f}/{row.get('quoteQualityLabel')} | "
             f"spread {row.get('atmSpreadQuality')} {percent_text(row.get('atmSpreadPct'))} | "
-            f"liq {row.get('atmLiquidityScore'):.0f} | "
+            f"win spr {percent_text(row.get('atmWindowMedianSpreadPct'))} | "
+            f"win OI {int(number(row.get('atmWindowOpenInterest'), 0))} | "
+            f"paper {'pass' if row.get('paperLiquidityPass') else 'fail'} | "
             f"move {percent_text(row.get('atmImpliedMovePct'))} / {money_text(row.get('atmExpectedMoveDollar'))} | "
             f"straddle {money_text(row.get('atmStraddleMid'))}"
         )

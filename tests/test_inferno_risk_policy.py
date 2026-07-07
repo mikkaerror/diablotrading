@@ -315,6 +315,55 @@ class SchwabOptionQualityTests(unittest.TestCase):
         )
         self.assertTrue(any("too thin" in s for s in b))
 
+    def test_explicit_paper_spread_oi_gate_lifts_legacy_liquidity_score_to_warning(self):
+        b, w, metrics = schwab_option_quality_guards(
+            {
+                "schwabOptions": {
+                    "qualityFlags": [],
+                    "quoteQualityScore": 45,
+                    "quoteQualityLabel": "poor",
+                    "atmSpreadQuality": "workable",
+                    "atmLiquidityScore": 40,
+                    "atmWindowMedianSpreadPct": 0.18,
+                    "atmWindowOpenInterest": 500,
+                    "paperLiquidityPass": True,
+                    "paperLiquidityBlockReason": None,
+                    "liveLiquidityPass": False,
+                    "liveLiquidityBlockReason": "atm-window-spread 18.00% exceeds gate 12%",
+                    "paperFillFrictionPct": 0.18,
+                }
+            }
+        )
+
+        self.assertEqual(b, [])
+        self.assertTrue(any("spread/OI paper gate passed" in s for s in w))
+        self.assertTrue(any("secondary to spread/OI gate" in s for s in w))
+        self.assertTrue(metrics["paperLiquidityPass"])
+        self.assertEqual(metrics["paperFillFrictionPct"], 0.18)
+
+    def test_explicit_paper_gate_blocks_hard_wide_even_with_high_legacy_score(self):
+        b, _, metrics = schwab_option_quality_guards(
+            {
+                "schwabOptions": {
+                    "qualityFlags": ["thin-atm-liquidity"],
+                    "quoteQualityScore": 90,
+                    "quoteQualityLabel": "institutional",
+                    "atmSpreadQuality": "wide",
+                    "atmLiquidityScore": 100,
+                    "atmWindowMedianSpreadPct": 0.30,
+                    "atmWindowOpenInterest": 10000,
+                    "paperLiquidityPass": False,
+                    "paperLiquidityBlockReason": "atm-window-spread 30.00% exceeds hard-wide ceiling 25%",
+                    "liveLiquidityPass": False,
+                    "liveLiquidityBlockReason": "atm-window-spread 30.00% exceeds hard-wide ceiling 25%",
+                }
+            }
+        )
+
+        self.assertFalse(metrics["paperLiquidityPass"])
+        self.assertTrue(any("paper liquidity gate failed" in s for s in b))
+        self.assertTrue(any("ATM spread is wide" in s for s in b))
+
     def test_stale_schwab_chain_blocks(self):
         b, _, metrics = schwab_option_quality_guards(
             {

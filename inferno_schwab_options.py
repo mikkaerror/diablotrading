@@ -31,6 +31,7 @@ from inferno_config import (
     SCHWAB_API_BASE_URL,
     SCHWAB_OPTIONS_ENABLED,
     SCHWAB_OPTIONS_SYMBOL_LIMIT,
+    SCHWAB_OPTIONS_STRIKE_COUNT,
     SCHWAB_OPTIONS_TIMEOUT_SECONDS,
     SCHWAB_TOKEN_FILE,
     local_now,
@@ -43,6 +44,11 @@ SCHWAB_OPTIONS_FILE = DATA_DIR / "inferno_schwab_options.json"
 SCHWAB_OPTIONS_TEXT_FILE = REPORTS_DIR / "schwab_options_latest.txt"
 SCHWAB_OPTIONS_STAGE = "schwab-options-read-only"
 CHAIN_ENDPOINT = "/marketdata/v1/chains"
+LIVE_MAX_SPREAD_PCT = 0.12
+PAPER_MAX_SPREAD_PCT = 0.20
+PAPER_MIN_WINDOW_OI = 250
+HARD_WIDE_SPREAD_PCT = 0.25
+DEFAULT_CHAIN_PARAMS = {"strikeCount": SCHWAB_OPTIONS_STRIKE_COUNT}
 
 
 def https_context() -> ssl.SSLContext:
@@ -89,6 +95,17 @@ def mean_number(values: list[float | int | None]) -> float | None:
     if not present:
         return None
     return round(sum(present) / len(present), 4)
+
+
+def median_number(values: list[float | int | None]) -> float | None:
+    """Return the median of present numeric values or ``None`` when empty."""
+    present = sorted(float(value) for value in values if value is not None)
+    if not present:
+        return None
+    midpoint = len(present) // 2
+    if len(present) % 2:
+        return round(present[midpoint], 4)
+    return round((present[midpoint - 1] + present[midpoint]) / 2.0, 4)
 
 
 def normalized_iv(value: float | None) -> float | None:
@@ -301,31 +318,33 @@ def normalize_contract(raw: dict[str, Any]) -> dict[str, Any]:
 def liquidity_score_for_contract(spread_pct: float | None, open_interest: int, volume: int) -> int:
     """Score contract tradability from spread, open interest, and volume.
 
-    The score is deliberately conservative. Tight spreads matter most because
-    bad entry/exit fills can destroy an otherwise correct earnings thesis.
+    The score is deliberately conservative and spread-primary. Volume is only a
+    tiny confirmation bonus once spread and open interest are already usable; it
+    must not rescue a wide-spread contract.
     """
     score = 0
     if spread_pct is not None:
         if spread_pct <= 0.05:
-            score += 45
+            score += 60
         elif spread_pct <= 0.10:
-            score += 35
+            score += 55
+        elif spread_pct <= LIVE_MAX_SPREAD_PCT:
+            score += 50
         elif spread_pct <= 0.20:
+            score += 45
+        elif spread_pct <= HARD_WIDE_SPREAD_PCT:
             score += 20
-        else:
-            score += 5
     if open_interest >= 1000:
-        score += 35
-    elif open_interest >= 250:
-        score += 25
+        score += 40
+    elif open_interest >= PAPER_MIN_WINDOW_OI:
+        score += 30
     elif open_interest >= 50:
-        score += 12
-    if volume >= 500:
-        score += 20
-    elif volume >= 100:
-        score += 14
-    elif volume >= 10:
-        score += 6
+        score += 10
+    if spread_pct is not None and spread_pct <= PAPER_MAX_SPREAD_PCT and open_interest >= PAPER_MIN_WINDOW_OI:
+        if volume >= 500:
+            score += 5
+        elif volume >= 100:
+            score += 3
     return min(100, score)
 
 
@@ -356,6 +375,139 @@ def nearest_atm_pair(contracts: list[dict[str, Any]], underlying_price: float | 
         if best_put:
             return {"call": best_call, "put": best_put}
     return None
+
+
+def spread_primary_liquidity_score(spread_pct: float | None, open_interest: int) -> int:
+    """Score ATM-window fillability with spread first and OI as confirmation."""
+    if spread_pct is None:
+        return 0
+    if spread_pct <= 0.05:
+        score = 80
+    elif spread_pct <= 0.10:
+        score = 75
+    elif spread_pct <= LIVE_MAX_SPREAD_PCT:
+        score = 70
+    elif spread_pct <= PAPER_MAX_SPREAD_PCT:
+        score = 55
+    elif spread_pct <= HARD_WIDE_SPREAD_PCT:
+        score = 35
+    else:
+        score = 5
+
+    if open_interest >= 2000:
+        score += 20
+    elif open_interest >= 500:
+        score += 15
+    elif open_interest >= PAPER_MIN_WINDOW_OI:
+        score += 10
+    return min(100, score)
+
+
+def spread_for_liquidity_gate(row: dict[str, Any]) -> float | None:
+    """Return the robust spread used for paper/live liquidity gates."""
+    spread = row.get("atmWindowMedianSpreadPct")
+    if spread is None:
+        spread = row.get("atmSpreadPct")
+    return number(spread, None)
+
+
+def liquidity_gate(
+    row: dict[str, Any],
+    *,
+    max_spread_pct: float,
+    min_window_oi: int = PAPER_MIN_WINDOW_OI,
+) -> dict[str, Any]:
+    """Evaluate a spread-primary liquidity gate for a Schwab chain summary."""
+    spread = spread_for_liquidity_gate(row)
+    window_oi = int_number(row.get("atmWindowOpenInterest"))
+    if spread is None:
+        return {
+            "passed": False,
+            "spreadPct": None,
+            "windowOpenInterest": window_oi,
+            "reason": "missing-atm-window-spread",
+        }
+    if spread > HARD_WIDE_SPREAD_PCT:
+        return {
+            "passed": False,
+            "spreadPct": spread,
+            "windowOpenInterest": window_oi,
+            "reason": f"atm-window-spread {spread:.2%} exceeds hard-wide ceiling {HARD_WIDE_SPREAD_PCT:.0%}",
+        }
+    if spread > max_spread_pct:
+        return {
+            "passed": False,
+            "spreadPct": spread,
+            "windowOpenInterest": window_oi,
+            "reason": f"atm-window-spread {spread:.2%} exceeds gate {max_spread_pct:.0%}",
+        }
+    if window_oi < min_window_oi:
+        return {
+            "passed": False,
+            "spreadPct": spread,
+            "windowOpenInterest": window_oi,
+            "reason": f"atm-window-open-interest {window_oi} below floor {min_window_oi}",
+        }
+    return {
+        "passed": True,
+        "spreadPct": spread,
+        "windowOpenInterest": window_oi,
+        "reason": "spread-primary-liquidity-pass",
+    }
+
+
+def paper_liquidity_gate(row: dict[str, Any]) -> dict[str, Any]:
+    """Return whether a chain is paper-admissible after spread/OI checks."""
+    return liquidity_gate(row, max_spread_pct=PAPER_MAX_SPREAD_PCT)
+
+
+def live_liquidity_gate(row: dict[str, Any]) -> dict[str, Any]:
+    """Return whether a chain clears the tighter future live-liquidity check."""
+    return liquidity_gate(row, max_spread_pct=LIVE_MAX_SPREAD_PCT)
+
+
+def atm_window_metrics(
+    contracts: list[dict[str, Any]],
+    atm_pair: dict[str, Any] | None,
+    underlying_price: float | None,
+    *,
+    window_per_side: int = 3,
+) -> dict[str, Any]:
+    """Summarize nearest ATM contracts so one odd strike cannot dominate."""
+    if not atm_pair or underlying_price is None:
+        return {
+            "atmWindowMedianSpreadPct": None,
+            "atmWindowOpenInterest": 0,
+            "atmWindowVolume": 0,
+            "atmWindowContractCount": 0,
+        }
+
+    expiration = (atm_pair.get("call") or {}).get("expirationDate")
+    considered: list[dict[str, Any]] = []
+    for side in ("CALL", "PUT"):
+        side_contracts = [
+            contract
+            for contract in contracts
+            if contract.get("putCall") == side
+            and contract.get("expirationDate") == expiration
+            and contract.get("mid")
+        ]
+        considered.extend(
+            sorted(
+                side_contracts,
+                key=lambda contract: abs((contract.get("strikePrice") or 0) - underlying_price),
+            )[:window_per_side]
+        )
+
+    spread = median_number([contract.get("spreadPct") for contract in considered])
+    open_interest = sum(int(contract.get("openInterest") or 0) for contract in considered)
+    volume = sum(int(contract.get("volume") or 0) for contract in considered)
+    return {
+        "atmWindowMedianSpreadPct": spread,
+        "atmWindowOpenInterest": open_interest,
+        "atmWindowVolume": volume,
+        "atmWindowContractCount": len(considered),
+    }
 
 
 def contract_digest(contract: dict[str, Any]) -> dict[str, Any]:
@@ -417,7 +569,11 @@ def side_stats(contracts: list[dict[str, Any]], side: str) -> dict[str, Any]:
     }
 
 
-def atm_metrics(atm_pair: dict[str, Any] | None, underlying_price: float | None) -> dict[str, Any]:
+def atm_metrics(
+    atm_pair: dict[str, Any] | None,
+    underlying_price: float | None,
+    contracts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Compute the ATM straddle quality and expected-move fields.
 
     The ATM straddle is the cleanest first-pass proxy for what the option market
@@ -438,6 +594,25 @@ def atm_metrics(atm_pair: dict[str, Any] | None, underlying_price: float | None)
             "atmSpreadQuality": "unknown",
             "atmLiquidityScore": None,
             "atmLiquidityBucket": "missing",
+            "atmWindowMedianSpreadPct": None,
+            "atmWindowOpenInterest": 0,
+            "atmWindowVolume": 0,
+            "atmWindowContractCount": 0,
+            "atmLiquidityGateSpreadPct": None,
+            "paperLiquidityPass": False,
+            "paperLiquidityBlockReason": "missing-atm-window-spread",
+            "liveLiquidityPass": False,
+            "liveLiquidityBlockReason": "missing-atm-window-spread",
+            "paperFillFrictionPct": None,
+            "paperFillFrictionModel": "full-atm-window-spread-per-crossing",
+            "paperLiquidityPolicy": {
+                "spreadPrimary": True,
+                "paperMaxSpreadPct": PAPER_MAX_SPREAD_PCT,
+                "liveMaxSpreadPct": LIVE_MAX_SPREAD_PCT,
+                "paperMinWindowOpenInterest": PAPER_MIN_WINDOW_OI,
+                "hardWideSpreadPct": HARD_WIDE_SPREAD_PCT,
+                "volumeCanRescueWideSpread": False,
+            },
             "atmImpliedVolatility": None,
             "atmNetDelta": None,
             "atmNetTheta": None,
@@ -449,8 +624,15 @@ def atm_metrics(atm_pair: dict[str, Any] | None, underlying_price: float | None)
     straddle_mid = round((call.get("mid") or 0) + (put.get("mid") or 0), 4)
     implied_move_pct = pct(straddle_mid / underlying_price) if underlying_price else None
     strike = call.get("strikePrice")
-    atm_spread_pct = mean_number([call.get("spreadPct"), put.get("spreadPct")])
-    liquidity_score = min(call.get("liquidityScore") or 0, put.get("liquidityScore") or 0)
+    window = atm_window_metrics(contracts or [], atm_pair, underlying_price)
+    atm_spread_pct = window.get("atmWindowMedianSpreadPct") or mean_number([call.get("spreadPct"), put.get("spreadPct")])
+    liquidity_score = spread_primary_liquidity_score(
+        atm_spread_pct,
+        int(window.get("atmWindowOpenInterest") or 0),
+    )
+    gate_row = {**window, "atmSpreadPct": atm_spread_pct}
+    paper_gate = paper_liquidity_gate(gate_row)
+    live_gate = live_liquidity_gate(gate_row)
 
     return {
         "atmStrike": strike,
@@ -465,6 +647,22 @@ def atm_metrics(atm_pair: dict[str, Any] | None, underlying_price: float | None)
         "atmSpreadQuality": spread_quality(atm_spread_pct),
         "atmLiquidityScore": liquidity_score,
         "atmLiquidityBucket": liquidity_bucket(liquidity_score),
+        **window,
+        "atmLiquidityGateSpreadPct": atm_spread_pct,
+        "paperLiquidityPass": paper_gate["passed"],
+        "paperLiquidityBlockReason": None if paper_gate["passed"] else paper_gate["reason"],
+        "liveLiquidityPass": live_gate["passed"],
+        "liveLiquidityBlockReason": None if live_gate["passed"] else live_gate["reason"],
+        "paperFillFrictionPct": atm_spread_pct,
+        "paperFillFrictionModel": "full-atm-window-spread-per-crossing",
+        "paperLiquidityPolicy": {
+            "spreadPrimary": True,
+            "paperMaxSpreadPct": PAPER_MAX_SPREAD_PCT,
+            "liveMaxSpreadPct": LIVE_MAX_SPREAD_PCT,
+            "paperMinWindowOpenInterest": PAPER_MIN_WINDOW_OI,
+            "hardWideSpreadPct": HARD_WIDE_SPREAD_PCT,
+            "volumeCanRescueWideSpread": False,
+        },
         "atmImpliedVolatility": mean_number(
             [normalized_iv(call.get("volatility")), normalized_iv(put.get("volatility"))]
         ),
@@ -537,9 +735,11 @@ def chain_quality_flags(
         flags.append("no-liquid-contracts")
     if not atm.get("atmStrike"):
         flags.append("missing-atm-pair")
-    if (atm.get("atmSpreadPct") or 0) > 0.35:
+    atm_spread = spread_for_liquidity_gate(atm)
+    paper_gate = paper_liquidity_gate(atm)
+    if atm_spread is not None and atm_spread > HARD_WIDE_SPREAD_PCT:
         flags.append("wide-atm-spread")
-    if (atm.get("atmLiquidityScore") or 0) < 70:
+    if not paper_gate["passed"]:
         flags.append("thin-atm-liquidity")
     if greeks_completeness_pct is not None and greeks_completeness_pct < 0.80:
         flags.append("incomplete-greeks")
@@ -561,7 +761,7 @@ def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     greeks_completeness_pct = pct(len(greek_complete) / len(contracts)) if contracts else None
     avg_spread_pct = mean_number([contract.get("spreadPct") for contract in contracts])
     liquid_avg_spread_pct = mean_number([contract.get("spreadPct") for contract in liquid_contracts])
-    atm = atm_metrics(atm_pair, underlying_price)
+    atm = atm_metrics(atm_pair, underlying_price, contracts)
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),
@@ -633,7 +833,7 @@ def build_report(
             if fixture_payloads is not None:
                 payload = fixture_payloads[symbol]
             elif status == "ok" and token:
-                payload = fetch_option_chain(symbol, access_token=token)
+                payload = fetch_option_chain(symbol, access_token=token, params=DEFAULT_CHAIN_PARAMS)
             else:
                 continue
             rows.append(summarize_chain(symbol, payload))

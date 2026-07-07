@@ -11,6 +11,7 @@ build evidence before any live automation earns authority.
 import argparse
 import hashlib
 import json
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from inferno_config import AUTO_PAPER_SELECTION_ENABLED, local_now
@@ -34,6 +35,14 @@ PAPER_AUTO_APPROVAL_REASONS = {
     "human approval still required",
     "execution intent is not approval-ready",
 }
+EVENT_DATE_FIELDS = ("nextEarnings", "earningsDate", "reportDate")
+EVENT_CONTEXT_FIELDS = ("trackerContext", "marketContext", "marketContextSummary")
+COUNTED_EVENT_STATUSES = {"paper-staged"}
+COUNTED_OUTCOME_STATUSES = {"open", "closed", "scored", "reviewed"}
+CAMPAIGN_ARMS = {"A", "B", "C", "D"}
+HOLD_THROUGH_EXIT_RULE = "hold-through"
+EXIT_BEFORE_EARNINGS_RULE = "exit-before-earnings"
+CONTRACT_MULTIPLIER = 100.0
 
 
 def load_strike_plan() -> dict[str, Any]:
@@ -59,6 +68,200 @@ def ticket_hash(parts: list[Any]) -> str:
     """Build a stable short id for duplicate-proof paper execution tickets."""
     raw = "|".join(str(part) for part in parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _text(value: Any) -> str:
+    """Return compact text for event-id fields."""
+    return str(value or "").strip()
+
+
+def _parse_event_date(value: Any) -> str:
+    """Normalize loose date/datetime values to YYYY-MM-DD when possible."""
+    raw = _text(value)
+    if not raw:
+        return ""
+    if len(raw) >= 10 and raw[4:5] == "-" and raw[7:8] == "-":
+        return raw[:10]
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return parsed.date().isoformat()
+    except ValueError:
+        return raw
+
+
+def _base_date_for_item(item: dict[str, Any]) -> date:
+    """Return the date used to reconstruct legacy days-to-earnings events."""
+    for field in ("tradeDate", "createdAt", "generatedAt"):
+        raw = _text(item.get(field))
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+        except ValueError:
+            if len(raw) >= 10 and raw[4:5] == "-" and raw[7:8] == "-":
+                try:
+                    return date.fromisoformat(raw[:10])
+                except ValueError:
+                    continue
+    return local_now().date()
+
+
+def _days_until_earnings_event(item: dict[str, Any]) -> str:
+    """Derive an event date from days-until-earnings for legacy artifacts."""
+    try:
+        days = int(float(item.get("daysUntilEarnings")))
+    except (TypeError, ValueError):
+        return ""
+    return (_base_date_for_item(item) + timedelta(days=days)).isoformat()
+
+
+def _event_date(item: dict[str, Any]) -> str:
+    """Return the best available earnings event date for a ticket-like item."""
+    for field in EVENT_DATE_FIELDS:
+        parsed = _parse_event_date(item.get(field))
+        if parsed:
+            return parsed
+    for context_field in EVENT_CONTEXT_FIELDS:
+        context = item.get(context_field) or {}
+        if not isinstance(context, dict):
+            continue
+        for field in EVENT_DATE_FIELDS:
+            parsed = _parse_event_date(context.get(field))
+            if parsed:
+                return parsed
+    derived = _days_until_earnings_event(item)
+    if derived:
+        return derived
+    return _parse_event_date(item.get("expiration") or (item.get("strikePlan") or {}).get("expiration")) or "unknown-event"
+
+
+def paper_event_id(item: dict[str, Any]) -> str:
+    """Return the distinct paper evidence event id for a ticket-like item."""
+    existing = _text(item.get("eventId"))
+    if existing:
+        return existing.upper()
+    ticker = _text(item.get("ticker") or item.get("symbol")).upper() or "UNKNOWN"
+    return f"{ticker}|{_event_date(item)}"
+
+
+def paper_event_ticket_count(event_id: str, ledger_items: list[dict[str, Any]]) -> int:
+    """Count existing open or scored paper tickets on a distinct event."""
+    target = _text(event_id).upper()
+    if not target:
+        return 0
+    count = 0
+    for item in ledger_items:
+        if not isinstance(item, dict):
+            continue
+        outcome_status = _text((item.get("outcome") or {}).get("status")).lower()
+        status = _text(item.get("status")).lower()
+        if status not in COUNTED_EVENT_STATUSES and outcome_status not in COUNTED_OUTCOME_STATUSES:
+            continue
+        if paper_event_id(item) == target:
+            count += 1
+    return count
+
+
+def _strategy_text(item: dict[str, Any]) -> str:
+    """Return a normalized strategy label from a ticket-like item."""
+    return _text(
+        item.get("strategy")
+        or (item.get("strikePlan") or {}).get("strategy")
+        or item.get("setupRec")
+    ).upper()
+
+
+def _campaign_pair_for_strategy(strategy: str) -> tuple[str, str]:
+    """Return the hold/exit arm pair for the campaign structure bucket."""
+    normalized = strategy.replace("_", " ")
+    if "STRADDLE" in normalized or "STRANGLE" in normalized:
+        return "A", "B"
+    return "C", "D"
+
+
+def _stable_variant_index(event_id: str, strategy: str) -> int:
+    """Return a deterministic 0/1 assignment without randomness."""
+    digest = hashlib.sha256(f"{event_id}|{strategy}".encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 2
+
+
+def campaign_arm_for_ticket(item: dict[str, Any], event_id: str) -> dict[str, Any]:
+    """Return pre-registered campaign arm metadata for a paper ticket."""
+    explicit_arm = _text(item.get("arm") or item.get("campaignArm")).upper()
+    explicit_exit = _text(item.get("exitRule") or item.get("campaignExitRule"))
+    if explicit_arm in CAMPAIGN_ARMS:
+        if not explicit_exit:
+            explicit_exit = HOLD_THROUGH_EXIT_RULE if explicit_arm in {"A", "C"} else EXIT_BEFORE_EARNINGS_RULE
+        return {
+            "arm": explicit_arm,
+            "campaignArm": explicit_arm,
+            "exitRule": explicit_exit,
+            "campaignExitRule": explicit_exit,
+            "campaignArmAssignment": "explicit",
+        }
+
+    strategy = _strategy_text(item)
+    hold_arm, exit_arm = _campaign_pair_for_strategy(strategy)
+    exit_variant = _stable_variant_index(event_id, strategy) == 1
+    arm = exit_arm if exit_variant else hold_arm
+    exit_rule = EXIT_BEFORE_EARNINGS_RULE if exit_variant else HOLD_THROUGH_EXIT_RULE
+    return {
+        "arm": arm,
+        "campaignArm": arm,
+        "exitRule": exit_rule,
+        "campaignExitRule": exit_rule,
+        "campaignArmAssignment": "event-hash",
+    }
+
+
+def friction_crossings_for_exit_rule(exit_rule: Any) -> int:
+    """Return how many spread crossings the campaign charges."""
+    normalized = _text(exit_rule).lower()
+    if normalized in {EXIT_BEFORE_EARNINGS_RULE, "exit-before", "sell-ramp"}:
+        return 2
+    return 1
+
+
+def _spread_pct(value: Any) -> float | None:
+    """Normalize a decimal/percentage spread input to a decimal fraction."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    return parsed / 100.0 if parsed > 1 else parsed
+
+
+def paper_fill_friction_model(
+    item: dict[str, Any],
+    *,
+    entry_limit: float,
+    exit_rule: Any,
+) -> dict[str, Any]:
+    """Estimate campaign spread friction from the full ATM spread per crossing."""
+    schwab = item.get("schwabOptions") if isinstance(item.get("schwabOptions"), dict) else {}
+    spread_pct = None
+    for value in (
+        item.get("paperFillFrictionPct"),
+        item.get("atmSpreadPctAtEntry"),
+        schwab.get("paperFillFrictionPct"),
+        schwab.get("atmWindowMedianSpreadPct"),
+        schwab.get("atmSpreadPct"),
+    ):
+        spread_pct = _spread_pct(value)
+        if spread_pct is not None:
+            break
+    crossings = friction_crossings_for_exit_rule(exit_rule)
+    per_crossing = round(entry_limit * spread_pct * CONTRACT_MULTIPLIER, 4) if spread_pct is not None else 0.0
+    total = round(per_crossing * crossings, 4)
+    return {
+        "paperFillFrictionPct": spread_pct,
+        "paperFrictionCrossings": crossings,
+        "estimatedSpreadFrictionPerCrossingDollars": per_crossing,
+        "estimatedTotalSpreadFrictionDollars": total,
+        "frictionModel": "full-atm-spread-per-crossing" if spread_pct is not None else "spread-unavailable",
+    }
 
 
 def ledger_leg_symbols(entry: dict[str, Any]) -> str:
@@ -355,6 +558,9 @@ def build_ledger_entry(
     status, block_reasons, risk_verdict, paper_auto_block_reason = paper_status_for_item(
         item, strike_plan_generated_at, ledger
     )
+    event_id = paper_event_id({**item, "expiration": strike_plan.get("expiration")})
+    arm = campaign_arm_for_ticket(item, event_id)
+    friction = paper_fill_friction_model(item, entry_limit=cost, exit_rule=arm["exitRule"])
     ticket_id = ticket_hash(
         [
             now.date().isoformat(),
@@ -371,6 +577,8 @@ def build_ledger_entry(
         "tradeDate": now.date().isoformat(),
         "sourceStrikePlanGeneratedAt": strike_plan_generated_at,
         "ticker": item.get("ticker"),
+        "eventId": event_id,
+        **arm,
         "setupRec": item.get("setupRec"),
         "strategy": strike_plan.get("strategy"),
         "paperVariantOnly": bool(item.get("paperVariantOnly") or strike_plan.get("paperVariantOnly")),
@@ -398,6 +606,7 @@ def build_ledger_entry(
         "expiration": strike_plan.get("expiration"),
         "entryCostType": cost_type,
         "entryLimit": round(cost, 4),
+        **friction,
         "estimatedMaxLoss": strike_plan.get("estimatedMaxLoss"),
         "estimatedMaxProfit": strike_plan.get("estimatedMaxProfit"),
         "breakEven": strike_plan.get("breakEven"),

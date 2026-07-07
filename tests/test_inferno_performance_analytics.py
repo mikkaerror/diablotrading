@@ -13,8 +13,10 @@ import unittest
 
 from inferno_performance_analytics import (
     BLOCK_REASON_CATEGORIES,
+    analytics_text,
     block_reason_categories,
     block_reason_counts,
+    build_performance_analytics,
     categorize_block_reason,
 )
 
@@ -86,6 +88,47 @@ class BlockReasonCategorizerTests(unittest.TestCase):
         counts = block_reason_counts(tickets)
         self.assertEqual(counts["foo reason"], 1)
         self.assertEqual(counts["bar reason"], 1)
+
+    def test_campaign_arm_summary_splits_closed_paper_outcomes(self) -> None:
+        ledger = {
+            "updatedAt": "2026-07-07T12:00:00-06:00",
+            "items": [
+                {
+                    "ticketId": "A-1",
+                    "status": "paper-staged",
+                    "strategy": "LONG_STRADDLE",
+                    "arm": "A",
+                    "exitRule": "hold-through",
+                    "entryLimit": 1.0,
+                    "estimatedMaxLoss": 100.0,
+                    "estimatedTotalSpreadFrictionDollars": 5.0,
+                    "outcome": {"status": "closed", "estimatedPnl": 20.0},
+                },
+                {
+                    "ticketId": "B-1",
+                    "status": "paper-staged",
+                    "strategy": "LONG_STRADDLE",
+                    "arm": "B",
+                    "exitRule": "exit-before-earnings",
+                    "entryLimit": 1.0,
+                    "estimatedMaxLoss": 100.0,
+                    "estimatedTotalSpreadFrictionDollars": 10.0,
+                    "outcome": {"status": "closed", "estimatedPnl": -10.0},
+                },
+            ],
+        }
+
+        analytics = build_performance_analytics(ledger=ledger)
+
+        arms = {item["arm"]: item for item in analytics["armSummary"]}
+        self.assertEqual(arms["A"]["count"], 1)
+        self.assertEqual(arms["B"]["count"], 1)
+        self.assertEqual(arms["A"]["estimatedFrictionDollars"], 5.0)
+        self.assertEqual(arms["B"]["exitRule"], "exit-before-earnings")
+        rendered = analytics_text(analytics)
+        self.assertIn("Campaign arm table:", rendered)
+        self.assertIn("- A: n=1", rendered)
+        self.assertIn("- B: n=1", rendered)
 
 
 if __name__ == "__main__":

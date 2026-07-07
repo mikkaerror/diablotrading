@@ -207,6 +207,77 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(entry["sourceRecommendedStrategy"], "PAPER_VARIANT_SCANNER")
         self.assertEqual(entry["sourceAlternativeScore"], 74.5)
         self.assertFalse(entry["liveTradingAllowed"])
+        self.assertEqual(entry["eventId"], "SMR|2026-08-21")
+
+    def test_event_ticket_count_counts_open_and_scored_staged_tickets(self) -> None:
+        ledger_items = [
+            {"ticker": "WSC", "eventId": "WSC|2026-07-08", "status": "paper-staged", "outcome": {"status": "open"}},
+            {"ticker": "WSC", "eventId": "WSC|2026-07-08", "status": "paper-staged", "outcome": {"status": "scored"}},
+            {"ticker": "WSC", "eventId": "WSC|2026-07-08", "status": "paper-blocked", "outcome": {"status": "not-opened"}},
+            {"ticker": "NEW", "eventId": "NEW|2026-07-08", "status": "paper-staged", "outcome": {"status": "open"}},
+        ]
+
+        self.assertEqual(paper_execution.paper_event_ticket_count("WSC|2026-07-08", ledger_items), 2)
+
+    def test_paper_event_id_uses_earnings_before_expiration(self) -> None:
+        event_id = paper_execution.paper_event_id(
+            {
+                "ticker": "WSC",
+                "trackerContext": {"nextEarnings": "2026-07-08T20:00:00-04:00"},
+                "strikePlan": {"expiration": "2026-07-17"},
+            }
+        )
+
+        self.assertEqual(event_id, "WSC|2026-07-08")
+
+    def test_ledger_entry_stamps_campaign_arm_and_full_spread_friction(self) -> None:
+        item = {
+            "ticker": "WSC",
+            "setupRec": "Straddle",
+            "campaignArm": "B",
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "schwabOptions": {"paperFillFrictionPct": 0.15},
+            "strikePlan": {
+                "strategy": "LONG_STRADDLE",
+                "expiration": "2026-07-17",
+                "estimatedDebit": 5.0,
+                "estimatedMaxLoss": 500.0,
+                "legs": [
+                    {"symbol": "WSC260717C00050000", "instruction": "BUY_TO_OPEN", "ask": 2.5},
+                    {"symbol": "WSC260717P00050000", "instruction": "BUY_TO_OPEN", "ask": 2.5},
+                ],
+            },
+        }
+        with patch("inferno_paper_execution.load_json_file", return_value={}):
+            with patch(
+                "inferno_paper_execution.paper_status_for_item",
+                return_value=("paper-staged", [], {"passed": True}, "ok"),
+            ):
+                entry = paper_execution.build_ledger_entry(
+                    item,
+                    strike_plan_generated_at=paper_execution.local_now().isoformat(),
+                    ledger={"items": []},
+                )
+
+        self.assertEqual(entry["arm"], "B")
+        self.assertEqual(entry["campaignArm"], "B")
+        self.assertEqual(entry["exitRule"], "exit-before-earnings")
+        self.assertEqual(entry["paperFrictionCrossings"], 2)
+        self.assertEqual(entry["paperFillFrictionPct"], 0.15)
+        self.assertEqual(entry["estimatedSpreadFrictionPerCrossingDollars"], 75.0)
+        self.assertEqual(entry["estimatedTotalSpreadFrictionDollars"], 150.0)
+        self.assertEqual(entry["frictionModel"], "full-atm-spread-per-crossing")
+        self.assertFalse(entry["liveTradingAllowed"])
+
+    def test_campaign_arm_assignment_is_always_registered(self) -> None:
+        item = {"ticker": "SMR", "strikePlan": {"strategy": "CALL_DEBIT_SPREAD"}}
+
+        arm = paper_execution.campaign_arm_for_ticket(item, "SMR|2026-07-17")
+
+        self.assertIn(arm["arm"], {"C", "D"})
+        self.assertEqual(arm["campaignArm"], arm["arm"])
+        self.assertIn(arm["exitRule"], {"hold-through", "exit-before-earnings"})
 
 
 class _FakeVerdict:

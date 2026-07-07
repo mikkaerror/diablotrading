@@ -78,6 +78,20 @@ class TradeEvidenceTests(unittest.TestCase):
         self.assertLess(outcome["netREstimate"], outcome["grossR"])
         self.assertFalse(outcome["frictionRealized"])
 
+    def test_normalized_outcome_charges_full_atm_spread_per_crossing(self) -> None:
+        ticket = closed_ticket("spread-ticket", pnl=250.0)
+        ticket["entryLimit"] = 5.0
+        ticket["estimatedMaxLoss"] = 500.0
+        ticket["paperFillFrictionPct"] = 0.10
+        ticket["paperFrictionCrossings"] = 2
+
+        outcome = normalized_outcome(ticket)
+
+        self.assertEqual(outcome["estimatedFrictionDollars"], 100.0)
+        self.assertEqual(outcome["frictionSource"], "full-atm-spread-per-crossing")
+        self.assertEqual(outcome["grossR"], 0.5)
+        self.assertEqual(outcome["netREstimate"], 0.3)
+
     def test_plain_straddle_name_is_treated_as_long_vol(self) -> None:
         self.assertTrue(is_long_vol({"strategy": "Straddle"}))
         card = decision_card(

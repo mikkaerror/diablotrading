@@ -160,6 +160,14 @@ def estimated_friction(item: dict[str, Any]) -> dict[str, Any]:
             "realized": False,
         }
 
+    campaign_friction = _first_number(item.get("estimatedTotalSpreadFrictionDollars"))
+    if campaign_friction is not None:
+        return {
+            "dollars": round(max(0.0, campaign_friction), 4),
+            "source": "full-atm-spread-per-crossing",
+            "realized": False,
+        }
+
     outcome_notes = text((item.get("outcome") or {}).get("notes")).lower()
     if "expiration intrinsic" in outcome_notes or "expired" in outcome_notes:
         return {
@@ -169,6 +177,23 @@ def estimated_friction(item: dict[str, Any]) -> dict[str, Any]:
         }
 
     entry_limit = _first_number(item.get("entryLimit"), (item.get("strikePlan") or {}).get("estimatedDebit"))
+    spread_pct = _first_number(
+        item.get("paperFillFrictionPct"),
+        item.get("atmSpreadPctAtEntry"),
+        (item.get("schwabOptions") or {}).get("paperFillFrictionPct"),
+        (item.get("schwabOptions") or {}).get("atmWindowMedianSpreadPct"),
+        (item.get("schwabOptions") or {}).get("atmSpreadPct"),
+    )
+    if spread_pct is not None and spread_pct > 1:
+        spread_pct /= 100.0
+    crossings = int(_first_number(item.get("paperFrictionCrossings")) or 0)
+    if entry_limit is not None and spread_pct is not None and spread_pct > 0 and crossings > 0:
+        return {
+            "dollars": round(entry_limit * spread_pct * CONTRACT_MULTIPLIER * crossings, 4),
+            "source": "full-atm-spread-per-crossing",
+            "realized": False,
+        }
+
     mid = entry_mid_value(item)
     if entry_limit is None or mid is None:
         return {"dollars": 0.0, "source": "unavailable", "realized": False}

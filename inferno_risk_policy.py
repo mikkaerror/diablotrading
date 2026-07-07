@@ -319,7 +319,7 @@ def market_context_guards(item: dict[str, Any]) -> tuple[list[str], list[str], d
     }
 
 
-def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[str], dict[str, Any]]:
+def schwab_option_quality_guards(item: dict[str, Any], *, mode: str = "paper") -> tuple[list[str], list[str], dict[str, Any]]:
     """Apply read-only Schwab option-chain quality gates when available.
 
     Missing Schwab data is not a blocker because OAuth may not be configured yet.
@@ -337,7 +337,29 @@ def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[
     atm_spread_quality = str(schwab_options.get("atmSpreadQuality") or "unknown")
     atm_bucket = str(schwab_options.get("atmExpectedMoveBucket") or "unknown")
     atm_liquidity = number(schwab_options.get("atmLiquidityScore"), 0)
-    spread_pct = number(schwab_options.get("atmSpreadPct"), 0)
+    spread_pct = number(
+        schwab_options.get("atmWindowMedianSpreadPct"),
+        number(schwab_options.get("atmSpreadPct"), 0),
+    )
+    paper_liquidity_pass = bool(schwab_options.get("paperLiquidityPass"))
+    live_liquidity_pass = bool(schwab_options.get("liveLiquidityPass"))
+    explicit_liquidity_gate = any(
+        key in schwab_options
+        for key in (
+            "paperLiquidityPass",
+            "liveLiquidityPass",
+            "paperLiquidityBlockReason",
+            "liveLiquidityBlockReason",
+            "atmWindowMedianSpreadPct",
+            "atmWindowOpenInterest",
+            "paperFillFrictionPct",
+        )
+    )
+    liquidity_block_reason = str(
+        schwab_options.get("paperLiquidityBlockReason")
+        or schwab_options.get("liveLiquidityBlockReason")
+        or ""
+    )
     source_status = str(schwab_options.get("sourceStatus") or "").strip().lower()
     source_generated_at = schwab_options.get("sourceGeneratedAt")
     source_age_minutes = (
@@ -365,24 +387,42 @@ def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[
         "empty-chain",
         "missing-underlying-price",
         "missing-atm-pair",
-        "no-liquid-contracts",
         "wide-atm-spread",
     }
     for flag in flags:
         if flag in hard_flags:
             blocks.append(f"Schwab option chain quality block: {flag}")
+        elif flag == "no-liquid-contracts":
+            if not paper_liquidity_pass:
+                blocks.append(f"Schwab option chain quality block: {flag}")
+            else:
+                warnings.append("Schwab option chain has no score-derived liquid contracts, but spread/OI paper gate passed")
+        elif flag == "thin-atm-liquidity":
+            blocks.append(f"Schwab paper liquidity gate failed: {liquidity_block_reason or flag}")
         elif flag == "incomplete-greeks":
             warnings.append("Schwab option chain has incomplete Greeks")
         else:
             warnings.append(f"Schwab option chain warning: {flag}")
 
-    if score and score < 50:
+    gate_passed = live_liquidity_pass if mode == "live" else paper_liquidity_pass
+    gate_name = "live" if mode == "live" else "paper"
+    if explicit_liquidity_gate and not gate_passed:
+        blocks.append(f"Schwab {gate_name} liquidity gate failed: {liquidity_block_reason or 'spread/OI gate failed'}")
+    if score and score < 50 and not paper_liquidity_pass:
         blocks.append(f"Schwab quote quality {score:.0f}/{label} is below paper threshold")
+    elif score and score < 50:
+        warnings.append(f"Schwab quote quality {score:.0f}/{label} is low, but spread/OI paper gate passed")
     elif 50 <= score < 70:
         warnings.append(f"Schwab quote quality is fragile at {score:.0f}/{label}")
-    if atm_spread_quality in {"wide", "untradeable"}:
+    if atm_spread_quality == "untradeable" or (spread_pct and spread_pct > 0.25):
         blocks.append(f"Schwab ATM spread is {atm_spread_quality}")
-    if atm_liquidity and atm_liquidity < 50:
+    elif atm_spread_quality == "wide" and explicit_liquidity_gate:
+        warnings.append("Schwab ATM spread is wide but inside the hard-wide paper ceiling")
+    elif atm_spread_quality == "wide":
+        blocks.append(f"Schwab ATM spread is {atm_spread_quality}")
+    if 0 < atm_liquidity < 70 and explicit_liquidity_gate:
+        warnings.append(f"Schwab ATM liquidity score {atm_liquidity:.0f} is secondary to spread/OI gate")
+    elif 0 < atm_liquidity < 50:
         blocks.append(f"Schwab ATM liquidity score {atm_liquidity:.0f} is too thin")
     elif 50 <= atm_liquidity < 70:
         warnings.append(f"Schwab ATM liquidity score {atm_liquidity:.0f} needs manual review")
@@ -399,8 +439,15 @@ def schwab_option_quality_guards(item: dict[str, Any]) -> tuple[list[str], list[
         "quoteQualityLabel": label,
         "qualityFlags": flags,
         "atmSpreadPct": spread_pct,
+        "atmWindowMedianSpreadPct": schwab_options.get("atmWindowMedianSpreadPct"),
+        "atmWindowOpenInterest": schwab_options.get("atmWindowOpenInterest"),
         "atmSpreadQuality": atm_spread_quality,
         "atmLiquidityScore": atm_liquidity,
+        "paperLiquidityPass": paper_liquidity_pass,
+        "paperLiquidityBlockReason": schwab_options.get("paperLiquidityBlockReason"),
+        "liveLiquidityPass": live_liquidity_pass,
+        "liveLiquidityBlockReason": schwab_options.get("liveLiquidityBlockReason"),
+        "paperFillFrictionPct": schwab_options.get("paperFillFrictionPct"),
         "atmExpectedMoveBucket": atm_bucket,
         "atmImpliedMovePct": schwab_options.get("atmImpliedMovePct"),
     }
@@ -435,7 +482,7 @@ def evaluate_strike_item(
     open_items = open_paper_items(ledger_items)
     plan = strategy_plan(item)
     context_blocks, context_warnings, context_metrics = market_context_guards(item)
-    schwab_blocks, schwab_warnings, schwab_metrics = schwab_option_quality_guards(item)
+    schwab_blocks, schwab_warnings, schwab_metrics = schwab_option_quality_guards(item, mode=mode)
 
     if not item.get("ok"):
         blocks.append(str(item.get("reason") or "strike plan failed"))

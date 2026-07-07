@@ -71,6 +71,12 @@ def strategy_key(ticket: dict[str, Any]) -> str:
     return str(ticket.get("strategy") or ticket.get("setupRec") or "UNKNOWN")
 
 
+def arm_key(ticket: dict[str, Any]) -> str:
+    """Return a pre-registered campaign arm label when one is present."""
+    arm = str(ticket.get("arm") or ticket.get("campaignArm") or "").upper().strip()
+    return arm if arm in {"A", "B", "C", "D"} else ""
+
+
 def summarize_closed_tickets(tickets: list[dict[str, Any]]) -> dict[str, Any]:
     """Calculate P/L metrics for closed paper tickets."""
     closed = [ticket for ticket in tickets if outcome_status(ticket) == "closed"]
@@ -373,6 +379,24 @@ def family_summary(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def arm_summary(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate paper outcomes by pre-registered campaign arm."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for ticket in tickets:
+        arm = arm_key(ticket)
+        if arm:
+            grouped[arm].append(ticket)
+    return [
+        {
+            "arm": arm,
+            "count": len(items),
+            "exitRule": next((item.get("exitRule") or item.get("campaignExitRule") for item in items if item.get("exitRule") or item.get("campaignExitRule")), None),
+            **summarize_closed_tickets(items),
+        }
+        for arm, items in sorted(grouped.items())
+    ]
+
+
 def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the current analytics package from the paper ledger."""
     ledger = ledger or load_ledger()
@@ -384,6 +408,7 @@ def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[st
     block_categories = block_reason_categories(tickets)
     strategies = strategy_summary(tickets)
     families = family_summary(tickets)
+    arms = arm_summary(tickets)
     analytics = {
         "generatedAt": local_now().isoformat(),
         "sourceLedgerUpdatedAt": ledger.get("updatedAt"),
@@ -397,6 +422,7 @@ def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[st
         "blockReasonCategories": block_categories,
         "strategies": strategies,
         "families": families,
+        "armSummary": arms,
         "deskVerdict": desk_verdict(closed, strategies, blocks),
     }
     return analytics
@@ -498,6 +524,17 @@ def analytics_text(analytics: dict[str, Any]) -> str:
             f"closed {closed_metrics.get('scoredCount')} | expectancy {closed_metrics.get('expectancy')} | "
             f"promotion {item.get('eligibleForPromotion')}"
         )
+    lines.extend(["", "Campaign arm table:"])
+    arms = analytics.get("armSummary") or []
+    if arms:
+        for item in arms:
+            lines.append(
+                f"- {item.get('arm')}: n={item.get('count')} | exit={item.get('exitRule')} | "
+                f"closed={item.get('scoredCount')} | grossR={item.get('averageGrossR')} | "
+                f"netR={item.get('averageNetREstimate')} | friction=${item.get('estimatedFrictionDollars')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "Strategy-family net-R table:"])
     for item in analytics.get("families") or []:
         lines.append(

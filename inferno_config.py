@@ -169,6 +169,7 @@ SCHWAB_OPTIONS_ENABLED = os.environ.get("SCHWAB_OPTIONS_ENABLED", "0").strip().l
 }
 SCHWAB_OPTIONS_TIMEOUT_SECONDS = float(os.environ.get("SCHWAB_OPTIONS_TIMEOUT_SECONDS", "20"))
 SCHWAB_OPTIONS_SYMBOL_LIMIT = int(os.environ.get("SCHWAB_OPTIONS_SYMBOL_LIMIT", "12"))
+SCHWAB_OPTIONS_STRIKE_COUNT = int(os.environ.get("SCHWAB_OPTIONS_STRIKE_COUNT", "24"))
 
 LABEL = "io.diablotrading.inferno-dawn-brief"
 WATCHDOG_LABEL = "io.diablotrading.inferno-watchdog"
