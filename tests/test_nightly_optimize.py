@@ -42,6 +42,26 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertIn('"$PYTHON" inferno_live_account_sync.py', text)
         self.assertNotIn("inferno_live_account_sync.py --quiet", text)
 
+    def test_nightly_refresh_preserves_schwab_snapshot_price_overlay(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        options = text.index('run_step "schwab options chain"')
+        overlay = text.index('run_step "snapshot price overlay"')
+        history = text.index('run_step "schwab price history"')
+
+        self.assertLess(options, overlay)
+        self.assertLess(overlay, history)
+
+    def test_nightly_refresh_runs_short_premium_monitor(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        funnel = text.index('run_step "funnel diagnostic"')
+        short_premium = text.index('run_step "short premium study"')
+        mastery = text.index('run_step "market mastery plan"')
+
+        self.assertLess(funnel, short_premium)
+        self.assertLess(short_premium, mastery)
+
     def test_deployed_copy_can_use_repo_root(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 

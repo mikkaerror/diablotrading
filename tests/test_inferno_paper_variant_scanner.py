@@ -93,15 +93,20 @@ class PaperVariantScannerTests(unittest.TestCase):
         self.assertEqual(payload["sourceFunnelBiasVerdict"], "premium-buy-monoculture")
 
         families = {item["sourceFamily"] for item in payload["pricingCandidates"]}
-        self.assertEqual(families, {"credit-spread", "wheel-proxy"})
-        self.assertEqual(payload["counts"]["pricingCandidates"], 2)
+        self.assertEqual(families, {"credit-spread", "wheel-proxy", "short-premium-defined"})
+        self.assertEqual(payload["counts"]["pricingCandidates"], 5)
+        self.assertEqual(payload["counts"]["shortPremiumDefinedCandidates"], 3)
         self.assertEqual(payload["counts"]["watchOnly"], 1)
         self.assertEqual(payload["watchOnlyCandidates"][0]["ticker"], "AZZ")
         self.assertTrue(all(item["paperVariantOnly"] for item in payload["pricingCandidates"]))
-        self.assertEqual(
-            {item["recommendedStrategy"] for item in payload["pricingCandidates"]},
-            {"PUT_CREDIT_SPREAD"},
-        )
+        self.assertIn("PUT_CREDIT_SPREAD", {item["recommendedStrategy"] for item in payload["pricingCandidates"]})
+        short_candidates = [
+            item for item in payload["pricingCandidates"]
+            if item["recommendedStrategy"] == "SHORT_PREMIUM_DEFINED"
+        ]
+        self.assertTrue(short_candidates)
+        self.assertTrue(all(item["arm"] == "SHORT_PREMIUM_DEFINED" for item in short_candidates))
+        self.assertTrue(all(item["shortPremiumDefined"] for item in short_candidates))
 
     def test_scanner_text_keeps_authority_warning_visible(self) -> None:
         payload = scanner.build_paper_variant_scanner(
@@ -115,6 +120,39 @@ class PaperVariantScannerTests(unittest.TestCase):
         self.assertIn("Authority: research-only; broker submit OFF; live trading OFF", rendered)
         self.assertIn("IREN", rendered)
         self.assertIn("no live orders", rendered)
+
+    def test_short_premium_defined_lane_keeps_forty_name_breadth(self) -> None:
+        rows = [
+            {
+                "ticker": f"SP{i:02d}",
+                "price": 50.0 + i,
+                "ivRank": 35.0,
+                "readiness": 75.0,
+                "signalTrigger": False,
+                "daysUntilEarnings": 20,
+                "setupRec": "Straddle",
+                "trend": "Neutral",
+                "rvol": 1.0,
+                "support": 45.0 + i,
+                "resistance": 60.0 + i,
+                "distanceToSupportPct": 10.0,
+                "distanceToResistancePct": 12.0,
+                "atrPercent": 4.0,
+            }
+            for i in range(45)
+        ]
+
+        payload = scanner.build_paper_variant_scanner(
+            snapshot={"generatedAt": "snapshot-now", "rows": rows},
+            funnel={"generatedAt": "funnel-now"},
+            limit=3,
+        )
+
+        self.assertEqual(payload["counts"]["shortPremiumDefinedCandidates"], 40)
+        self.assertEqual(
+            sum(1 for item in payload["pricingCandidates"] if item["recommendedStrategy"] == "SHORT_PREMIUM_DEFINED"),
+            40,
+        )
 
 
 if __name__ == "__main__":

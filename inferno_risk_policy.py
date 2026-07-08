@@ -25,6 +25,7 @@ from inferno_config import (
 )
 
 SCHWAB_OPTIONS_MAX_AGE_HOURS = 36.0
+SHORT_PREMIUM_DEFINED_STRATEGY = "SHORT_PREMIUM_DEFINED"
 
 
 def current_single_ticket_cap() -> dict[str, Any]:
@@ -309,13 +310,13 @@ def market_context_guards(item: dict[str, Any]) -> tuple[list[str], list[str], d
             blocks.append("put credit spread is fighting extreme expansion risk")
         elif rvol >= 1.5 or atr_expansion >= 1.2:
             warnings.append("put credit spread is selling premium into elevated movement risk")
-    elif strategy == "IRON_CONDOR":
+    elif strategy in {"IRON_CONDOR", SHORT_PREMIUM_DEFINED_STRATEGY}:
         if rvol >= 1.35 or atr_expansion >= 1.0:
-            blocks.append("iron condor is fighting expansion and elevated RVOL")
+            blocks.append(f"{strategy.lower().replace('_', ' ')} is fighting expansion and elevated RVOL")
         elif rvol >= 1.15 or atr_expansion >= 0.6:
-            warnings.append("iron condor is warming up; premium capture may be less forgiving")
+            warnings.append(f"{strategy.lower().replace('_', ' ')} is warming up; premium capture may be less forgiving")
         if min(distance_to_support, distance_to_resistance) <= 2.0:
-            warnings.append("iron condor sits close to one edge of the structure range")
+            warnings.append(f"{strategy.lower().replace('_', ' ')} sits close to one edge of the structure range")
     elif strategy in {"LONG_STRADDLE", "LONG_STRANGLE"}:
         if rvol < 0.85 and atr_expansion <= 0:
             warnings.append("long-volatility structure lacks strong expansion confirmation")

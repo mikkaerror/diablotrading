@@ -279,6 +279,25 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(arm["campaignArm"], arm["arm"])
         self.assertIn(arm["exitRule"], {"hold-through", "exit-before-earnings"})
 
+    def test_short_premium_defined_arm_stays_explicit(self) -> None:
+        item = {
+            "ticker": "WDC",
+            "arm": "SHORT_PREMIUM_DEFINED",
+            "strikePlan": {
+                "strategy": "SHORT_PREMIUM_DEFINED",
+                "estimatedCredit": 1.1,
+                "estimatedMaxLoss": 390,
+                "shortPremiumDefined": True,
+            },
+        }
+
+        arm = paper_execution.campaign_arm_for_ticket(item, "WDC|2026-07-20")
+
+        self.assertEqual(arm["arm"], "SHORT_PREMIUM_DEFINED")
+        self.assertEqual(arm["campaignArm"], "SHORT_PREMIUM_DEFINED")
+        self.assertEqual(arm["exitRule"], "hold-through")
+        self.assertEqual(arm["campaignArmAssignment"], "explicit")
+
 
 class _FakeVerdict:
     """Minimal stand-in for a risk verdict in auto-paper unit tests."""

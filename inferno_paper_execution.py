@@ -40,6 +40,8 @@ EVENT_CONTEXT_FIELDS = ("trackerContext", "marketContext", "marketContextSummary
 COUNTED_EVENT_STATUSES = {"paper-staged"}
 COUNTED_OUTCOME_STATUSES = {"open", "closed", "scored", "reviewed"}
 CAMPAIGN_ARMS = {"A", "B", "C", "D"}
+SHORT_PREMIUM_DEFINED_ARM = "SHORT_PREMIUM_DEFINED"
+EXPLICIT_CAMPAIGN_ARMS = CAMPAIGN_ARMS | {SHORT_PREMIUM_DEFINED_ARM}
 HOLD_THROUGH_EXIT_RULE = "hold-through"
 EXIT_BEFORE_EARNINGS_RULE = "exit-before-earnings"
 CONTRACT_MULTIPLIER = 100.0
@@ -174,6 +176,8 @@ def _strategy_text(item: dict[str, Any]) -> str:
 def _campaign_pair_for_strategy(strategy: str) -> tuple[str, str]:
     """Return the hold/exit arm pair for the campaign structure bucket."""
     normalized = strategy.replace("_", " ")
+    if strategy == SHORT_PREMIUM_DEFINED_ARM:
+        return SHORT_PREMIUM_DEFINED_ARM, SHORT_PREMIUM_DEFINED_ARM
     if "STRADDLE" in normalized or "STRANGLE" in normalized:
         return "A", "B"
     return "C", "D"
@@ -189,9 +193,13 @@ def campaign_arm_for_ticket(item: dict[str, Any], event_id: str) -> dict[str, An
     """Return pre-registered campaign arm metadata for a paper ticket."""
     explicit_arm = _text(item.get("arm") or item.get("campaignArm")).upper()
     explicit_exit = _text(item.get("exitRule") or item.get("campaignExitRule"))
-    if explicit_arm in CAMPAIGN_ARMS:
+    if explicit_arm in EXPLICIT_CAMPAIGN_ARMS:
         if not explicit_exit:
-            explicit_exit = HOLD_THROUGH_EXIT_RULE if explicit_arm in {"A", "C"} else EXIT_BEFORE_EARNINGS_RULE
+            explicit_exit = (
+                HOLD_THROUGH_EXIT_RULE
+                if explicit_arm in {"A", "C", SHORT_PREMIUM_DEFINED_ARM}
+                else EXIT_BEFORE_EARNINGS_RULE
+            )
         return {
             "arm": explicit_arm,
             "campaignArm": explicit_arm,
@@ -201,6 +209,14 @@ def campaign_arm_for_ticket(item: dict[str, Any], event_id: str) -> dict[str, An
         }
 
     strategy = _strategy_text(item)
+    if strategy == SHORT_PREMIUM_DEFINED_ARM:
+        return {
+            "arm": SHORT_PREMIUM_DEFINED_ARM,
+            "campaignArm": SHORT_PREMIUM_DEFINED_ARM,
+            "exitRule": explicit_exit or HOLD_THROUGH_EXIT_RULE,
+            "campaignExitRule": explicit_exit or HOLD_THROUGH_EXIT_RULE,
+            "campaignArmAssignment": "strategy",
+        }
     hold_arm, exit_arm = _campaign_pair_for_strategy(strategy)
     exit_variant = _stable_variant_index(event_id, strategy) == 1
     arm = exit_arm if exit_variant else hold_arm
@@ -584,6 +600,8 @@ def build_ledger_entry(
         "paperVariantOnly": bool(item.get("paperVariantOnly") or strike_plan.get("paperVariantOnly")),
         "paperVariantFamily": item.get("paperVariantFamily") or strike_plan.get("variantFamily"),
         "paperVariantOfStrategy": item.get("paperVariantOfStrategy") or strike_plan.get("variantForStrategy"),
+        "shortPremiumDefined": bool(item.get("shortPremiumDefined") or strike_plan.get("shortPremiumDefined")),
+        "preRegisteredCampaign": item.get("preRegisteredCampaign") or strike_plan.get("preRegisteredCampaign"),
         "status": status,
         "blockReasons": block_reasons,
         "paperOnly": True,

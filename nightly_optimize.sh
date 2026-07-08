@@ -12,7 +12,7 @@
 #   6) write a single coordination note summarizing what changed
 #
 # What this DOES NOT do (see CLAUDE.md §8):
-#   - approve or reject any paper ticket  (operator runs ./today.sh)
+#   - approve or reject any paper ticket  (operator runs ./inferno today)
 #   - touch the capital-scaling ack file  (operator decision)
 #   - mutate authority / live trading flags  (system-locked)
 #   - edit the universe / tracker / risk policy constants
@@ -81,6 +81,7 @@ fi
 if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
   run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
   run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
 fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
@@ -107,6 +108,7 @@ run_step "behavior audit"        "$PYTHON" inferno_trading_behavior_audit.py bui
 run_step "portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
 run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
+run_step "short premium study"   "$PYTHON" inferno_short_premium_study.py run
 run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
 
 # 4) meta surfaces

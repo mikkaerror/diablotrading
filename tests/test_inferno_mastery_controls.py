@@ -114,6 +114,29 @@ class TradeEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(card["profitPlan"][0], "review at +0.5R")
 
+    def test_short_premium_defined_bypasses_long_vol_hurdle(self) -> None:
+        item = {
+            "ticker": "XYZ",
+            "price": 100.0,
+            "strategy": "SHORT_PREMIUM_DEFINED",
+            "estimatedMaxLoss": 400.0,
+            "schwabOptions": {"atmImpliedMovePct": 0.12, "sourceStatus": "fixture"},
+            "greekSummary": {
+                "netDelta": 0.0,
+                "netGamma": -0.01,
+                "netTheta": 0.04,
+                "netVega": -0.05,
+                "greeksComplete": True,
+            },
+        }
+
+        card = decision_card(item, account_nlv=5000)
+
+        self.assertFalse(is_long_vol(item))
+        self.assertEqual(card["longVolHurdle"]["status"], "not-applicable")
+        self.assertNotIn("long-vol-premium-hurdle", card["missingFields"])
+        self.assertTrue(card["paperComparisonAllowed"])
+
     def test_long_vol_high_premium_remains_shadow_only(self) -> None:
         item = {
             "ticker": "XYZ",

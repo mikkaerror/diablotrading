@@ -27,12 +27,16 @@ PAPER_VARIANT_SCANNER_TEXT_FILE = REPORTS_DIR / "paper_variant_scanner_latest.tx
 STAGE = "paper-variant-scanner-research-only"
 
 DEFAULT_LIMIT = 8
+SHORT_PREMIUM_DEFINED_LIMIT = 40
 PRICE_CAP = 100.0
 WHEEL_PROXY_PRICE_CAP = 30.0
 MIN_CREDIT_IV_RANK = 50.0
 MIN_WHEEL_IV_RANK = 30.0
 MIN_READY = 72.0
 MIN_SUPPORT_ATR = 1.0
+SHORT_PREMIUM_DEFINED_ARM = "SHORT_PREMIUM_DEFINED"
+MIN_SHORT_PREMIUM_READY = 50.0
+MAX_SHORT_PREMIUM_DTE = 90.0
 
 
 def text(value: Any) -> str:
@@ -188,6 +192,37 @@ def wheel_proxy_candidate(row: dict[str, Any]) -> dict[str, Any] | None:
     )
 
 
+def short_premium_defined_candidate(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a broad pre-earnings defined-risk short-premium candidate."""
+    price = number(row.get("price"))
+    dte = number(row.get("daysUntilEarnings"))
+    readiness = number(row.get("readiness"), 0.0) or 0.0
+    if price is None or price <= 0 or dte is None:
+        return None
+    if dte <= 0 or dte > MAX_SHORT_PREMIUM_DTE or readiness < MIN_SHORT_PREMIUM_READY:
+        return None
+    reason = "pre-registered breadth test for defined-risk short premium; pricing and paper-risk gates decide"
+    candidate = base_candidate(
+        row,
+        family="short-premium-defined",
+        reason=reason,
+        score=variant_score(row, family_boost=4.0),
+    )
+    candidate.update(
+        {
+            "recommendedStrategy": SHORT_PREMIUM_DEFINED_ARM,
+            "arm": SHORT_PREMIUM_DEFINED_ARM,
+            "campaignArm": SHORT_PREMIUM_DEFINED_ARM,
+            "exitRule": "hold-through",
+            "campaignExitRule": "hold-through",
+            "shortPremiumDefined": True,
+            "preRegisteredCampaign": "defined-risk-short-premium-2026-07-07",
+            "campaignRiskShareTargetPct": 4.0,
+        }
+    )
+    return candidate
+
+
 def sweet_spot_watch(row: dict[str, Any]) -> dict[str, Any] | None:
     dte = number(row.get("daysUntilEarnings"))
     atr = number(row.get("atrPercent"))
@@ -240,10 +275,15 @@ def build_paper_variant_scanner(
     funnel = funnel if funnel is not None else (load_json_file(FUNNEL_DIAGNOSTIC_FILE) or {})
     rows = snapshot_rows(snapshot)
     raw_candidates: list[dict[str, Any]] = []
+    short_premium_candidates: list[dict[str, Any]] = []
     watch: list[dict[str, Any]] = []
     family_counts: dict[str, int] = defaultdict(int)
 
     for row in rows:
+        short_premium = short_premium_defined_candidate(row)
+        if short_premium:
+            short_premium_candidates.append(short_premium)
+            family_counts["short-premium-defined"] += 1
         credit = credit_spread_candidate(row)
         if credit:
             raw_candidates.append(credit)
@@ -258,6 +298,11 @@ def build_paper_variant_scanner(
             family_counts["sweet-spot-debit-watch"] += 1
 
     pricing_candidates = dedupe_candidates(raw_candidates, limit=limit)
+    short_premium_pricing_candidates = dedupe_candidates(
+        short_premium_candidates,
+        limit=SHORT_PREMIUM_DEFINED_LIMIT,
+    )
+    pricing_candidates.extend(short_premium_pricing_candidates)
     verdict = "no-paper-variants"
     if pricing_candidates:
         verdict = "paper-variants-ready-for-pricing"
@@ -287,8 +332,10 @@ def build_paper_variant_scanner(
         "sourceFunnelBiasVerdict": funnel.get("biasVerdict"),
         "counts": {
             "universeRows": len(rows),
-            "rawCandidates": len(raw_candidates),
+            "rawCandidates": len(raw_candidates) + len(short_premium_candidates),
             "pricingCandidates": len(pricing_candidates),
+            "shortPremiumDefinedCandidates": len(short_premium_pricing_candidates),
+            "shortPremiumDefinedBreadthTarget": SHORT_PREMIUM_DEFINED_LIMIT,
             "watchOnly": len(watch),
             "families": dict(sorted(family_counts.items())),
         },
@@ -298,6 +345,7 @@ def build_paper_variant_scanner(
         "rules": [
             "scanner output is paper-only and diagnostic-only",
             "pricing and paper-risk gates decide whether any variant survives",
+            "SHORT_PREMIUM_DEFINED is defined-risk only and targets up to 40 distinct pre-earnings names",
             "no live orders, no approvals, no risk-constant changes, and no universe edits",
         ],
         "citations": [
@@ -322,6 +370,8 @@ def scanner_text(payload: dict[str, Any]) -> str:
         f"- universe rows: {counts.get('universeRows', 0)}",
         f"- raw candidates: {counts.get('rawCandidates', 0)}",
         f"- pricing candidates: {counts.get('pricingCandidates', 0)}",
+        f"- short-premium defined candidates: {counts.get('shortPremiumDefinedCandidates', 0)}/"
+        f"{counts.get('shortPremiumDefinedBreadthTarget', SHORT_PREMIUM_DEFINED_LIMIT)}",
         f"- watch-only candidates: {counts.get('watchOnly', 0)}",
         f"- families: {json.dumps(counts.get('families') or {})}",
         "",

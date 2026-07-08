@@ -115,6 +115,17 @@ class BlockReasonCategorizerTests(unittest.TestCase):
                     "estimatedTotalSpreadFrictionDollars": 10.0,
                     "outcome": {"status": "closed", "estimatedPnl": -10.0},
                 },
+                {
+                    "ticketId": "SP-1",
+                    "status": "paper-staged",
+                    "strategy": "SHORT_PREMIUM_DEFINED",
+                    "arm": "SHORT_PREMIUM_DEFINED",
+                    "exitRule": "hold-through",
+                    "entryLimit": 1.2,
+                    "estimatedMaxLoss": 380.0,
+                    "estimatedTotalSpreadFrictionDollars": 12.0,
+                    "outcome": {"status": "closed", "estimatedPnl": 76.0},
+                },
             ],
         }
 
@@ -123,12 +134,15 @@ class BlockReasonCategorizerTests(unittest.TestCase):
         arms = {item["arm"]: item for item in analytics["armSummary"]}
         self.assertEqual(arms["A"]["count"], 1)
         self.assertEqual(arms["B"]["count"], 1)
+        self.assertEqual(arms["SHORT_PREMIUM_DEFINED"]["count"], 1)
         self.assertEqual(arms["A"]["estimatedFrictionDollars"], 5.0)
         self.assertEqual(arms["B"]["exitRule"], "exit-before-earnings")
+        self.assertEqual(arms["SHORT_PREMIUM_DEFINED"]["exitRule"], "hold-through")
         rendered = analytics_text(analytics)
         self.assertIn("Campaign arm table:", rendered)
         self.assertIn("- A: n=1", rendered)
         self.assertIn("- B: n=1", rendered)
+        self.assertIn("- SHORT_PREMIUM_DEFINED: n=1", rendered)
 
 
 if __name__ == "__main__":

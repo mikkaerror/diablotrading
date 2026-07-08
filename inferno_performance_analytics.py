@@ -25,6 +25,7 @@ MIN_SAMPLE_FOR_PROMOTION = 30
 MIN_EXPECTANCY_FOR_PROMOTION = 1.0
 MAX_FALSE_POSITIVE_RATE = 0.45
 MIN_PROFIT_FACTOR_FOR_PROMOTION = 1.25
+SHORT_PREMIUM_DEFINED_ARM = "SHORT_PREMIUM_DEFINED"
 
 
 def number(value: Any, default: float = 0.0) -> float:
@@ -74,7 +75,7 @@ def strategy_key(ticket: dict[str, Any]) -> str:
 def arm_key(ticket: dict[str, Any]) -> str:
     """Return a pre-registered campaign arm label when one is present."""
     arm = str(ticket.get("arm") or ticket.get("campaignArm") or "").upper().strip()
-    return arm if arm in {"A", "B", "C", "D"} else ""
+    return arm if arm in {"A", "B", "C", "D", SHORT_PREMIUM_DEFINED_ARM} else ""
 
 
 def summarize_closed_tickets(tickets: list[dict[str, Any]]) -> dict[str, Any]:

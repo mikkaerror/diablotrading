@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Tests for research-only strategy alternative pricing."""
 
+import time
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -104,6 +105,88 @@ def scanner_payload() -> dict:
                 "sourceAlternativeScore": 99,
             },
         ]
+    }
+
+
+def short_premium_scanner_payload(count: int = 2) -> dict:
+    return {
+        "pricingCandidates": [
+            {
+                "ticker": f"SP{i}",
+                "sourceFamily": "short-premium-defined",
+                "paperVariantOnly": True,
+                "recommendedStrategy": "SHORT_PREMIUM_DEFINED",
+                "sourceRecommendedStrategy": "PAPER_VARIANT_SCANNER",
+                "recommendationVerdict": "paper-variant-research",
+                "recommendationReason": "pre-registered breadth test",
+                "candidateStrategyRank": i + 1,
+                "fallbackVariant": False,
+                "sourceAlternativeScore": 80 - i,
+                "price": 100,
+                "baselineUnderlyingPrice": 100,
+                "daysUntilEarnings": 49,
+                "ivRank": 55,
+                "atrPercent": 4,
+                "arm": "SHORT_PREMIUM_DEFINED",
+                "campaignArm": "SHORT_PREMIUM_DEFINED",
+                "exitRule": "hold-through",
+                "shortPremiumDefined": True,
+                "marketContextSummary": {
+                    "trend": "Neutral",
+                    "rvol": 0.8,
+                    "support": 92,
+                    "resistance": 108,
+                    "distanceToSupportPct": 8,
+                    "distanceToResistancePct": 8,
+                    "atrPercent": 4,
+                    "ivRank": 55,
+                },
+            }
+            for i in range(count)
+        ]
+    }
+
+
+def condor_schwab_options(symbol: str = "SP0") -> dict:
+    contracts = []
+    for put_call, strikes in {
+        "CALL": [105, 108, 110, 112],
+        "PUT": [95, 92, 90, 88],
+    }.items():
+        for strike in strikes:
+            distance = abs(strike - 100)
+            bid = round(max(0.2, 3.0 - distance * 0.35), 2)
+            ask = round(bid + 0.12, 2)
+            contracts.append(
+                {
+                    "symbol": f"{symbol}   260619{put_call[0]}{int(strike * 1000):08d}",
+                    "putCall": put_call,
+                    "expirationDate": "2026-06-19",
+                    "strikePrice": strike,
+                    "bid": bid,
+                    "ask": ask,
+                    "mark": round((bid + ask) / 2, 2),
+                    "last": round((bid + ask) / 2, 2),
+                    "volume": 100,
+                    "openInterest": 500,
+                    "volatility": 35,
+                }
+            )
+    return {
+        symbol: {
+            "symbol": symbol,
+            "status": "ok",
+            "underlyingPrice": 100,
+            "qualityFlags": [],
+            "sourceStatus": "fixture",
+            "sourceGeneratedAt": "2026-05-01T12:00:00+00:00",
+            "paperLiquidityPass": True,
+            "liveLiquidityPass": True,
+            "atmWindowMedianSpreadPct": 0.08,
+            "atmWindowOpenInterest": 2000,
+            "paperFillFrictionPct": 0.08,
+            "contracts": contracts,
+        }
     }
 
 
@@ -259,6 +342,18 @@ class StrategyAlternativePricingTests(unittest.TestCase):
 
         self.assertEqual([row["ticker"] for row in rows], ["BBB", "AAA"])
         self.assertFalse(any(row.get("paperVariantOnly") for row in rows))
+
+    def test_source_candidates_add_short_premium_breadth_outside_normal_slots(self) -> None:
+        rows = pricing.source_candidates(
+            scorer_payload(),
+            limit=2,
+            paper_variant_scanner=short_premium_scanner_payload(count=3),
+        )
+
+        self.assertEqual([row["ticker"] for row in rows[:2]], ["BBB", "AAA"])
+        short_rows = [row for row in rows if row["recommendedStrategy"] == "SHORT_PREMIUM_DEFINED"]
+        self.assertEqual([row["ticker"] for row in short_rows], ["SP0", "SP1", "SP2"])
+        self.assertTrue(all(row["shortPremiumDefined"] for row in short_rows))
 
     def test_intent_from_candidate_carries_market_context(self) -> None:
         candidate = pricing.source_candidates(scorer_payload(), limit=1)[0]
@@ -593,6 +688,192 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertGreater(ladder[0]["shortCallStrike"], 108)
         self.assertLess(ladder[0]["shortPutStrike"], 92)
         self.assertNotIn("_strikePlan", pricing.public_ladder_row(ladder[0]))
+
+    def test_build_prefers_schwab_contracts_without_yfinance_call(self) -> None:
+        scorer = {
+            "scorecards": [
+                {
+                    "ticker": "BBB",
+                    "longVolPressureScore": 40,
+                    "recommendation": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "verdict": "prefer-alternative-research",
+                    },
+                }
+            ]
+        }
+        reducer = {
+            "scenarioSlate": [
+                {
+                    "ticker": "BBB",
+                    "price": 50,
+                    "daysUntilEarnings": 14,
+                    "marketContextSummary": {
+                        "trend": "Bullish",
+                        "support": 46,
+                        "resistance": 58,
+                        "atrPercent": 5,
+                    },
+                }
+            ]
+        }
+        schwab_options = {
+            "BBB": {
+                "symbol": "BBB",
+                "status": "ok",
+                "underlyingPrice": 50,
+                "qualityFlags": [],
+                "contracts": [
+                    {
+                        "symbol": "BBB   260619C00050000",
+                        "putCall": "CALL",
+                        "expirationDate": "2026-06-19",
+                        "strikePrice": 50,
+                        "bid": 1.75,
+                        "ask": 2.0,
+                        "mark": 1.875,
+                        "last": 1.9,
+                        "volume": 100,
+                        "openInterest": 500,
+                        "volatility": 40,
+                    },
+                    {
+                        "symbol": "BBB   260619C00055000",
+                        "putCall": "CALL",
+                        "expirationDate": "2026-06-19",
+                        "strikePrice": 55,
+                        "bid": 0.8,
+                        "ask": 1.0,
+                        "mark": 0.9,
+                        "last": 0.9,
+                        "volume": 80,
+                        "openInterest": 400,
+                        "volatility": 38,
+                    },
+                ],
+            }
+        }
+
+        def fail_ticker_factory(symbol: str):  # noqa: ARG001
+            raise AssertionError("yfinance should not be called when Schwab contracts are usable")
+
+        payload = pricing.build_strategy_alternative_pricing(
+            scorer=scorer,
+            reducer=reducer,
+            schwab_options_index=schwab_options,
+            ticker_factory=fail_ticker_factory,
+        )
+
+        self.assertEqual(payload["counts"]["priced"], 1)
+        self.assertEqual(payload["items"][0]["chainSource"], "schwab-options")
+        self.assertFalse(payload["items"][0]["brokerSubmitAllowed"])
+        self.assertFalse(payload["items"][0]["liveTradingAllowed"])
+
+    def test_short_premium_defined_prices_as_labeled_condor(self) -> None:
+        payload = pricing.build_strategy_alternative_pricing(
+            scorer={"scorecards": []},
+            reducer={"scenarioSlate": []},
+            paper_variant_scanner=short_premium_scanner_payload(count=1),
+            schwab_options_index=condor_schwab_options("SP0"),
+        )
+
+        self.assertEqual(payload["counts"]["requestedByStrategy"], {"SHORT_PREMIUM_DEFINED": 1})
+        self.assertEqual(payload["counts"]["priced"], 1)
+        item = payload["items"][0]
+        plan = item["strikePlan"]
+        self.assertEqual(item["recommendedStrategy"], "SHORT_PREMIUM_DEFINED")
+        self.assertEqual(plan["strategy"], "SHORT_PREMIUM_DEFINED")
+        self.assertEqual(plan["baseStrategy"], "IRON_CONDOR")
+        self.assertEqual(plan["arm"], "SHORT_PREMIUM_DEFINED")
+        self.assertTrue(plan["shortPremiumDefined"])
+        self.assertGreater(plan["estimatedCredit"], 0)
+        self.assertFalse(item["brokerSubmitAllowed"])
+        self.assertFalse(item["liveTradingAllowed"])
+
+    def test_yfinance_fallback_timeout_becomes_failed_research_row(self) -> None:
+        scorer = {
+            "scorecards": [
+                {
+                    "ticker": "MISS",
+                    "longVolPressureScore": 40,
+                    "recommendation": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "verdict": "prefer-alternative-research",
+                    },
+                }
+            ]
+        }
+        reducer = {
+            "scenarioSlate": [
+                {
+                    "ticker": "MISS",
+                    "price": 50,
+                    "daysUntilEarnings": 14,
+                    "marketContextSummary": {"trend": "Bullish", "atrPercent": 5},
+                }
+            ]
+        }
+
+        class HangingTicker:
+            @property
+            def options(self):
+                time.sleep(1)
+                return ("2026-06-19",)
+
+        payload = pricing.build_strategy_alternative_pricing(
+            scorer=scorer,
+            reducer=reducer,
+            schwab_options_index={},
+            ticker_factory=lambda symbol: HangingTicker(),  # noqa: ARG005
+            chain_timeout_seconds=0.05,
+            allow_yfinance_fallback=True,
+        )
+
+        self.assertEqual(payload["counts"]["failed"], 1)
+        self.assertIn("OptionChainTimeoutError", payload["items"][0]["reason"])
+        self.assertIn("yfinance expirations for MISS", payload["items"][0]["reason"])
+        self.assertFalse(payload["items"][0]["brokerSubmitAllowed"])
+        self.assertFalse(payload["items"][0]["liveTradingAllowed"])
+
+    def test_missing_schwab_contracts_fail_closed_without_yfinance(self) -> None:
+        scorer = {
+            "scorecards": [
+                {
+                    "ticker": "MISS",
+                    "longVolPressureScore": 40,
+                    "recommendation": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "verdict": "prefer-alternative-research",
+                    },
+                }
+            ]
+        }
+        reducer = {
+            "scenarioSlate": [
+                {
+                    "ticker": "MISS",
+                    "price": 50,
+                    "daysUntilEarnings": 14,
+                    "marketContextSummary": {"trend": "Bullish", "atrPercent": 5},
+                }
+            ]
+        }
+
+        def fail_ticker_factory(symbol: str):  # noqa: ARG001
+            raise AssertionError("unattended runs should not call yfinance without an explicit flag")
+
+        payload = pricing.build_strategy_alternative_pricing(
+            scorer=scorer,
+            reducer=reducer,
+            schwab_options_index={},
+            ticker_factory=fail_ticker_factory,
+        )
+
+        self.assertEqual(payload["counts"]["failed"], 1)
+        self.assertEqual(payload["items"][0]["chainSource"], "schwab-options-missing")
+        self.assertIn("yfinance fallback disabled", payload["items"][0]["reason"])
+        self.assertFalse(payload["items"][0]["brokerSubmitAllowed"])
+        self.assertFalse(payload["items"][0]["liveTradingAllowed"])
 
     def test_empty_build_is_authority_safe(self) -> None:
         payload = pricing.build_strategy_alternative_pricing(

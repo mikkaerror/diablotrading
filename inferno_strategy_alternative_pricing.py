@@ -15,6 +15,7 @@ Strict contract:
 
 import argparse
 import json
+import signal
 from typing import Any, Callable
 
 import pandas as pd
@@ -58,15 +59,26 @@ PAPER_VARIANT_SCANNER_FILE = DATA_DIR / "inferno_paper_variant_scanner.json"
 
 DEFAULT_LIMIT = 6
 DEFAULT_VARIANTS_PER_TICKER = 3
+DEFAULT_CHAIN_TIMEOUT_SECONDS = 20.0
 PUT_CREDIT_LADDER_SHORT_LIMIT = 18
 PUT_CREDIT_LADDER_LONG_LIMIT = 8
+PUT_CREDIT_LADDER_EVALUATION_LIMIT = 80
 PUT_CREDIT_LADDER_REPORT_LIMIT = 12
 PUT_CREDIT_SUPPORT_SAFE_REPORT_LIMIT = 5
 IRON_CONDOR_SHORT_LIMIT = 8
 IRON_CONDOR_WING_LIMIT = 3
+IRON_CONDOR_LADDER_EVALUATION_LIMIT = 160
 IRON_CONDOR_LADDER_REPORT_LIMIT = 12
 IRON_CONDOR_RANGE_SAFE_REPORT_LIMIT = 5
-PRICEABLE_RECOMMENDATIONS = {"CALL_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "IRON_CONDOR", "PUT_DEBIT_SPREAD"}
+SHORT_PREMIUM_DEFINED_STRATEGY = "SHORT_PREMIUM_DEFINED"
+SHORT_PREMIUM_DEFINED_PRICE_LIMIT = 40
+PRICEABLE_RECOMMENDATIONS = {
+    "CALL_DEBIT_SPREAD",
+    "PUT_CREDIT_SPREAD",
+    "IRON_CONDOR",
+    "PUT_DEBIT_SPREAD",
+    SHORT_PREMIUM_DEFINED_STRATEGY,
+}
 FALLBACK_RECOMMENDATION_VERDICT = "fallback-price-check"
 VERDICT_PRIORITY = {
     "prefer-alternative-research": 0,
@@ -98,6 +110,82 @@ def number(value: Any, default: float | None = None) -> float | None:
         return float(raw)
     except ValueError:
         return default
+
+
+class OptionChainTimeoutError(TimeoutError):
+    """Raised when an external option-chain dependency exceeds its budget."""
+
+
+def call_with_timeout(func: Callable[[], Any], *, timeout_seconds: float, label: str) -> Any:
+    """Run a blocking chain call with a bounded wall-clock budget."""
+    if timeout_seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        return func()
+
+    def _timeout_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
+        raise OptionChainTimeoutError(f"{label} exceeded {timeout_seconds:.1f}s")
+
+    try:
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    except (AttributeError, ValueError):
+        return func()
+
+    try:
+        return func()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def contract_expiration(contract: dict[str, Any]) -> str:
+    """Return a normalized expiration date from a Schwab contract row."""
+    raw = text(contract.get("expirationDate") or contract.get("expiration"))
+    if not raw:
+        return ""
+    return raw.split("T", 1)[0][:10]
+
+
+def schwab_expiration_candidates(schwab_options: dict[str, Any] | None, days_until_earnings: int) -> list[str]:
+    """Return ranked expiration dates available in the local Schwab tape."""
+    contracts = (schwab_options or {}).get("contracts") or []
+    expirations = tuple(
+        sorted({contract_expiration(contract) for contract in contracts if isinstance(contract, dict) and contract_expiration(contract)})
+    )
+    return ranked_expiration_candidates(expirations, days_until_earnings)
+
+
+def schwab_contract_frame(
+    schwab_options: dict[str, Any] | None,
+    *,
+    expiration: str,
+    put_call: str,
+) -> pd.DataFrame:
+    """Convert normalized Schwab contracts into the yfinance-like frame shape."""
+    rows: list[dict[str, Any]] = []
+    for contract in (schwab_options or {}).get("contracts") or []:
+        if not isinstance(contract, dict):
+            continue
+        if norm(contract.get("putCall")) != put_call:
+            continue
+        if contract_expiration(contract) != expiration:
+            continue
+        last = number(contract.get("last"))
+        mark = number(contract.get("mark") or contract.get("mid"))
+        rows.append(
+            {
+                "contractSymbol": text(contract.get("symbol") or contract.get("description")),
+                "strike": number(contract.get("strikePrice")),
+                "bid": number(contract.get("bid"), 0.0) or 0.0,
+                "ask": number(contract.get("ask"), 0.0) or 0.0,
+                "lastPrice": last if last and last > 0 else (mark or 0.0),
+                "volume": number(contract.get("volume"), 0.0) or 0.0,
+                "openInterest": number(contract.get("openInterest"), 0.0) or 0.0,
+                "impliedVolatility": number(contract.get("volatility"), 0.0) or 0.0,
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def ticket_cap_policy() -> dict[str, Any]:
@@ -240,6 +328,15 @@ def scanner_candidate_rows(paper_variant_scanner: dict[str, Any] | None) -> list
     return normalized
 
 
+def short_premium_scanner_rows(paper_variant_scanner: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return broad short-premium rows outside the normal alternative limit."""
+    return [
+        row
+        for row in scanner_candidate_rows(paper_variant_scanner)
+        if norm(row.get("recommendedStrategy")) == SHORT_PREMIUM_DEFINED_STRATEGY
+    ]
+
+
 def source_candidates(
     scorer: dict[str, Any],
     *,
@@ -269,20 +366,36 @@ def source_candidates(
                 selected_keys.add(key)
                 candidates.append(row)
     remaining_ticker_slots = max(0, limit - len(selected_tickers))
-    if remaining_ticker_slots <= 0:
-        return candidates
 
     added_scanner_tickers: set[str] = set()
-    for row in scanner_candidate_rows(paper_variant_scanner):
+    scanner_rows = scanner_candidate_rows(paper_variant_scanner)
+    if remaining_ticker_slots > 0:
+        for row in scanner_rows:
+            ticker = norm(row.get("ticker"))
+            strategy = norm(row.get("recommendedStrategy"))
+            if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
+                continue
+            key = (ticker, strategy)
+            if not ticker or not strategy or key in selected_keys or ticker in selected_tickers:
+                continue
+            if len(added_scanner_tickers) >= remaining_ticker_slots:
+                break
+            selected_keys.add(key)
+            added_scanner_tickers.add(ticker)
+            candidates.append(row)
+
+    short_premium_tickers: set[str] = set()
+    blocked_tickers = selected_tickers | added_scanner_tickers
+    for row in short_premium_scanner_rows(paper_variant_scanner):
         ticker = norm(row.get("ticker"))
         strategy = norm(row.get("recommendedStrategy"))
         key = (ticker, strategy)
-        if not ticker or not strategy or key in selected_keys or ticker in selected_tickers:
+        if not ticker or not strategy or key in selected_keys or ticker in blocked_tickers:
             continue
-        if len(added_scanner_tickers) >= remaining_ticker_slots:
+        if len(short_premium_tickers) >= SHORT_PREMIUM_DEFINED_PRICE_LIMIT:
             break
         selected_keys.add(key)
-        added_scanner_tickers.add(ticker)
+        short_premium_tickers.add(ticker)
         candidates.append(row)
     return candidates
 
@@ -360,7 +473,25 @@ def plan_for_strategy(
         return put_debit_spread_plan(pricing_intent, expiration, puts)
     if strategy == "IRON_CONDOR":
         return iron_condor_plan(pricing_intent, expiration, calls, puts)
+    if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
+        plan = iron_condor_plan(pricing_intent, expiration, calls, puts)
+        return mark_short_premium_defined(plan) if plan else None
     return None
+
+
+def mark_short_premium_defined(plan: dict[str, Any]) -> dict[str, Any]:
+    """Label an iron-condor construction as the pre-registered short-premium arm."""
+    return {
+        **plan,
+        "baseStrategy": plan.get("strategy") or "IRON_CONDOR",
+        "strategy": SHORT_PREMIUM_DEFINED_STRATEGY,
+        "variantFamily": "short-premium-defined",
+        "shortPremiumDefined": True,
+        "arm": SHORT_PREMIUM_DEFINED_STRATEGY,
+        "campaignArm": SHORT_PREMIUM_DEFINED_STRATEGY,
+        "exitRule": "hold-through",
+        "campaignExitRule": "hold-through",
+    }
 
 
 def leg_spread_pct(leg: Any) -> float:
@@ -430,7 +561,7 @@ def strategy_optimizer_notes(plan: dict[str, Any], pricing_intent: dict[str, Any
             blocks.append("call debit spread does not carry positive delta")
         if resistance and break_even and break_even >= resistance:
             warnings.append(f"call debit breakeven {break_even:.2f} is at/above resistance {resistance:.2f}")
-    elif strategy == "IRON_CONDOR":
+    elif strategy in {"IRON_CONDOR", SHORT_PREMIUM_DEFINED_STRATEGY}:
         credit = number(plan.get("estimatedCredit"), 0.0) or 0.0
         credit_risk = round((credit * 100.0) / max_loss, 4) if credit > 0 and max_loss > 0 else 0.0
         plan["creditRisk"] = credit_risk
@@ -779,10 +910,14 @@ def build_put_credit_ladder(
     if short_rows.empty:
         return []
     ladder: list[dict[str, Any]] = []
+    evaluations = 0
     for _, short_row in short_rows.iterrows():
         short_strike = number(short_row.get("strike"))
         long_rows = buyable(puts[puts["strike"] < short_strike]).sort_values("strike", ascending=False).head(PUT_CREDIT_LADDER_LONG_LIMIT)
         for _, long_row in long_rows.iterrows():
+            evaluations += 1
+            if evaluations > PUT_CREDIT_LADDER_EVALUATION_LIMIT:
+                return sorted_put_credit_ladder_rows(ladder)
             plan = put_credit_plan_from_pair(pricing_intent, expiration, short_row, long_row)
             if not plan:
                 continue
@@ -814,6 +949,7 @@ def build_iron_condor_ladder(
     ladder: list[dict[str, Any]] = []
     buyable_calls = buyable(calls)
     buyable_puts = buyable(puts)
+    evaluations = 0
     for _, short_call_row in short_call_rows.iterrows():
         short_call_strike = number(short_call_row.get("strike"))
         long_call_rows = buyable_calls[buyable_calls["strike"] > short_call_strike].sort_values("strike").head(
@@ -830,6 +966,9 @@ def build_iron_condor_ladder(
                 continue
             for _, long_call_row in long_call_rows.iterrows():
                 for _, long_put_row in long_put_rows.iterrows():
+                    evaluations += 1
+                    if evaluations > IRON_CONDOR_LADDER_EVALUATION_LIMIT:
+                        return sorted_condor_ladder_rows(ladder)
                     plan = iron_condor_plan_from_rows(
                         pricing_intent,
                         expiration,
@@ -853,12 +992,19 @@ def build_iron_condor_ladder(
 
 def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
     """Mark a priced variant as research-only and connect it to the scorer."""
+    strategy = norm(candidate.get("recommendedStrategy"))
+    if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
+        plan = mark_short_premium_defined(plan)
     return {
         **plan,
         "paperVariantOnly": True,
         "researchOnly": True,
         "diagnosticOnly": True,
-        "variantFamily": f"priced-{text(plan.get('strategy')).lower().replace('_', '-')}",
+        "variantFamily": (
+            "short-premium-defined"
+            if strategy == SHORT_PREMIUM_DEFINED_STRATEGY
+            else f"priced-{text(plan.get('strategy')).lower().replace('_', '-')}"
+        ),
         "variantForStrategy": candidate.get("sourceFamily") or "pressured-long-vol",
         "sourcePaperVariant": bool(candidate.get("paperVariantOnly")),
         "variantReason": candidate.get("recommendationReason"),
@@ -868,6 +1014,153 @@ def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[st
         "sourceAlternativeEdgeVsLongVol": candidate.get("sourceAlternativeEdgeVsLongVol"),
         "candidateStrategyRank": candidate.get("candidateStrategyRank"),
         "fallbackVariant": bool(candidate.get("fallbackVariant")),
+        "arm": candidate.get("arm") or plan.get("arm"),
+        "campaignArm": candidate.get("campaignArm") or plan.get("campaignArm"),
+        "exitRule": candidate.get("exitRule") or plan.get("exitRule"),
+        "campaignExitRule": candidate.get("campaignExitRule") or plan.get("campaignExitRule"),
+        "shortPremiumDefined": bool(candidate.get("shortPremiumDefined") or plan.get("shortPremiumDefined")),
+        "preRegisteredCampaign": candidate.get("preRegisteredCampaign"),
+        "campaignRiskShareTargetPct": candidate.get("campaignRiskShareTargetPct"),
+    }
+
+
+def build_priced_item_from_expirations(
+    *,
+    base: dict[str, Any],
+    candidate: dict[str, Any],
+    strategy: str,
+    pricing_intent: dict[str, Any],
+    expirations: list[str],
+    chain_source: str,
+    chain_loader: Callable[[str], tuple[pd.DataFrame, pd.DataFrame]],
+    generated_at: str,
+) -> dict[str, Any]:
+    """Build one priced item from a bounded list of expiration chain frames."""
+    attempts: list[str] = []
+    put_credit_ladder: list[dict[str, Any]] = []
+    iron_condor_ladder: list[dict[str, Any]] = []
+    for expiration in expirations:
+        calls_raw, puts_raw = chain_loader(expiration)
+        calls = clean_chain(calls_raw)
+        puts = clean_chain(puts_raw)
+        if strategy == "PUT_CREDIT_SPREAD":
+            expiration_ladder = build_put_credit_ladder(
+                pricing_intent,
+                expiration,
+                puts,
+                base_item={**base, "expiration": expiration, "chainSource": chain_source},
+                generated_at=generated_at,
+            )
+            if not expiration_ladder:
+                attempts.append(expiration)
+                continue
+            put_credit_ladder.extend(expiration_ladder)
+            continue
+        if strategy in {"IRON_CONDOR", SHORT_PREMIUM_DEFINED_STRATEGY}:
+            expiration_ladder = build_iron_condor_ladder(
+                pricing_intent,
+                expiration,
+                calls,
+                puts,
+                base_item={**base, "expiration": expiration, "chainSource": chain_source},
+                generated_at=generated_at,
+            )
+            if not expiration_ladder:
+                attempts.append(expiration)
+                continue
+            iron_condor_ladder.extend(expiration_ladder)
+            continue
+        plan = plan_for_strategy(strategy, pricing_intent, expiration, calls, puts)
+        if not plan:
+            attempts.append(expiration)
+            continue
+        optimizer_blocks, optimizer_warnings = strategy_optimizer_notes(plan, pricing_intent)
+        plan["optimizerBlocks"] = optimizer_blocks
+        plan["optimizerWarnings"] = optimizer_warnings
+        plan["optimizerPassed"] = not optimizer_blocks
+        variant = annotate_variant(plan, candidate)
+        item = {
+            **base,
+            "ok": True,
+            "status": "priced",
+            "chainSource": chain_source,
+            "expiration": expiration,
+            "expirationCandidates": expirations,
+            "strikePlan": variant,
+        }
+        risk_verdict = evaluate_strike_item(item, strike_plan_generated_at=generated_at, mode="paper").as_dict()
+        item["riskVerdict"] = risk_verdict
+        item["optimizerPassed"] = not optimizer_blocks
+        item["paperRiskPassed"] = bool(risk_verdict.get("passed"))
+        item["combinedPassed"] = bool(risk_verdict.get("passed")) and not optimizer_blocks
+        return item
+    if strategy == "PUT_CREDIT_SPREAD" and put_credit_ladder:
+        ladder = sorted_put_credit_ladder_rows(put_credit_ladder)
+        support_safe_ladder = [row for row in ladder if row.get("shortPutBelowSupport")]
+        best = ladder[0]
+        best_plan = dict(best.get("_strikePlan") or {})
+        best_risk = dict(best.get("_riskVerdict") or {})
+        variant = annotate_variant(best_plan, candidate)
+        return {
+            **base,
+            "ok": True,
+            "status": "priced",
+            "chainSource": chain_source,
+            "expiration": variant.get("expiration"),
+            "expirationCandidates": expirations,
+            "strikePlan": variant,
+            "riskVerdict": best_risk,
+            "optimizerPassed": bool(best.get("optimizerPassed")),
+            "paperRiskPassed": bool(best.get("paperRiskPassed")),
+            "combinedPassed": bool(best.get("combinedPassed")),
+            "putCreditLadderRows": len(ladder),
+            "putCreditSupportSafeRows": len(support_safe_ladder),
+            "putCreditLadder": [
+                public_ladder_row(row)
+                for row in ladder[:PUT_CREDIT_LADDER_REPORT_LIMIT]
+            ],
+            "putCreditSupportSafeLadder": [
+                public_ladder_row(row)
+                for row in support_safe_ladder[:PUT_CREDIT_SUPPORT_SAFE_REPORT_LIMIT]
+            ],
+        }
+    if strategy in {"IRON_CONDOR", SHORT_PREMIUM_DEFINED_STRATEGY} and iron_condor_ladder:
+        ladder = sorted_condor_ladder_rows(iron_condor_ladder)
+        range_safe_ladder = [row for row in ladder if row.get("rangeSafe")]
+        best = ladder[0]
+        best_plan = dict(best.get("_strikePlan") or {})
+        best_risk = dict(best.get("_riskVerdict") or {})
+        variant = annotate_variant(best_plan, candidate)
+        return {
+            **base,
+            "ok": True,
+            "status": "priced",
+            "chainSource": chain_source,
+            "expiration": variant.get("expiration"),
+            "expirationCandidates": expirations,
+            "strikePlan": variant,
+            "riskVerdict": best_risk,
+            "optimizerPassed": bool(best.get("optimizerPassed")),
+            "paperRiskPassed": bool(best.get("paperRiskPassed")),
+            "combinedPassed": bool(best.get("combinedPassed")),
+            "ironCondorLadderRows": len(ladder),
+            "ironCondorRangeSafeRows": len(range_safe_ladder),
+            "ironCondorLadder": [
+                public_ladder_row(row)
+                for row in ladder[:IRON_CONDOR_LADDER_REPORT_LIMIT]
+            ],
+            "ironCondorRangeSafeLadder": [
+                public_ladder_row(row)
+                for row in range_safe_ladder[:IRON_CONDOR_RANGE_SAFE_REPORT_LIMIT]
+            ],
+        }
+    return {
+        **base,
+        "ok": False,
+        "status": "no-plan",
+        "chainSource": chain_source,
+        "expirationCandidates": expirations,
+        "reason": f"no {strategy} plan across {chain_source} expirations: {', '.join(attempts) or 'none'}",
     }
 
 
@@ -878,6 +1171,8 @@ def build_priced_item(
     schwab_options_index: dict[str, dict[str, Any]],
     generated_at: str,
     ticker_factory: Callable[[str], Any] = yf.Ticker,
+    chain_timeout_seconds: float = DEFAULT_CHAIN_TIMEOUT_SECONDS,
+    allow_yfinance_fallback: bool = False,
 ) -> dict[str, Any]:
     """Price one recommended alternative without mutating operational artifacts."""
     strategy = norm(candidate.get("recommendedStrategy"))
@@ -911,6 +1206,13 @@ def build_priced_item(
         "paperOnly": True,
         "liveTradingAllowed": False,
         "brokerSubmitAllowed": False,
+        "arm": candidate.get("arm"),
+        "campaignArm": candidate.get("campaignArm"),
+        "exitRule": candidate.get("exitRule"),
+        "campaignExitRule": candidate.get("campaignExitRule"),
+        "shortPremiumDefined": bool(candidate.get("shortPremiumDefined")),
+        "preRegisteredCampaign": candidate.get("preRegisteredCampaign"),
+        "campaignRiskShareTargetPct": candidate.get("campaignRiskShareTargetPct"),
         "marketContext": pricing_intent.get("marketContext") or {},
         "marketContextSummary": {
             "trend": trend_label((pricing_intent.get("marketContext") or {}).get("trend", {}).get("label")),
@@ -928,129 +1230,63 @@ def build_priced_item(
     if number(pricing_intent.get("price"), 0.0) <= 0:
         return {**base, "ok": False, "status": "failed", "reason": "missing usable underlying price"}
     try:
+        schwab_expirations = schwab_expiration_candidates(
+            schwab_options,
+            int(number(intent.get("daysUntilEarnings"), 0) or 0),
+        )
+        if schwab_expirations:
+            return build_priced_item_from_expirations(
+                base=base,
+                candidate=candidate,
+                strategy=strategy,
+                pricing_intent=pricing_intent,
+                expirations=schwab_expirations,
+                chain_source="schwab-options",
+                chain_loader=lambda expiration: (
+                    schwab_contract_frame(schwab_options, expiration=expiration, put_call="CALL"),
+                    schwab_contract_frame(schwab_options, expiration=expiration, put_call="PUT"),
+                ),
+                generated_at=generated_at,
+            )
+
+        if not allow_yfinance_fallback:
+            return {
+                **base,
+                "ok": False,
+                "status": "failed",
+                "chainSource": "schwab-options-missing",
+                "reason": "no usable Schwab option contracts for ticker; yfinance fallback disabled for unattended run",
+            }
+
         stock = ticker_factory(str(intent.get("ticker")))
-        expirations = ranked_expiration_candidates(stock.options, int(number(intent.get("daysUntilEarnings"), 0) or 0))
-        attempts: list[str] = []
-        put_credit_ladder: list[dict[str, Any]] = []
-        iron_condor_ladder: list[dict[str, Any]] = []
-        for expiration in expirations:
-            chain = stock.option_chain(expiration)
-            calls = clean_chain(chain.calls)
-            puts = clean_chain(chain.puts)
-            if strategy == "PUT_CREDIT_SPREAD":
-                expiration_ladder = build_put_credit_ladder(
-                    pricing_intent,
-                    expiration,
-                    puts,
-                    base_item={**base, "expiration": expiration},
-                    generated_at=generated_at,
-                )
-                if not expiration_ladder:
-                    attempts.append(expiration)
-                    continue
-                put_credit_ladder.extend(expiration_ladder)
-                continue
-            if strategy == "IRON_CONDOR":
-                expiration_ladder = build_iron_condor_ladder(
-                    pricing_intent,
-                    expiration,
-                    calls,
-                    puts,
-                    base_item={**base, "expiration": expiration},
-                    generated_at=generated_at,
-                )
-                if not expiration_ladder:
-                    attempts.append(expiration)
-                    continue
-                iron_condor_ladder.extend(expiration_ladder)
-                continue
-            plan = plan_for_strategy(strategy, pricing_intent, expiration, calls, puts)
-            if not plan:
-                attempts.append(expiration)
-                continue
-            optimizer_blocks, optimizer_warnings = strategy_optimizer_notes(plan, pricing_intent)
-            plan["optimizerBlocks"] = optimizer_blocks
-            plan["optimizerWarnings"] = optimizer_warnings
-            plan["optimizerPassed"] = not optimizer_blocks
-            variant = annotate_variant(plan, candidate)
-            item = {
-                **base,
-                "ok": True,
-                "status": "priced",
-                "expiration": expiration,
-                "strikePlan": variant,
-            }
-            risk_verdict = evaluate_strike_item(item, strike_plan_generated_at=generated_at, mode="paper").as_dict()
-            item["riskVerdict"] = risk_verdict
-            item["optimizerPassed"] = not optimizer_blocks
-            item["paperRiskPassed"] = bool(risk_verdict.get("passed"))
-            item["combinedPassed"] = bool(risk_verdict.get("passed")) and not optimizer_blocks
-            return item
-        if strategy == "PUT_CREDIT_SPREAD" and put_credit_ladder:
-            ladder = sorted_put_credit_ladder_rows(put_credit_ladder)
-            support_safe_ladder = [row for row in ladder if row.get("shortPutBelowSupport")]
-            best = ladder[0]
-            best_plan = dict(best.get("_strikePlan") or {})
-            best_risk = dict(best.get("_riskVerdict") or {})
-            variant = annotate_variant(best_plan, candidate)
-            return {
-                **base,
-                "ok": True,
-                "status": "priced",
-                "expiration": variant.get("expiration"),
-                "expirationCandidates": expirations,
-                "strikePlan": variant,
-                "riskVerdict": best_risk,
-                "optimizerPassed": bool(best.get("optimizerPassed")),
-                "paperRiskPassed": bool(best.get("paperRiskPassed")),
-                "combinedPassed": bool(best.get("combinedPassed")),
-                "putCreditLadderRows": len(ladder),
-                "putCreditSupportSafeRows": len(support_safe_ladder),
-                "putCreditLadder": [
-                    public_ladder_row(row)
-                    for row in ladder[:PUT_CREDIT_LADDER_REPORT_LIMIT]
-                ],
-                "putCreditSupportSafeLadder": [
-                    public_ladder_row(row)
-                    for row in support_safe_ladder[:PUT_CREDIT_SUPPORT_SAFE_REPORT_LIMIT]
-                ],
-            }
-        if strategy == "IRON_CONDOR" and iron_condor_ladder:
-            ladder = sorted_condor_ladder_rows(iron_condor_ladder)
-            range_safe_ladder = [row for row in ladder if row.get("rangeSafe")]
-            best = ladder[0]
-            best_plan = dict(best.get("_strikePlan") or {})
-            best_risk = dict(best.get("_riskVerdict") or {})
-            variant = annotate_variant(best_plan, candidate)
-            return {
-                **base,
-                "ok": True,
-                "status": "priced",
-                "expiration": variant.get("expiration"),
-                "expirationCandidates": expirations,
-                "strikePlan": variant,
-                "riskVerdict": best_risk,
-                "optimizerPassed": bool(best.get("optimizerPassed")),
-                "paperRiskPassed": bool(best.get("paperRiskPassed")),
-                "combinedPassed": bool(best.get("combinedPassed")),
-                "ironCondorLadderRows": len(ladder),
-                "ironCondorRangeSafeRows": len(range_safe_ladder),
-                "ironCondorLadder": [
-                    public_ladder_row(row)
-                    for row in ladder[:IRON_CONDOR_LADDER_REPORT_LIMIT]
-                ],
-                "ironCondorRangeSafeLadder": [
-                    public_ladder_row(row)
-                    for row in range_safe_ladder[:IRON_CONDOR_RANGE_SAFE_REPORT_LIMIT]
-                ],
-            }
-        return {
-            **base,
-            "ok": False,
-            "status": "no-plan",
-            "expirationCandidates": expirations,
-            "reason": f"no {strategy} plan across expirations: {', '.join(attempts) or 'none'}",
-        }
+        yfinance_options = call_with_timeout(
+            lambda: tuple(stock.options or ()),
+            timeout_seconds=chain_timeout_seconds,
+            label=f"yfinance expirations for {intent.get('ticker')}",
+        )
+        expirations = ranked_expiration_candidates(
+            yfinance_options,
+            int(number(intent.get("daysUntilEarnings"), 0) or 0),
+        )
+
+        def load_yfinance_chain(expiration: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+            chain = call_with_timeout(
+                lambda: stock.option_chain(expiration),
+                timeout_seconds=chain_timeout_seconds,
+                label=f"yfinance option chain for {intent.get('ticker')} {expiration}",
+            )
+            return chain.calls, chain.puts
+
+        return build_priced_item_from_expirations(
+            base=base,
+            candidate=candidate,
+            strategy=strategy,
+            pricing_intent=pricing_intent,
+            expirations=expirations,
+            chain_source="yfinance-fallback",
+            chain_loader=load_yfinance_chain,
+            generated_at=generated_at,
+        )
     except Exception as exc:  # noqa: BLE001
         return {**base, "ok": False, "status": "failed", "reason": f"{type(exc).__name__}: {exc}"}
 
@@ -1073,6 +1309,8 @@ def build_strategy_alternative_pricing(
     variants_per_ticker: int = DEFAULT_VARIANTS_PER_TICKER,
     ticker_factory: Callable[[str], Any] = yf.Ticker,
     schwab_options_index: dict[str, dict[str, Any]] | None = None,
+    chain_timeout_seconds: float = DEFAULT_CHAIN_TIMEOUT_SECONDS,
+    allow_yfinance_fallback: bool = False,
 ) -> dict[str, Any]:
     """Build the research-only alternative pricing artifact."""
     ensure_dirs()
@@ -1098,6 +1336,8 @@ def build_strategy_alternative_pricing(
             schwab_options_index=schwab_index,
             generated_at=generated_at,
             ticker_factory=ticker_factory,
+            chain_timeout_seconds=chain_timeout_seconds,
+            allow_yfinance_fallback=allow_yfinance_fallback,
         )
         for candidate in candidates
     ]
@@ -1131,6 +1371,8 @@ def build_strategy_alternative_pricing(
             "requested": len(candidates),
             "tickerGroups": len({norm(item.get("ticker")) for item in candidates if norm(item.get("ticker"))}),
             "variantsPerTicker": variants_per_ticker,
+            "chainTimeoutSeconds": chain_timeout_seconds,
+            "yfinanceFallbackAllowed": allow_yfinance_fallback,
             "fallbackVariants": sum(1 for item in candidates if item.get("fallbackVariant")),
             "scannerCandidates": sum(1 for item in candidates if item.get("paperVariantOnly")),
             "requestedByStrategy": {
@@ -1159,6 +1401,7 @@ def build_strategy_alternative_pricing(
             "Combined pass means optimizer and paper-risk quality only, not live authority.",
             "Broker submit remains false and every priced variant requires explicit human review.",
             "The ticket-cap policy sets a target band; only the hard cap is a blocking optimizer limit.",
+            "Unattended runs use Schwab contracts only; yfinance option-chain fallback is manual diagnostics only.",
         ],
     }
 
@@ -1206,6 +1449,12 @@ def plan_strike_summary(plan: dict[str, Any]) -> str:
             f"put wing {plan.get('shortPutStrike')}/{plan.get('longPutStrike')} | "
             f"max profit {fmt_money(plan.get('estimatedMaxProfit'))}"
         )
+    if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
+        return (
+            f"defined-risk condor calls {plan.get('shortCallStrike')}/{plan.get('longCallStrike')} | "
+            f"puts {plan.get('shortPutStrike')}/{plan.get('longPutStrike')} | "
+            f"credit/risk {fmt(plan.get('creditRisk'))}"
+        )
     return f"breakeven {fmt(plan.get('breakEven'))}"
 
 
@@ -1228,6 +1477,8 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         f"- requested: {counts.get('requested', 0)}",
         f"- ticker groups: {counts.get('tickerGroups', 0)}",
         f"- variants per ticker: {counts.get('variantsPerTicker', 0)}",
+        f"- external chain timeout: {fmt(counts.get('chainTimeoutSeconds'))}s",
+        f"- yfinance fallback allowed: {counts.get('yfinanceFallbackAllowed', False)}",
         f"- fallback variants: {counts.get('fallbackVariants', 0)}",
         f"- scanner candidates: {counts.get('scannerCandidates', 0)}",
         f"- requested by strategy: {json.dumps(counts.get('requestedByStrategy') or {})}",
@@ -1256,7 +1507,7 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         if item.get("status") != "priced":
             lines.append(
                 f"- {item.get('ticker')} | {item.get('recommendedStrategy')} | "
-                f"{item.get('status')} | {item.get('reason')}"
+                f"{item.get('status')} | chain {item.get('chainSource') or 'n/a'} | {item.get('reason')}"
             )
             continue
         plan = item.get("strikePlan") or {}
@@ -1273,7 +1524,8 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         lines.append(
             f"  source: rank {item.get('candidateStrategyRank') or 'n/a'} | "
             f"{'fallback' if item.get('fallbackVariant') else 'primary'} | "
-            f"score {fmt(item.get('sourceAlternativeScore'))} | edge {fmt(item.get('sourceAlternativeEdgeVsLongVol'))}"
+            f"score {fmt(item.get('sourceAlternativeScore'))} | edge {fmt(item.get('sourceAlternativeEdgeVsLongVol'))} | "
+            f"chain {item.get('chainSource') or 'n/a'}"
         )
         lines.append(
             f"  gates: optimizer {'pass' if optimizer_passed else 'block'} | "
@@ -1374,6 +1626,17 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_VARIANTS_PER_TICKER,
         help="Ranked defined-risk strategy variants to price per ticker group.",
     )
+    parser.add_argument(
+        "--chain-timeout-seconds",
+        type=float,
+        default=DEFAULT_CHAIN_TIMEOUT_SECONDS,
+        help="Maximum seconds for each external yfinance chain call; Schwab tape is preferred when available.",
+    )
+    parser.add_argument(
+        "--allow-yfinance-fallback",
+        action="store_true",
+        help="Manual diagnostics only: fetch option chains from yfinance when Schwab contracts are unavailable.",
+    )
     return parser.parse_args()
 
 
@@ -1384,7 +1647,12 @@ def main() -> int:
         print(STRATEGY_ALTERNATIVE_PRICING_TEXT_FILE.read_text(encoding="utf-8"))
         latest = json.loads(STRATEGY_ALTERNATIVE_PRICING_FILE.read_text(encoding="utf-8")) if STRATEGY_ALTERNATIVE_PRICING_FILE.exists() else {}
         return 0 if latest.get("promotable") is False else 1
-    payload = build_strategy_alternative_pricing(limit=args.limit, variants_per_ticker=args.variants_per_ticker)
+    payload = build_strategy_alternative_pricing(
+        limit=args.limit,
+        variants_per_ticker=args.variants_per_ticker,
+        chain_timeout_seconds=args.chain_timeout_seconds,
+        allow_yfinance_fallback=args.allow_yfinance_fallback,
+    )
     save_strategy_alternative_pricing(payload)
     print(strategy_alternative_pricing_text(payload))
     return 0
