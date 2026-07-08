@@ -13,6 +13,8 @@ def shadow_ledger() -> dict:
             {
                 "ticketId": "win",
                 "ticker": "AAA",
+                "tradeDate": "2026-05-01",
+                "daysUntilEarnings": 5,
                 "strategy": "LONG_STRADDLE",
                 "underlyingPrice": 100,
                 "entryLimit": 5,
@@ -21,13 +23,15 @@ def shadow_ledger() -> dict:
                 "estimatedMaxLoss": 500,
                 "outcome": {
                     "status": "closed",
-                    "exitUnderlyingPrice": 108,
+                    "exitUnderlyingPrice": 130,
                     "estimatedReturnOnRisk": 0.6,
                 },
             },
             {
                 "ticketId": "miss",
                 "ticker": "BBB",
+                "tradeDate": "2026-05-01",
+                "daysUntilEarnings": 5,
                 "strategy": "LONG_STRANGLE",
                 "underlyingPrice": 50,
                 "entryLimit": 2,
@@ -41,10 +45,34 @@ def shadow_ledger() -> dict:
             {
                 "ticketId": "vertical",
                 "ticker": "CCC",
+                "tradeDate": "2026-05-01",
+                "daysUntilEarnings": 5,
                 "strategy": "CALL_DEBIT_SPREAD",
                 "underlyingPrice": 80,
                 "entryLimit": 1.25,
                 "outcome": {"status": "closed", "exitUnderlyingPrice": 85},
+            },
+        ],
+    }
+
+
+def price_history() -> dict:
+    return {
+        "rows": [
+            {
+                "symbol": "AAA",
+                "candles": [
+                    {"datetime": "2026-05-05T05:00:00+00:00", "close": 100},
+                    {"datetime": "2026-05-06T05:00:00+00:00", "close": 104},
+                    {"datetime": "2026-05-07T05:00:00+00:00", "close": 108},
+                ],
+            },
+            {
+                "symbol": "BBB",
+                "candles": [
+                    {"datetime": "2026-05-05T05:00:00+00:00", "close": 50},
+                    {"datetime": "2026-05-07T05:00:00+00:00", "close": 51},
+                ],
             },
         ],
     }
@@ -87,6 +115,7 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
             paper_ledger={"items": []},
             shadow_ledger=shadow_ledger(),
             paper_reducer=reducer(),
+            price_history=price_history(),
         )
 
         self.assertTrue(payload["researchOnly"])
@@ -99,13 +128,17 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
         self.assertEqual(first["impliedMoveSource"], "breakeven-min")
         self.assertEqual(first["impliedMovePct"], 5.0)
         self.assertEqual(first["realizedAbsMovePct"], 8.0)
+        self.assertEqual(first["reactionStartDate"], "2026-05-05")
+        self.assertEqual(first["reactionEndDate"], "2026-05-07")
         self.assertTrue(first["beatImpliedMove"])
+        self.assertTrue(payload["dataIntegrity"]["reliable"])
 
     def test_current_candidates_surface_missing_prices(self) -> None:
         payload = ledger.build_expected_move_ledger(
             paper_ledger={"items": []},
             shadow_ledger=shadow_ledger(),
             paper_reducer=reducer(),
+            price_history=price_history(),
         )
 
         self.assertEqual(payload["counts"]["currentLongVolCandidates"], 2)
@@ -119,6 +152,7 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
             paper_ledger={"items": []},
             shadow_ledger=shadow_ledger(),
             paper_reducer=reducer(),
+            price_history=price_history(),
         )
 
         xyz = next(item for item in payload["currentCandidates"] if item["ticker"] == "XYZ")
@@ -135,6 +169,7 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
             paper_ledger={"items": []},
             shadow_ledger=shadow_ledger(),
             paper_reducer=reducer(),
+            price_history=price_history(),
         )
         rendered = ledger.expected_move_ledger_text(payload)
 
@@ -149,6 +184,7 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
             paper_ledger={"items": []},
             shadow_ledger=shadow_ledger(),
             paper_reducer={"scenarioSlate": []},
+            price_history=price_history(),
         )
         diagnostics = payload["regimeDiagnostics"]
 
@@ -163,6 +199,52 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
             [row["bucket"] for row in diagnostics["impliedMoveBuckets"]],
             ["0-10%"],
         )
+
+    def test_duplicate_snapshots_collapse_to_latest_pre_event_snapshot(self) -> None:
+        duplicate = shadow_ledger()["items"][0]
+        duplicate = {
+            **duplicate,
+            "ticketId": "latest",
+            "tradeDate": "2026-05-03",
+            "daysUntilEarnings": 3,
+            "underlyingPrice": 102,
+            "lowerBreakEven": 97,
+            "upperBreakEven": 107,
+            "outcome": {"status": "closed", "estimatedReturnOnRisk": 0.2},
+        }
+
+        payload = ledger.build_expected_move_ledger(
+            paper_ledger={"items": []},
+            shadow_ledger={"items": [shadow_ledger()["items"][0], duplicate]},
+            paper_reducer={"scenarioSlate": []},
+            price_history=price_history(),
+        )
+
+        self.assertEqual(payload["counts"]["sourceClosedLongVolRows"], 2)
+        self.assertEqual(payload["counts"]["closedLongVolRecords"], 1)
+        self.assertEqual(payload["counts"]["dedupedExcessSnapshots"], 1)
+        record = payload["closedRecords"][0]
+        self.assertEqual(record["ticketId"], "latest")
+        self.assertEqual(record["eventId"], "AAA|2026-05-06")
+        self.assertEqual(record["dedupedSnapshotCount"], 2)
+        self.assertEqual(record["baselineUnderlyingPrice"], 102)
+        self.assertEqual(record["realizedAbsMovePct"], 8.0)
+
+    def test_data_integrity_flags_repeated_and_implausible_realized_moves(self) -> None:
+        diagnostics = ledger.data_integrity(
+            [
+                {"eventId": "AAA|1", "ticker": "AAA", "realizedAbsMovePct": 3.0},
+                {"eventId": "AAA|2", "ticker": "AAA", "realizedAbsMovePct": 3.0},
+                {"eventId": "AAA|3", "ticker": "AAA", "realizedAbsMovePct": 3.0},
+                {"eventId": "BBB|1", "ticker": "BBB", "realizedAbsMovePct": 45.0},
+                {"eventId": "BBB|1", "ticker": "BBB", "realizedAbsMovePct": 4.0},
+            ]
+        )
+
+        self.assertFalse(diagnostics["reliable"])
+        self.assertEqual(diagnostics["implausibleMagnitudeRecords"], 1)
+        self.assertEqual(diagnostics["frozenRealizedNames"], ["AAA"])
+        self.assertEqual(diagnostics["duplicateEventIds"], ["BBB|1"])
 
 
 if __name__ == "__main__":

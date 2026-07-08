@@ -16,6 +16,7 @@ Strict contract:
 import argparse
 import json
 from collections import defaultdict
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from inferno_config import local_now
@@ -30,10 +31,13 @@ EXPECTED_MOVE_LEDGER_STAGE = "expected-move-ledger-research-only"
 PAPER_EXECUTION_LEDGER_FILE = DATA_DIR / "inferno_paper_execution_ledger.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
+SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 
 MIN_EXPECTED_MOVE_SAMPLE = 10
 CONTRACT_MULTIPLIER = 100.0
 CHRONOLOGICAL_COHORT_COUNT = 4
+EVENT_DATE_CLUSTER_DAYS = 3
+IMPLAUSIBLE_EARNINGS_MOVE_PCT = 40.0
 
 HURDLE_REASONABLE_ATR_MULTIPLE = 1.25
 HURDLE_STRETCH_ATR_MULTIPLE = 2.0
@@ -94,6 +98,168 @@ def first_number(*values: Any) -> float | None:
         if parsed is not None:
             return parsed
     return None
+
+
+def parse_date(value: Any) -> date | None:
+    """Normalize loose date/datetime artifact values to a calendar date."""
+    raw = text(value)
+    if not raw:
+        return None
+    if "|" in raw:
+        raw = raw.rsplit("|", 1)[-1]
+    if len(raw) >= 10 and raw[4:5] == "-" and raw[7:8] == "-":
+        try:
+            return date.fromisoformat(raw[:10])
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def parse_datetime(value: Any) -> datetime | None:
+    """Normalize loose artifact timestamps for snapshot ordering."""
+    raw = text(value)
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        parsed = parse_date(raw)
+        return datetime.combine(parsed, datetime.min.time()) if parsed else None
+
+
+def entry_reference_date(entry: dict[str, Any]) -> date | None:
+    """Return the date used to infer legacy earnings events."""
+    for field in ("tradeDate", "createdAt", "sourceStrikePlanGeneratedAt", "generatedAt", "refreshedAt"):
+        parsed = parse_date(entry.get(field))
+        if parsed:
+            return parsed
+    return None
+
+
+def entry_reference_datetime(entry: dict[str, Any]) -> datetime | None:
+    """Return the best timestamp for choosing the last pre-event snapshot."""
+    for field in ("createdAt", "sourceStrikePlanGeneratedAt", "refreshedAt", "tradeDate", "generatedAt"):
+        parsed = parse_datetime(entry.get(field))
+        if parsed:
+            return parsed
+    return None
+
+
+EVENT_DATE_FIELDS = (
+    "eventId",
+    "nextEarnings",
+    "earningsDate",
+    "reportDate",
+    "eventDate",
+    "earningsAt",
+    "earningsDateTime",
+)
+EVENT_CONTEXT_FIELDS = ("trackerContext", "marketContext", "marketContextSummary", "strikePlan")
+
+
+def earnings_event_candidate(entry: dict[str, Any]) -> tuple[date | None, str]:
+    """Return the best available earnings event date plus provenance."""
+    for field in EVENT_DATE_FIELDS:
+        parsed = parse_date(entry.get(field))
+        if parsed:
+            return parsed, f"explicit-{field}"
+    for context_field in EVENT_CONTEXT_FIELDS:
+        context = entry.get(context_field) or {}
+        if not isinstance(context, dict):
+            continue
+        for field in EVENT_DATE_FIELDS:
+            parsed = parse_date(context.get(field))
+            if parsed:
+                return parsed, f"explicit-{context_field}.{field}"
+
+    base = entry_reference_date(entry)
+    days = number(entry.get("daysUntilEarnings"))
+    if base and days is not None:
+        return base + timedelta(days=int(days)), "derived-tradeDate-plus-daysUntilEarnings"
+
+    expiration = parse_date(entry.get("expiration") or (entry.get("strikePlan") or {}).get("expiration"))
+    if expiration:
+        return expiration, "fallback-expiration"
+    return None, "missing-event-date"
+
+
+def candle_date(candle: dict[str, Any]) -> date | None:
+    """Return a daily candle date from Schwab-style history rows."""
+    parsed = parse_date(candle.get("datetime") or candle.get("date"))
+    if parsed:
+        return parsed
+    raw = number(candle.get("datetime"))
+    if raw is not None:
+        try:
+            return datetime.utcfromtimestamp(raw / 1000.0).date()
+        except (OverflowError, OSError, ValueError):
+            return None
+    return None
+
+
+def price_history_by_symbol(payload: dict[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
+    """Index daily close history by ticker symbol."""
+    if not payload:
+        return {}
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if rows is None and isinstance(payload, dict):
+        rows = [
+            {"symbol": symbol, "candles": row.get("candles") if isinstance(row, dict) else row}
+            for symbol, row in payload.items()
+            if isinstance(row, (dict, list))
+        ]
+    indexed: dict[str, list[dict[str, Any]]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        symbol = norm(row.get("symbol") or row.get("ticker"))
+        candles: list[dict[str, Any]] = []
+        for candle in row.get("candles") or []:
+            if not isinstance(candle, dict):
+                continue
+            parsed_date = candle_date(candle)
+            close = number(candle.get("close") or candle.get("Close"))
+            if parsed_date and close is not None and close > 0:
+                candles.append({"date": parsed_date, "close": close})
+        if symbol and candles:
+            indexed[symbol] = sorted(candles, key=lambda item: item["date"])
+    return indexed
+
+
+def earnings_day_reaction(
+    *,
+    ticker: str,
+    event_date: date,
+    price_history: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Compute abs(close(T+1) / close(T-1) - 1) from daily candles."""
+    candles = price_history.get(norm(ticker)) or []
+    before = [row for row in candles if row["date"] < event_date]
+    after = [row for row in candles if row["date"] > event_date]
+    if not before or not after:
+        return {
+            "status": "missing-price-history",
+            "realizedAbsMovePct": None,
+            "reactionStartDate": before[-1]["date"].isoformat() if before else None,
+            "reactionEndDate": after[0]["date"].isoformat() if after else None,
+            "reactionStartClose": before[-1]["close"] if before else None,
+            "reactionEndClose": after[0]["close"] if after else None,
+        }
+    start = before[-1]
+    end = after[0]
+    realized = abs((end["close"] / start["close"]) - 1.0) * 100.0
+    return {
+        "status": "computed",
+        "realizedAbsMovePct": round(realized, 4),
+        "reactionStartDate": start["date"].isoformat(),
+        "reactionEndDate": end["date"].isoformat(),
+        "reactionStartClose": round(start["close"], 4),
+        "reactionEndClose": round(end["close"], 4),
+        "realizedMoveSource": "schwab-daily-close-t-plus-1-over-t-minus-1",
+    }
 
 
 def underlying_entry_price(entry: dict[str, Any]) -> float | None:
@@ -247,57 +413,249 @@ def outcome_r(entry: dict[str, Any]) -> float | None:
     return round(pnl / risk, 6)
 
 
-def closed_expected_move_record(entry: dict[str, Any], source: str) -> dict[str, Any] | None:
+def closed_long_vol_candidate(entry: dict[str, Any]) -> bool:
+    """Return True when a source item is closed long-vol evidence."""
+    strategy = entry.get("strategy") or entry.get("setupRec")
+    outcome = entry.get("outcome") or {}
+    return is_long_vol_strategy(strategy) and text(outcome.get("status")).lower() == "closed"
+
+
+def event_group_key(row: dict[str, Any]) -> tuple[str, str]:
+    """Return the dedupe key for one normalized source row."""
+    return norm(row.get("ticker")), text(row.get("canonicalEventDate"))
+
+
+def canonicalize_event_dates(
+    rows: list[dict[str, Any]],
+    *,
+    cluster_days: int = EVENT_DATE_CLUSTER_DAYS,
+) -> dict[str, Any]:
+    """Collapse adjacent inferred dates for the same ticker into one event."""
+    by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_ticker[norm(row.get("ticker"))].append(row)
+
+    clustered_events: list[dict[str, Any]] = []
+    for ticker, ticker_rows in by_ticker.items():
+        explicit = [row for row in ticker_rows if text(row.get("eventDateSource")).startswith("explicit")]
+        inferred = [row for row in ticker_rows if row not in explicit]
+
+        for row in explicit:
+            row["canonicalEventDate"] = row["eventDate"].isoformat()
+            row["canonicalEventDateSource"] = row["eventDateSource"]
+
+        ordered_dates = sorted({row["eventDate"] for row in inferred if row.get("eventDate")})
+        clusters: list[list[date]] = []
+        for candidate in ordered_dates:
+            if not clusters or (candidate - clusters[-1][-1]).days > cluster_days:
+                clusters.append([candidate])
+            else:
+                clusters[-1].append(candidate)
+
+        for cluster in clusters:
+            counts = {
+                candidate: sum(1 for row in inferred if row.get("eventDate") == candidate)
+                for candidate in cluster
+            }
+            canonical = sorted(counts, key=lambda item: (-counts[item], item))[0]
+            for row in inferred:
+                if row.get("eventDate") in set(cluster):
+                    row["canonicalEventDate"] = canonical.isoformat()
+                    row["canonicalEventDateSource"] = "inferred-clustered-daysUntilEarnings"
+            clustered_events.append(
+                {
+                    "ticker": ticker,
+                    "canonicalEventDate": canonical.isoformat(),
+                    "candidateDates": [item.isoformat() for item in cluster],
+                    "snapshotCount": sum(counts.values()),
+                    "dateCounts": {item.isoformat(): count for item, count in counts.items()},
+                }
+            )
+
+    return {
+        "clusteredInferredEvents": clustered_events,
+        "clusterWindowDays": cluster_days,
+    }
+
+
+def choose_event_snapshot(rows: list[dict[str, Any]], event_date: date) -> dict[str, Any]:
+    """Choose the actual paper row or latest pre-event shadow snapshot."""
+    def sort_key(row: dict[str, Any]) -> tuple[int, int, str, str]:
+        entry = row["entry"]
+        ref = entry_reference_datetime(entry) or datetime.min
+        ref_date = ref.date()
+        is_pre_event = ref_date <= event_date
+        source_priority = 1 if row.get("source") == "paper" else 0
+        status_priority = 1 if text(entry.get("status")).lower() == "paper-staged" else 0
+        return (
+            source_priority,
+            status_priority,
+            ref.isoformat() if is_pre_event else "",
+            text(entry.get("ticketId")),
+        )
+
+    pre_event = [row for row in rows if (entry_reference_date(row["entry"]) or date.max) <= event_date]
+    candidates = pre_event or rows
+    return sorted(candidates, key=sort_key)[-1]
+
+
+def closed_expected_move_record(
+    entry: dict[str, Any],
+    source: str,
+    *,
+    event_date: date,
+    event_date_source: str,
+    duplicate_entries: list[dict[str, Any]],
+    price_history: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any] | None:
     """Normalize one closed long-vol record into expected-move evidence."""
     strategy = entry.get("strategy") or entry.get("setupRec")
-    if not is_long_vol_strategy(strategy):
+    if not closed_long_vol_candidate(entry):
         return None
     outcome = entry.get("outcome") or {}
-    if text(outcome.get("status")).lower() != "closed":
-        return None
     baseline = underlying_entry_price(entry)
-    exit_price = underlying_exit_price(entry)
-    if baseline is None or baseline <= 0 or exit_price is None:
+    if baseline is None or baseline <= 0:
         return None
     implied, implied_source = implied_move_pct(entry, baseline)
     if implied is None:
         return None
-    realized = round(abs(exit_price - baseline) / baseline * 100.0, 4)
+    reaction = earnings_day_reaction(
+        ticker=norm(entry.get("ticker")),
+        event_date=event_date,
+        price_history=price_history,
+    )
+    realized = number(reaction.get("realizedAbsMovePct"))
+    if realized is None:
+        return None
     edge = round(realized - implied, 4)
+    event_id = f"{norm(entry.get('ticker'))}|{event_date.isoformat()}"
     return {
         "source": source,
         "ticketId": entry.get("ticketId") or entry.get("scenarioId"),
+        "eventId": event_id,
+        "earningsDate": event_date.isoformat(),
+        "earningsDateSource": event_date_source,
         "ticker": norm(entry.get("ticker")),
         "strategy": text(strategy),
         "family": long_vol_family(strategy),
         "baselineUnderlyingPrice": round(baseline, 4),
-        "exitUnderlyingPrice": round(exit_price, 4),
+        "exitUnderlyingPrice": underlying_exit_price(entry),
         "impliedMovePct": implied,
         "impliedMoveSource": implied_source,
         "realizedAbsMovePct": realized,
+        "realizedMoveStatus": reaction.get("status"),
+        "realizedMoveSource": reaction.get("realizedMoveSource"),
+        "reactionStartDate": reaction.get("reactionStartDate"),
+        "reactionEndDate": reaction.get("reactionEndDate"),
+        "reactionStartClose": reaction.get("reactionStartClose"),
+        "reactionEndClose": reaction.get("reactionEndClose"),
         "moveEdgePct": edge,
         "moveRatio": round(realized / implied, 4) if implied > 0 else None,
         "beatImpliedMove": realized >= implied,
         "entryDebit": entry_debit(entry),
         "outcomeR": outcome_r(entry),
         "reviewedAt": outcome.get("reviewedAt"),
+        "selectedSnapshotAt": (
+            entry_reference_datetime(entry).isoformat()
+            if entry_reference_datetime(entry)
+            else None
+        ),
+        "dedupedSnapshotCount": len(duplicate_entries),
+        "dedupedTicketIds": sorted(
+            text(item.get("ticketId") or item.get("scenarioId"))
+            for item in duplicate_entries
+            if text(item.get("ticketId") or item.get("scenarioId"))
+        ),
     }
+
+
+def closed_expected_move_evidence(
+    *,
+    paper_ledger: dict[str, Any] | None = None,
+    shadow_ledger: dict[str, Any] | None = None,
+    price_history: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return deduped closed long-vol records plus construction diagnostics."""
+    paper = paper_ledger if paper_ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
+    shadow = shadow_ledger if shadow_ledger is not None else (load_json_file(SHADOW_EVIDENCE_FILE) or {})
+    history_payload = price_history if price_history is not None else (load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {})
+    history_index = price_history_by_symbol(history_payload)
+    source_rows: list[dict[str, Any]] = []
+    for source, payload in (("paper", paper), ("shadow", shadow)):
+        for item in payload.get("items") or []:
+            if not closed_long_vol_candidate(item):
+                continue
+            event_date, event_source = earnings_event_candidate(item)
+            if not event_date:
+                continue
+            source_rows.append(
+                {
+                    "source": source,
+                    "entry": item,
+                    "ticker": norm(item.get("ticker")),
+                    "eventDate": event_date,
+                    "eventDateSource": event_source,
+                }
+            )
+
+    cluster_diagnostics = canonicalize_event_dates(source_rows)
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in source_rows:
+        if row.get("canonicalEventDate"):
+            grouped[event_group_key(row)].append(row)
+
+    records: list[dict[str, Any]] = []
+    missing_realized: list[dict[str, Any]] = []
+    for key, group in sorted(grouped.items()):
+        _, event_text = key
+        event_date = parse_date(event_text)
+        if not event_date:
+            continue
+        selected = choose_event_snapshot(group, event_date)
+        duplicate_entries = [row["entry"] for row in group]
+        record = closed_expected_move_record(
+            selected["entry"],
+            selected["source"],
+            event_date=event_date,
+            event_date_source=text(selected.get("canonicalEventDateSource") or selected.get("eventDateSource")),
+            duplicate_entries=duplicate_entries,
+            price_history=history_index,
+        )
+        if record:
+            records.append(record)
+        else:
+            missing_realized.append(
+                {
+                    "eventId": f"{key[0]}|{event_text}",
+                    "ticker": key[0],
+                    "earningsDate": event_text,
+                    "snapshotCount": len(group),
+                }
+            )
+
+    diagnostics = {
+        "sourceClosedLongVolRows": len(source_rows),
+        "dedupedEventCount": len(grouped),
+        "dedupedExcessSnapshots": max(0, len(source_rows) - len(grouped)),
+        "priceHistorySymbols": sorted(history_index),
+        "missingRealizedEvents": missing_realized,
+        **cluster_diagnostics,
+    }
+    return records, diagnostics
 
 
 def closed_expected_move_records(
     *,
     paper_ledger: dict[str, Any] | None = None,
     shadow_ledger: dict[str, Any] | None = None,
+    price_history: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return closed paper/shadow long-vol records with move evidence."""
-    paper = paper_ledger if paper_ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
-    shadow = shadow_ledger if shadow_ledger is not None else (load_json_file(SHADOW_EVIDENCE_FILE) or {})
-    records: list[dict[str, Any]] = []
-    for source, payload in (("paper", paper), ("shadow", shadow)):
-        for item in payload.get("items") or []:
-            record = closed_expected_move_record(item, source)
-            if record:
-                records.append(record)
+    """Return deduped closed paper/shadow long-vol records with move evidence."""
+    records, _ = closed_expected_move_evidence(
+        paper_ledger=paper_ledger,
+        shadow_ledger=shadow_ledger,
+        price_history=price_history,
+    )
     return records
 
 
@@ -404,6 +762,53 @@ def move_stats(records: list[dict[str, Any]]) -> dict[str, Any]:
         "meanMoveEdgePct": mean([value for value in edges if value is not None]),
         "meanMoveRatio": mean([value for value in ratios if value is not None]),
         "meanOutcomeR": mean([value for value in r_values if value is not None]),
+    }
+
+
+def data_integrity(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Detect pseudo-replication and implausible earnings-day realized moves."""
+    by_name: dict[str, set[float]] = defaultdict(set)
+    by_event: dict[str, int] = defaultdict(int)
+    for record in records:
+        realized = number(record.get("realizedAbsMovePct"))
+        if realized is not None:
+            by_name[text(record.get("ticker"))].add(round(realized, 2))
+        event_id = text(record.get("eventId"))
+        if event_id:
+            by_event[event_id] += 1
+
+    n_records = sum(1 for record in records if number(record.get("realizedAbsMovePct")) is not None)
+    n_distinct = sum(len(values) for values in by_name.values())
+    implausible = sum(
+        1
+        for record in records
+        if (number(record.get("realizedAbsMovePct"), 0.0) or 0.0) > IMPLAUSIBLE_EARNINGS_MOVE_PCT
+    )
+    frozen = [
+        ticker
+        for ticker, values in by_name.items()
+        if len(values) == 1 and sum(1 for record in records if text(record.get("ticker")) == ticker) > 2
+    ]
+    duplicate_events = [event_id for event_id, count in by_event.items() if count > 1]
+    replication_ratio = (n_records / n_distinct) if n_distinct else float("inf")
+    reliable = n_records == 0 or (
+        replication_ratio <= 1.5
+        and implausible == 0
+        and not frozen
+        and not duplicate_events
+    )
+    return {
+        "records": n_records,
+        "distinctRealizedValues": n_distinct,
+        "effectiveObservations": n_distinct,
+        "replicationRatio": round(replication_ratio, 2) if n_distinct else None,
+        "implausibleMagnitudeRecords": implausible,
+        "implausibleMagnitudeThresholdPct": IMPLAUSIBLE_EARNINGS_MOVE_PCT,
+        "frozenRealizedNames": sorted(frozen),
+        "duplicateEventIds": sorted(duplicate_events),
+        "duplicateEventCount": len(duplicate_events),
+        "reliable": reliable,
+        "ok": reliable,
     }
 
 
@@ -543,7 +948,7 @@ def evidence_quality_diagnostics(records: list[dict[str, Any]]) -> dict[str, Any
         "interpretation": (
             "Outcome-R and expected-move math are different measures, but positive R while "
             "missing the implied move requires reconciliation before promotion. Repeated "
-            "fingerprints remain visible and are not silently deduplicated."
+            "fingerprints after per-event dedupe remain visible for reconciliation."
         ),
     }
 
@@ -654,15 +1059,18 @@ def build_expected_move_ledger(
     paper_ledger: dict[str, Any] | None = None,
     shadow_ledger: dict[str, Any] | None = None,
     paper_reducer: dict[str, Any] | None = None,
+    price_history: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the research-only expected-move ledger."""
     ensure_dirs()
-    closed_records = closed_expected_move_records(
+    closed_records, construction = closed_expected_move_evidence(
         paper_ledger=paper_ledger,
         shadow_ledger=shadow_ledger,
+        price_history=price_history,
     )
     current_candidates = current_long_vol_candidates(paper_reducer)
     stats = move_stats(closed_records)
+    integrity = data_integrity(closed_records)
     priced_current = [
         item
         for item in current_candidates
@@ -687,12 +1095,18 @@ def build_expected_move_ledger(
         "counts": {
             "closedLongVolRecords": len(closed_records),
             "withExpectedMove": len(closed_records),
+            "sourceClosedLongVolRows": construction.get("sourceClosedLongVolRows", len(closed_records)),
+            "dedupedEventCount": construction.get("dedupedEventCount", len(closed_records)),
+            "dedupedExcessSnapshots": construction.get("dedupedExcessSnapshots", 0),
+            "missingRealizedEvents": len(construction.get("missingRealizedEvents") or []),
             "currentLongVolCandidates": len(current_candidates),
             "currentPricedCandidates": len(priced_current),
             "currentMissingPriceOrPremium": len(missing_current),
             "currentPremiumPressured": len(pressure_candidates),
         },
         "overall": stats,
+        "dataIntegrity": integrity,
+        "constructionDiagnostics": construction,
         "byFamily": group_stats(closed_records, "family"),
         "bySource": group_stats(closed_records, "source"),
         "regimeDiagnostics": diagnostics,
@@ -703,7 +1117,8 @@ def build_expected_move_ledger(
         "reminders": [
             "A long-vol ticket needs realised move to clear premium, spread, and decay; direction alone is not enough.",
             "Breakeven distance is preferred; debit/underlying is used only when breakevens are absent.",
-            "Repeated fingerprints and metric conflicts are reported rather than silently cleaned away.",
+            "Closed evidence is one row per ticker plus earnings date; repeated snapshots are collapsed before stats.",
+            "Realised move is the earnings-day close reaction, not entry-to-expiration drift.",
             "This artifact is diagnostic only and cannot promote live or paper authority.",
         ],
     }
@@ -730,6 +1145,8 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
     counts = payload.get("counts") or {}
     overall = payload.get("overall") or {}
     diagnostics = payload.get("regimeDiagnostics") or {}
+    integrity = payload.get("dataIntegrity") or {}
+    construction = payload.get("constructionDiagnostics") or {}
     concentration = diagnostics.get("concentration") or {}
     recent = diagnostics.get("recentCohort") or {}
     quality = diagnostics.get("evidenceQuality") or {}
@@ -743,6 +1160,9 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- closed long-vol records: {counts.get('closedLongVolRecords', 0)}",
+        f"- source closed long-vol rows: {counts.get('sourceClosedLongVolRows', 0)}",
+        f"- deduped excess snapshots: {counts.get('dedupedExcessSnapshots', 0)}",
+        f"- missing realized events: {counts.get('missingRealizedEvents', 0)}",
         f"- current long-vol candidates: {counts.get('currentLongVolCandidates', 0)}",
         f"- current priced candidates: {counts.get('currentPricedCandidates', 0)}",
         f"- current missing price/premium: {counts.get('currentMissingPriceOrPremium', 0)}",
@@ -755,6 +1175,16 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
         f"- mean realised abs move: {fmt(overall.get('meanRealizedAbsMovePct'), suffix='%')}",
         f"- mean move edge: {fmt(overall.get('meanMoveEdgePct'), suffix='%')}",
         f"- mean outcome R: {fmt(overall.get('meanOutcomeR'))}",
+        "",
+        "Data integrity:",
+        f"- reliable: {integrity.get('reliable')}",
+        f"- records/distinct realized: {integrity.get('records')}/{integrity.get('distinctRealizedValues')}",
+        f"- replication ratio: {fmt(integrity.get('replicationRatio'))}",
+        f"- >{fmt(integrity.get('implausibleMagnitudeThresholdPct'), suffix='%')} moves: "
+        f"{integrity.get('implausibleMagnitudeRecords')}",
+        f"- frozen names: {', '.join(integrity.get('frozenRealizedNames') or []) or 'none'}",
+        f"- duplicate events: {integrity.get('duplicateEventCount')}",
+        f"- price-history symbols: {len(construction.get('priceHistorySymbols') or [])}",
         "",
         "Regime and evidence diagnostics:",
         f"- verdict: {diagnostics.get('verdict')}",

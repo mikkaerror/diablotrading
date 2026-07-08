@@ -715,7 +715,7 @@ def score_threshold_audit_status(report: dict) -> tuple[bool, str]:
 
 
 def expected_move_ledger_status(report: dict) -> tuple[bool, str]:
-    return _research_module_status(
+    ok, detail = _research_module_status(
         report,
         ok_verdicts={
             "insufficient-data",
@@ -724,6 +724,33 @@ def expected_move_ledger_status(report: dict) -> tuple[bool, str]:
             "move-edge-watch",
         },
     )
+    if not ok:
+        return ok, detail
+    integrity = report.get("dataIntegrity") or {}
+    if integrity and integrity.get("reliable") is False:
+        return (
+            False,
+            (
+                f"{detail} | data-integrity-fail "
+                f"records={integrity.get('records')} "
+                f"distinct={integrity.get('distinctRealizedValues')} "
+                f"replication={integrity.get('replicationRatio')} "
+                f"implausible>{integrity.get('implausibleMagnitudeThresholdPct')}%="
+                f"{integrity.get('implausibleMagnitudeRecords')} "
+                f"frozen={','.join(integrity.get('frozenRealizedNames') or []) or 'none'} "
+                f"duplicate-events={integrity.get('duplicateEventCount')}"
+            ),
+        )
+    if integrity:
+        return (
+            True,
+            (
+                f"{detail} | data-integrity=ok "
+                f"events={integrity.get('records')} "
+                f"effective={integrity.get('effectiveObservations')}"
+            ),
+        )
+    return ok, detail
 
 
 def strategy_alternative_scorer_status(report: dict) -> tuple[bool, str]:
