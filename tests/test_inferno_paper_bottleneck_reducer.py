@@ -50,9 +50,41 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertNotIn("AVOID", [item["ticker"] for item in payload["scenarioSlate"]])
         self.assertTrue(all(not item["brokerSubmitAllowed"] for item in payload["scenarioSlate"]))
 
-    def test_executable_paper_candidate_keeps_paper_stage_label(self) -> None:
+    def test_hard_blocked_shadow_reasons_suppress_approval_noise(self) -> None:
         director = {
-            "verdict": "ready-to-paper-stage",
+            "verdict": "no-viable-paper-tests",
+            "counts": {"stageableNow": 0},
+            "hardBlockedSlate": [
+                {
+                    "ticker": "PRIM",
+                    "category": "hard-blocked",
+                    "strategy": "LONG_STRADDLE",
+                    "readiness": 80,
+                    "estimatedMaxLoss": 2800.0,
+                    "priorityScore": 60,
+                    "reasons": [
+                        "human approval is missing",
+                        "human approval still required",
+                        "max loss $2800.00 exceeds single-ticket cap $500.00",
+                    ],
+                }
+            ],
+        }
+
+        payload = build_reducer(
+            director_loader=lambda: director,
+            snapshot_loader=lambda: {"rows": []},
+            scenario_target=1,
+        )
+
+        self.assertEqual(
+            payload["scenarioSlate"][0]["reasons"],
+            ["max loss $2800.00 exceeds single-ticket cap $500.00"],
+        )
+
+    def test_executable_paper_candidate_keeps_operator_candidate_label(self) -> None:
+        director = {
+            "verdict": "operator-paper-candidates",
             "stageableSlate": [
                 {
                     "ticker": "OTEX",
@@ -77,7 +109,9 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         scenario = payload["scenarioSlate"][0]
         self.assertTrue(scenario["executableInPaperMoney"])
         self.assertFalse(scenario["shadowOnly"])
-        self.assertEqual(scenario["evidenceLane"], "paper-stage")
+        self.assertEqual(scenario["evidenceLane"], "paper-operator-candidate")
+        self.assertIn("operator-routable paper candidate", scenario["reducerAction"])
+        self.assertIn("do not stage it autonomously", scenario["reducerAction"])
         self.assertEqual(scenario["price"], 28.75)
         self.assertEqual(scenario["priceSource"], "latest_snapshot.rows")
         self.assertFalse(scenario["brokerSubmitAllowed"])
@@ -112,9 +146,79 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertTrue(scenario["paperAutoSelected"])
         self.assertFalse(scenario["requiresApproval"])
         self.assertFalse(scenario["authorityEligible"])
-        self.assertEqual(scenario["evidenceLane"], "paper-auto-stage")
+        self.assertEqual(scenario["evidenceLane"], "paper-auto-candidate")
+        self.assertIn("operator-owned paper workflow", scenario["reducerAction"])
+        self.assertIn("do not stage it autonomously", scenario["reducerAction"])
         self.assertFalse(scenario["brokerSubmitAllowed"])
         self.assertFalse(scenario["liveTradingAllowed"])
+
+    def test_priced_paper_research_variants_are_surfaced_before_shadow_rows(self) -> None:
+        director = {
+            "verdict": "research-watch",
+            "counts": {
+                "paperResearchSelected": 2,
+                "distinctPaperResearchEvents": 1,
+            },
+            "pricedPaperVariantWatchlist": [
+                {
+                    "ticker": "GOOG",
+                    "category": "paper-research-selected",
+                    "strategy": "CALL_DEBIT_SPREAD",
+                    "expiration": "2026-07-24",
+                    "eventId": "GOOG|2026-07-23",
+                    "paperResearchSelected": True,
+                    "estimatedMaxLoss": 330.0,
+                    "priceLabel": "debit",
+                    "price": 3.30,
+                    "sourceAlternativeScore": 72,
+                    "warnings": ["bullish call spread lacks strong RVOL confirmation"],
+                },
+                {
+                    "ticker": "GOOG",
+                    "category": "paper-research-selected",
+                    "strategy": "IRON_CONDOR",
+                    "expiration": "2026-07-31",
+                    "eventId": "GOOG|2026-07-23",
+                    "paperResearchSelected": True,
+                    "estimatedMaxLoss": 330.0,
+                    "priceLabel": "credit",
+                    "price": 1.70,
+                    "sourceAlternativeScore": 54,
+                },
+            ],
+            "hardBlockedSlate": [
+                {
+                    "ticker": "GOOG",
+                    "category": "hard-blocked",
+                    "strategy": "LONG_STRADDLE",
+                    "setupRec": "Straddle",
+                    "readiness": 80,
+                    "daysUntilEarnings": 16,
+                    "estimatedMaxLoss": 2365.0,
+                    "priorityScore": 53.55,
+                    "reasons": ["max loss $2365.00 exceeds single-ticket cap $2000.00"],
+                }
+            ],
+        }
+
+        payload = build_reducer(
+            director_loader=lambda: director,
+            snapshot_loader=lambda: {"rows": [{"ticker": "GOOG", "price": 358.45, "support": 333.69}]},
+            scenario_target=2,
+        )
+
+        self.assertEqual(payload["counts"]["paperResearchSelected"], 2)
+        self.assertEqual(payload["counts"]["shadowOnly"], 0)
+        self.assertEqual([item["evidenceLane"] for item in payload["scenarioSlate"]], ["paper-research-selected", "paper-research-selected"])
+        self.assertEqual([item["strategy"] for item in payload["scenarioSlate"]], ["CALL_DEBIT_SPREAD", "IRON_CONDOR"])
+        self.assertEqual([item["ticker"] for item in payload["topFiveFocus"]], ["GOOG", "GOOG"])
+        self.assertTrue(all(item["paperResearchSelected"] for item in payload["scenarioSlate"]))
+        self.assertTrue(all(not item["executableInPaperMoney"] for item in payload["scenarioSlate"]))
+        self.assertTrue(all(not item["requiresApproval"] for item in payload["scenarioSlate"]))
+        self.assertTrue(all(not item["brokerSubmitAllowed"] for item in payload["scenarioSlate"]))
+        self.assertEqual(payload["scenarioSlate"][0]["price"], 358.45)
+        self.assertEqual(payload["scenarioSlate"][0]["optionPremium"], 3.30)
+        self.assertIn("approval-free paper research", payload["scenarioSlate"][0]["reducerAction"])
 
     def test_tracker_shadow_candidates_exclude_existing_and_negative_dte(self) -> None:
         snapshot = {

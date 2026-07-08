@@ -259,7 +259,9 @@ def next_milestones(
     if not exposure_clear(exposure):
         milestones.append("reduce sector/setup concentration or explicitly down-rank crowded slates")
     if not broker_preview_clean(broker_preview):
-        milestones.append("produce at least one clean paper-staged ticket for broker-preview payload testing")
+        milestones.append(
+            "build at least one clean offline broker-preview payload from an already eligible simulated paper ticket; do not stage tickets autonomously"
+        )
     if not performance_promoted(performance):
         milestones.append("earn strategy promotion through positive expectancy and profit factor")
     if not strategy_lab_promoted(strategy_lab):

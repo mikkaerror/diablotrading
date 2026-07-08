@@ -208,6 +208,52 @@ def option_score_rows(
     return rows
 
 
+def has_entry_score(item: dict[str, Any]) -> bool:
+    """Return True when a paper/shadow entry carries any rank score."""
+    return any(clamp_score(item.get(field)) is not None for field in SCORE_FIELDS)
+
+
+def option_entry_score_coverage(
+    *,
+    paper_ledger: dict[str, Any] | None = None,
+    shadow_ledger: dict[str, Any] | None = None,
+) -> dict[str, int]:
+    """Count score preservation on current paper/shadow option entries."""
+    paper = paper_ledger if paper_ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
+    shadow = shadow_ledger if shadow_ledger is not None else (load_json_file(SHADOW_EVIDENCE_FILE) or {})
+    total = 0
+    scored = 0
+    open_total = 0
+    open_scored = 0
+    closed_total = 0
+    closed_scored = 0
+    for payload in (paper, shadow):
+        for item in payload.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            total += 1
+            scored_entry = has_entry_score(item)
+            if scored_entry:
+                scored += 1
+            status = text((item.get("outcome") or {}).get("status")).lower()
+            if status == "open":
+                open_total += 1
+                if scored_entry:
+                    open_scored += 1
+            if status == "closed":
+                closed_total += 1
+                if scored_entry:
+                    closed_scored += 1
+    return {
+        "optionEntryRecords": total,
+        "optionEntryScoreRows": scored,
+        "openOptionEntryRecords": open_total,
+        "openOptionEntryScoreRows": open_scored,
+        "closedOptionEntryRecords": closed_total,
+        "closedOptionEntryScoreRows": closed_scored,
+    }
+
+
 def bucket_summary(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
     """Summarize observed outcomes by score bucket for one field."""
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -356,6 +402,7 @@ def build_score_calibration(
     ensure_dirs()
     scenario_rows = scenario_observation_rows(scenario_evidence)
     option_rows = option_score_rows(paper_ledger=paper_ledger, shadow_ledger=shadow_ledger)
+    entry_coverage = option_entry_score_coverage(paper_ledger=paper_ledger, shadow_ledger=shadow_ledger)
     scenario_tables = [
         calibration_table(scenario_rows, field, lane="scenario-observations")
         for field in SCORE_FIELDS
@@ -384,6 +431,7 @@ def build_score_calibration(
                 for row in option_rows
                 if any(row.get(field) is not None for field in SCORE_FIELDS)
             ),
+            **entry_coverage,
             "tables": len(tables),
         },
         "scenarioCalibration": scenario_tables,
@@ -429,6 +477,11 @@ def score_calibration_text(payload: dict[str, Any]) -> str:
         f"- scenario score rows: {counts.get('scenarioScoreRows', 0)}",
         f"- readiness rows: {counts.get('readinessRows', 0)}",
         f"- option rows carrying scores: {counts.get('optionScoreRows', 0)}",
+        (
+            "- current option entries carrying scores: "
+            f"{counts.get('optionEntryScoreRows', 0)} / {counts.get('optionEntryRecords', 0)} "
+            f"(open {counts.get('openOptionEntryScoreRows', 0)} / {counts.get('openOptionEntryRecords', 0)})"
+        ),
         "",
         "Scenario observation calibration:",
     ]

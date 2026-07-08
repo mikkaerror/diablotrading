@@ -4,8 +4,8 @@ from __future__ import annotations
 
 This module creates a daily simulation packet for the thinkorswim execution
 cockpit. It does not place orders and it does not unlock live authority. Its
-job is to tell the operator exactly what may be staged in paperMoney, what must
-remain blocked, and how to log simulated fills back into the desk.
+job is to tell the operator which paperMoney candidates are operator-routable,
+what must remain blocked, and how to log simulated fills back into the desk.
 """
 
 import argparse
@@ -505,14 +505,14 @@ def tos_sandbox_text(session: dict[str, Any]) -> str:
         f"Sandbox ready: {session.get('sandboxReady')}",
         f"Live trading allowed: {session.get('liveTradingAllowed')}",
         f"Broker submit allowed: {session.get('brokerSubmitAllowed')}",
-        f"Stageable: {session.get('stageableCount')} | watchlist: {session.get('watchlistCount')} | blocked: {session.get('blockedCount')}",
+        f"Operator-routable: {session.get('stageableCount')} | watchlist: {session.get('watchlistCount')} | blocked: {session.get('blockedCount')}",
         "",
         "Session checklist:",
     ]
     for step in session.get("sessionChecklist", []):
         lines.append(f"- {step}")
 
-    lines.extend(["", "Stageable tickets:"])
+    lines.extend(["", "Operator-routable tickets:"])
     stageable = session.get("stageableTickets") or []
     if not stageable:
         lines.append("- none")

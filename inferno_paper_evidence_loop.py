@@ -116,15 +116,15 @@ def build_actions(payload: dict[str, Any]) -> list[str]:
     counts = payload.get("counts") or {}
     actions: list[str] = []
     if counts.get("stageableNow", 0) > 0:
-        actions.append("Paper-stage the current clean sandbox names and update the seeded fill-log rows immediately.")
+        actions.append("Record the current clean sandbox names for the operator-owned paper workflow; unattended agents must not stage them.")
     elif counts.get("autoPaperSelected", 0) > 0:
-        actions.append("Paper-stage the model-selected auto slate; this is simulated evidence only, not live authority.")
+        actions.append("Record the model-selected auto slate for the operator-owned paper workflow; do not stage it autonomously.")
     elif counts.get("approvalOnly", 0) > 0:
         actions.append("Review the approval-only slate only for live-style discretion; do not let it block paper evidence throughput.")
     if counts.get("plannedFillRows", 0) > 0:
-        actions.append("Replace planned fill-log placeholders with real paperMoney execution facts as soon as a test is staged.")
+        actions.append("After the operator stages a paper test, replace planned fill-log placeholders with real paperMoney execution facts.")
     if counts.get("openFillRows", 0) > 0 or counts.get("paperOpenTickets", 0) > 0:
-        actions.append("Close or update open paper positions so the evidence engine can score real outcomes.")
+        actions.append("Operator-owned paper positions need fill or close updates before scoring; unattended agents must not close tickets.")
     if counts.get("shadowReadyForReview", 0) > 0:
         actions.append("Review expired shadow tickets to keep the research lane honest.")
     if counts.get("remainingForPromotion", 0) > 0:
@@ -165,7 +165,7 @@ def build_audit() -> dict[str, Any]:
     }
 
     if counts["stageableNow"] > 0 or counts["autoPaperSelected"] > 0:
-        verdict = "ready-to-stage"
+        verdict = "operator-paper-candidates"
     elif counts["openFillRows"] > 0 or counts["paperOpenTickets"] > 0 or counts["closedFillRows"] > 0:
         verdict = "collect-paper-outcomes"
     elif counts["approvalOnly"] > 0:
@@ -208,7 +208,7 @@ def audit_text(payload: dict[str, Any]) -> str:
         f"Strategy lab: {payload.get('strategyLabVerdict')}",
         "",
         "Counts:",
-        f"- stageable now: {counts.get('stageableNow', 0)}",
+        f"- operator-routable now: {counts.get('stageableNow', 0)}",
         f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
         f"- approval only: {counts.get('approvalOnly', 0)}",
         f"- planned fill rows: {counts.get('plannedFillRows', 0)}",
@@ -227,7 +227,7 @@ def audit_text(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            f"Stageable tickers: {', '.join(payload.get('stageableTickers') or []) or 'none'}",
+            f"Operator-routable tickers: {', '.join(payload.get('stageableTickers') or []) or 'none'}",
             f"Approval tickers: {', '.join(payload.get('approvalTickers') or []) or 'none'}",
             f"Open paper tickers: {', '.join(payload.get('openPaperTickers') or []) or 'none'}",
             f"Shadow review tickers: {', '.join(payload.get('shadowReviewTickers') or []) or 'none'}",

@@ -18,6 +18,8 @@ def artifact_fixture() -> dict:
                 "closedScenarioObservations": 401,
                 "closedOptionRecords": 146,
                 "optionScoreRows": 0,
+                "optionEntryScoreRows": 22,
+                "openOptionEntryScoreRows": 18,
             },
             "scenarioCalibration": [
                 {
@@ -98,6 +100,7 @@ class ScoreThresholdAuditTests(unittest.TestCase):
         titles = {item["title"] for item in payload["findings"]}
         self.assertIn("Score surfaces are not monotonic enough to treat as probabilities", titles)
         self.assertIn("Loosening promotion thresholds would not solve the current problem", titles)
+        self.assertIn("Closed option outcomes are historical and still scoreless", titles)
         self.assertIn("Configured ticket cap is far above the account-size formula", titles)
         self.assertGreaterEqual(payload["counts"]["thresholdsCataloged"], 10)
 
@@ -112,6 +115,7 @@ class ScoreThresholdAuditTests(unittest.TestCase):
 
         self.assertIn("Do not loosen promotion or risk gates", rendered)
         self.assertIn("optionScoreRows=0", rendered)
+        self.assertIn("current score-preserved entries=22", rendered)
         self.assertIn("Authority: research-only; broker submit OFF; live trading OFF", rendered)
         self.assertIn("Threshold catalog", rendered)
 

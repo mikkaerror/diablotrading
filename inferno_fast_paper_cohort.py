@@ -60,6 +60,7 @@ TARGET_DAILY_TRADES = 5
 MAX_PER_STRATEGY = 3
 CONTRACT_MULTIPLIER = 100
 EASTERN = ZoneInfo("America/New_York")
+BACKLOG_LIMIT = 8
 
 
 def number(value: Any, default: float = 0.0) -> float:
@@ -188,6 +189,49 @@ def choose_daily_slate(
             str(item.get("ticker") or ""),
         ),
     )
+
+
+def candidate_brief(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Return the non-authority fields we can expose for backlog reporting."""
+    return {
+        "ticker": candidate.get("ticker"),
+        "strategy": candidate.get("strategy"),
+        "bootstrapScore": candidate.get("bootstrapScore"),
+        "failedGates": candidate.get("failedGates") or [],
+        "readiness": candidate.get("readiness"),
+        "maxLoss": candidate.get("maxLoss"),
+        "promotionEligible": False,
+        "paperOnly": True,
+    }
+
+
+def backlog_slate(
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    *,
+    limit: int = BACKLOG_LIMIT,
+) -> list[dict[str, Any]]:
+    """List priceable candidates not opened this cycle.
+
+    This is intentionally a queue, not an approval surface. Rows here are
+    useful for the next autonomous fast-paper pass, but they never become
+    promotion evidence or broker actions by appearing in the backlog.
+    """
+    selected_tickers = {str(item.get("ticker") or "").upper() for item in selected}
+    rows = [
+        candidate_brief(item)
+        for item in candidates
+        if str(item.get("ticker") or "").upper() not in selected_tickers
+    ]
+    rows.sort(
+        key=lambda item: (
+            -int(item.get("bootstrapScore") or 0),
+            -number(item.get("readiness")),
+            number(item.get("maxLoss")),
+            str(item.get("ticker") or ""),
+        )
+    )
+    return rows[: max(0, limit)]
 
 
 def build_fast_entry(candidate: dict[str, Any], *, now: datetime) -> dict[str, Any]:
@@ -407,13 +451,16 @@ def build_fast_paper_cohort(
         item for item in ledger.get("items") or []
         if item.get("tradeDate") == now.date().isoformat()
     ]
+    opened_today_risk = sum(number(item.get("estimatedMaxLoss")) for item in opened_today)
+    remaining_daily_risk = max(0.0, MAX_DAILY_TICKET_DOLLARS - opened_today_risk)
     capacity = max(0, min(target_trades, MAX_OPEN_PAPER_TICKETS - len(existing_open)))
     selected: list[dict[str, Any]] = []
     pool: list[dict[str, Any]] = []
+    backlog: list[dict[str, Any]] = []
     bootstrap: dict[str, Any] = bootstrap_override or {}
     strike_plan: dict[str, Any] = strike_plan_override or {}
 
-    if is_market_session(now.date()) and capacity > 0 and not opened_today:
+    if is_market_session(now.date()) and capacity > 0 and remaining_daily_risk > 0:
         snapshot = snapshot_override if snapshot_override is not None else (
             load_json_file(SNAPSHOT_FILE) or {}
         )
@@ -434,7 +481,12 @@ def build_fast_paper_cohort(
             bootstrap.get("proposals") or [],
             excluded_tickers=excluded,
         )
-        selected = choose_daily_slate(pool, capacity=capacity)
+        selected = choose_daily_slate(
+            pool,
+            capacity=capacity,
+            daily_risk_cap=remaining_daily_risk,
+        )
+        backlog = backlog_slate(pool, selected)
         new_entries = [build_fast_entry(item, now=now) for item in selected]
         existing_ids = {str(item.get("ticketId") or "") for item in ledger.get("items") or []}
         inserted = [item for item in new_entries if str(item.get("ticketId") or "") not in existing_ids]
@@ -487,6 +539,8 @@ def build_fast_paper_cohort(
         }
         for item in current_open
     ]
+    if not backlog:
+        backlog = backlog_slate(pool, selected)
     payload = {
         "generatedAt": now.isoformat(),
         "stage": FAST_PAPER_STAGE,
@@ -513,6 +567,8 @@ def build_fast_paper_cohort(
         "riskBudget": {
             "dailyMaxLossCap": MAX_DAILY_TICKET_DOLLARS,
             "openTicketCap": MAX_OPEN_PAPER_TICKETS,
+            "openedTodayMaxLoss": round(opened_today_risk, 2),
+            "remainingDailyMaxLoss": round(remaining_daily_risk, 2),
             "selectedMaxLoss": round(sum(number(item.get("maxLoss")) for item in selected), 2),
             "openMaxLoss": round(
                 sum(number(item.get("estimatedMaxLoss")) for item in current_open),
@@ -530,6 +586,7 @@ def build_fast_paper_cohort(
             }
             for item in selected
         ],
+        "backlogSlate": backlog,
         "openSlate": open_slate,
         "closedTicketIds": closed_ids,
         "closePendingReasons": close_pending,
@@ -576,6 +633,8 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
         f"- closed today: {counts.get('closedToday', 0)}",
         f"- open now: {counts.get('open', 0)}",
         f"- close pending: {counts.get('closePending', 0)}",
+        f"- opened-today max loss: ${number(risk.get('openedTodayMaxLoss')):,.2f}",
+        f"- remaining daily max loss: ${number(risk.get('remainingDailyMaxLoss')):,.2f}",
         f"- selected max loss: ${number(risk.get('selectedMaxLoss')):,.2f} / "
         f"${number(risk.get('dailyMaxLossCap')):,.2f}",
         f"- open max loss: ${number(risk.get('openMaxLoss')):,.2f}",
@@ -591,6 +650,17 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
             f"- {item.get('ticker')} | {item.get('strategy')} | "
             f"score {item.get('bootstrapScore')}/5 | max loss ${number(item.get('maxLoss')):,.2f} | "
             f"exit eligible {item.get('exitEligibleDate')} | failed bootstrap gates: {failed}"
+        )
+    backlog = payload.get("backlogSlate") or []
+    lines.extend(["", "Backlog slate:"])
+    if not backlog:
+        lines.append("- none")
+    for item in backlog:
+        failed = ", ".join(item.get("failedGates") or []) or "none"
+        lines.append(
+            f"- {item.get('ticker')} | {item.get('strategy')} | "
+            f"score {item.get('bootstrapScore')}/5 | max loss ${number(item.get('maxLoss')):,.2f} | "
+            f"failed bootstrap gates: {failed}"
         )
     lines.extend(
         [

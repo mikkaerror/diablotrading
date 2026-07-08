@@ -34,6 +34,12 @@ PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 DEFAULT_SCENARIO_TARGET = int(os.environ.get("INFERNO_PBR_SCENARIO_TARGET", "12"))
 MAX_SCENARIO_LIMIT = int(os.environ.get("INFERNO_PBR_MAX_SCENARIOS", "20"))
 TOP_FOCUS_COUNT = 5
+APPROVAL_ONLY_REASONS = {
+    "human approval is missing",
+    "human approval missing",
+    "human approval still required",
+    "execution intent is not approval-ready",
+}
 
 
 def float_value(value: Any, default: float = 0.0) -> float:
@@ -59,7 +65,7 @@ def scenario_rank_score(candidate: dict[str, Any]) -> float:
     favor high-readiness names, but we give some lift to cheap tickets and
     nearer earnings because those produce faster paper evidence.
     """
-    priority = float_value(candidate.get("priorityScore") or candidate.get("priority"))
+    priority = float_value(candidate.get("priorityScore") or candidate.get("priority") or candidate.get("sourceAlternativeScore"))
     readiness = float_value(candidate.get("readiness"))
     max_loss = float_value(candidate.get("estimatedMaxLoss"), MAX_SINGLE_TICKET_DOLLARS)
     dte = int_value(candidate.get("daysUntilEarnings"), 99)
@@ -74,6 +80,23 @@ def scenario_rank_score(candidate: dict[str, Any]) -> float:
 def normalize_ticker(value: Any) -> str:
     """Return a stable uppercase ticker symbol."""
     return str(value or "").strip().upper()
+
+
+def normalize_reason(value: Any) -> str:
+    """Return a stable lowercase blocker reason."""
+    return str(value or "").strip().lower()
+
+
+def diagnostic_reasons_for_category(reasons: list[Any], category: str) -> list[str]:
+    """Return reducer-facing reasons without approval noise on hard blocks."""
+    cleaned = [str(reason or "").strip() for reason in reasons if str(reason or "").strip()]
+    if category in {"hard-blocked", "failed-construction"}:
+        non_approval = [
+            reason for reason in cleaned if normalize_reason(reason) not in APPROVAL_ONLY_REASONS
+        ]
+        if non_approval:
+            return non_approval
+    return cleaned
 
 
 def snapshot_row_lookup(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -123,16 +146,19 @@ def scenario_from_director_candidate(
     """Convert a director candidate into a reducer scenario.
 
     The original director category remains intact. The reducer only adds
-    evidence labels and a clearer "can this be staged?" boundary.
+    evidence labels and a clearer operator-routable paper boundary.
     """
     ticker = normalize_ticker(candidate.get("ticker"))
     category = str(candidate.get("category") or lane)
+    paper_research_selected = category == "paper-research-selected" or bool(candidate.get("paperResearchSelected"))
     auto_paper_selected = category == "auto-paper-selected" or bool(candidate.get("paperAutoSelected"))
     executable = category in {"stageable-now", "auto-paper-selected"}
     approval_needed = category == "approval-only"
-    shadow_only = not executable
+    shadow_only = not executable and not paper_research_selected
     max_loss = float_value(candidate.get("estimatedMaxLoss"))
     capital_gap = max(0.0, max_loss - MAX_SINGLE_TICKET_DOLLARS)
+    scenario_price = None if paper_research_selected else candidate.get("price")
+    option_premium = candidate.get("price") if paper_research_selected else None
 
     scenario_score = round(scenario_rank_score(candidate) + max(0, 10 - rank_hint) * 0.01, 2)
 
@@ -143,28 +169,42 @@ def scenario_from_director_candidate(
         "sourceLane": lane,
         "directorCategory": category,
         "strategy": candidate.get("strategy"),
-        "setupRec": candidate.get("setupRec"),
+        "setupRec": candidate.get("setupRec") or candidate.get("strategy"),
+        "expiration": candidate.get("expiration"),
+        "eventId": candidate.get("eventId"),
         "readiness": candidate.get("readiness"),
         "confidence": candidate.get("confidence"),
         "daysUntilEarnings": candidate.get("daysUntilEarnings"),
-        "price": candidate.get("price"),
-        "baselineUnderlyingPrice": candidate.get("baselineUnderlyingPrice") or candidate.get("price"),
+        "price": scenario_price,
+        "baselineUnderlyingPrice": candidate.get("baselineUnderlyingPrice") or scenario_price,
         "priceSource": candidate.get("priceSource"),
+        "optionPremium": option_premium,
+        "optionPremiumLabel": candidate.get("priceLabel"),
         "estimatedMaxLoss": candidate.get("estimatedMaxLoss"),
         "capitalGap": round(capital_gap, 2),
         "priorityScore": candidate.get("priorityScore"),
+        "sourceAlternativeScore": candidate.get("sourceAlternativeScore"),
         "scenarioScore": scenario_score,
         "executableInPaperMoney": executable,
         "requiresApproval": approval_needed,
         "shadowOnly": shadow_only,
+        "paperResearchSelected": paper_research_selected,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "authorityEligible": category == "stageable-now" and not auto_paper_selected,
         "paperAutoSelected": auto_paper_selected,
-        "evidenceLane": "paper-auto-stage" if auto_paper_selected else ("paper-stage" if executable else "shadow-scenario"),
+        "evidenceLane": (
+            "paper-auto-candidate"
+            if auto_paper_selected
+            else (
+                "paper-operator-candidate"
+                if executable
+                else ("paper-research-selected" if paper_research_selected else "shadow-scenario")
+            )
+        ),
         "reducerAction": reducer_action_for_candidate(candidate, category, capital_gap),
-        "reasons": candidate.get("reasons") or [],
-        "warnings": candidate.get("warnings") or [],
+        "reasons": diagnostic_reasons_for_category(candidate.get("reasons") or [], category),
+        "warnings": candidate.get("warnings") or candidate.get("optimizerWarnings") or [],
         "marketContextSummary": candidate.get("marketContextSummary") or {},
     }
     return scenario
@@ -174,13 +214,19 @@ def reducer_action_for_candidate(candidate: dict[str, Any], category: str, capit
     """Return the safest next action for one scenario."""
     ticker = normalize_ticker(candidate.get("ticker"))
     if candidate.get("paperAutoSelected"):
-        return f"Auto-stage/track {ticker} in paperMoney only; no live order authority."
+        return f"Record {ticker} for the operator-owned paper workflow; do not stage it autonomously."
     if category == "stageable-now":
-        return f"Stage {ticker} in paperMoney only; record fill immediately."
+        return f"Record {ticker} as an operator-routable paper candidate; do not stage it autonomously."
     if category == "auto-paper-selected":
-        return f"Auto-stage/track {ticker} in paperMoney only; no live order authority."
+        return f"Record {ticker} for the operator-owned paper workflow; do not stage it autonomously."
+    if category == "paper-research-selected":
+        strategy = str(candidate.get("strategy") or "variant")
+        return (
+            f"Track {ticker} {strategy} as approval-free paper research; "
+            "broker staging remains disabled until an operator-owned workflow routes it."
+        )
     if category == "approval-only":
-        return f"Approve or reject {ticker}; if approved, rebuild strike cycle before staging."
+        return f"Leave {ticker} in the operator-owned approval queue; if the human approves it, rebuild strike cycle before staging."
     if capital_gap > 0:
         return (
             f"Do not stage {ticker}; search for a capped variant at or below "
@@ -259,22 +305,44 @@ def tracker_shadow_candidates(
 
 def collect_director_scenarios(director: dict[str, Any]) -> list[dict[str, Any]]:
     """Collect director cohorts in safety-first priority order."""
+    priced_variants = [
+        {**item, "category": "paper-research-selected"}
+        for item in (director.get("pricedPaperVariantWatchlist") or [])
+        if isinstance(item, dict) and item.get("paperResearchSelected")
+    ]
     cohorts = [
         ("stageable", director.get("stageableSlate") or []),
         ("auto-paper", director.get("autoPaperSlate") or []),
+        ("paper-research", priced_variants),
         ("approval", director.get("approvalSlate") or []),
         ("research", director.get("researchWatchlist") or []),
         ("capital-near-miss", director.get("capitalNearMissSlate") or []),
         ("hard-blocked", director.get("hardBlockedSlate") or []),
     ]
     seen: set[str] = set()
+    covered_tickers: set[str] = set()
     scenarios: list[dict[str, Any]] = []
     for lane, items in cohorts:
         for item in items:
             ticker = normalize_ticker(item.get("ticker"))
-            if not ticker or ticker in seen:
+            if not ticker:
                 continue
-            seen.add(ticker)
+            if lane == "paper-research":
+                key = "|".join(
+                    [
+                        ticker,
+                        str(item.get("strategy") or item.get("setupRec") or ""),
+                        str(item.get("expiration") or ""),
+                    ]
+                )
+            else:
+                if ticker in covered_tickers:
+                    continue
+                key = ticker
+            if key in seen:
+                continue
+            seen.add(key)
+            covered_tickers.add(ticker)
             scenarios.append(scenario_from_director_candidate(item, lane=lane, rank_hint=len(scenarios)))
     return scenarios
 
@@ -309,6 +377,7 @@ def build_reducer(
     scenarios.sort(
         key=lambda item: (
             not bool(item.get("executableInPaperMoney")),
+            not bool(item.get("paperResearchSelected")),
             not bool(item.get("requiresApproval")),
             -float_value(item.get("scenarioScore")),
             int_value(item.get("daysUntilEarnings"), 999),
@@ -321,6 +390,7 @@ def build_reducer(
 
     executable = [item for item in scenarios if item.get("executableInPaperMoney")]
     approval = [item for item in scenarios if item.get("requiresApproval")]
+    paper_research = [item for item in scenarios if item.get("paperResearchSelected")]
     shadow = [item for item in scenarios if item.get("shadowOnly")]
     verdict = "scenario-slate-ready" if len(scenarios) >= scenario_target else "scenario-slate-thin"
 
@@ -338,6 +408,7 @@ def build_reducer(
             "topFocus": min(TOP_FOCUS_COUNT, len(scenarios)),
             "executablePaper": len(executable),
             "approvalNeeded": len(approval),
+            "paperResearchSelected": len(paper_research),
             "shadowOnly": len(shadow),
         },
         "topFiveFocus": scenarios[:TOP_FOCUS_COUNT],
@@ -345,8 +416,8 @@ def build_reducer(
         "directorVerdict": director.get("verdict"),
         "directorCounts": director.get("counts") or {},
         "rules": [
-            "Only executablePaper=true can be staged in paperMoney.",
-            "All shadowOnly scenarios are evidence collection only and never broker-submit.",
+            "Rows with executablePaper=true are operator-routable paper candidates; unattended agents must not stage them.",
+            "All non-executable scenarios are evidence collection only and never broker-submit.",
             "Use the top five for operator focus; keep the full slate for after-the-fact scoring.",
         ],
     }
@@ -365,23 +436,33 @@ def reducer_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- scenarios: {counts.get('scenarios', 0)}",
-        f"- executable paper: {counts.get('executablePaper', 0)}",
+        f"- operator-routable paper candidates: {counts.get('executablePaper', 0)}",
         f"- approval needed: {counts.get('approvalNeeded', 0)}",
+        f"- paper research selected: {counts.get('paperResearchSelected', 0)}",
         f"- shadow only: {counts.get('shadowOnly', 0)}",
         "",
         "Top five focus:",
     ]
     for item in payload.get("topFiveFocus") or []:
+        dte = item.get("daysUntilEarnings")
+        dte_text = f"{dte}d" if dte is not None else "n/a"
+        price = item.get("price")
+        price_text = price if price is not None else "n/a"
+        premium = item.get("optionPremium")
+        premium_text = ""
+        if premium is not None:
+            premium_label = item.get("optionPremiumLabel") or "premium"
+            premium_text = f" | {premium_label} ${float_value(premium):.2f}"
         lines.append(
             f"- #{item.get('rank')} {item.get('ticker')} | {item.get('evidenceLane')} | "
             f"score {item.get('scenarioScore')} | {item.get('setupRec')} | "
-            f"{item.get('daysUntilEarnings')}d | price {item.get('price') or 'n/a'}"
+            f"{dte_text} | price {price_text}{premium_text}"
         )
         lines.append(f"  action: {item.get('reducerAction')}")
 
     lines.extend(["", "Full scenario slate:"])
     for item in payload.get("scenarioSlate") or []:
-        tag = "PAPER" if item.get("executableInPaperMoney") else "SHADOW"
+        tag = "PAPER" if item.get("executableInPaperMoney") else ("RESEARCH" if item.get("paperResearchSelected") else "SHADOW")
         lines.append(
             f"- #{item.get('rank')} {item.get('ticker')} [{tag}] "
             f"{item.get('sourceLane')} | score {item.get('scenarioScore')} | price {item.get('price') or 'n/a'}"
@@ -410,15 +491,20 @@ def reducer_csv(payload: dict[str, Any]) -> str:
         "scenarioScore",
         "setupRec",
         "strategy",
+        "expiration",
+        "eventId",
         "daysUntilEarnings",
         "price",
         "priceSource",
+        "optionPremium",
+        "optionPremiumLabel",
         "readiness",
         "confidence",
         "estimatedMaxLoss",
         "capitalGap",
         "executableInPaperMoney",
         "paperAutoSelected",
+        "paperResearchSelected",
         "requiresApproval",
         "shadowOnly",
         "reducerAction",
@@ -435,15 +521,20 @@ def reducer_csv(payload: dict[str, Any]) -> str:
             "scenarioScore": item.get("scenarioScore"),
             "setupRec": item.get("setupRec"),
             "strategy": item.get("strategy"),
+            "expiration": item.get("expiration"),
+            "eventId": item.get("eventId"),
             "daysUntilEarnings": item.get("daysUntilEarnings"),
             "price": item.get("price"),
             "priceSource": item.get("priceSource"),
+            "optionPremium": item.get("optionPremium"),
+            "optionPremiumLabel": item.get("optionPremiumLabel"),
             "readiness": item.get("readiness"),
             "confidence": item.get("confidence"),
             "estimatedMaxLoss": item.get("estimatedMaxLoss"),
             "capitalGap": item.get("capitalGap"),
             "executableInPaperMoney": item.get("executableInPaperMoney"),
             "paperAutoSelected": item.get("paperAutoSelected"),
+            "paperResearchSelected": item.get("paperResearchSelected"),
             "requiresApproval": item.get("requiresApproval"),
             "shadowOnly": item.get("shadowOnly"),
             "reducerAction": item.get("reducerAction"),

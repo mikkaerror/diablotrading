@@ -211,6 +211,7 @@ MAX_DAILY_TICKET_DOLLARS = float(os.environ.get("MAX_DAILY_TICKET_DOLLARS", "150
 # live drawdown scaling so the paper loop can continue while live capital is paused.
 PAPER_TICKET_BUDGET_DOLLARS = float(os.environ.get("INFERNO_PAPER_TICKET_BUDGET", "500"))
 PAPER_DAILY_BUDGET_DOLLARS = float(os.environ.get("INFERNO_PAPER_DAILY_BUDGET", "1500"))
+MAX_PAPER_TICKETS_PER_EVENT = int(os.environ.get("INFERNO_MAX_PAPER_TICKETS_PER_EVENT", "2"))
 MAX_OPEN_PAPER_TICKETS = int(os.environ.get("MAX_OPEN_PAPER_TICKETS", "5"))
 MAX_STRIKE_PLAN_AGE_MINUTES = int(os.environ.get("MAX_STRIKE_PLAN_AGE_MINUTES", "180"))
 MIN_DEBIT_SPREAD_REWARD_RISK = float(os.environ.get("MIN_DEBIT_SPREAD_REWARD_RISK", "0.50"))

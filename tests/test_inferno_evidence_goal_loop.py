@@ -121,6 +121,23 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("paper-blocker-swarm outcomeReward must remain zero", result["errors"])
 
+    def test_progress_prefers_active_swarm_blocker_over_historical_bucket(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["paperBlockerSwarm"]["dominantLane"] = "premium_hurdle"
+        artifacts["paperBlockerSwarm"]["counts"]["operatorActionRequired"] = 0
+        artifacts["paperBlockerSwarm"]["blockerCounts"] = {
+            "premium_hurdle": 6,
+            "liquidity": 5,
+        }
+        artifacts["performance"]["blockReasonCategories"] = {
+            "approval-missing": {"count": 132}
+        }
+
+        progress = loop.progress_snapshot(artifacts, now=NOW)
+
+        self.assertEqual(progress["dominantBlocker"], "premium_hurdle")
+        self.assertEqual(progress["dominantBlockerCount"], 6)
+
     def test_precheck_requires_paper_evidence_authority(self) -> None:
         artifacts = safe_artifacts()
         artifacts["authority"]["decision"]["authorityLevel"] = "halted"

@@ -114,10 +114,26 @@ class StrategyShadowComparisonTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["groups"], 0)
         self.assertEqual(payload["register"], [])
 
+    def test_source_pricing_freshness_flags_stale_register(self) -> None:
+        report = {"sourcePricing": {"generatedAt": "2026-07-06T10:00:00-06:00"}}
+        pricing = {"generatedAt": "2026-07-06T10:05:00-06:00"}
+
+        freshness = comparison.source_pricing_freshness(report, pricing)
+
+        self.assertFalse(freshness["freshForPricing"])
+        self.assertEqual(freshness["reason"], "stale-relative-to-pricing")
+
+    def test_source_pricing_freshness_accepts_matching_source(self) -> None:
+        report = {"sourcePricing": {"generatedAt": "2026-07-06T10:00:00-06:00"}}
+        pricing = {"generatedAt": "2026-07-06T10:00:00-06:00"}
+
+        self.assertTrue(comparison.source_pricing_freshness(report, pricing)["freshForPricing"])
+
     def test_text_report_names_register_and_condor(self) -> None:
         payload = comparison.build_strategy_shadow_comparison(
             {
                 "items": [
+                    priced_item("PL", "CALL_DEBIT_SPREAD", combined=True),
                     priced_item("PL", "PUT_CREDIT_SPREAD", combined=False, optimizer_blocks=["short put above support"]),
                     priced_item("PL", "IRON_CONDOR", combined=True),
                 ]
@@ -129,6 +145,7 @@ class StrategyShadowComparisonTests(unittest.TestCase):
 
         self.assertIn("Strategy Shadow Comparison Register", report)
         self.assertIn("IRON_CONDOR", report)
+        self.assertIn("CALL_DEBIT_SPREAD", report)
         self.assertIn("broker submit allowed: False", report)
         self.assertIn("payoff checkpoints", report)
 
@@ -151,6 +168,31 @@ class StrategyShadowComparisonTests(unittest.TestCase):
         self.assertEqual(comparison.credit_structure_expiration_pnl(condor, 50), 120.0)
         self.assertEqual(comparison.credit_structure_expiration_pnl(condor, 60), -180.0)
         self.assertEqual(comparison.credit_structure_expiration_pnl(put_credit, 39), -30.0)
+
+    def test_debit_spread_payoff_math_reads_strikes_from_legs(self) -> None:
+        call_debit = {
+            "strategy": "CALL_DEBIT_SPREAD",
+            "estimatedDebit": 2.85,
+            "legs": [
+                {"instruction": "BUY_TO_OPEN", "putCall": "CALL", "strike": 365},
+                {"instruction": "SELL_TO_OPEN", "putCall": "CALL", "strike": 370},
+            ],
+        }
+        put_debit = {
+            "strategy": "PUT_DEBIT_SPREAD",
+            "estimatedDebit": 1.60,
+            "legs": [
+                {"instruction": "BUY_TO_OPEN", "putCall": "PUT", "strike": 75},
+                {"instruction": "SELL_TO_OPEN", "putCall": "PUT", "strike": 72.5},
+            ],
+        }
+
+        self.assertEqual(comparison.credit_structure_expiration_pnl(call_debit, 364), -285.0)
+        self.assertEqual(comparison.credit_structure_expiration_pnl(call_debit, 368), 15.0)
+        self.assertEqual(comparison.credit_structure_expiration_pnl(call_debit, 373), 215.0)
+        self.assertEqual(comparison.credit_structure_expiration_pnl(put_debit, 76), -160.0)
+        self.assertEqual(comparison.credit_structure_expiration_pnl(put_debit, 74), -60.0)
+        self.assertEqual(comparison.credit_structure_expiration_pnl(put_debit, 70), 90.0)
 
 
 if __name__ == "__main__":

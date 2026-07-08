@@ -99,7 +99,8 @@ class PaperBlockerSwarmTests(unittest.TestCase):
         self.assertFalse(payload["brokerSubmitAllowed"])
         self.assertFalse(payload["liveTradingAllowed"])
         self.assertEqual(payload["counts"]["blockedCandidatesAnalyzed"], 1)
-        self.assertEqual(payload["counts"]["operatorActionRequired"], 1)
+        self.assertEqual(payload["counts"]["operatorApprovalMentioned"], 1)
+        self.assertEqual(payload["counts"]["operatorActionRequired"], 0)
         self.assertEqual(payload["counts"]["marketDataBlocked"], 1)
         self.assertEqual(payload["counts"]["marketQualityBlocked"], 1)
         self.assertEqual(payload["counts"]["strategyFallbackSuggested"], 1)
@@ -115,7 +116,9 @@ class PaperBlockerSwarmTests(unittest.TestCase):
         self.assertEqual(finding["fixability"], "data-refresh")
         self.assertTrue(finding["strategyFallbackSuggested"])
         self.assertIn("5-wide debit spread", finding["capFit"]["boundedFits"])
-        self.assertIn("operator_action", finding["activeLanes"])
+        self.assertTrue(finding["operatorApprovalMentioned"])
+        self.assertFalse(finding["operatorActionRequired"])
+        self.assertNotIn("operator_action", finding["activeLanes"])
         self.assertIn("data_freshness", finding["activeLanes"])
         self.assertIn("liquidity", finding["activeLanes"])
         self.assertIn("strike_construction", finding["activeLanes"])
@@ -173,6 +176,7 @@ class PaperBlockerSwarmTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["verdict"], "operator-action-required")
+        self.assertEqual(payload["counts"]["operatorApprovalMentioned"], 1)
         self.assertEqual(payload["counts"]["operatorActionRequired"], 1)
         self.assertEqual(payload["counts"]["fixableByTooling"], 0)
         self.assertEqual(payload["candidateFindings"][0]["dominantLane"], "operator_action")
@@ -189,6 +193,8 @@ class PaperBlockerSwarmTests(unittest.TestCase):
         self.assertIn("Inferno Paper Blocker Swarm", text)
         self.assertIn("outcome reward: 0.0", text)
         self.assertIn("broker submit OFF", text)
+        self.assertIn("approval text present on non-actionable blockers: 1", text)
+        self.assertNotIn("operator approval mentioned", text)
         self.assertIn("MEI | Straddle", text)
 
 

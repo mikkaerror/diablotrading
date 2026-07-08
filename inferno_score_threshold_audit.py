@@ -377,19 +377,36 @@ def calibration_findings(score_calibration: dict[str, Any]) -> list[dict[str, An
             )
         )
     if int(counts.get("optionScoreRows") or 0) == 0:
+        entry_score_rows = int(counts.get("optionEntryScoreRows") or 0)
+        open_entry_score_rows = int(counts.get("openOptionEntryScoreRows") or 0)
+        if entry_score_rows:
+            title = "Closed option outcomes are historical and still scoreless"
+            evidence = (
+                f"{counts.get('closedOptionRecords', 0)} closed option records exist, "
+                f"but optionScoreRows=0; current score-preserved entries={entry_score_rows} "
+                f"(open={open_entry_score_rows})."
+            )
+            recommendation = (
+                "Close and review the score-preserved paper/shadow entries before treating scores as calibrated; "
+                "do not fabricate historical score backfills without source provenance."
+            )
+        else:
+            title = "Closed option outcomes are not carrying score fields"
+            evidence = (
+                f"{counts.get('closedOptionRecords', 0)} closed option records exist, "
+                "but optionScoreRows=0."
+            )
+            recommendation = "Preserve readiness/scenarioScore/priorityScore on paper and shadow option records at entry."
         findings.append(
             finding(
                 "P2",
-                "Closed option outcomes are not carrying score fields",
-                (
-                    f"{counts.get('closedOptionRecords', 0)} closed option records exist, "
-                    "but optionScoreRows=0."
-                ),
+                title,
+                evidence,
                 (
                     "The desk can calibrate scenario observations, but it cannot yet answer whether the "
                     "exact scores attached to option tickets predicted option R outcomes."
                 ),
-                "Preserve readiness/scenarioScore/priorityScore on paper and shadow option records at entry.",
+                recommendation,
                 source="data/inferno_score_calibration.json",
             )
         )
@@ -544,7 +561,7 @@ def assumption_checks() -> list[dict[str, Any]]:
         {
             "assumption": "Scores are rank surfaces, not calibrated probabilities.",
             "status": "supported",
-            "evidence": "Score calibration explicitly reports monotonic violations and optionScoreRows=0.",
+            "evidence": "Score calibration reports monotonic violations and no closed score-bearing option outcomes yet.",
             "falsifier": "Closed option records with score fields show monotonic, stable bucket-level R outcomes.",
         },
         {
@@ -922,7 +939,7 @@ def render_score_threshold_audit(payload: dict[str, Any]) -> str:
         "Executive read:",
         "- Do not loosen promotion or risk gates based on the current evidence.",
         "- Treat readiness, scenarioScore, and variant scores as rank surfaces until option-outcome calibration exists.",
-        "- The most useful next work is better paper-chance generation plus score preservation on closed option records.",
+        "- The most useful next work is better paper-chance generation plus closing score-preserved option records.",
         "",
         "Counts:",
         f"- thresholds cataloged: {counts.get('thresholdsCataloged', 0)}",

@@ -16,10 +16,11 @@ import json
 from collections import Counter
 from typing import Any
 
-from inferno_config import AUTO_PAPER_SELECTION_ENABLED, MAX_SINGLE_TICKET_DOLLARS, local_now
+from inferno_config import AUTO_PAPER_SELECTION_ENABLED, MAX_PAPER_TICKETS_PER_EVENT, MAX_SINGLE_TICKET_DOLLARS, local_now
 from inferno_doctor import in_current_service_cycle
 from inferno_execution_clerk import build_execution_queue
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_paper_execution import paper_event_id, paper_event_ticket_count
 from inferno_trade_evidence import decision_card, volatility_context
 from inferno_strike_selector import (
     build_strike_plan,
@@ -28,6 +29,7 @@ from inferno_strike_selector import (
     effective_strategy_alternative_item,
     save_strike_plan,
 )
+from inferno_ticket_cap_policy import current_ticket_cap_policy
 from server import APPROVAL_QUEUE_FILE, DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
 
 
@@ -40,6 +42,8 @@ PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_TEST_DIRECTOR_TEXT_FILE = REPORTS_DIR / "paper_test_director_latest.txt"
 PAPER_REHEARSAL_STRIKE_PLAN_FILE = DATA_DIR / "inferno_paper_rehearsal_strike_plan.json"
 PAPER_REHEARSAL_STRIKE_PLAN_TEXT_FILE = REPORTS_DIR / "paper_rehearsal_strike_plan_latest.txt"
+STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
+PAPER_EXECUTION_LEDGER_FILE = DATA_DIR / "inferno_paper_execution_ledger.json"
 
 PROMOTION_TARGET = 30
 EXPANDED_REHEARSAL_LIMIT = 12
@@ -49,7 +53,15 @@ APPROVAL_ONLY_REASONS = {
     "human approval still required",
     "execution intent is not approval-ready",
 }
-GOOD_VERDICTS = {"ready-to-paper-stage", "auto-paper-selected", "approval-bottleneck"}
+GOOD_VERDICTS = {
+    "operator-paper-candidates",
+    "auto-paper-selected",
+    "paper-research-selected",
+    "event-capped",
+    "approval-bottleneck",
+}
+CONSTRUCTION_WATCH_LIMIT = 8
+PRICED_VARIANT_WATCH_LIMIT = 8
 
 
 def normalize_reason(reason: Any) -> str:
@@ -68,6 +80,21 @@ def dedupe(items: list[Any]) -> list[str]:
         seen.add(value)
         cleaned.append(value)
     return cleaned
+
+
+def non_approval_reason_list(reasons: list[Any]) -> list[str]:
+    """Return reasons that describe real data, risk, construction, or market blocks."""
+    return [str(reason or "").strip() for reason in reasons if normalize_reason(reason) not in APPROVAL_ONLY_REASONS]
+
+
+def diagnostic_reasons(candidate: dict[str, Any]) -> list[str]:
+    """Return report-facing blocker reasons without letting stale approval text dominate."""
+    reasons = [str(reason or "").strip() for reason in candidate.get("reasons") or [] if str(reason or "").strip()]
+    if candidate.get("category") in {"hard-blocked", "failed-construction"}:
+        non_approval = non_approval_reason_list(reasons)
+        if non_approval:
+            return non_approval
+    return reasons
 
 
 def load_payload(path: Any, default: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +194,24 @@ def float_value(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def trend_label(value: Any) -> str:
+    """Return a readable trend label from either string or dict context."""
+    if isinstance(value, dict):
+        return str(value.get("label") or value.get("tone") or "Unknown")
+    return str(value or "Unknown")
+
+
+def effective_ticket_cap_dollars() -> float:
+    """Return the active paper/research hard cap with a config fallback."""
+    try:
+        policy = current_ticket_cap_policy() or {}
+        cap = (policy.get("effectiveBand") or {}).get("hardCapDollars")
+    except Exception:
+        cap = None
+    parsed = float_value(cap, MAX_SINGLE_TICKET_DOLLARS)
+    return parsed if parsed > 0 else float(MAX_SINGLE_TICKET_DOLLARS)
+
+
 def paper_priority_score(execution_item: dict[str, Any], strike_item: dict[str, Any]) -> float:
     """Score paper candidates for operator focus.
 
@@ -188,6 +233,7 @@ def classify_candidate(
     strike_item: dict[str, Any],
     execution_item: dict[str, Any] | None,
     sandbox_ticket: dict[str, Any] | None,
+    ledger_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Classify one strike candidate into an actionable paper-test cohort."""
     execution_item = execution_item or {}
@@ -197,6 +243,15 @@ def classify_candidate(
     ticker = str(strike_item.get("ticker", "")).upper()
     strike_plan = effective_item.get("strikePlan") or {}
     risk_verdict = effective_item.get("riskVerdict") or {}
+    event_source = {
+        **strike_item,
+        **effective_item,
+        "expiration": strike_plan.get("expiration") or effective_item.get("expiration") or strike_item.get("expiration"),
+    }
+    event_id = paper_event_id(event_source)
+    event_ticket_count = paper_event_ticket_count(event_id, ledger_items or [])
+    event_capped = event_ticket_count >= MAX_PAPER_TICKETS_PER_EVENT
+    ticket_cap = effective_ticket_cap_dollars()
     liquidity_notes = strike_plan.get("liquidityNotes") or []
     sandbox_reasons = sandbox_ticket.get("reasons") or []
     combined_reasons = dedupe(list(sandbox_reasons) + list(liquidity_notes) + list(risk_verdict.get("blocks") or []))
@@ -206,6 +261,9 @@ def classify_candidate(
 
     candidate = {
         "ticker": ticker,
+        "eventId": event_id,
+        "eventTicketCount": event_ticket_count,
+        "maxPaperTicketsPerEvent": MAX_PAPER_TICKETS_PER_EVENT,
         "setupRec": strike_item.get("setupRec"),
         "strategy": sandbox_ticket.get("strategy") or strike_plan.get("strategy") or strike_item.get("setupRec"),
         "approvalStatus": strike_item.get("approvalStatus"),
@@ -217,9 +275,10 @@ def classify_candidate(
         "estimatedMaxLoss": strike_plan.get("estimatedMaxLoss"),
         "estimatedDebit": strike_plan.get("estimatedDebit"),
         "capitalGap": round(
-            max(0.0, float_value(strike_plan.get("estimatedMaxLoss")) - MAX_SINGLE_TICKET_DOLLARS),
+            max(0.0, float_value(strike_plan.get("estimatedMaxLoss")) - ticket_cap),
             2,
         ),
+        "ticketCapDollars": round(ticket_cap, 2),
         "priorityScore": paper_priority_score(execution_item, strike_item),
         "reasons": combined_reasons,
         "warnings": risk_verdict.get("warnings") or [],
@@ -254,6 +313,19 @@ def classify_candidate(
         )
         return candidate
 
+    if (
+        sandbox_ticket.get("status") == "stage-in-papermoney"
+        and strike_item.get("approvalStatus") != "approved"
+        and candidate.get("paperAutoSelected")
+        and event_capped
+    ):
+        candidate["category"] = "event-capped"
+        candidate["eventCapReason"] = (
+            f"{event_ticket_count} tickets already on {event_id} "
+            f"(cap {MAX_PAPER_TICKETS_PER_EVENT})"
+        )
+        return candidate
+
     if sandbox_ticket.get("status") == "stage-in-papermoney":
         candidate["category"] = "stageable-now"
         return candidate
@@ -263,7 +335,14 @@ def classify_candidate(
         and strike_item.get("approvalStatus") != "approved"
         and not non_approval_reasons
     ):
-        candidate["category"] = "auto-paper-selected" if AUTO_PAPER_SELECTION_ENABLED else "approval-only"
+        if AUTO_PAPER_SELECTION_ENABLED and event_capped:
+            candidate["category"] = "event-capped"
+            candidate["eventCapReason"] = (
+                f"{event_ticket_count} tickets already on {event_id} "
+                f"(cap {MAX_PAPER_TICKETS_PER_EVENT})"
+            )
+        else:
+            candidate["category"] = "auto-paper-selected" if AUTO_PAPER_SELECTION_ENABLED else "approval-only"
         return candidate
 
     if risk_verdict.get("passed") is True and not non_approval_reasons:
@@ -285,7 +364,7 @@ def approval_operator_steps(approval_slate: list[dict[str, Any]]) -> list[str]:
         steps.append(candidate["approveCommand"])
     steps.extend(
         [
-            "./run_inferno_strike_cycle.sh",
+            "./inferno strike-cycle",
             "Open thinkorswim paperMoney only after the refreshed sandbox says stageable > 0.",
         ]
     )
@@ -296,7 +375,7 @@ def blocker_table(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Aggregate blocker reasons across the current paper-test slate."""
     counts: Counter[str] = Counter()
     for candidate in candidates:
-        for reason in candidate.get("reasons") or []:
+        for reason in diagnostic_reasons(candidate):
             counts[reason] += 1
     return [
         {"reason": reason, "count": count}
@@ -334,10 +413,206 @@ def capital_near_miss_slate(candidates: list[dict[str, Any]]) -> list[dict[str, 
     )
 
 
+def strategy_family(strategy: Any) -> str:
+    """Return a compact display family for a strategy name."""
+    value = str(strategy or "").upper()
+    if "CALL" in value and "DEBIT" in value:
+        return "defined-risk-call"
+    if "PUT" in value and "CREDIT" in value:
+        return "defined-risk-put-credit"
+    if "CONDOR" in value:
+        return "defined-risk-condor"
+    if "PUT" in value and "DEBIT" in value:
+        return "defined-risk-put-debit"
+    return "defined-risk-alternative"
+
+
+def block_categories(blocks: list[Any]) -> list[str]:
+    """Condense paper-risk blocks into stable watchlist labels."""
+    categories: list[str] = []
+    for raw in blocks:
+        reason = normalize_reason(raw)
+        if not reason:
+            continue
+        label = "other"
+        if "drawdown pause" in reason or "single-ticket cap $0.00" in reason:
+            label = "paper-stage-paused"
+        elif "reward/risk" in reason or "credit/risk" in reason:
+            label = "payoff-quality"
+        elif (
+            "schwab" in reason
+            or "spread is wide" in reason
+            or "visible-market" in reason
+            or "liquidity" in reason
+            or "too thin" in reason
+            or "atm" in reason
+        ):
+            label = "chain-quality"
+        elif "projected daily max loss" in reason or "single-ticket cap" in reason:
+            label = "capital-sizing"
+        elif "support" in reason or "resistance" in reason or "trend" in reason or "conflicts" in reason:
+            label = "market-structure"
+        if label not in categories:
+            categories.append(label)
+    return categories
+
+
+def construction_watchlist(strategy_pricing: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return priced alternatives worth monitoring despite paper-quality blocks.
+
+    This lane is deliberately not a paper ticket list. It exists so the desk can
+    see real option-chain work that passed construction/optimizer checks while
+    payoff, chain-quality, or market-structure blocks still prevent staging.
+    """
+    cap_policy = strategy_pricing.get("ticketCapPolicy") or {}
+    construction_band = cap_policy.get("constructionBand") or {}
+    effective_band = cap_policy.get("effectiveBand") or {}
+    construction_cap = float_value(construction_band.get("hardCapDollars"), MAX_SINGLE_TICKET_DOLLARS)
+    target_floor = float_value(construction_band.get("minTargetDollars"), 0.0)
+    paper_cap = float_value(effective_band.get("hardCapDollars"), MAX_SINGLE_TICKET_DOLLARS)
+
+    rows: list[dict[str, Any]] = []
+    for item in strategy_pricing.get("items") or []:
+        if not isinstance(item, dict) or item.get("status") != "priced":
+            continue
+        if not item.get("optimizerPassed"):
+            continue
+        if item.get("combinedPassed"):
+            continue
+        plan = item.get("strikePlan") or {}
+        risk = item.get("riskVerdict") or {}
+        max_loss = float_value(plan.get("estimatedMaxLoss"), 999999.0)
+        if construction_cap > 0 and max_loss > construction_cap:
+            continue
+        blocks = risk.get("blocks") or []
+        rows.append(
+            {
+                "ticker": str(item.get("ticker", "")).upper(),
+                "strategy": plan.get("strategy") or item.get("recommendedStrategy"),
+                "family": strategy_family(plan.get("strategy") or item.get("recommendedStrategy")),
+                "expiration": item.get("expiration"),
+                "estimatedMaxLoss": plan.get("estimatedMaxLoss"),
+                "estimatedDebit": plan.get("estimatedDebit"),
+                "estimatedCredit": plan.get("estimatedCredit"),
+                "constructionCapDollars": round(construction_cap, 2),
+                "constructionTargetFloorDollars": round(target_floor, 2),
+                "paperStageCapDollars": round(paper_cap, 2),
+                "sourceAlternativeScore": item.get("sourceAlternativeScore"),
+                "sourceAlternativeEdgeVsLongVol": item.get("sourceAlternativeEdgeVsLongVol"),
+                "candidateStrategyRank": item.get("candidateStrategyRank"),
+                "fallbackVariant": bool(item.get("fallbackVariant")),
+                "optimizerPassed": bool(item.get("optimizerPassed")),
+                "paperRiskPassed": bool(item.get("paperRiskPassed")),
+                "combinedPassed": bool(item.get("combinedPassed")),
+                "blockCategories": block_categories(blocks),
+                "paperRiskBlocks": blocks[:4],
+                "optimizerWarnings": (plan.get("optimizerWarnings") or [])[:4],
+                "warnings": (risk.get("warnings") or [])[:4],
+                "nextStep": (
+                    "Keep in construction watch; rerun pricing after the simulated paper budget fits "
+                    "and reject if payoff or chain-quality blocks persist."
+                ),
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda item: (
+            item.get("strategy") != "CALL_DEBIT_SPREAD",
+            bool(item.get("fallbackVariant")),
+            -(float_value(item.get("sourceAlternativeScore"), 0.0)),
+            float_value(item.get("estimatedMaxLoss"), 999999.0),
+            item.get("ticker", ""),
+        ),
+    )[:CONSTRUCTION_WATCH_LIMIT]
+
+
+def priced_paper_variant_watchlist(
+    strategy_pricing: dict[str, Any],
+    ledger: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return research-only priced variants that passed paper risk checks.
+
+    These rows are deliberately separate from approval/stageable slates. A
+    combined pass here means the priced research variant cleared optimizer and
+    paper-risk math, not that the operator approved a paper ticket.
+    """
+    ledger_items = list((ledger or {}).get("items") or [])
+    rows: list[dict[str, Any]] = []
+    for item in strategy_pricing.get("items") or []:
+        if not isinstance(item, dict) or item.get("status") != "priced":
+            continue
+        if not item.get("combinedPassed"):
+            continue
+        plan = item.get("strikePlan") or {}
+        if not plan.get("paperVariantOnly"):
+            continue
+        price = plan.get("estimatedDebit")
+        price_label = "debit"
+        if price is None:
+            price = plan.get("estimatedCredit")
+            price_label = "credit"
+        event_source = {
+            **item,
+            "strikePlan": plan,
+            "expiration": item.get("expiration") or plan.get("expiration"),
+        }
+        event_id = paper_event_id(event_source)
+        event_ticket_count = paper_event_ticket_count(event_id, ledger_items)
+        event_capped = event_ticket_count >= MAX_PAPER_TICKETS_PER_EVENT
+        rows.append(
+            {
+                "ticker": str(item.get("ticker", "")).upper(),
+                "strategy": plan.get("strategy") or item.get("recommendedStrategy"),
+                "family": strategy_family(plan.get("strategy") or item.get("recommendedStrategy")),
+                "expiration": item.get("expiration") or plan.get("expiration"),
+                "eventId": event_id,
+                "eventTicketCount": event_ticket_count,
+                "maxPaperTicketsPerEvent": MAX_PAPER_TICKETS_PER_EVENT,
+                "paperResearchSelected": AUTO_PAPER_SELECTION_ENABLED and not event_capped,
+                "eventCapped": event_capped,
+                "eventCapReason": (
+                    f"{event_ticket_count} tickets already on {event_id} "
+                    f"(cap {MAX_PAPER_TICKETS_PER_EVENT})"
+                    if event_capped
+                    else None
+                ),
+                "estimatedMaxLoss": plan.get("estimatedMaxLoss"),
+                "priceLabel": price_label,
+                "price": price,
+                "sourceAlternativeScore": item.get("sourceAlternativeScore"),
+                "candidateStrategyRank": item.get("candidateStrategyRank"),
+                "sourcePaperVariant": bool(item.get("paperVariantOnly") or plan.get("sourcePaperVariant")),
+                "paperVariantFamily": item.get("paperVariantFamily") or plan.get("variantForStrategy"),
+                "variantReason": plan.get("variantReason"),
+                "marketContextSummary": item.get("marketContextSummary") or {},
+                "optimizerWarnings": (plan.get("optimizerWarnings") or [])[:4],
+                "warnings": ((item.get("riskVerdict") or {}).get("warnings") or [])[:4],
+                "nextStep": (
+                    "Approval-free research selection; broker staging remains disabled until an "
+                    "operator-owned paper workflow routes it."
+                    if not event_capped
+                    else "Distinct-event cap reached; wait for a new independent event."
+                ),
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda item: (
+            bool(item.get("eventCapped")),
+            float_value(item.get("eventTicketCount"), 99999.0),
+            not bool(item.get("sourcePaperVariant")),
+            -(float_value(item.get("sourceAlternativeScore"), 0.0)),
+            float_value(item.get("estimatedMaxLoss"), 999999.0),
+            item.get("ticker", ""),
+        ),
+    )[:PRICED_VARIANT_WATCH_LIMIT]
+
+
 def classify_candidates(
     strike_plan: dict[str, Any],
     execution_queue: dict[str, Any],
     sandbox: dict[str, Any],
+    ledger: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Classify a strike plan against a matching execution queue and sandbox."""
     execution_by_ticker = index_by_ticker(execution_queue.get("items") or [])
@@ -345,11 +620,13 @@ def classify_candidates(
         sandbox.get("blockedTickets") or []
     )
     sandbox_by_ticker = index_by_ticker(sandbox_tickets)
+    ledger_items = list((ledger or {}).get("items") or [])
     return [
         classify_candidate(
             item,
             execution_by_ticker.get(str(item.get("ticker", "")).upper()),
             sandbox_by_ticker.get(str(item.get("ticker", "")).upper()),
+            ledger_items,
         )
         for item in strike_plan.get("items", [])
     ]
@@ -364,6 +641,7 @@ def split_candidates(
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
 ]:
     """Return the candidate cohorts used by the paper-test director."""
     stageable = sorted(
@@ -372,7 +650,16 @@ def split_candidates(
     )
     auto_paper = sorted(
         [candidate for candidate in candidates if candidate["category"] == "auto-paper-selected"],
-        key=lambda item: (-float_value(item.get("priorityScore")), float_value(item.get("estimatedMaxLoss"), 99999.0)),
+        key=lambda item: (
+            float_value(item.get("eventTicketCount"), 99999.0) > 0,
+            float_value(item.get("eventTicketCount"), 99999.0),
+            -float_value(item.get("priorityScore")),
+            float_value(item.get("estimatedMaxLoss"), 99999.0),
+        ),
+    )
+    event_capped = sorted(
+        [candidate for candidate in candidates if candidate["category"] == "event-capped"],
+        key=lambda item: (-float_value(item.get("priorityScore")), item.get("ticker", "")),
     )
     approval_only = sorted(
         [candidate for candidate in candidates if candidate["category"] == "approval-only"],
@@ -387,7 +674,7 @@ def split_candidates(
         key=lambda item: (-float_value(item.get("priorityScore")), item.get("ticker", "")),
     )
     near_miss = capital_near_miss_slate(hard_blocked)
-    return stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss
+    return stageable, auto_paper, event_capped, approval_only, research_watch, hard_blocked, near_miss
 
 
 def build_director() -> dict[str, Any]:
@@ -399,14 +686,16 @@ def build_director() -> dict[str, Any]:
     sandbox = load_payload(TOS_SANDBOX_FILE, {})
     authority = load_payload(AUTHORITY_MANIFEST_FILE, {"decision": {}, "evidence": {}})
     performance = load_payload(PERFORMANCE_ANALYTICS_FILE, {"closedMetrics": {}, "deskVerdict": {}})
+    strategy_pricing = load_payload(STRATEGY_ALTERNATIVE_PRICING_FILE, {"items": []})
+    paper_ledger = load_payload(PAPER_EXECUTION_LEDGER_FILE, {"items": []})
 
     source_execution_queue = execution_queue
     source_strike_plan = strike_plan
     source_label = "primary-review-queue"
     expanded_tickers: list[str] = []
 
-    candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox)
-    stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
+    candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox, paper_ledger)
+    stageable, auto_paper, event_capped, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
 
     if not stageable and not auto_paper and not approval_only and not research_watch:
         expanded_tickers = expanded_rehearsal_tickers(snapshot, execution_queue)
@@ -422,37 +711,72 @@ def build_director() -> dict[str, Any]:
             source_strike_plan = build_strike_plan_from_queue(source_execution_queue, limit=len(expanded_tickers))
             source_label = "expanded-eligible-universe"
             save_rehearsal_strike_plan(source_strike_plan)
-            candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox)
-            stageable, auto_paper, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
+            candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox, paper_ledger)
+            stageable, auto_paper, event_capped, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
 
     scored_tickets = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
     remaining_for_promotion = max(0, PROMOTION_TARGET - scored_tickets)
     auto_paper_stageable = [candidate for candidate in stageable if candidate.get("paperAutoSelected")]
     combined_auto_paper = auto_paper_stageable + auto_paper
+    priced_variant_watch = priced_paper_variant_watchlist(strategy_pricing, paper_ledger)
+    construction_watch = construction_watchlist(strategy_pricing)
+    priced_variant_selected = [
+        candidate for candidate in priced_variant_watch if candidate.get("paperResearchSelected")
+    ]
 
     if stageable:
-        verdict = "ready-to-paper-stage"
+        verdict = "operator-paper-candidates"
     elif auto_paper:
         verdict = "auto-paper-selected"
+    elif event_capped:
+        verdict = "event-capped"
     elif approval_only:
         verdict = "approval-bottleneck"
     elif research_watch:
         verdict = "research-watch"
+    elif priced_variant_selected:
+        verdict = "paper-research-selected"
+    elif priced_variant_watch:
+        verdict = "paper-variant-watch"
+    elif construction_watch:
+        verdict = "construction-watch"
     else:
         verdict = "no-viable-paper-tests"
 
     next_actions: list[str] = []
     if stageable:
-        next_actions.append("Paper stageable names exist now. Rehearse only the stageable slate in paperMoney.")
+        next_actions.append(
+            "Operator-routable paper candidates exist now; record them for the operator-owned paper workflow and do not stage autonomously."
+        )
     elif auto_paper:
         next_actions.append(
-            "Data selected paper-only names automatically. Rehearse the auto paper slate; live orders still require explicit confirmation."
+            "Auto-paper-selected names are research-only candidates for the operator-owned paper workflow; do not stage, approve, reject, or close them autonomously."
+        )
+    elif event_capped:
+        next_actions.append(
+            "Gate-passing paper names are event-capped; wait for a new distinct earnings event instead of stacking correlated repeats."
         )
     elif approval_only:
         next_actions.append("The bottleneck is approval, not discovery. Decide the pending paper-safe names first.")
         next_actions.extend(approval_operator_steps(approval_only))
     elif research_watch:
         next_actions.append("No clean paper tickets yet. Keep the watchlist alive and wait for stronger confirmation.")
+        if priced_variant_selected:
+            next_actions.append(
+                "Priced paper variants cleared research pricing and are selected for paper research tracking; broker staging remains operator-owned."
+            )
+    elif priced_variant_selected:
+        next_actions.append(
+            "Priced paper variants cleared research pricing and are selected for paper research tracking; broker staging remains operator-owned."
+        )
+    elif priced_variant_watch:
+        next_actions.append(
+            "Priced paper-variant watch items cleared research pricing, but the distinct-event cap blocks new selections."
+        )
+    elif construction_watch:
+        next_actions.append(
+            "Construction-watch alternatives are pricing, but paper-quality blocks remain. Track them without staging."
+        )
     else:
         next_actions.append("No viable paper tests are currently clean enough. Preserve capital and keep research running.")
         if near_miss:
@@ -480,8 +804,16 @@ def build_director() -> dict[str, Any]:
             "totalCandidates": len(candidates),
             "stageableNow": len(stageable),
             "autoPaperSelected": len(combined_auto_paper),
+            "eventCapped": len(event_capped),
+            "distinctAutoPaperEvents": len({candidate.get("eventId") for candidate in combined_auto_paper if candidate.get("eventId")}),
             "approvalOnly": len(approval_only),
             "researchWatch": len(research_watch),
+            "pricedPaperVariantWatch": len(priced_variant_watch),
+            "paperResearchSelected": len(priced_variant_selected),
+            "distinctPaperResearchEvents": len(
+                {candidate.get("eventId") for candidate in priced_variant_selected if candidate.get("eventId")}
+            ),
+            "constructionWatch": len(construction_watch),
             "hardBlocked": len(hard_blocked),
             "capitalNearMiss": len(near_miss),
             "scoredTickets": scored_tickets,
@@ -492,8 +824,11 @@ def build_director() -> dict[str, Any]:
         "blockerCounts": blocker_table(candidates),
         "stageableSlate": stageable,
         "autoPaperSlate": combined_auto_paper,
+        "eventCappedSlate": event_capped,
         "approvalSlate": approval_only,
         "researchWatchlist": research_watch,
+        "pricedPaperVariantWatchlist": priced_variant_watch,
+        "constructionWatchlist": construction_watch,
         "hardBlockedSlate": hard_blocked,
         "capitalNearMissSlate": near_miss,
         "nextActions": next_actions,
@@ -515,10 +850,16 @@ def director_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- total candidates: {counts.get('totalCandidates', 0)}",
-        f"- stageable now: {counts.get('stageableNow', 0)}",
+        f"- operator-routable now: {counts.get('stageableNow', 0)}",
         f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
+        f"- event capped: {counts.get('eventCapped', 0)}",
+        f"- distinct auto paper events: {counts.get('distinctAutoPaperEvents', 0)}",
         f"- approval only: {counts.get('approvalOnly', 0)}",
         f"- research watch: {counts.get('researchWatch', 0)}",
+        f"- priced paper-variant watch: {counts.get('pricedPaperVariantWatch', 0)}",
+        f"- paper research selected: {counts.get('paperResearchSelected', 0)}",
+        f"- distinct paper research events: {counts.get('distinctPaperResearchEvents', 0)}",
+        f"- construction watch: {counts.get('constructionWatch', 0)}",
         f"- hard blocked: {counts.get('hardBlocked', 0)}",
         f"- capital near-miss: {counts.get('capitalNearMiss', 0)}",
         f"- scored tickets: {counts.get('scoredTickets', 0)}",
@@ -545,6 +886,10 @@ def director_text(payload: dict[str, Any]) -> str:
             f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
             f"priority {candidate.get('priorityScore')} | max loss ${float_value(candidate.get('estimatedMaxLoss')):.2f}"
         )
+        lines.append(
+            f"  event {candidate.get('eventId')} | existing event tickets "
+            f"{candidate.get('eventTicketCount')}/{candidate.get('maxPaperTicketsPerEvent')}"
+        )
         if candidate.get("paperVariantOnly"):
             lines.append(
                 f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
@@ -552,7 +897,7 @@ def director_text(payload: dict[str, Any]) -> str:
             )
         if candidate.get("paperAutoSelected"):
             lines.append("  paper-only auto selection; live authority remains locked")
-        trend = (candidate.get("marketContextSummary") or {}).get("trend", "Unknown")
+        trend = trend_label((candidate.get("marketContextSummary") or {}).get("trend"))
         lines.append(
             f"  {candidate.get('daysUntilEarnings')}d to earnings | readiness {candidate.get('readiness')} | "
             f"trend {trend}"
@@ -561,7 +906,7 @@ def director_text(payload: dict[str, Any]) -> str:
             lines.append(f"  warnings: {'; '.join(candidate.get('warnings') or [])}")
         lines.append(f"  approve: {candidate.get('approveCommand')}")
 
-    lines.extend(["", "Stageable now:"])
+    lines.extend(["", "Operator-routable now:"])
     stageable = payload.get("stageableSlate") or []
     if not stageable:
         lines.append("- none")
@@ -570,26 +915,97 @@ def director_text(payload: dict[str, Any]) -> str:
             f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
             f"priority {candidate.get('priorityScore')} | max loss ${float_value(candidate.get('estimatedMaxLoss')):.2f}"
         )
-        if candidate.get("paperVariantOnly"):
-            lines.append(
-                f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
-                f"maps to {candidate.get('paperVariantOfStrategy')}"
-            )
-
-    lines.extend(["", "Capital near-miss slate:"])
-    near_miss = payload.get("capitalNearMissSlate") or []
-    if not near_miss:
-        lines.append("- none")
-    for candidate in near_miss[:5]:
         lines.append(
-            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
-            f"gap ${float_value(candidate.get('capitalGap')):.2f} above ${MAX_SINGLE_TICKET_DOLLARS:.2f} cap"
+            f"  event {candidate.get('eventId')} | existing event tickets "
+            f"{candidate.get('eventTicketCount')}/{candidate.get('maxPaperTicketsPerEvent')}"
         )
         if candidate.get("paperVariantOnly"):
             lines.append(
                 f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
                 f"maps to {candidate.get('paperVariantOfStrategy')}"
             )
+
+    lines.extend(["", "Event-capped:"])
+    event_capped = payload.get("eventCappedSlate") or []
+    if not event_capped:
+        lines.append("- none")
+    for candidate in event_capped:
+        lines.append(
+            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
+            f"event {candidate.get('eventId')} | {candidate.get('eventCapReason')}"
+        )
+
+    lines.extend(["", "Capital near-miss slate:"])
+    near_miss = payload.get("capitalNearMissSlate") or []
+    if not near_miss:
+        lines.append("- none")
+    for candidate in near_miss[:5]:
+        ticket_cap = float_value(candidate.get("ticketCapDollars"), MAX_SINGLE_TICKET_DOLLARS)
+        lines.append(
+            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
+            f"gap ${float_value(candidate.get('capitalGap')):.2f} above ${ticket_cap:.2f} cap"
+        )
+        if candidate.get("paperVariantOnly"):
+            lines.append(
+                f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
+                f"maps to {candidate.get('paperVariantOfStrategy')}"
+            )
+
+    lines.extend(["", "Priced paper-variant watch:"])
+    priced_variant_watch = payload.get("pricedPaperVariantWatchlist") or []
+    if not priced_variant_watch:
+        lines.append("- none")
+    for candidate in priced_variant_watch[:8]:
+        context = candidate.get("marketContextSummary") or {}
+        lines.append(
+            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
+            f"expiration {candidate.get('expiration')} | {candidate.get('priceLabel')} "
+            f"${float_value(candidate.get('price')):.2f} | max loss "
+            f"${float_value(candidate.get('estimatedMaxLoss')):.2f} | score "
+            f"{float_value(candidate.get('sourceAlternativeScore')):.2f}"
+        )
+        if candidate.get("sourcePaperVariant"):
+            lines.append(f"  scanner variant: {candidate.get('paperVariantFamily')}")
+        lines.append(
+            f"  event {candidate.get('eventId')} | existing event tickets "
+            f"{candidate.get('eventTicketCount')}/{candidate.get('maxPaperTicketsPerEvent')} | "
+            f"selected {candidate.get('paperResearchSelected')}"
+        )
+        if candidate.get("eventCapped"):
+            lines.append(f"  event cap: {candidate.get('eventCapReason')}")
+        if context:
+            lines.append(
+                f"  trend {trend_label(context.get('trend'))} | rvol {context.get('rvol')} | "
+                f"support {context.get('support')}"
+            )
+        warnings = list(candidate.get("optimizerWarnings") or []) + list(candidate.get("warnings") or [])
+        if warnings:
+            lines.append(f"  warnings: {'; '.join(str(warning) for warning in warnings[:3])}")
+        lines.append(f"  next: {candidate.get('nextStep')}")
+
+    lines.extend(["", "Construction watch:"])
+    construction_watch = payload.get("constructionWatchlist") or []
+    if not construction_watch:
+        lines.append("- none")
+    for candidate in construction_watch[:8]:
+        price = candidate.get("estimatedDebit")
+        price_label = "debit" if price is not None else "credit"
+        if price is None:
+            price = candidate.get("estimatedCredit")
+        categories = ", ".join(candidate.get("blockCategories") or []) or "paper-risk-blocked"
+        lines.append(
+            f"- {candidate.get('ticker')} | {candidate.get('strategy')} | "
+            f"expiration {candidate.get('expiration')} | {price_label} ${float_value(price):.2f} | "
+            f"max loss ${float_value(candidate.get('estimatedMaxLoss')):.2f} | {categories}"
+        )
+        lines.append(
+            f"  construction cap ${float_value(candidate.get('constructionCapDollars')):.2f} | "
+            f"paper cap ${float_value(candidate.get('paperStageCapDollars')):.2f} | "
+            f"score {float_value(candidate.get('sourceAlternativeScore')):.2f}"
+        )
+        blocks = candidate.get("paperRiskBlocks") or []
+        if blocks:
+            lines.append(f"  paper blocks: {'; '.join(str(block) for block in blocks[:3])}")
 
     lines.extend(["", "Auto paper slate:"])
     auto_paper_slate = payload.get("autoPaperSlate") or []
@@ -612,7 +1028,7 @@ def director_text(payload: dict[str, Any]) -> str:
     if not blocked:
         lines.append("- none")
     for candidate in blocked[:8]:
-        reasons = "; ".join(candidate.get("reasons") or []) or "unknown block"
+        reasons = "; ".join(diagnostic_reasons(candidate)) or "unknown block"
         lines.append(f"- {candidate.get('ticker')} | {candidate.get('category')} | {reasons}")
 
     lines.extend(["", "Top blocker counts:"])

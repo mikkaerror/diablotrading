@@ -322,20 +322,33 @@ def classify_candidate(
                 next_step = "No bounded cap-fit fallback was found for this ticker."
                 evidence = ["no bounded fallback structure fit the current cap"]
         elif evidence:
-            status = "blocked"
             if lane_id == "operator_action":
-                next_step = "Leave approval with the operator; unattended code cannot approve or reject."
+                if operator_only:
+                    status = "blocked"
+                    next_step = "Leave approval with the operator; unattended code cannot approve or reject."
+                else:
+                    status = "context"
+                    next_step = (
+                        "Approval remains operator-owned, but it is not the current research blocker; "
+                        "resolve the non-approval lanes first."
+                    )
             elif lane_id == "data_freshness":
+                status = "blocked"
                 next_step = "Refresh tracker, execution queue, and Schwab option-chain truth before regrading."
             elif lane_id == "liquidity":
+                status = "blocked"
                 next_step = "Do not stage poor quote quality; wait for liquid contracts or record market-quality block."
             elif lane_id == "strike_construction":
+                status = "blocked"
                 next_step = "Rebuild strike plan only after source data is clean; otherwise route to bounded fallback audit."
             elif lane_id == "premium_hurdle":
+                status = "blocked"
                 next_step = "Keep shadow-only until premium, max-loss, and net-greeks evidence clears the decision card."
             elif lane_id == "capital_fit":
+                status = "blocked"
                 next_step = "Respect the current cap; only bounded structures that already fit may be researched."
             elif lane_id == "concentration_process":
+                status = "blocked"
                 next_step = "Fail closed until concentration or process warnings clear."
 
         lane_findings.append(
@@ -408,7 +421,8 @@ def classify_candidate(
         "dominantLane": dominant,
         "fixability": fixability,
         "toolingFixable": tooling_fixable,
-        "operatorActionRequired": bool(lanes.get("operator_action")),
+        "operatorApprovalMentioned": bool(lanes.get("operator_action")),
+        "operatorActionRequired": operator_only,
         "marketDataBlocked": refreshable_data,
         "marketQualityBlocked": market_quality_blocked,
         "strategyFallbackSuggested": fallback_suggested,
@@ -539,6 +553,7 @@ def build_swarm(
         "stageableNow": (director.get("counts") or {}).get("stageableNow", 0),
         "autoPaperSelected": (director.get("counts") or {}).get("autoPaperSelected", 0),
         "approvalOnly": (director.get("counts") or {}).get("approvalOnly", 0),
+        "operatorApprovalMentioned": sum(1 for item in findings if item.get("operatorApprovalMentioned")),
         "operatorActionRequired": sum(1 for item in findings if item.get("operatorActionRequired")),
         "marketDataBlocked": sum(1 for item in findings if item.get("marketDataBlocked")),
         "marketQualityBlocked": sum(1 for item in findings if item.get("marketQualityBlocked")),
@@ -622,6 +637,12 @@ def build_swarm(
 def render_text(payload: dict[str, Any]) -> str:
     counts = payload.get("counts") or {}
     rewards = payload.get("rewards") or {}
+    if counts.get("operatorActionRequired", 0):
+        approval_context_line = f"- operator approval required: {counts.get('operatorApprovalMentioned', 0)}"
+    else:
+        approval_context_line = (
+            f"- approval text present on non-actionable blockers: {counts.get('operatorApprovalMentioned', 0)}"
+        )
     lines = [
         "Inferno Paper Blocker Swarm",
         "",
@@ -640,6 +661,7 @@ def render_text(payload: dict[str, Any]) -> str:
         f"- blocked candidates analyzed: {counts.get('blockedCandidatesAnalyzed', 0)}",
         f"- hard blocked: {counts.get('hardBlocked', 0)}",
         f"- fixable by tooling/research: {counts.get('fixableByTooling', 0)}",
+        approval_context_line,
         f"- operator action required: {counts.get('operatorActionRequired', 0)}",
         f"- market data blocked: {counts.get('marketDataBlocked', 0)}",
         f"- market quality blocked: {counts.get('marketQualityBlocked', 0)}",

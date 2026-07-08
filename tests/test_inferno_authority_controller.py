@@ -210,6 +210,19 @@ class AuthorityHelperTests(unittest.TestCase):
             milestones,
         )
 
+    def test_next_milestones_do_not_direct_autonomous_paper_staging(self) -> None:
+        inputs = healthy_inputs()
+        milestones = next_milestones(
+            inputs["performance"],
+            inputs["strategy_lab"],
+            inputs["exposure"],
+            inputs["broker_preview"],
+        )
+        joined = " | ".join(milestones)
+        self.assertIn("offline broker-preview payload", joined)
+        self.assertIn("do not stage tickets autonomously", joined)
+        self.assertNotIn("paper-staged ticket", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -293,6 +293,20 @@ def _dominant_blocker(performance: dict[str, Any]) -> tuple[str | None, int]:
     return ranked[0] if ranked else (None, 0)
 
 
+def _active_dominant_blocker(
+    performance: dict[str, Any],
+    paper_blocker_swarm: dict[str, Any],
+) -> tuple[str | None, int]:
+    """Prefer the current paper-swarm lane over stale historical block buckets."""
+    lane = str(paper_blocker_swarm.get("dominantLane") or "").strip()
+    counts = paper_blocker_swarm.get("counts") or {}
+    operator_required = int(_number(counts.get("operatorActionRequired")))
+    if lane and (lane != "operator_action" or operator_required > 0):
+        blocker_counts = paper_blocker_swarm.get("blockerCounts") or {}
+        return lane, int(_number(blocker_counts.get(lane), counts.get("fixableByTooling")))
+    return _dominant_blocker(performance)
+
+
 def progress_snapshot(
     artifacts: dict[str, dict[str, Any]],
     *,
@@ -313,7 +327,10 @@ def progress_snapshot(
     paper_swarm_counts = paper_blocker_swarm.get("counts") or {}
     fast_counts = fast_paper.get("counts") or {}
     scenario_counts = scenario_evidence.get("counts") or {}
-    dominant_blocker, dominant_blocker_count = _dominant_blocker(performance)
+    dominant_blocker, dominant_blocker_count = _active_dominant_blocker(
+        performance,
+        paper_blocker_swarm,
+    )
     exit_dates = sorted(
         str(item.get("exitEligibleDate"))
         for item in fast_paper.get("openSlate") or []
@@ -1012,7 +1029,7 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- paper loop: {progress.get('paperLoopVerdict')}",
         f"- paper director: {progress.get('paperDirectorVerdict')} | "
         f"verified candidates {progress.get('verifiedPaperCandidates')} "
-        f"(stageable {progress.get('paperStageableNow')}, "
+        f"(operator-routable {progress.get('paperStageableNow')}, "
         f"auto {progress.get('paperAutoSelected')}, "
         f"approval {progress.get('paperApprovalOnly')})",
         f"- paper blocker swarm: {progress.get('paperBlockerSwarmVerdict')} | "
@@ -1379,7 +1396,7 @@ def _lesson_guidance(blocker: str) -> str:
     guidance = {
         "approval-missing": (
             "Do not route around human approval. Concentrate unattended work on "
-            "fast-paper and scenario evidence, and keep operator decisions on `./today.sh`."
+            "fast-paper and scenario evidence, and keep operator decisions on `./inferno today`."
         ),
         "size-cap-violation": (
             "Reject oversize structures before expensive downstream evaluation and "

@@ -75,7 +75,18 @@ def shadow_ledger() -> dict:
                     "status": "closed",
                     "estimatedPnl": 35,
                 },
-            }
+            },
+            {
+                "ticketId": "s2",
+                "ticker": "DDD",
+                "strategy": "IRON_CONDOR",
+                "readiness": 77,
+                "priorityScore": 64,
+                "estimatedMaxLoss": 150,
+                "outcome": {
+                    "status": "open",
+                },
+            },
         ],
     }
 
@@ -95,6 +106,9 @@ class ScoreCalibrationTests(unittest.TestCase):
         self.assertFalse(payload["promotable"])
         self.assertFalse(payload["liveTradingAllowed"])
         self.assertEqual(payload["counts"]["closedScenarioObservations"], 3)
+        self.assertEqual(payload["counts"]["optionEntryRecords"], 2)
+        self.assertEqual(payload["counts"]["optionEntryScoreRows"], 2)
+        self.assertEqual(payload["counts"]["openOptionEntryScoreRows"], 1)
         scenario_score = next(
             table
             for table in payload["scenarioCalibration"]
@@ -131,6 +145,7 @@ class ScoreCalibrationTests(unittest.TestCase):
 
         self.assertIn("Inferno Score Calibration Lab", rendered)
         self.assertIn("Scenario observation calibration", rendered)
+        self.assertIn("current option entries carrying scores", rendered)
         self.assertIn("research-only", rendered)
         self.assertIn("Scores are ranking surfaces", rendered)
 

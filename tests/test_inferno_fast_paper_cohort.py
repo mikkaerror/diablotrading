@@ -46,6 +46,26 @@ def candidate(ticker: str, strategy: str, loss: float, score: int = 4) -> dict:
     }
 
 
+def strike_item(ticker: str, strategy: str, loss: float) -> dict:
+    item = candidate(ticker, strategy, loss)["item"]
+    return {**item, "ok": True}
+
+
+def bootstrap(tickers: list[tuple[str, int]]) -> dict:
+    return {
+        "proposals": [
+            {
+                "ticker": ticker,
+                "score": score,
+                "readiness": 90,
+                "failedGates": [],
+                "liveQualityYet": False,
+            }
+            for ticker, score in tickers
+        ]
+    }
+
+
 class MarketCalendarTests(unittest.TestCase):
     def test_juneteenth_and_weekend_roll_to_monday(self) -> None:
         self.assertFalse(fast.is_market_session(date(2026, 6, 19)))
@@ -73,6 +93,44 @@ class SlateSelectionTests(unittest.TestCase):
         self.assertFalse(entry["liveTradingAllowed"])
         self.assertFalse(entry["brokerSubmitAllowed"])
         self.assertEqual(entry["evidenceCohort"], "exploratory-fast")
+
+    def test_same_day_cycle_tops_off_inside_remaining_daily_cap(self) -> None:
+        existing = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 1400), now=NOW)
+        ledger = {"items": [existing]}
+        payload, updated = fast.build_fast_paper_cohort(
+            now=NOW,
+            ledger_override=ledger,
+            bootstrap_override=bootstrap([("B", 5), ("C", 4)]),
+            strike_plan_override={
+                "items": [
+                    strike_item("B", "CALL_DEBIT_SPREAD", 80),
+                    strike_item("C", "LONG_STRANGLE", 160),
+                ]
+            },
+            target_trades=5,
+        )
+
+        self.assertEqual(payload["counts"]["selectedToday"], 1)
+        self.assertEqual(payload["selectedSlate"][0]["ticker"], "B")
+        self.assertEqual(payload["riskBudget"]["openedTodayMaxLoss"], 1400.0)
+        self.assertEqual(payload["riskBudget"]["remainingDailyMaxLoss"], 100.0)
+        self.assertEqual(len(fast.open_items(updated)), 2)
+        self.assertTrue(all(not item["promotionEligible"] for item in payload["selectedSlate"]))
+
+    def test_backlog_keeps_priceable_candidates_that_do_not_fit_today(self) -> None:
+        existing = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 1450), now=NOW)
+        payload, updated = fast.build_fast_paper_cohort(
+            now=NOW,
+            ledger_override={"items": [existing]},
+            bootstrap_override=bootstrap([("B", 5)]),
+            strike_plan_override={"items": [strike_item("B", "LONG_STRANGLE", 120)]},
+            target_trades=5,
+        )
+
+        self.assertEqual(payload["counts"]["selectedToday"], 0)
+        self.assertEqual([item["ticker"] for item in payload["backlogSlate"]], ["B"])
+        self.assertEqual(payload["backlogSlate"][0]["promotionEligible"], False)
+        self.assertEqual(len(fast.open_items(updated)), 1)
 
 
 class ExitTests(unittest.TestCase):

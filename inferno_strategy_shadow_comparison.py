@@ -78,6 +78,32 @@ def combined_passed(item: dict[str, Any]) -> bool:
     return item.get("status") == "priced" and bool(item.get("combinedPassed"))
 
 
+def source_pricing_freshness(report: dict[str, Any], pricing: dict[str, Any]) -> dict[str, Any]:
+    """Return whether a shadow comparison summarizes the current pricing run."""
+    pricing_generated_at = text(pricing.get("generatedAt"))
+    source_pricing_generated_at = text((report.get("sourcePricing") or {}).get("generatedAt"))
+    if not pricing_generated_at:
+        return {
+            "freshForPricing": True,
+            "reason": "pricing-artifact-missing",
+            "pricingGeneratedAt": pricing_generated_at,
+            "sourcePricingGeneratedAt": source_pricing_generated_at,
+        }
+    if source_pricing_generated_at == pricing_generated_at:
+        return {
+            "freshForPricing": True,
+            "reason": "source-pricing-matches",
+            "pricingGeneratedAt": pricing_generated_at,
+            "sourcePricingGeneratedAt": source_pricing_generated_at,
+        }
+    return {
+        "freshForPricing": False,
+        "reason": "stale-relative-to-pricing",
+        "pricingGeneratedAt": pricing_generated_at,
+        "sourcePricingGeneratedAt": source_pricing_generated_at,
+    }
+
+
 def plan_summary(item: dict[str, Any]) -> dict[str, Any]:
     """Return the compact option-plan fields needed for comparison."""
     plan = item.get("strikePlan") or {}
@@ -110,6 +136,7 @@ def plan_summary(item: dict[str, Any]) -> dict[str, Any]:
         "optimizerBlocks": plan.get("optimizerBlocks") or item.get("optimizerBlocks") or [],
         "riskBlocks": risk.get("blocks") or [],
         "warnings": (plan.get("optimizerWarnings") or []) + (risk.get("warnings") or []),
+        "legs": plan.get("legs") or [],
     }
 
 
@@ -134,6 +161,18 @@ def market_reference(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def leg_strike(plan: dict[str, Any], instruction: str, put_call: str) -> float | None:
+    """Return a strike from the plan legs when compact top-level fields omit it."""
+    instruction = norm(instruction)
+    put_call = norm(put_call)
+    for leg in plan.get("legs") or []:
+        if not isinstance(leg, dict):
+            continue
+        if norm(leg.get("instruction")) == instruction and norm(leg.get("putCall")) == put_call:
+            return number(leg.get("strike"))
+    return None
+
+
 def credit_structure_expiration_pnl(plan: dict[str, Any], underlying_price: Any) -> float | None:
     """Estimate expiration P/L for supported defined-risk structures."""
     price = number(underlying_price)
@@ -145,15 +184,15 @@ def credit_structure_expiration_pnl(plan: dict[str, Any], underlying_price: Any)
 
     pnl = credit * 100.0 - debit * 100.0
     if strategy in {"PUT_CREDIT_SPREAD", "PUT_DEBIT_SPREAD", "IRON_CONDOR"}:
-        short_put = number(plan.get("shortPutStrike"))
-        long_put = number(plan.get("longPutStrike"))
+        short_put = number(plan.get("shortPutStrike"), leg_strike(plan, "SELL_TO_OPEN", "PUT"))
+        long_put = number(plan.get("longPutStrike"), leg_strike(plan, "BUY_TO_OPEN", "PUT"))
         if short_put is not None:
             pnl -= max(0.0, short_put - price) * 100.0
         if long_put is not None:
             pnl += max(0.0, long_put - price) * 100.0
-    if strategy == "IRON_CONDOR":
-        short_call = number(plan.get("shortCallStrike"))
-        long_call = number(plan.get("longCallStrike"))
+    if strategy in {"CALL_DEBIT_SPREAD", "IRON_CONDOR"}:
+        short_call = number(plan.get("shortCallStrike"), leg_strike(plan, "SELL_TO_OPEN", "CALL"))
+        long_call = number(plan.get("longCallStrike"), leg_strike(plan, "BUY_TO_OPEN", "CALL"))
         if short_call is not None:
             pnl -= max(0.0, price - short_call) * 100.0
         if long_call is not None:
@@ -522,11 +561,14 @@ def render_strategy_shadow_comparison(payload: dict[str, Any]) -> str:
             if not row:
                 continue
             payoffs = row.get("payoffs") or {}
-            condor = payoffs.get("IRON_CONDOR") or {}
-            put_credit_payoff = payoffs.get("PUT_CREDIT_SPREAD") or {}
+            payoff_bits = [
+                f"{strategy} {fmt_money(values.get('pnl'))}"
+                for strategy, values in sorted(payoffs.items())
+                if isinstance(values, dict)
+            ]
             checkpoints.append(
                 f"{label} {fmt_num(row.get('underlyingPrice'))}: "
-                f"condor {fmt_money(condor.get('pnl'))} / put-credit {fmt_money(put_credit_payoff.get('pnl'))}"
+                f"{' / '.join(payoff_bits) if payoff_bits else 'no priced payoff'}"
             )
         if checkpoints:
             lines.append(f"  payoff checkpoints: {' | '.join(checkpoints)}")
