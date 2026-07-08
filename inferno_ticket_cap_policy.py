@@ -154,13 +154,16 @@ def build_ticket_cap_policy() -> dict[str, Any]:
         if construction_hard_cap
         else 0.0
     )
-    hard_cap = min(requested["maxTicketDollars"], paper_budget_cap)
-    hard_cap = max(0.0, round(hard_cap, 2))
-    target_floor = min(requested["minTicketDollars"], hard_cap) if hard_cap else 0.0
-    effective_target = min(max(requested["targetTicketDollars"], target_floor), hard_cap) if hard_cap else 0.0
-    if hard_cap < requested["minTicketDollars"]:
+    paper_hard_cap = max(0.0, round(paper_budget_cap, 2))
+    target_floor = min(requested["minTicketDollars"], paper_hard_cap) if paper_hard_cap else 0.0
+    effective_target = (
+        min(max(requested["targetTicketDollars"], target_floor), paper_hard_cap)
+        if paper_hard_cap
+        else 0.0
+    )
+    if paper_hard_cap < requested["minTicketDollars"]:
         verdict = "paper-budget-below-target-band"
-    elif hard_cap < requested["maxTicketDollars"]:
+    elif paper_hard_cap < requested["maxTicketDollars"]:
         verdict = "clamped-to-paper-budget"
     else:
         verdict = "active"
@@ -172,7 +175,7 @@ def build_ticket_cap_policy() -> dict[str, Any]:
         "message": (
             f"Target paper/research ticket band ${requested['minTicketDollars']:.0f}-"
             f"${requested['maxTicketDollars']:.0f}; construction ceiling ${construction_hard_cap:.0f}; "
-            f"simulated paper ceiling ${hard_cap:.0f}; live capital ceiling ${live_hard_cap:.0f}."
+            f"simulated paper risk budget ${paper_hard_cap:.0f}; live capital ceiling ${live_hard_cap:.0f}."
         ),
         "researchOnly": True,
         "promotable": False,
@@ -191,7 +194,8 @@ def build_ticket_cap_policy() -> dict[str, Any]:
         "effectiveBand": {
             "minTargetDollars": round(target_floor, 2),
             "targetTicketDollars": round(effective_target, 2),
-            "hardCapDollars": hard_cap,
+            "hardCapDollars": paper_hard_cap,
+            "constructionConstrainedHardCapDollars": construction_hard_cap,
             "sourceRiskCapDollars": paper_budget_cap,
             "sourceRiskCapSource": "paper-budget",
             "sourceRiskCapVerdict": "paper-budget",
@@ -199,7 +203,7 @@ def build_ticket_cap_policy() -> dict[str, Any]:
             "drawdownLevel": None,
             "drawdownCapMultiplier": None,
             "newEntriesAllowed": True,
-            "note": "Simulated paper cap; independent of the live drawdown stepper.",
+            "note": "Simulated paper risk budget; independent of construction search caps and the live drawdown stepper.",
         },
         "liveCapitalBand": {
             "hardCapDollars": live_hard_cap,

@@ -118,6 +118,9 @@ class PromotionThresholdTests(unittest.TestCase):
     def test_promotion_sample_size_floor(self) -> None:
         self.assertGreaterEqual(mc.MIN_PAPER_SAMPLES_FOR_PROMOTION, 30)
 
+    def test_distinct_event_promotion_floor(self) -> None:
+        self.assertGreaterEqual(mc.MIN_DISTINCT_EVENTS_FOR_PROMOTION, 30)
+
     def test_wilson_floor_above_coinflip(self) -> None:
         self.assertGreater(mc.MIN_WILSON_LOWER_FOR_EDGE, 0.40)
         self.assertLess(mc.MIN_WILSON_LOWER_FOR_EDGE, 0.55)
@@ -151,7 +154,7 @@ class SnapshotTests(unittest.TestCase):
             "mathSeed", "defaultBootstrapResamples",
             "defaultPermutationResamples", "defaultPosteriorDraws",
             "defaultAlpha", "defaultZ", "operatorLevel", "gatePercentile",
-            "minPaperSamplesForPromotion", "minWilsonLowerForEdge",
+            "minPaperSamplesForPromotion", "minDistinctEventsForPromotion", "minWilsonLowerForEdge",
             "devilsAdvocateHoldP", "devilsAdvocateWeakenP",
             "evidenceStrengthStrong", "evidenceStrengthModerate",
             "evidenceStrengthWeak", "maxKellyFraction",
@@ -183,6 +186,36 @@ class DefaultValuesTests(unittest.TestCase):
     def test_default_z_matches_alpha(self) -> None:
         # z = 1.96 for two-tailed alpha=0.05.
         self.assertAlmostEqual(mc.DEFAULT_Z, 1.96, places=2)
+
+
+class ClusterBootstrapTests(unittest.TestCase):
+    def test_cluster_bootstrap_resamples_whole_events(self) -> None:
+        records = [
+            {"event": "A", "r": 1.0},
+            {"event": "A", "r": 1.0},
+            {"event": "B", "r": -1.0},
+        ]
+
+        mean, lower, upper = mc.cluster_bootstrap_mean_ci(
+            records,
+            value_fn=lambda row: row["r"],
+            cluster_key_fn=lambda row: row["event"],
+            resamples=200,
+            seed=1,
+        )
+
+        self.assertAlmostEqual(mean, 1.0 / 3.0)
+        self.assertLessEqual(lower, mean)
+        self.assertGreaterEqual(upper, mean)
+
+    def test_single_cluster_ci_collapses_to_mean(self) -> None:
+        mean, lower, upper = mc.cluster_bootstrap_mean_ci(
+            [{"event": "A", "r": 1.0}, {"event": "A", "r": -1.0}],
+            value_fn=lambda row: row["r"],
+            cluster_key_fn=lambda row: row["event"],
+        )
+
+        self.assertEqual((mean, lower, upper), (0.0, 0.0, 0.0))
 
 
 if __name__ == "__main__":

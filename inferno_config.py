@@ -5,6 +5,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from inferno_math_config import MAX_DAILY_RISK_UNITS
+
 
 ROOT = Path(__file__).resolve().parent
 LOCAL_ENV_FILE = ROOT / ".env.inferno"
@@ -201,7 +203,6 @@ AUTO_PAPER_SELECTION_ENABLED = os.environ.get("INFERNO_AUTO_PAPER_SELECTION", "1
     "yes",
     "on",
 }
-MAX_DAILY_RISK_UNITS = 3.0
 MAX_SINGLE_TRADE_RISK_UNITS = 1.0
 MAX_ACTIVE_EXECUTION_INTENTS = 3
 MAX_SINGLE_TICKET_DOLLARS = float(os.environ.get("MAX_SINGLE_TICKET_DOLLARS", "500"))

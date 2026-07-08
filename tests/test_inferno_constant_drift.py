@@ -76,13 +76,17 @@ class ConstantDriftScanTests(unittest.TestCase):
             self.assertEqual(len(findings), 1)
             self.assertEqual(findings[0]["severity"], "P2")
 
-    def test_live_repo_flags_known_risk_constants(self) -> None:
-        # Against the real repo, the two known risk-constant duplications must
-        # surface (aligned today, so P2). This is the regression anchor.
+    def test_live_repo_single_sources_known_risk_constants(self) -> None:
+        # Against the real repo, these high-impact risk constants must stay
+        # imported from the central math config, not redefined with literals.
         findings = audit.constant_drift_findings()
         titles = {f["title"] for f in findings}
-        self.assertIn(
+        self.assertNotIn(
             "Risk/threshold constant MAX_DAILY_RISK_UNITS is defined in multiple files",
+            titles,
+        )
+        self.assertNotIn(
+            "Risk/threshold constant MAX_KELLY_FRACTION is defined in multiple files",
             titles,
         )
 

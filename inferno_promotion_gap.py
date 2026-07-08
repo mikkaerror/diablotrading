@@ -22,6 +22,7 @@ from inferno_config import local_now
 from inferno_strategy_lab import (
     MAX_DRAWDOWN_RISK_UNITS,
     MAX_FALSE_POSITIVE_RATE,
+    MIN_DISTINCT_EVENTS_FOR_PROMOTION,
     MIN_EXPECTANCY_LOWER_BOUND,
     MIN_PROFIT_FACTOR,
     MIN_SCORED_TRADES_FOR_PROMOTION,
@@ -94,6 +95,7 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     win_count = int(strategy.get("winCount") or 0)
     loss_count = int(strategy.get("lossCount") or 0)
     scored_count = int(strategy.get("scoredCount") or 0)
+    distinct_event_count = int(strategy.get("distinctEventCount") or 0)
     win_rate_lower = _safe_float(strategy.get("winRateLowerBound"))
     payoff_ratio = _safe_float(strategy.get("payoffRatio"))
     floor = win_rate_floor_from_payoff(payoff_ratio)
@@ -119,6 +121,7 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
 
     cleared = {
         "scoredCount": scored_count >= MIN_SCORED_TRADES_FOR_PROMOTION,
+        "distinctEventCount": distinct_event_count >= MIN_DISTINCT_EVENTS_FOR_PROMOTION,
         "winRateLowerBound": (win_rate_lower or 0.0) >= (win_rate_target or MIN_WIN_RATE_LOWER_BOUND),
         "expectancyLowerBound": (expectancy_lower if expectancy_lower is not None else -1.0)
         >= MIN_EXPECTANCY_LOWER_BOUND,
@@ -142,6 +145,9 @@ def analyze_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         "scoredCount": scored_count,
         "scoredCountTarget": MIN_SCORED_TRADES_FOR_PROMOTION,
         "scoredCountGap": max(0, MIN_SCORED_TRADES_FOR_PROMOTION - scored_count),
+        "distinctEventCount": distinct_event_count,
+        "distinctEventTarget": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
+        "distinctEventGap": max(0, MIN_DISTINCT_EVENTS_FOR_PROMOTION - distinct_event_count),
         "winRateLowerBound": win_rate_lower,
         "winRateLowerBoundTarget": win_rate_target,
         "winRateLowerBoundGap": _gap(win_rate_target, win_rate_lower),
@@ -179,6 +185,7 @@ def build_promotion_gap(lab: dict[str, Any] | None = None) -> dict[str, Any]:
         "sourceLabGeneratedAt": lab.get("generatedAt"),
         "thresholds": {
             "scoredTradesForPromotion": MIN_SCORED_TRADES_FOR_PROMOTION,
+            "distinctEventsForPromotion": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
             "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
             "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
             "legacyFixedWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
@@ -212,6 +219,8 @@ def gap_text(gap: dict[str, Any]) -> str:
         "Overall gaps:",
         f"- scored trades:        {overall.get('scoredCount')}/{overall.get('scoredCountTarget')} "
         f"(gap {overall.get('scoredCountGap')})",
+        f"- distinct events:      {overall.get('distinctEventCount')}/{overall.get('distinctEventTarget')} "
+        f"(gap {overall.get('distinctEventGap')})",
         f"- win-rate lower bound: {overall.get('winRateLowerBound')} vs {overall.get('winRateLowerBoundTarget')} "
         f"(gap {overall.get('winRateLowerBoundGap')}; {overall.get('winRateLowerBoundTargetSource')})",
         f"- payoff breakeven:     {overall.get('winRateBreakeven')} + margin "
@@ -231,6 +240,7 @@ def gap_text(gap: dict[str, Any]) -> str:
             f"- {strat.get('strategy')}: "
             f"{strat.get('gatesOpen')}/{strat.get('gatesTotal')} "
             f"| scored {strat.get('scoredCount')}/{strat.get('scoredCountTarget')} "
+            f"| events {strat.get('distinctEventCount')}/{strat.get('distinctEventTarget')} "
             f"| trades-to-WR-floor {strat.get('tradesToWinRateFloor')}"
         )
     lines.extend(

@@ -27,6 +27,7 @@ def strategy_summary(**overrides) -> dict:
         "winCount": 0,
         "lossCount": 0,
         "scoredCount": 0,
+        "distinctEventCount": 0,
         "winRateLowerBound": None,
         "payoffRatio": None,
         "winRateLowerBoundTarget": None,
@@ -53,6 +54,7 @@ class PromotionGapTests(unittest.TestCase):
     def test_empty_strategy_reports_full_gap(self) -> None:
         result = analyze_strategy(strategy_summary())
         self.assertEqual(result["scoredCountGap"], 30)
+        self.assertEqual(result["distinctEventGap"], 30)
         self.assertEqual(result["gatesOpen"], 0)
         self.assertFalse(result["promotable"])
 
@@ -62,6 +64,7 @@ class PromotionGapTests(unittest.TestCase):
                 winCount=25,
                 lossCount=5,
                 scoredCount=30,
+                distinctEventCount=30,
                 winRateLowerBound=0.55,
                 payoffRatio=1.0,
                 expectancyPerRiskConfidence={"lower": 0.1},
@@ -82,6 +85,7 @@ class PromotionGapTests(unittest.TestCase):
                 winCount=27,
                 lossCount=33,
                 scoredCount=60,
+                distinctEventCount=60,
                 winRateLowerBound=0.331,
                 payoffRatio=2.5,
                 expectancyPerRiskConfidence={"lower": 0.1},
@@ -117,11 +121,30 @@ class PromotionGapTests(unittest.TestCase):
         result = trades_to_winrate_floor(3, 10, target=0.42, max_trades=200)
         self.assertIsNone(result)
 
+    def test_distinct_event_gap_blocks_otherwise_good_raw_trade_count(self) -> None:
+        result = analyze_strategy(
+            strategy_summary(
+                winCount=25,
+                lossCount=5,
+                scoredCount=30,
+                distinctEventCount=5,
+                winRateLowerBound=0.55,
+                payoffRatio=1.0,
+                expectancyPerRiskConfidence={"lower": 0.1},
+                profitFactor=1.6,
+                falsePositiveRate=0.2,
+                maxDrawdownRiskUnits=-2.0,
+            )
+        )
+
+        self.assertFalse(result["promotable"])
+        self.assertEqual(result["distinctEventGap"], 25)
+
     def test_build_promotion_gap_is_always_research_only(self) -> None:
         lab = {
             "generatedAt": "2026-05-10T08:00:00-06:00",
             "overall": strategy_summary(
-                winCount=40, lossCount=0, scoredCount=40, winRateLowerBound=0.99,
+                winCount=40, lossCount=0, scoredCount=40, distinctEventCount=40, winRateLowerBound=0.99,
                 profitFactor=10.0, expectancyPerRiskConfidence={"lower": 5.0},
                 falsePositiveRate=0.0, maxDrawdownRiskUnits=0.0,
             ),
@@ -131,6 +154,7 @@ class PromotionGapTests(unittest.TestCase):
         self.assertTrue(gap["researchOnly"])
         self.assertFalse(gap["promotable"])
         self.assertIn("scoredTradesForPromotion", gap["thresholds"])
+        self.assertIn("distinctEventsForPromotion", gap["thresholds"])
 
     def test_build_promotion_gap_handles_missing_inputs(self) -> None:
         gap = build_promotion_gap({})

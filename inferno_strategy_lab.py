@@ -16,8 +16,12 @@ from typing import Any
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
-from inferno_math_config import MIN_WILSON_LOWER_FOR_EDGE
-from inferno_paper_execution import load_ledger
+from inferno_math_config import (
+    MIN_DISTINCT_EVENTS_FOR_PROMOTION as MATH_MIN_DISTINCT_EVENTS_FOR_PROMOTION,
+    MIN_WILSON_LOWER_FOR_EDGE,
+    cluster_bootstrap_mean_ci,
+)
+from inferno_paper_execution import load_ledger, paper_event_id
 from inferno_performance_analytics import (
     estimated_pnl,
     max_loss,
@@ -33,6 +37,7 @@ STRATEGY_LAB_TEXT_FILE = REPORTS_DIR / "strategy_lab_latest.txt"
 
 CONFIDENCE_Z = 1.96
 MIN_SCORED_TRADES_FOR_PROMOTION = 30
+MIN_DISTINCT_EVENTS_FOR_PROMOTION = MATH_MIN_DISTINCT_EVENTS_FOR_PROMOTION
 MIN_WIN_RATE_LOWER_BOUND = MIN_WILSON_LOWER_FOR_EDGE
 WIN_RATE_BREAKEVEN_MARGIN = 0.03
 MIN_EXPECTANCY_LOWER_BOUND = 0.0
@@ -103,6 +108,23 @@ def confidence_interval(values: list[float], z_score: float = CONFIDENCE_Z) -> d
         "lower": round(avg - margin, 6),
         "upper": round(avg + margin, 6),
         "std": round(std, 6),
+    }
+
+
+def cluster_confidence_interval(records: list[dict[str, Any]]) -> dict[str, float | None]:
+    """Return a mean-R CI by resampling distinct event clusters."""
+    if not records:
+        return {"mean": None, "lower": None, "upper": None, "clustered": True}
+    mean, lower, upper = cluster_bootstrap_mean_ci(
+        records,
+        value_fn=lambda record: record.get("returnOnRisk"),
+        cluster_key_fn=lambda record: record.get("eventId"),
+    )
+    return {
+        "mean": round(mean, 6),
+        "lower": round(lower, 6),
+        "upper": round(upper, 6),
+        "clustered": True,
     }
 
 
@@ -219,6 +241,7 @@ def closed_trade_records(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "ticketId": ticket.get("ticketId"),
                 "ticker": ticket.get("ticker"),
+                "eventId": paper_event_id(ticket),
                 "strategy": strategy_key(ticket),
                 "createdAt": ticket.get("createdAt"),
                 "reviewedAt": outcome.get("reviewedAt"),
@@ -235,6 +258,7 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     blockers: list[str] = []
     warnings: list[str] = []
     scored = int(metrics.get("scoredCount") or 0)
+    distinct_events = int(metrics.get("distinctEventCount") or 0)
     expectancy_lower = metrics.get("expectancyPerRiskConfidence", {}).get("lower")
     win_lower = metrics.get("winRateLowerBound")
     win_target = metrics.get("winRateLowerBoundTarget")
@@ -252,6 +276,10 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         blockers.append(
             f"need {MIN_SCORED_TRADES_FOR_PROMOTION - scored} more scored paper trades for promotion evidence"
         )
+    if distinct_events < MIN_DISTINCT_EVENTS_FOR_PROMOTION:
+        blockers.append(
+            f"need {MIN_DISTINCT_EVENTS_FOR_PROMOTION - distinct_events} more distinct paper events for promotion evidence"
+        )
     if expectancy_lower is None or expectancy_lower <= MIN_EXPECTANCY_LOWER_BOUND:
         blockers.append("expectancy lower bound is not positive")
     if win_lower is None or win_lower < win_target:
@@ -268,7 +296,11 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     elif dd is not None and dd < MAX_DRAWDOWN_RISK_UNITS:
         level = "cooldown"
     elif blockers:
-        level = "evidence-building" if scored < MIN_SCORED_TRADES_FOR_PROMOTION else "probation"
+        level = (
+            "evidence-building"
+            if scored < MIN_SCORED_TRADES_FOR_PROMOTION or distinct_events < MIN_DISTINCT_EVENTS_FOR_PROMOTION
+            else "probation"
+        )
     elif warnings:
         level = "probation"
     else:
@@ -294,17 +326,21 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, An
     """Summarize evidence for one strategy family."""
     records = closed_trade_records(tickets)
     returns = [record["returnOnRisk"] for record in records]
+    distinct_events = len({record.get("eventId") for record in records if record.get("eventId")})
     wins = [value for value in returns if value > 0]
     losses = [value for value in returns if value < 0]
     win_rate = round(len(wins) / len(returns), 4) if returns else None
     payoff = payoff_ratio(wins, losses)
     kelly = kelly_from_returns(win_rate, payoff)
-    confidence = confidence_interval(returns)
+    confidence = cluster_confidence_interval(records)
     win_floor = win_rate_floor_from_payoff(payoff)
     metrics = {
         "strategy": name,
         "ticketCount": len(tickets),
         "scoredCount": len(returns),
+        "distinctEventCount": distinct_events,
+        "distinctEventTarget": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
+        "distinctEventGap": max(0, MIN_DISTINCT_EVENTS_FOR_PROMOTION - distinct_events),
         "winCount": len(wins),
         "lossCount": len(losses),
         "openCount": sum(1 for ticket in tickets if outcome_status(ticket) == "open"),
@@ -354,6 +390,7 @@ def build_strategy_lab(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
         "stage": "strategy-evidence-lab",
         "thresholds": {
             "minScoredTradesForPromotion": MIN_SCORED_TRADES_FOR_PROMOTION,
+            "minDistinctEventsForPromotion": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
             "winRateFloorMode": "payoff-implied-breakeven-plus-margin",
             "winRateBreakevenMargin": WIN_RATE_BREAKEVEN_MARGIN,
             "legacyFixedMinWinRateLowerBound": MIN_WIN_RATE_LOWER_BOUND,
@@ -390,6 +427,7 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         "",
         "Overall evidence:",
         f"- scored trades: {overall.get('scoredCount', 0)}",
+        f"- distinct events: {overall.get('distinctEventCount', 0)}/{overall.get('distinctEventTarget')}",
         f"- win rate: {overall.get('winRate')} | Wilson lower: {overall.get('winRateLowerBound')} "
         f"| target: {overall.get('winRateLowerBoundTarget')} ({overall.get('winRateLowerBoundTargetSource')})",
         f"- expectancy/risk mean: {confidence.get('mean')} | lower: {confidence.get('lower')}",
@@ -408,6 +446,7 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         item_confidence = item.get("expectancyPerRiskConfidence") or {}
         lines.append(
             f"- {item.get('strategy')}: {item.get('scoredCount')} scored | "
+            f"{item.get('distinctEventCount')} events | "
             f"win LB {item.get('winRateLowerBound')}/{item.get('winRateLowerBoundTarget')} | "
             f"exp LB {item_confidence.get('lower')} | "
             f"PF {item.get('profitFactor')} | "

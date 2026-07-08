@@ -68,7 +68,10 @@ Changing levels touches every module at once. No drift between modules.
 
 import hashlib
 import os
+import random
+from collections import defaultdict
 from typing import Final
+from typing import Any, Callable
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +160,56 @@ def gate_percentile_for_level(level: str | None = None) -> float:
     return OPERATOR_LEVEL_GATE_PERCENTILE.get(chosen, 80.0)
 
 
+def _quantile(sorted_values: list[float], q: float) -> float:
+    """Return a deterministic nearest-rank quantile from sorted values."""
+    if not sorted_values:
+        return 0.0
+    index = round((len(sorted_values) - 1) * max(0.0, min(1.0, q)))
+    return sorted_values[int(index)]
+
+
+def cluster_bootstrap_mean_ci(
+    records: list[dict[str, Any]],
+    *,
+    value_fn: Callable[[dict[str, Any]], float | None],
+    cluster_key_fn: Callable[[dict[str, Any]], Any],
+    resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
+    alpha: float = DEFAULT_ALPHA,
+    seed: int | None = None,
+) -> tuple[float, float, float]:
+    """Return mean and CI by resampling whole event clusters.
+
+    Every record in a sampled cluster is included together. This is the
+    conservative bootstrap required for paper options evidence, where repeated
+    tickets on one ticker/earnings event are correlated observations.
+    """
+    clusters: dict[str, list[float]] = defaultdict(list)
+    for record in records:
+        value = value_fn(record)
+        if value is None:
+            continue
+        key = str(cluster_key_fn(record) or "unknown-event")
+        clusters[key].append(float(value))
+    values = [value for group in clusters.values() for value in group]
+    if not values:
+        return 0.0, 0.0, 0.0
+    mean = sum(values) / len(values)
+    keys = sorted(clusters)
+    if len(keys) <= 1 or resamples <= 0:
+        return mean, mean, mean
+    rng = random.Random(seed if seed is not None else module_seed("cluster-bootstrap-mean-ci"))
+    draws: list[float] = []
+    for _ in range(resamples):
+        sampled: list[float] = []
+        for _ in keys:
+            sampled.extend(clusters[rng.choice(keys)])
+        draws.append(sum(sampled) / len(sampled))
+    draws.sort()
+    lower = _quantile(draws, alpha / 2.0)
+    upper = _quantile(draws, 1.0 - (alpha / 2.0))
+    return mean, lower, upper
+
+
 # ---------------------------------------------------------------------------
 # Promotion gates (frozen — these are the desk's risk policy).
 # ---------------------------------------------------------------------------
@@ -164,6 +217,10 @@ def gate_percentile_for_level(level: str | None = None) -> float:
 MIN_PAPER_SAMPLES_FOR_PROMOTION: Final[int] = 30
 """Strategy needs at least this many closed paper outcomes before any
 promotion math can render a verdict that touches authority."""
+
+MIN_DISTINCT_EVENTS_FOR_PROMOTION: Final[int] = 30
+"""Strategy needs this many distinct ticker/event observations before promotion
+math can render a verdict that touches authority."""
 
 MIN_WILSON_LOWER_FOR_EDGE: Final[float] = 0.42
 """Legacy fixed Wilson lower-bound fallback used only when a payoff-aware
@@ -245,6 +302,7 @@ def snapshot() -> dict[str, object]:
         "operatorLevel": OPERATOR_LEVEL,
         "gatePercentile": gate_percentile_for_level(),
         "minPaperSamplesForPromotion": MIN_PAPER_SAMPLES_FOR_PROMOTION,
+        "minDistinctEventsForPromotion": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
         "minWilsonLowerForEdge": MIN_WILSON_LOWER_FOR_EDGE,
         "devilsAdvocateHoldP": DEVILS_ADVOCATE_HOLD_P,
         "devilsAdvocateWeakenP": DEVILS_ADVOCATE_WEAKEN_P,

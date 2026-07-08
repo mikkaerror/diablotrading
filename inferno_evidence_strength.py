@@ -75,9 +75,10 @@ from typing import Any, Callable
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_math_config import cluster_bootstrap_mean_ci
+from inferno_paper_execution import paper_event_id
 from inferno_theme_synthesizer import (
     _r_units,
-    bootstrap_mean_ci,
     wilson_interval,
 )
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
@@ -243,9 +244,16 @@ def _default_devils_advocate_loader() -> dict[str, Any] | None:
 
 def aggregate_samples(records: list[dict[str, Any]]) -> tuple[list[float], int, int]:
     """Extract closed-outcome R-unit samples; returns (samples, wins, losses)."""
-    samples: list[float] = []
-    wins = 0
-    losses = 0
+    sample_rows = aggregate_sample_rows(records)
+    samples = [row["r"] for row in sample_rows]
+    wins = sum(1 for value in samples if value > 0)
+    losses = sum(1 for value in samples if value < 0)
+    return samples, wins, losses
+
+
+def aggregate_sample_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Extract closed-outcome R-unit samples with event ids."""
+    rows: list[dict[str, Any]] = []
     for record in records:
         outcome = (record.get("outcome") or {})
         status = str(outcome.get("status") or record.get("outcomeStatus") or "").lower()
@@ -256,12 +264,9 @@ def aggregate_samples(records: list[dict[str, Any]]) -> tuple[list[float], int, 
             r = _r_units(outcome)
         if r is None:
             continue
-        samples.append(float(r))
-        if r > 0:
-            wins += 1
-        elif r < 0:
-            losses += 1
-    return samples, wins, losses
+        value = float(r)
+        rows.append({"r": value, "eventId": paper_event_id(record)})
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -276,15 +281,23 @@ def build_strength(
 ) -> dict[str, Any]:
     """Compose the composite evidence strength scalar."""
     records = (shadow_loader or _default_shadow_loader)()
-    samples, wins, losses = aggregate_samples(records)
+    sample_rows = aggregate_sample_rows(records)
+    samples = [row["r"] for row in sample_rows]
+    wins = sum(1 for value in samples if value > 0)
+    losses = sum(1 for value in samples if value < 0)
     n_total = len(samples)
+    distinct_events = len({row.get("eventId") for row in sample_rows if row.get("eventId")})
 
     if n_total == 0:
         w_lower, w_upper = 0.0, 1.0
         m_mean, m_lower, m_upper = 0.0, 0.0, 0.0
     else:
         w_lower, w_upper = wilson_interval(wins, n_total)
-        m_mean, m_lower, m_upper = bootstrap_mean_ci(samples)
+        m_mean, m_lower, m_upper = cluster_bootstrap_mean_ci(
+            sample_rows,
+            value_fn=lambda row: row.get("r"),
+            cluster_key_fn=lambda row: row.get("eventId"),
+        )
 
     da_payload = (devils_advocate_loader or _default_devils_advocate_loader)()
     if isinstance(da_payload, dict):
@@ -314,7 +327,7 @@ def build_strength(
         s_w = max(s_w, s_e)
 
     components: dict[str, float | None] = {
-        "sampleSize": sample_size_strength(n_total),
+        "sampleSize": sample_size_strength(distinct_events),
         "wilsonLower": s_w,
         "expectancyLower": s_e,
         "falsification": falsification_strength(edges_holding, strategies_total),
@@ -374,6 +387,7 @@ def build_strength(
         "moderateThreshold": MODERATE_STRENGTH,
         "weakThreshold": WEAK_STRENGTH,
         "totalSamples": n_total,
+        "distinctEvents": distinct_events,
         "wins": wins,
         "losses": losses,
         "wilsonLower": round(w_lower, 4),
@@ -395,6 +409,7 @@ def build_strength(
         "devilsAdvocateVerdict": da_verdict,
         "reminders": [
             "geometric mean — the weakest component caps the composite",
+            "sample-size strength uses distinct ticker/event count, not raw trades",
             "authority manifest is owned by the controller; this scalar is advisory",
             "falsification component only counts edges surviving sign-flip bootstrap",
         ],
@@ -408,6 +423,7 @@ def strength_text(payload: dict[str, Any]) -> str:
         f"Generated: {payload.get('generatedAt')}",
         f"Verdict: {payload.get('verdict')}  strength={payload.get('strength')}",
         f"Samples: {payload.get('totalSamples')}  "
+        f"distinctEvents={payload.get('distinctEvents')}  "
         f"wins={payload.get('wins')}  "
         f"losses={payload.get('losses')}",
         f"Win-rate Wilson: [{payload.get('wilsonLower')}, {payload.get('wilsonUpper')}]",

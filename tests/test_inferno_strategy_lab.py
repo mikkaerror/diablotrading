@@ -24,6 +24,7 @@ def closed_ticket(index: int, pnl: float, strategy: str = "TEST_EDGE") -> dict[s
     return {
         "ticketId": f"ticket-{index}",
         "ticker": f"T{index}",
+        "eventId": f"T{index}|2026-07-01",
         "strategy": strategy,
         "status": "paper-staged",
         "riskVerdict": {"metrics": {"maxLossDollars": 10}},
@@ -78,6 +79,26 @@ class StrategyLabTests(unittest.TestCase):
         self.assertIn("PROMOTABLE_EDGE", lab["promotionCandidates"])
         self.assertEqual(lab["deskVerdict"]["level"], "review-for-promotion")
 
+    def test_repeated_same_event_cannot_clear_promotion_gate(self) -> None:
+        """Thirty raw trades on one event are not thirty independent bets."""
+        tickets = []
+        for index in range(25):
+            ticket = closed_ticket(index, 10.0, strategy="CORRELATED_EDGE")
+            ticket["eventId"] = "ONE|2026-07-01"
+            tickets.append(ticket)
+        for index in range(25, 35):
+            ticket = closed_ticket(index, -5.0, strategy="CORRELATED_EDGE")
+            ticket["eventId"] = "ONE|2026-07-01"
+            tickets.append(ticket)
+
+        summary = summarize_strategy("CORRELATED_EDGE", tickets)
+
+        self.assertEqual(summary["scoredCount"], 35)
+        self.assertEqual(summary["distinctEventCount"], 1)
+        self.assertEqual(summary["distinctEventGap"], 29)
+        self.assertFalse(summary["verdict"]["promotable"])
+        self.assertIn("distinct paper events", "; ".join(summary["verdict"]["blockers"]))
+
     def test_convex_payoff_edge_uses_payoff_aware_win_floor(self) -> None:
         """A low-hit-rate convex strategy can clear the corrected win-rate gate."""
         tickets = []
@@ -98,6 +119,7 @@ class StrategyLabTests(unittest.TestCase):
         summary = summarize_strategy("CONVEX_EDGE", tickets)
 
         self.assertEqual(summary["scoredCount"], 60)
+        self.assertEqual(summary["distinctEventCount"], 60)
         self.assertEqual(summary["winCount"], 27)
         self.assertEqual(summary["lossCount"], 33)
         self.assertEqual(summary["payoffRatio"], 2.5)

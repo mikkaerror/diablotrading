@@ -87,6 +87,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from inferno_config import local_now
+from inferno_math_config import (
+    MAX_DAILY_RISK_UNITS as DEFAULT_MAX_DAILY_RISK_UNITS,
+    MAX_KELLY_FRACTION as DEFAULT_MAX_KELLY_FRACTION,
+)
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_theme_synthesizer import _r_units
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
@@ -97,8 +101,8 @@ KELLY_SIZING_TEXT_FILE = REPORTS_DIR / "kelly_sizing_latest.txt"
 KELLY_SIZING_STAGE = "kelly-sizing-research-only"
 
 MIN_KELLY_SAMPLES = int(os.environ.get("INFERNO_KELLY_MIN_SAMPLES", "8"))
-MAX_KELLY_FRACTION = float(os.environ.get("INFERNO_KELLY_MAX_FRACTION", "0.25"))
-MAX_DAILY_RISK_UNITS = float(os.environ.get("INFERNO_KELLY_MAX_DAILY_RISK_UNITS", "3.0"))
+MAX_KELLY_FRACTION = float(os.environ.get("INFERNO_KELLY_MAX_FRACTION", str(DEFAULT_MAX_KELLY_FRACTION)))
+MAX_DAILY_RISK_UNITS = float(os.environ.get("INFERNO_KELLY_MAX_DAILY_RISK_UNITS", str(DEFAULT_MAX_DAILY_RISK_UNITS)))
 KELLY_BOOTSTRAP_RESAMPLES = int(os.environ.get("INFERNO_KELLY_BOOTSTRAP", "2000"))
 KELLY_BOOTSTRAP_SEED = int(os.environ.get("INFERNO_KELLY_SEED", "20260514"))
 

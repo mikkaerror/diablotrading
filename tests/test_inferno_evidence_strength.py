@@ -23,12 +23,14 @@ import inferno_evidence_strength as es
 def closed_records(r_units: list[float]) -> list[dict]:
     return [
         {
+            "ticker": f"T{index}",
+            "eventId": f"T{index}|2026-07-01",
             "strategy": "Test",
             "outcome": {"status": "closed"},
             "estimatedPnl": float(value),
             "maxLossDollars": 1.0,
         }
-        for value in r_units
+        for index, value in enumerate(r_units)
     ]
 
 
@@ -126,6 +128,7 @@ class BuildStrengthTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "no-evidence")
         self.assertEqual(payload["strength"], 0.0)
         self.assertEqual(payload["totalSamples"], 0)
+        self.assertEqual(payload["distinctEvents"], 0)
 
     def test_strong_evidence(self) -> None:
         # 80 winning samples, +1R each.
@@ -139,6 +142,21 @@ class BuildStrengthTests(unittest.TestCase):
         self.assertGreater(payload["strength"], 0.7)
         self.assertEqual(payload["wins"], 80)
         self.assertEqual(payload["losses"], 0)
+        self.assertEqual(payload["distinctEvents"], 80)
+
+    def test_repeated_same_event_weakens_sample_size_component(self) -> None:
+        records = closed_records([1.0] * 80)
+        for record in records:
+            record["eventId"] = "ONE|2026-07-01"
+
+        payload = es.build_strength(
+            shadow_loader=lambda: records,
+            devils_advocate_loader=lambda: None,
+        )
+
+        self.assertEqual(payload["totalSamples"], 80)
+        self.assertEqual(payload["distinctEvents"], 1)
+        self.assertLess(payload["components"]["sampleSize"], 0.05)
 
     def test_weak_when_one_component_is_weak(self) -> None:
         # Strong on sample size + wilson + expectancy, but devil's advocate
