@@ -168,13 +168,21 @@ class SchwabDailyOpsTests(unittest.TestCase):
 
         self.assertEqual(symbols, ["OTEX", "KEYS", "AVGO"])
 
-    def test_default_symbol_universe_blends_positions_priority_slate_then_backfill(self) -> None:
+    def test_default_symbol_universe_prioritizes_active_paper_and_strategy_rows(self) -> None:
         payloads = {
             ops.LIVE_ACCOUNT_SYNC_FILE: {
                 "positions": [
                     {"symbol": "TE"},
                     {"symbol": "HIVE"},
                 ]
+            },
+            ops.PAPER_TEST_DIRECTOR_FILE: {
+                "autoPaperSlate": [{"ticker": "MOD"}],
+                "researchWatchlist": [{"ticker": "FCX"}],
+                "constructionWatchlist": [{"ticker": "GLW"}],
+            },
+            ops.STRATEGY_ALTERNATIVE_SCORER_FILE: {
+                "scorecards": [{"ticker": "GOOG"}, {"ticker": "TXN"}],
             },
             ops.SNAPSHOT_FILE: {
                 "rows": [
@@ -194,9 +202,12 @@ class SchwabDailyOpsTests(unittest.TestCase):
         }
 
         with patch.object(ops, "load_json_file", side_effect=lambda path: payloads.get(path, {})):
-            symbols = ops.default_symbol_universe(limit=8)
+            symbols = ops.default_symbol_universe(limit=10)
 
-        self.assertEqual(symbols, ["TE", "HIVE", "LUNR", "AVGO", "CCI", "AEHR", "MRVL", "TXN"])
+        self.assertEqual(
+            symbols,
+            ["TE", "HIVE", "MOD", "FCX", "GLW", "GOOG", "TXN", "CCI", "AEHR", "MRVL"],
+        )
 
 
 if __name__ == "__main__":

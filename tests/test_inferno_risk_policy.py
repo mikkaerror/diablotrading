@@ -425,6 +425,19 @@ class EvaluateStrikeItemTests(unittest.TestCase):
         )
         self.assertTrue(v.passed, f"clean ticket should pass, got blocks={v.blocks}")
 
+    def test_duplicate_block_text_is_reported_once(self):
+        item = _clean_item()
+        duplicate = "Schwab paper liquidity gate failed: atm-window-spread 24.85% exceeds gate 20%"
+        item["strikePlan"]["liquidityNotes"] = [duplicate, duplicate]
+        v = evaluate_strike_item(
+            item,
+            strike_plan_generated_at=_fresh_plan_timestamp(),
+            ledger_items=[],
+            mode="paper",
+        )
+        self.assertFalse(v.passed)
+        self.assertEqual(v.blocks.count(duplicate), 1)
+
     def test_live_trading_flag_always_blocks(self):
         """BROKER-SUBMIT-OFF TRIPWIRE.
 

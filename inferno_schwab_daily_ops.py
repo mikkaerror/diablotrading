@@ -44,6 +44,8 @@ from server import (
 
 EXECUTION_QUEUE_FILE = DATA_DIR / "inferno_execution_queue.json"
 WATCHLIST_INPUT_FILE = DATA_DIR / "inferno_watchlist_input.json"
+PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 SCHWAB_DAILY_OPS_FILE = DATA_DIR / "inferno_schwab_daily_ops.json"
 SCHWAB_DAILY_OPS_TEXT_FILE = REPORTS_DIR / "schwab_daily_ops_latest.txt"
 SCHWAB_DAILY_OPS_STAGE = "schwab-daily-ops-read-only"
@@ -257,21 +259,35 @@ def top_priority_slate(payload: dict[str, Any], *, n: int = DEFAULT_PRIORITY_SLA
 def default_symbol_universe(limit: int | None = None) -> list[str]:
     """Choose the daily Schwab pull universe from the current decision slate.
 
-    Order matters: held names stay monitored first, then the priority slate gets
-    chain coverage before execution/approval/watchlist backfill. This changes
-    market-data coverage only; it does not change eligible tickers, risk gates,
-    authority, or broker permissions.
+    Order matters: held names stay monitored first, then current paper and
+    strategy-research rows get chain coverage before execution, approval,
+    tracker-priority, and watchlist backfill. This changes market-data coverage
+    only; it does not change eligible tickers, risk gates, authority, or broker
+    permissions.
     """
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     snapshot = load_json_file(SNAPSHOT_FILE) or {}
+    paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    alternative_scorer = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
     execution = load_json_file(EXECUTION_QUEUE_FILE) or {}
     approval = load_json_file(APPROVAL_QUEUE_FILE) or {}
     watchlist = load_json_file(WATCHLIST_INPUT_FILE) or {}
     symbols = (
         symbols_from_positions(live_sync)
-        + top_priority_slate(snapshot)
+        + symbols_from_payload(
+            paper_director,
+            (
+                "stageableSlate",
+                "autoPaperSlate",
+                "researchWatchlist",
+                "pricedPaperVariantWatchlist",
+                "constructionWatchlist",
+            ),
+        )
+        + symbols_from_payload(alternative_scorer, ("scorecards",))
         + symbols_from_payload(execution, ("items", "readyTickers"))
         + symbols_from_payload(approval, ("items",))
+        + top_priority_slate(snapshot)
         + symbols_from_payload(watchlist, ("tickers", "symbols", "watchlist"))
     )
     return unique_symbols(symbols, limit=limit)

@@ -105,6 +105,18 @@ def number(value: Any, default: float = 0.0) -> float:
     return parsed
 
 
+def unique_messages(messages: list[str]) -> list[str]:
+    """Return messages in first-seen order with exact duplicates removed."""
+    seen: set[str] = set()
+    unique: list[str] = []
+    for message in messages:
+        if message in seen:
+            continue
+        seen.add(message)
+        unique.append(message)
+    return unique
+
+
 def parse_timestamp(value: Any) -> datetime | None:
     """Parse ISO timestamps while tolerating missing or malformed data."""
     if not value:
@@ -553,6 +565,8 @@ def evaluate_strike_item(
     blocks.extend(context_blocks)
     warnings.extend(context_warnings)
     warnings.extend(schwab_warnings)
+    blocks = unique_messages(blocks)
+    warnings = unique_messages(warnings)
 
     metrics = {
         "ticker": ticker,
