@@ -12,6 +12,7 @@ from morning_inferno_pipeline import (
     read_sheet_rows_from_table,
     repair_setup_and_trigger_columns,
     sync_price_column_if_needed,
+    updater_status_entry,
 )
 
 
@@ -152,6 +153,55 @@ class InfernoTickerUniverseAuditTests(unittest.TestCase):
         args = mock_update_sheet_range.call_args[0]
         self.assertEqual(args[1], "E2:E2")
         self.assertEqual(args[2], [["$61.23"]])
+
+    @patch("morning_inferno_pipeline.update_sheet_range")
+    @patch("morning_inferno_pipeline.download_history_with_retries")
+    @patch("morning_inferno_pipeline.get_sheet")
+    def test_price_sync_can_refresh_valid_prices_when_requested(
+        self,
+        mock_get_sheet,
+        mock_download_history,
+        mock_update_sheet_range,
+    ) -> None:
+        class FakeSheet:
+            def get_all_values(self):
+                return [HEADERS, make_row(Ticker="PSTG", Price="$59.00")]
+
+        mock_get_sheet.return_value = FakeSheet()
+        mock_download_history.return_value = pd.DataFrame({"Close": [61.23]})
+
+        result = sync_price_column_if_needed(
+            backtest_root="unused",
+            sheet_name="unused",
+            refresh_valid=True,
+        )  # type: ignore[arg-type]
+
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(result["repairedTickers"], [])
+        self.assertEqual(result["refreshedTickers"], ["PSTG"])
+        self.assertTrue(result["refreshValid"])
+        mock_update_sheet_range.assert_called_once()
+        args = mock_update_sheet_range.call_args[0]
+        self.assertEqual(args[1], "E2:E2")
+        self.assertEqual(args[2], [["$61.23"]])
+
+    def test_updater_status_entry_keeps_price_refresh_summary(self) -> None:
+        result = {
+            "script": "E price refresh",
+            "ok": True,
+            "stdout": (
+                '{"checked": true, "updated": 2, "repairedTickers": ["A"], '
+                '"refreshedTickers": ["B"], "skippedTickers": ["C"], "refreshValid": true}'
+            ),
+        }
+
+        entry = updater_status_entry(result)
+
+        self.assertEqual(entry["script"], "E price refresh")
+        self.assertTrue(entry["summary"]["refreshValid"])
+        self.assertEqual(entry["summary"]["updated"], 2)
+        self.assertEqual(entry["summary"]["refreshedTickers"], ["B"])
+        self.assertEqual(entry["summary"]["skippedTickers"], ["C"])
 
     @patch("morning_inferno_pipeline.update_sheet_range")
     @patch("morning_inferno_pipeline.download_history_with_retries")

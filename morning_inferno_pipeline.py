@@ -1291,11 +1291,18 @@ def sync_earnings_dates(backtest_root: Path, sheet_name: str) -> dict[str, Any]:
     return summary
 
 
-def sync_price_column_if_needed(backtest_root: Path, sheet_name: str) -> dict[str, Any]:
+def sync_price_column_if_needed(
+    backtest_root: Path,
+    sheet_name: str,
+    *,
+    refresh_valid: bool = False,
+) -> dict[str, Any]:
     """Repair blank or #N/A price cells from recent daily close history.
 
-    We only intervene when the sheet price is unusable. Valid prices stay
-    untouched so we do not fight any existing manual/operator workflow.
+    By default we only intervene when the sheet price is unusable. Scheduled
+    model refreshes can opt into ``refresh_valid`` so the operator-owned tracker
+    receives fresh vendor prices while preserving the conservative default for
+    ordinary dawn runs.
     """
     sheet = get_sheet(backtest_root, sheet_name)
     rows = google_sheets_call("read price rows", lambda: sheet.get_all_values())
@@ -1314,20 +1321,29 @@ def sync_price_column_if_needed(backtest_root: Path, sheet_name: str) -> dict[st
     price_values: list[list[Any]] = []
     updated = 0
     repaired_tickers: list[str] = []
+    refreshed_tickers: list[str] = []
+    skipped_tickers: list[str] = []
 
     for cells in rows[1:]:
         ticker = cells[ticker_index].strip().upper() if ticker_index < len(cells) else ""
         raw_price = cells[price_index].strip() if price_index < len(cells) else ""
         parsed_price = number_or_none(raw_price)
-        if ticker and (parsed_price is None or parsed_price <= 0):
+        should_refresh = ticker and (refresh_valid or parsed_price is None or parsed_price <= 0)
+        if should_refresh:
             history = download_history_with_retries(ticker, period="10d")
             close = pd.to_numeric(history["Close"], errors="coerce").dropna()
             repaired_price = float(close.iloc[-1]) if not close.empty else 0.0
             if repaired_price > 0:
                 price_values.append([f"${repaired_price:.2f}"])
-                updated += 1
-                repaired_tickers.append(ticker)
+                if parsed_price is None or parsed_price <= 0:
+                    updated += 1
+                    repaired_tickers.append(ticker)
+                elif abs(repaired_price - parsed_price) >= 0.005:
+                    updated += 1
+                    refreshed_tickers.append(ticker)
                 continue
+            if ticker:
+                skipped_tickers.append(ticker)
         price_values.append([raw_price])
 
     if updated:
@@ -1337,6 +1353,9 @@ def sync_price_column_if_needed(backtest_root: Path, sheet_name: str) -> dict[st
         "checked": True,
         "updated": updated,
         "repairedTickers": repaired_tickers[:20],
+        "refreshedTickers": refreshed_tickers[:20],
+        "skippedTickers": skipped_tickers[:20],
+        "refreshValid": refresh_valid,
     }
 
 
@@ -1985,6 +2004,39 @@ def write_payload(payload: dict[str, Any]) -> None:
     write_market_context_audit(payload.get("rows", []))
 
 
+def updater_status_entry(result: dict[str, Any]) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "script": result["script"],
+        "ok": result["ok"],
+        "recovered": result.get("recovered", False),
+    }
+    stdout = result.get("stdout")
+    if not stdout:
+        return entry
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError:
+        return entry
+    if not isinstance(parsed, dict):
+        return entry
+
+    compact_keys = (
+        "checked",
+        "updated",
+        "reason",
+        "rows",
+        "columns",
+        "repairedTickers",
+        "refreshedTickers",
+        "skippedTickers",
+        "refreshValid",
+    )
+    summary = {key: parsed[key] for key in compact_keys if key in parsed}
+    if summary:
+        entry["summary"] = summary
+    return entry
+
+
 def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, Any]], email_sent: bool, email_error: str | None = None) -> None:
     repair_result = next((result for result in updater_results if result["script"] == "R-20DayATR self-heal"), None)
     formula_result = next((result for result in updater_results if result["script"] == "U:Y score sync"), None)
@@ -2008,14 +2060,7 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
             "approvalQueueCount": journal_count,
             "executionReadyCount": execution_queue.get("activeReadyCount", 0),
             "executionRiskUnits": execution_queue.get("stagedRiskUnits", 0),
-            "updaterScripts": [
-                {
-                    "script": result["script"],
-                    "ok": result["ok"],
-                    "recovered": result.get("recovered", False),
-                }
-                for result in updater_results
-            ],
+            "updaterScripts": [updater_status_entry(result) for result in updater_results],
             "repair": json.loads(repair_result["stdout"]) if repair_result and repair_result.get("stdout") else None,
             "formulaSync": json.loads(formula_result["stdout"]) if formula_result and formula_result.get("stdout") else None,
         },
@@ -2416,6 +2461,11 @@ def parse_args() -> argparse.Namespace:
         help="Use built-in BC/P/Q/R syncs instead of launching external Backtest scripts.",
     )
     parser.add_argument("--skip-updates", action="store_true", help="Do not run the BC/P/Q/R PyCharm jobs")
+    parser.add_argument(
+        "--refresh-prices",
+        action="store_true",
+        help="Refresh valid tracker Price cells from the latest available vendor close instead of only repairing blanks/errors.",
+    )
     parser.add_argument("--skip-email", action="store_true", help="Build the snapshot but do not send email")
     parser.add_argument(
         "--automation",
@@ -2496,10 +2546,14 @@ def main() -> int:
                         "returncode": 0,
                     }
                 )
-                price_sync_summary = sync_price_column_if_needed(backtest_root, args.sheet_name)
+                price_sync_summary = sync_price_column_if_needed(
+                    backtest_root,
+                    args.sheet_name,
+                    refresh_valid=args.refresh_prices,
+                )
                 updater_results.append(
                     {
-                        "script": "E price self-heal",
+                        "script": "E price refresh" if args.refresh_prices else "E price self-heal",
                         "ok": True,
                         "stdout": json.dumps(price_sync_summary),
                         "stderr": "",

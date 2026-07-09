@@ -13,7 +13,9 @@ import argparse
 from typing import Any
 
 from inferno_capital_deployment_readiness import build_capital_deployment_readiness
+from inferno_cash_attribution import build_cash_attribution
 from inferno_config import approved_account_scope, local_now
+from inferno_deposit_plan import build_deposit_plan
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_live_account_sync import build_live_account_sync
 from inferno_live_book_review_packet import build_review_packet
@@ -44,6 +46,13 @@ def number(value: Any, default: float = 0.0) -> float:
         return float(cleaned)
     except ValueError:
         return default
+
+
+def money(value: Any) -> str:
+    """Render money values with conventional negative formatting."""
+    parsed = number(value)
+    prefix = "-$" if parsed < 0 else "$"
+    return f"{prefix}{abs(parsed):,.2f}"
 
 
 def truthy(value: Any) -> bool:
@@ -130,7 +139,7 @@ def build_execution_process(verdict: str) -> list[str]:
         opening,
         "Run this launch check again after any position exit, tracker update, or cash change.",
         "Approve one candidate from the approval queue; reject anything you cannot explain in one sentence.",
-        "Run ./run_inferno_strike_cycle.sh after options markets are open for current strikes.",
+        "Run ./inferno strike-cycle after options markets are open for current strikes.",
         "Review reports/strike_plan_latest.txt and any broker preview before touching TOS.",
         f"Enter orders manually in {approved_account_scope()} only; final submit requires your explicit confirmation.",
         "After fills, run capture/ingest and rebuild the command center so evidence stays current.",
@@ -156,6 +165,8 @@ def build_capital_launch_check(
     )
     live_book_packet = build_review_packet()
     risk_gate_audit = build_risk_gate_audit()
+    deposit_plan = build_deposit_plan()
+    cash_attribution = build_cash_attribution()
     command_center = build_command_center()
 
     verdict_block = launch_verdict(readiness, risk_gate_audit, live_book_packet)
@@ -193,6 +204,24 @@ def build_capital_launch_check(
             "blockers": readiness.get("blockers") or [],
             "warnings": readiness.get("warnings") or [],
         },
+        "depositPlan": {
+            "verdict": deposit_plan.get("verdict"),
+            "message": deposit_plan.get("message"),
+            "plan": deposit_plan.get("plan") or {},
+            "schedule": deposit_plan.get("schedule") or {},
+            "forecastWindows": deposit_plan.get("forecastWindows") or {},
+            "capitalTreatment": deposit_plan.get("capitalTreatment") or {},
+            "brokerCashSnapshot": deposit_plan.get("brokerCashSnapshot") or {},
+        },
+        "cashAttribution": {
+            "verdict": cash_attribution.get("verdict"),
+            "message": cash_attribution.get("message"),
+            "brokerCash": cash_attribution.get("brokerCash") or {},
+            "latestCashChange": cash_attribution.get("latestCashChange") or {},
+            "latestCashClassification": cash_attribution.get("latestCashClassification") or {},
+            "realizedOptionsProfit": cash_attribution.get("realizedOptionsProfit") or {},
+            "capitalTreatment": cash_attribution.get("capitalTreatment") or {},
+        },
         "riskGateAudit": {
             "verdict": risk_gate_audit.get("verdict"),
             "message": risk_gate_audit.get("message"),
@@ -218,6 +247,15 @@ def render_capital_launch_check(payload: dict[str, Any]) -> str:
     """Render the launch check as a concise operator-facing briefing."""
     readiness = payload.get("capitalReadiness") or {}
     guardrails = readiness.get("guardrails") or {}
+    deposit = payload.get("depositPlan") or {}
+    deposit_plan = deposit.get("plan") or {}
+    deposit_schedule = deposit.get("schedule") or {}
+    deposit_forecast = deposit.get("forecastWindows") or {}
+    deposit_broker = deposit.get("brokerCashSnapshot") or {}
+    cash_attribution = payload.get("cashAttribution") or {}
+    cash_classification = cash_attribution.get("latestCashClassification") or {}
+    cash_change = cash_attribution.get("latestCashChange") or {}
+    realized_options = cash_attribution.get("realizedOptionsProfit") or {}
     risk = payload.get("riskGateAudit") or {}
     live_book = payload.get("liveBook") or {}
     live_counts = live_book.get("counts") or {}
@@ -242,6 +280,20 @@ def render_capital_launch_check(payload: dict[str, Any]) -> str:
         f"- Max starter ticket: ${number(guardrails.get('maxStarterTicket')):,.2f}",
         f"- Max long-term buy: ${number(guardrails.get('maxLongTermBuy')):,.2f}",
         f"- Reserve cash: ${number(guardrails.get('reserveCash')):,.2f}",
+        "",
+        "Deposit plan",
+        f"- Recurring deposit: ${number(deposit_plan.get('amountDollars')):,.2f} every {int(number(deposit_plan.get('intervalDays')))} day(s)",
+        f"- Next expected deposit: {deposit_schedule.get('nextDepositDate')} ({deposit_schedule.get('daysUntilNextDeposit')} day(s))",
+        f"- 30-day planned deposits: ${number((deposit_forecast.get('30Days') or {}).get('grossDeposits')):,.2f}",
+        f"- Broker-confirmed cash: ${number(deposit_broker.get('cash')):,.2f}",
+        "- Treatment: planned deposits are not deployable until broker cash confirms.",
+        "",
+        "Cash attribution",
+        f"- Verdict: {cash_attribution.get('verdict')}",
+        f"- Latest cash delta: {money(cash_change.get('deltaCash'))}",
+        f"- Classification: {cash_classification.get('classification') or '-'}",
+        f"- Realized options profit known: {realized_options.get('known')}",
+        "- Treatment: cash changes are not option profit without a broker transaction ledger.",
         "",
         "Live book",
         f"- Verdict: {live_book.get('verdict')}",
