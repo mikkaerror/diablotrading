@@ -112,6 +112,8 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertEqual(scenario["evidenceLane"], "paper-operator-candidate")
         self.assertIn("operator-routable paper candidate", scenario["reducerAction"])
         self.assertIn("do not stage it autonomously", scenario["reducerAction"])
+        self.assertEqual(payload["counts"]["operatorRoutablePaper"], 1)
+        self.assertEqual(payload["counts"]["paperAutoSelected"], 0)
         self.assertEqual(scenario["price"], 28.75)
         self.assertEqual(scenario["priceSource"], "latest_snapshot.rows")
         self.assertFalse(scenario["brokerSubmitAllowed"])
@@ -149,6 +151,9 @@ class PaperBottleneckReducerTests(unittest.TestCase):
         self.assertEqual(scenario["evidenceLane"], "paper-auto-candidate")
         self.assertIn("operator-owned paper workflow", scenario["reducerAction"])
         self.assertIn("do not stage it autonomously", scenario["reducerAction"])
+        self.assertEqual(payload["counts"]["operatorRoutablePaper"], 0)
+        self.assertEqual(payload["counts"]["paperAutoSelected"], 1)
+        self.assertEqual(payload["counts"]["executablePaper"], 1)
         self.assertFalse(scenario["brokerSubmitAllowed"])
         self.assertFalse(scenario["liveTradingAllowed"])
 

@@ -171,6 +171,13 @@ def summarize_status(name: str, ok: bool, detail: str) -> str:
     return f"[{marker}] {name}: {detail}"
 
 
+def count_int(counts: dict, key: str, default: int = 0) -> int:
+    try:
+        return int(counts.get(key, default) or 0)
+    except (TypeError, ValueError):
+        return default
+
+
 def smtp_login_ok() -> tuple[bool, str]:
     settings = smtp_settings()
     if not settings["username"]:
@@ -1265,6 +1272,35 @@ def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> 
     return ok, detail
 
 
+def paper_bottleneck_reducer_status(reducer: dict, now: datetime) -> tuple[bool, str]:
+    reducer_today = in_current_service_cycle(str(reducer.get("generatedAt", "")), now=now)
+    counts = reducer.get("counts") or {}
+    verdict = reducer.get("verdict")
+    ok = reducer_today and verdict in {
+        "scenario-slate-ready",
+        "scenario-slate-thin",
+    }
+    if not reducer_today:
+        return ok, json.dumps({"generatedAt": reducer.get("generatedAt"), "verdict": verdict})
+
+    auto_paper = count_int(counts, "paperAutoSelected")
+    operator_routable = counts.get("operatorRoutablePaper")
+    if operator_routable is None:
+        executable = count_int(counts, "executablePaper")
+        operator_routable = max(executable - auto_paper, 0) if "paperAutoSelected" in counts else executable
+    else:
+        operator_routable = count_int(counts, "operatorRoutablePaper")
+
+    detail = (
+        f"{verdict} | scenarios={count_int(counts, 'scenarios')} | "
+        f"operator={operator_routable} | "
+        f"auto-paper={auto_paper} | "
+        f"paper-research={count_int(counts, 'paperResearchSelected')} | "
+        f"shadow={count_int(counts, 'shadowOnly')}"
+    )
+    return ok, detail
+
+
 def main() -> int:
     load_env_file(SMTP_ENV_FILE)
 
@@ -2057,9 +2093,6 @@ def main() -> int:
         warnings += 1
 
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
-    paper_reducer_today = in_current_service_cycle(str(paper_reducer.get("generatedAt", "")), now=now)
-    paper_reducer_counts = paper_reducer.get("counts") or {}
-
     paper_test_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_director_ok, paper_director_detail = paper_test_director_status(paper_test_director, paper_reducer, now)
     lines.append(summarize_status("Paper test director", paper_director_ok, paper_director_detail))
@@ -2072,23 +2105,7 @@ def main() -> int:
     if paper_blocker_swarm and not paper_blocker_swarm_ok:
         warnings += 1
 
-    paper_reducer_ok = paper_reducer_today and paper_reducer.get("verdict") in {
-        "scenario-slate-ready",
-        "scenario-slate-thin",
-    }
-    paper_reducer_detail = (
-        f"{paper_reducer.get('verdict')} | scenarios={paper_reducer_counts.get('scenarios', 0)} | "
-        f"paper={paper_reducer_counts.get('executablePaper', 0)} | "
-        f"paper-research={paper_reducer_counts.get('paperResearchSelected', 0)} | "
-        f"shadow={paper_reducer_counts.get('shadowOnly', 0)}"
-        if paper_reducer_today
-        else json.dumps(
-            {
-                "generatedAt": paper_reducer.get("generatedAt"),
-                "verdict": paper_reducer.get("verdict"),
-            }
-        )
-    )
+    paper_reducer_ok, paper_reducer_detail = paper_bottleneck_reducer_status(paper_reducer, now)
     lines.append(summarize_status("Paper bottleneck reducer", paper_reducer_ok, paper_reducer_detail))
     if paper_reducer and not paper_reducer_ok:
         warnings += 1

@@ -17,6 +17,7 @@ from inferno_doctor import (
     launch_agent_status,
     live_position_review_status,
     model_command_center_status,
+    paper_bottleneck_reducer_status,
     paper_blocker_swarm_status,
     paper_mark_to_market_status,
     paper_test_director_status,
@@ -504,6 +505,48 @@ class InfernoDoctorInformationalSignalsTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("auto-paper-selected", detail)
         self.assertIn("auto-paper=2", detail)
+
+    def test_paper_bottleneck_reducer_status_separates_auto_from_operator(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        reducer = {
+            "generatedAt": "2026-05-19T08:56:00-06:00",
+            "verdict": "scenario-slate-ready",
+            "counts": {
+                "scenarios": 12,
+                "executablePaper": 1,
+                "operatorRoutablePaper": 0,
+                "paperAutoSelected": 1,
+                "paperResearchSelected": 0,
+                "shadowOnly": 11,
+            },
+        }
+
+        ok, detail = paper_bottleneck_reducer_status(reducer, now)
+
+        self.assertTrue(ok)
+        self.assertIn("scenario-slate-ready", detail)
+        self.assertIn("operator=0", detail)
+        self.assertIn("auto-paper=1", detail)
+        self.assertNotIn(" | paper=1 |", detail)
+
+    def test_paper_bottleneck_reducer_status_backfills_legacy_operator_count(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        reducer = {
+            "generatedAt": "2026-05-19T08:56:00-06:00",
+            "verdict": "scenario-slate-ready",
+            "counts": {
+                "scenarios": 3,
+                "executablePaper": 2,
+                "paperResearchSelected": 0,
+                "shadowOnly": 1,
+            },
+        }
+
+        ok, detail = paper_bottleneck_reducer_status(reducer, now)
+
+        self.assertTrue(ok)
+        self.assertIn("operator=2", detail)
+        self.assertIn("auto-paper=0", detail)
 
     def test_paper_test_director_status_accepts_research_selection(self) -> None:
         now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")

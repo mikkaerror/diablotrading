@@ -389,6 +389,8 @@ def build_reducer(
         scenario["rank"] = index
 
     executable = [item for item in scenarios if item.get("executableInPaperMoney")]
+    operator_routable = [item for item in executable if not item.get("paperAutoSelected")]
+    auto_paper = [item for item in scenarios if item.get("paperAutoSelected")]
     approval = [item for item in scenarios if item.get("requiresApproval")]
     paper_research = [item for item in scenarios if item.get("paperResearchSelected")]
     shadow = [item for item in scenarios if item.get("shadowOnly")]
@@ -407,6 +409,8 @@ def build_reducer(
             "scenarios": len(scenarios),
             "topFocus": min(TOP_FOCUS_COUNT, len(scenarios)),
             "executablePaper": len(executable),
+            "operatorRoutablePaper": len(operator_routable),
+            "paperAutoSelected": len(auto_paper),
             "approvalNeeded": len(approval),
             "paperResearchSelected": len(paper_research),
             "shadowOnly": len(shadow),
@@ -416,7 +420,8 @@ def build_reducer(
         "directorVerdict": director.get("verdict"),
         "directorCounts": director.get("counts") or {},
         "rules": [
-            "Rows with executablePaper=true are operator-routable paper candidates; unattended agents must not stage them.",
+            "Rows with evidenceLane=paper-operator-candidate are operator-routable; unattended agents must not stage them.",
+            "Rows with paperAutoSelected=true are research-only auto candidates for the operator-owned paper workflow.",
             "All non-executable scenarios are evidence collection only and never broker-submit.",
             "Use the top five for operator focus; keep the full slate for after-the-fact scoring.",
         ],
@@ -436,7 +441,8 @@ def reducer_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- scenarios: {counts.get('scenarios', 0)}",
-        f"- operator-routable paper candidates: {counts.get('executablePaper', 0)}",
+        f"- operator-routable paper candidates: {counts.get('operatorRoutablePaper', 0)}",
+        f"- auto-paper candidates: {counts.get('paperAutoSelected', 0)}",
         f"- approval needed: {counts.get('approvalNeeded', 0)}",
         f"- paper research selected: {counts.get('paperResearchSelected', 0)}",
         f"- shadow only: {counts.get('shadowOnly', 0)}",
@@ -462,7 +468,15 @@ def reducer_text(payload: dict[str, Any]) -> str:
 
     lines.extend(["", "Full scenario slate:"])
     for item in payload.get("scenarioSlate") or []:
-        tag = "PAPER" if item.get("executableInPaperMoney") else ("RESEARCH" if item.get("paperResearchSelected") else "SHADOW")
+        tag = (
+            "AUTO-PAPER"
+            if item.get("paperAutoSelected")
+            else (
+                "PAPER"
+                if item.get("executableInPaperMoney")
+                else ("RESEARCH" if item.get("paperResearchSelected") else "SHADOW")
+            )
+        )
         lines.append(
             f"- #{item.get('rank')} {item.get('ticker')} [{tag}] "
             f"{item.get('sourceLane')} | score {item.get('scenarioScore')} | price {item.get('price') or 'n/a'}"
