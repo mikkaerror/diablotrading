@@ -15,7 +15,7 @@ class MorningInfernoUpdaterTimeoutTests(unittest.TestCase):
             patch("morning_inferno_pipeline.UPDATER_SCRIPT_TIMEOUT_SECONDS", 7),
             patch("morning_inferno_pipeline.sleep_for_retry"),
             patch(
-                "morning_inferno_pipeline.subprocess.run",
+                "morning_inferno_pipeline.run_updater_subprocess",
                 side_effect=subprocess.TimeoutExpired(["python", "slow.py"], 7, output="partial"),
             ),
         ):

@@ -8,6 +8,7 @@ import google.auth
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -98,9 +99,10 @@ CONVICTION_CONFIG = {
     "require_trigger": True,
     "banned_setups": {"Avoid"},
 }
-UPDATER_SCRIPT_RETRIES = 3
-UPDATER_SCRIPT_RETRY_DELAY_SECONDS = 8
+UPDATER_SCRIPT_RETRIES = int_from_env("INFERNO_UPDATER_SCRIPT_RETRIES", 3)
+UPDATER_SCRIPT_RETRY_DELAY_SECONDS = int_from_env("INFERNO_UPDATER_SCRIPT_RETRY_DELAY_SECONDS", 8)
 UPDATER_SCRIPT_TIMEOUT_SECONDS = int_from_env("INFERNO_UPDATER_SCRIPT_TIMEOUT_SECONDS", 180)
+UPDATER_SCRIPT_KILL_GRACE_SECONDS = int_from_env("INFERNO_UPDATER_SCRIPT_KILL_GRACE_SECONDS", 5)
 UPDATER_SCRIPT_TIMEOUT_RETURN_CODE = 124
 UPDATER_COLUMN_NA_THRESHOLD = 0.82
 GOOGLE_SHEETS_RETRIES = 5
@@ -1525,6 +1527,40 @@ def read_sheet_rows(backtest_root: Path, sheet_name: str) -> list[dict[str, Any]
     return read_sheet_rows_from_table(headers, raw_rows)
 
 
+def _terminate_process_group(process: subprocess.Popen[str], sig: int) -> None:
+    try:
+        os.killpg(process.pid, sig)
+    except ProcessLookupError:
+        return
+
+
+def run_updater_subprocess(
+    command: list[str],
+    backtest_root: Path,
+    *,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(  # noqa: S603 - command comes from configured local updater scripts
+        command,
+        cwd=backtest_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        return subprocess.CompletedProcess(command, process.returncode, stdout=stdout, stderr=stderr)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_group(process, signal.SIGTERM)
+        try:
+            stdout, stderr = process.communicate(timeout=UPDATER_SCRIPT_KILL_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            _terminate_process_group(process, signal.SIGKILL)
+            stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(command, timeout_seconds, output=stdout, stderr=stderr) from exc
+
+
 def run_script_with_retries(script_name: str, backtest_root: Path, python_bin: Path) -> tuple[subprocess.CompletedProcess[str], list[dict[str, Any]]]:
     attempts: list[dict[str, Any]] = []
     final_result: subprocess.CompletedProcess[str] | None = None
@@ -1532,12 +1568,10 @@ def run_script_with_retries(script_name: str, backtest_root: Path, python_bin: P
         timed_out = False
         command = [str(python_bin), script_name]
         try:
-            completed = subprocess.run(
+            completed = run_updater_subprocess(
                 command,
-                cwd=backtest_root,
-                capture_output=True,
-                text=True,
-                timeout=UPDATER_SCRIPT_TIMEOUT_SECONDS,
+                backtest_root,
+                timeout_seconds=UPDATER_SCRIPT_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired as exc:
             timed_out = True
