@@ -1135,8 +1135,11 @@ range and should be compared against defined-risk alternatives.
 ### Defined-risk alternative scoring
 
 When a current long-vol candidate is labelled `hard` or `extreme`,
-`inferno_strategy_alternative_scorer` compares three non-call structures:
+`inferno_strategy_alternative_scorer` compares defined-risk structures:
 
+- `CALL_DEBIT_SPREAD`: bullish defined-risk debit; expected Greek
+  posture is positive delta, limited negative theta, limited positive
+  vega.
 - `PUT_CREDIT_SPREAD`: bullish defined-risk short premium; expected
   Greek posture is mild positive delta, positive theta, negative vega.
 - `IRON_CONDOR`: neutral defined-risk short premium; expected Greek
@@ -1146,6 +1149,13 @@ When a current long-vol candidate is labelled `hard` or `extreme`,
   vega.
 
 It also scores `STAND_ASIDE` as a valid zero-risk decision.
+
+`inferno_strategy_alternative_pricing` uses the ticket-cap policy's construction
+band for optimizer sizing and then separately records the central paper-risk
+verdict. This allows shadow/pricing research under the current construction
+band printed by `reports/ticket_cap_policy_latest.txt`. Paper verdicts use the
+simulated paper budget from `inferno_config.py`; live verdicts still inherit the
+drawdown-scaled capital cap and can remain `$0` while live capital is paused.
 
 The main contextual ratios are:
 
@@ -1170,7 +1180,7 @@ precision. The comparison to long vol is:
 score_edge_vs_long_vol = alternative_score - rank_pressure_score
 ```
 
-A non-call alternative is only marked `prefer-alternative-research`
+A defined-risk alternative is only marked `prefer-alternative-research`
 when the score is at least `70` and clears the pressured long-vol score
 by at least `5` points. This is a research ranking only; it still needs
 strike-cycle pricing and risk-policy approval before any paper staging.
@@ -1178,7 +1188,7 @@ strike-cycle pricing and risk-policy approval before any paper staging.
 `inferno_strategy_alternative_pricing` then prices the top research
 recommendations in isolation. It can price more than one ranked
 strategy variant per ticker group, so a failed top idea can be compared
-against the next-best non-call structure without changing any queue or
+against the next-best defined-risk structure without changing any queue or
 ledger. It uses the same strike-selector plan builders and the same
 paper risk policy, but writes only its own artifact:
 

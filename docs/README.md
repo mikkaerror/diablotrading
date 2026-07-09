@@ -10,7 +10,7 @@ Always start with live artifacts before reading long docs:
 ```bash
 python3 inferno_model_command_center.py build
 python3 inferno_brain_console.py
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 If generated artifacts disagree with durable docs, the artifacts win for the

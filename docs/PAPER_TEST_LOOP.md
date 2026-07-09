@@ -35,7 +35,7 @@ a closed scenario observation, or a scored paper outcome.
 2. Refresh the strike lane when the options plan itself needs rebuilding.
 
 ```bash
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 ```
 
 3. Read the paper state.
@@ -83,7 +83,7 @@ does not authorize a live order.
 
 ```bash
 python3 inferno_approval_queue.py approve TICKER
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 ```
 
 7. Stage only when the sandbox says the ticket is stageable.
@@ -99,13 +99,13 @@ python3 inferno_approval_queue.py approve TICKER
 
 ```bash
 ./run_inferno_outcome_review.sh
-./run_inferno_strike_cycle.sh
-python3 inferno_doctor.py
+./inferno strike-cycle
+./inferno doctor
 ```
 
 ## Paper States
 
-- `ready-to-paper-stage`: at least one clean paper ticket is available.
+- `operator-paper-candidates`: at least one clean paper candidate is available for the operator-owned workflow.
 - `auto-paper-selected`: viable paper-only candidate exists and approval is the only blocker.
 - `approval-bottleneck`: viable candidate exists, approval is missing.
 - `research-watch`: no clean ticket, but names are worth monitoring.

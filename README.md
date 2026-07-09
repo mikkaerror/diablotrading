@@ -15,7 +15,7 @@ matures.
 **If you are the operator, every morning:**
 
 ```bash
-./today.sh                 # one-screen glance: money, holdings, candidates
+./inferno today            # one-screen glance: money, holdings, candidates
 ```
 
 **If you are an agent (Claude or Codex), every session start:**
@@ -38,8 +38,8 @@ python3 install_inferno_nightly_optimize_service.py install
 For the current operating-truth snapshot, run:
 
 ```bash
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 Then read `reports/usage_optimizer_latest.txt` and
@@ -61,7 +61,7 @@ without breaking the safety rails. After the anchor five, work from
 ## One-command health check
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 If the doctor reports warnings, treat them as work queue items, not noise.

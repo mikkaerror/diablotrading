@@ -13,8 +13,9 @@ Run in order, before any user-requested work:
 ```bash
 # 1) Refresh the handoff packets so you read the current truth, not yesterday's
 cd "<repo-root>"
-./run_inferno_central_command.sh onboard
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno onboard
+./inferno usage
 
 # 2) Read the operating picture
 cat reports/usage_optimizer_latest.txt
@@ -38,6 +39,25 @@ cat docs/MODEL_COLLABORATION_BRIEF.md
 Only after all six steps should you begin work. If the user gives you a task
 before you run them, ask to do the onramp first. The ten-minute investment
 prevents the thirty-minute commit-resolution session later.
+
+Operator-facing work should start from `./inferno`, the unified control
+surface:
+
+```bash
+./inferno status
+./inferno sync
+./inferno today
+./inferno doctor
+./inferno preflight
+./inferno usage
+./inferno deposit-plan
+./inferno cash-ledger
+./inferno ticket-cap
+./inferno schedule
+```
+
+The lower-level `run_inferno_*` scripts remain available for diagnostics and
+module-specific repair, but they are no longer the default mental model.
 
 ## 1. Specialization lanes (binding unless user explicitly overrides)
 
@@ -152,7 +172,7 @@ Tests live in `tests/test_inferno_<lane>.py`. Wire into:
 ## 7. The fast-path operator entry point
 
 The desk has many reports. The day-to-day entry point for the operator is
-`./today.sh` (which calls `today.py`). It reads existing artifacts and
+`./inferno today` (which calls `today.py`). It reads existing artifacts and
 prints one screen:
 
   - current NLV and cash, plus change from peak
@@ -188,7 +208,7 @@ explicit click, is fixed:
   - Backlog item progress notes
 
 **Always requires explicit operator approval:**
-  - Approving / rejecting any paper ticket (operator runs `./today.sh`)
+  - Approving / rejecting any paper ticket (operator runs `./inferno today`)
   - Ack-ing or revoking the capital-scaling formula
   - Touching `liveTradingAllowed` / `brokerSubmitAllowed` (still hard-coded)
   - Any change to risk policy constants

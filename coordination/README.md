@@ -35,14 +35,14 @@ Build or refresh the command center:
 
 ```bash
 cd "<repo-root>"
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 Append a note:
 
 ```bash
-python3 inferno_model_command_center.py note \
+./inferno note \
   --author codex \
   --title "What changed" \
   --body "Updated the live-account review lane and re-ran tests." \
@@ -52,7 +52,7 @@ python3 inferno_model_command_center.py note \
 Add a mission:
 
 ```bash
-python3 inferno_model_command_center.py mission-add \
+./inferno mission-add \
   --owner shared \
   --status pending \
   --priority high \
@@ -64,7 +64,7 @@ python3 inferno_model_command_center.py mission-add \
 Update a mission:
 
 ```bash
-python3 inferno_model_command_center.py mission-update \
+./inferno mission-update \
   --id mission-1234abcd \
   --status in-progress \
   --owner claude
@@ -72,14 +72,14 @@ python3 inferno_model_command_center.py mission-update \
 
 ## Workflow
 
-1. Run `../run_inferno_central_command.sh` and `../run_inferno_usage_optimizer.sh`
+1. Run `../inferno status` and `../inferno usage`
 2. Read `../reports/usage_optimizer_latest.txt`
 3. Read `../reports/model_command_center_latest.txt`
 4. Check `../docs/SYSTEM_MAP.md` if you are new to the architecture
 5. Claim or update a mission
 6. Make changes with tests and backups
 7. Append a note
-8. Rebuild central command and the usage optimizer
+8. Rebuild central command and the usage optimizer with `./inferno status` and `./inferno usage`
 
 ## Sync Protocol
 

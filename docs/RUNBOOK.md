@@ -10,14 +10,14 @@ Use this order when the desk needs to be boring, repeatable, and ready before
 the open:
 
 ```bash
-./run_inferno_reporting_preflight.sh
+./inferno preflight
 ./run_inferno_dawn_cycle.sh
-./run_inferno_schwab_daily_ops.sh
+./inferno daily-ops
 ./run_inferno_live_account_sync.sh
 ./run_inferno_live_position_review.sh
 ./run_inferno_risk_gate_audit.sh
-./run_inferno_model_command_center.sh
-./run_inferno_action_pulse.sh --phase manual --deployable-cash 1050 --send --force-send
+./inferno status
+./inferno action-pulse --phase manual --deployable-cash 1050 --send --force-send
 ```
 
 Operator flow:
@@ -43,7 +43,7 @@ Then open:
 ### Check the desk in one command
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
 ./run_inferno_deploy_preflight.sh
 ./run_inferno_cloud_control_plane.sh
 ./run_inferno_cloud_execution_audit.sh
@@ -194,7 +194,7 @@ python3 inferno_watchdog.py
 ### Check the approval queue
 
 ```bash
-python3 inferno_approval_queue.py status
+./inferno approvals
 ./run_inferno_approval_inbox.sh
 ./run_inferno_approval_dispatch.sh status
 ```
@@ -208,7 +208,7 @@ python3 inferno_execution_clerk.py
 ### Build paper-only strike plans
 
 ```bash
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 ```
 
 This writes:
@@ -227,7 +227,7 @@ Run this after regular options markets open. A 6 AM Mountain run can produce sta
 ### Run the capital launch check
 
 ```bash
-./run_inferno_capital_launch_check.sh --deployable-cash 1000
+./inferno capital-check --deployable-cash 1000
 ```
 
 This is the one-command preflight before real cash is deployed. It refreshes
@@ -239,8 +239,8 @@ but automation remains locked and warnings must be accepted explicitly.
 ### Send the twice-daily action pulse
 
 ```bash
-./run_inferno_action_pulse.sh --phase open --deployable-cash 1000 --send
-./run_inferno_action_pulse.sh --phase preclose --deployable-cash 1000 --send
+./inferno action-pulse --phase open --deployable-cash 1000 --send
+./inferno action-pulse --phase preclose --deployable-cash 1000 --send
 ```
 
 The action pulse is the easy-access tactical email. It refreshes the read-only
@@ -263,7 +263,7 @@ Default local times:
 ### Refresh Schwab option-chain tape
 
 ```bash
-./run_inferno_schwab_daily_ops.sh
+./inferno daily-ops
 ```
 
 This refreshes the local Schwab OAuth token when possible, pulls read-only
@@ -594,7 +594,7 @@ Common collaboration commands:
 ### Run the central supervisor command
 
 ```bash
-./run_inferno_central_command.sh
+./inferno run
 ```
 
 This is the shortest full-desk refresh for a human or collaborating model. It:
@@ -609,8 +609,8 @@ This is the shortest full-desk refresh for a human or collaborating model. It:
 For a fast new-model landing packet:
 
 ```bash
-./run_inferno_central_command.sh onboard
-./run_inferno_usage_optimizer.sh
+./inferno onboard
+./inferno usage
 ```
 
 The usage optimizer writes:
@@ -667,8 +667,9 @@ This writes:
 - [data/inferno_tos_fill_log.csv](data/inferno_tos_fill_log.csv)
 
 This is the paperMoney rehearsal packet. It turns authority-approved execution
-intents into a short list of names that may be staged in thinkorswim's paper
-account, plus a manual fill log so outcome review stays auditable.
+intents into a short list of operator-routable paper candidates for
+thinkorswim's paper account, plus a manual fill log so outcome review stays
+auditable.
 
 If the sandbox says `ready=false`, do not improvise. Fix the authority layer or
 the execution queue first.
@@ -1323,7 +1324,7 @@ It does not override the live conviction gates.
 Run this first:
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 Then check:
@@ -1348,7 +1349,7 @@ If you need a same-day recovery:
 Check:
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 Then verify:
@@ -1493,7 +1494,7 @@ These are the names that matter:
 
 ```bash
 python3 inferno_housekeeping.py
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 ### Once a month

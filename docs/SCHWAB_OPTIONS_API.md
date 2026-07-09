@@ -252,13 +252,13 @@ SCHWAB_OPTIONS_ENABLED=1 python3 inferno_schwab_options.py AAPL NVDA AVGO
 Daily operator tape:
 
 ```bash
-./run_inferno_schwab_daily_ops.sh
+./inferno daily-ops
 ```
 
 This is also run opportunistically by:
 
-- `./run_inferno_action_pulse.sh`
-- `./run_inferno_strike_cycle.sh`
+- `./inferno action-pulse`
+- `./inferno strike-cycle`
 
 Safety checks:
 
@@ -266,7 +266,7 @@ Safety checks:
 python3 -m unittest tests.test_inferno_schwab_options
 python3 -m unittest tests.test_inferno_schwab_daily_ops
 python3 inferno_secret_hygiene.py
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 ## Safety Rules

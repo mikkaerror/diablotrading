@@ -6,8 +6,8 @@ First refresh the compact handoff surface:
 
 ```bash
 cd "<repo-root>"
-./run_inferno_central_command.sh onboard
-./run_inferno_usage_optimizer.sh
+./inferno onboard
+./inferno usage
 ```
 
 Read these first:

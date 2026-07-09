@@ -151,6 +151,24 @@ Main files:
 
 - add artifact pruning
 - add stale-data guardrails
+- require background refreshes to fail soft per lane and always write a current
+  status artifact, even when Google Sheets, Schwab OAuth, TOS visibility, or a
+  quote source is down
+- treat Schwab `reauthorizationRequired` as a hard preflight failure, not a
+  configured-token warning
+- overlay fresh Schwab option-chain underlyings onto the local snapshot before
+  paper/strike gates consume tracker `Price` values; preserve sheet prices as
+  provenance instead of treating old-but-valid cells as current quotes
+- run the full daily model refresh on a dedicated weekday LaunchAgent so Schwab
+  OAuth `ensure`, tracker price refresh, Schwab account/options, snapshot price
+  overlay, paper gates, strategy alternatives, command center, and doctor stay
+  in one auditable chain
+- make `./inferno` the single operator control surface for status, sync, today,
+  doctor, schedule, and model onboarding; keep lower-level `run_inferno_*`
+  scripts as implementation details and diagnostics
+- allow automatic Schwab access-token refresh while the refresh grant is valid;
+  when Schwab requires browser consent, alert the operator instead of trying to
+  automate or fake the consent flow
 - add a second email path or fallback alert channel
 - add explicit lock-file protection so overlapping runs never fight
 

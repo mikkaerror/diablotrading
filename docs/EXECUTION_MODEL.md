@@ -74,12 +74,12 @@ not an error to route around.
 ```bash
 python3 inferno_execution_clerk.py
 python3 inferno_execution_clerk.py build
-python3 inferno_approval_queue.py status
+./inferno approvals
 ./run_inferno_approval_inbox.sh
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 ./run_inferno_paper_evidence_loop.sh
 ./run_inferno_broker_preview.sh
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 ## Promotion Standard

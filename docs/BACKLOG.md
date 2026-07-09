@@ -77,14 +77,14 @@ context. Items are ranked by leverage. Each one names its owner and a clear
   different — codex covers artifact staleness, this item covers
   drawdown tier. Still leverage in shipping this one.
 
-### #6 — `./today.sh --quiet` mode for cron
+### #6 — `./inferno today --quiet` mode for cron
 - **Owner:** claude
 - **Why:** `nightly_optimize.sh` should run `today.sh` and tee its output
   to a dated file so the morning recap is always one file away. The
   current today.sh expects an interactive prompt and exits cleanly on q,
   but a quiet mode that skips prompts and just dumps the screen is the
   right primitive for cron.
-- **Done signal:** `./today.sh --quiet` runs end-to-end with no prompts,
+- **Done signal:** `./inferno today --quiet` runs end-to-end with no prompts,
   prints money + holdings + candidates summary, exits 0.
 - **Estimate:** ~10 lines. Carefully — this is the kind of flag CLAUDE.md
   §7 warns against. If we add it, the constraint is "only one flag,

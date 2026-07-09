@@ -7,14 +7,14 @@ How to walk into this project for the first time.
 Run the generated handoff packets first:
 
 ```bash
-./run_inferno_central_command.sh onboard
-./run_inferno_usage_optimizer.sh
+./inferno onboard
+./inferno usage
 ```
 
 Then run the one-screen console:
 
 ```bash
-python3 inferno_brain_console.py
+./inferno status
 ```
 
 Generated artifacts are the current trading-day truth. Durable docs explain
@@ -120,8 +120,8 @@ Where docs conflict (rare):
 When usage is tight, run:
 
 ```bash
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 Then start with `reports/usage_optimizer_latest.txt`. It lists the smallest

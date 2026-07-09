@@ -17,7 +17,7 @@ briefing stack in low-performance mode.
 
 ```bash
 cd "<repo-root>"
-python3 inferno_doctor.py
+./inferno doctor
 python3 inferno_brain_console.py
 cat reports/morning_brief_latest.txt
 cat reports/approval_cadence_latest.txt
@@ -58,19 +58,19 @@ ticket_size = min(ticket_size, printed_max_starter_ticket)
 Never exceed the printed starter-ticket cap regardless of conviction.
 Never exceed the printed max options risk budget.
 
-## Step 4 — Paper-stage before live (3 minutes)
+## Step 4 — Operator paper workflow before live (3 minutes)
 
 ```bash
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 cat reports/strike_plan_latest.txt
 cat reports/paper_test_director_latest.txt
 ```
 
 The strike cycle picks strikes for approved or paper-auto tickets, then the
-paper test director gives you a single memo with: stageable now / auto-paper
-selected / approval only / hard-blocked. For paperMoney evidence, use only
-**stageable** or **auto-paper-selected** names. Live trades still require
-explicit manual confirmation.
+paper test director gives you a single memo with: operator-routable now /
+auto-paper selected / approval only / hard-blocked. For paperMoney evidence,
+the operator may use only **operator-routable** or **auto-paper-selected**
+names. Live trades still require explicit manual confirmation.
 
 The fast-paper cohort is separate exploratory evidence. It may cycle up to
 five priceable option simulations after the next market session, but those

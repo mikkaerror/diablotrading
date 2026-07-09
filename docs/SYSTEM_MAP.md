@@ -54,8 +54,24 @@ Generated artifacts beat durable docs when they disagree.
 | Scenario learning | `reports/scenario_backtest_latest.txt` |
 | Live book posture | `reports/live_position_review_latest.txt` |
 | Capital readiness | `reports/capital_deployment_readiness_latest.txt` |
+| Recurring deposit forecast | `reports/deposit_plan_latest.txt` |
+| Broker cash attribution | `reports/cash_attribution_latest.txt` |
+| Ticket cap and call posture | `reports/ticket_cap_policy_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
+
+`reports/ticket_cap_policy_latest.txt` separates the operator's research
+construction cap from live capital authority. Live sizing still inherits the
+drawdown stepper and can be `$0` while the account is paused. Paper staging is
+decoupled through `inferno_risk_policy.evaluate_strike_item(..., mode="paper")`
+and uses the simulated paper budget from `inferno_config.py`; quote, liquidity,
+spread, duplicate, source-divergence, and authority-tripwire gates still apply.
+
+`reports/paper_test_director_latest.txt` can surface operator-routable paper
+candidates, auto-selected research candidates, priced paper-research variants,
+or construction-watch alternatives from the strategy-pricing lane. Those rows
+are research visibility only for unattended agents: they do not approve, stage,
+close, promote, or submit tickets.
 
 ## Model Ownership
 
@@ -81,10 +97,31 @@ a note in `coordination/model_notes.jsonl` through the command-center CLI.
 ## Start Commands
 
 ```bash
-./run_inferno_central_command.sh onboard
-./run_inferno_usage_optimizer.sh
-python3 inferno_brain_console.py
+./inferno status
+./inferno sync
+./inferno today
 ```
+
+`./inferno` is the unified operator control surface. It routes to the existing
+tested subsystems instead of replacing them:
+
+- `./inferno status` — one current desk state
+- `./inferno sync` — full model/account/tracker refresh
+- `./inferno today` — one-letter operator decision screen
+- `./inferno doctor` — health check
+- `./inferno preflight` — reporting readiness check
+- `./inferno usage` — low-context handoff packet
+- `./inferno oauth` — Schwab OAuth status/refresh/restart
+- `./inferno daily-ops` — Schwab daily options operations tape
+- `./inferno action-pulse` — tactical action pulse; no email unless `--send`
+- `./inferno deposit-plan` — recurring deposit forecast, separate from broker cash
+- `./inferno cash-ledger` — broker cash-change reconciliation without profit inference
+- `./inferno ticket-cap` — construction ticket band, simulated paper budget, and call-options posture
+- `./inferno capital-check` — capital launch check; defaults to deployable cash 0
+- `./inferno strike-cycle` — strike cycle; defaults to deployable cash 0
+- `./inferno approvals` — approval queue status only
+- `./inferno schedule` — LaunchAgent and Codex automation schedule
+- `./inferno onboard` — compact handoff packet for another model
 
 ## Verify Before Commit
 
@@ -92,7 +129,7 @@ python3 inferno_brain_console.py
 python3 -m unittest discover tests
 python3 inferno_math_verify.py
 python3 inferno_secret_hygiene.py
-python3 inferno_doctor.py
+./inferno doctor
 git diff --check
 ```
 

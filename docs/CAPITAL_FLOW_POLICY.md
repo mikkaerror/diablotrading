@@ -179,7 +179,7 @@ When `inferno_capital_flow_advisor.py` lands (BACKLOG item, not yet shipped):
 - **Write:** `reports/capital_flow_recommendation_latest.txt` (one screen,
   phone-readable) and `data/inferno_capital_flow.json` (the structured
   recommendation for downstream consumption).
-- **Surface:** new `Harvest:` block in `./today.sh` that appears only when
+- **Surface:** new `Harvest:` block in `./inferno today` that appears only when
   the trigger fires.
 - **Don't touch:** the live broker, the capital scaling ack file, authority,
   or any code that touches actual capital deployment.

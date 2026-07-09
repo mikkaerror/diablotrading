@@ -6,8 +6,8 @@ Use this when model usage is getting burned by repeated context transfer.
 
 ```bash
 cd "<repo-root>"
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 Then give the next model only:
@@ -35,7 +35,8 @@ history. The artifacts are the source of truth.
 ## Cheap Checks Before Expensive Debugging
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
+./inferno preflight
 python3 inferno_math_verify.py
 python3 inferno_secret_hygiene.py
 ```
@@ -54,8 +55,8 @@ Every meaningful cleanup should end with:
   --body "What changed, what passed, what still needs attention." \
   --tags cleanup,handoff
 
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 That creates a small, current handoff surface and keeps future sessions from

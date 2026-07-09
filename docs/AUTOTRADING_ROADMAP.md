@@ -58,13 +58,13 @@ produces enough scored outcomes, live automation stays off.
 ## Commands
 
 ```bash
-./run_inferno_strike_cycle.sh
+./inferno strike-cycle
 python3 inferno_schwab_options.py AAPL NVDA --json
-./run_inferno_schwab_daily_ops.sh
+./inferno daily-ops
 python3 inferno_paper_execution.py status
 python3 inferno_strategy_lab.py status
 ./run_inferno_broker_preview.sh
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 ## Authority Rule

@@ -35,14 +35,14 @@ GitHub.
 1. Run central command and refresh the low-context handoff:
 
 ```bash
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 2. Run the doctor:
 
 ```bash
-python3 inferno_doctor.py
+./inferno doctor
 ```
 
 3. Review the staged diff:

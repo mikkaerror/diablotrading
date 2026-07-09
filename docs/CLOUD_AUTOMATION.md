@@ -256,7 +256,7 @@ Run both systems for two successful mornings:
 
 1. Cloud job sends the morning brief.
 2. Local LaunchAgent sees a successful send and skips duplicates.
-3. `python3 inferno_doctor.py` remains healthy.
+3. `./inferno doctor` remains healthy.
 
 After two clean mornings, uninstall the local service if desired:
 

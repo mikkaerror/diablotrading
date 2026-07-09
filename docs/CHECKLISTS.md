@@ -32,7 +32,7 @@ If any answer is no, slow down.
 
 ## Capital Deployment Checklist
 
-1. Run `./run_inferno_capital_launch_check.sh --deployable-cash 1000`.
+1. Run `./inferno capital-check --deployable-cash 1000`.
 2. If the verdict is `blocked`, do not deploy fresh capital.
 3. If the verdict is `manual-ready-with-warnings`, explicitly accept or clear every warning first.
 4. Confirm the account suffix still matches local approved config.

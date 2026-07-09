@@ -41,20 +41,20 @@ If that ever changes, it changes because the evidence earned it.
 
 If a feature would weaken one of these rails, the feature is wrong.
 
-## Paper automation distinction
+## Paper Automation Distinction
 
-The desk may auto-select and paper-stage simulated candidates when the only
-remaining blocker is human approval. That is evidence collection, not trading
-authority. Live orders remain explicit-confirmation only until closed paper
-outcomes earn promotion through the authority controller.
+The desk may auto-select simulated paper candidates and research variants for
+operator review. Unattended agents must not stage, approve, reject, close, or
+promote paper tickets. Live orders remain explicit-confirmation only until
+closed paper outcomes earn promotion through the authority controller.
 
 ## What another model should read first
 
 Before reading docs, refresh the compact handoff surface:
 
 ```bash
-./run_inferno_central_command.sh
-./run_inferno_usage_optimizer.sh
+./inferno status
+./inferno usage
 ```
 
 Then read the generated usage packet first. It exists specifically to keep
@@ -77,7 +77,7 @@ depth.
 
 ```text
 You are joining the Inferno Earnings Dashboard at <repo-root>.
-Start by running ./run_inferno_central_command.sh and ./run_inferno_usage_optimizer.sh.
+Start by running ./inferno status and ./inferno usage.
 Then read reports/usage_optimizer_latest.txt, reports/model_command_center_onboard_latest.txt,
 reports/central_command_latest.txt, docs/SYSTEM_MAP.md, docs/PROJECT_STATUS.md,
 and docs/MODEL_COLLABORATION_BRIEF.md.

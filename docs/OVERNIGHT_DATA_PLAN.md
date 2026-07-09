@@ -42,7 +42,7 @@ quiet, then use thinkorswim only when the operator intentionally opens it.
 5. Refresh Schwab options quality for the active shortlist:
 
    ```bash
-   ./run_inferno_schwab_daily_ops.sh
+   ./inferno daily-ops
    ```
 
 6. Only when you are physically supervising TOS and want an export capture, run:

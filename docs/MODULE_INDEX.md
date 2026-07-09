@@ -166,6 +166,9 @@ Safety            — authority, risk, secrets
 | `inferno_central_command.py` | Cross-subsystem coordination surface | as needed |
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
 | `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer | ~09:00 + ~15:30 weekdays |
+| `inferno_deposit_plan.py` | Recurring deposit forecast that keeps planned deposits separate from broker-confirmed cash and trading profit | `reports/deposit_plan_latest.txt` |
+| `inferno_cash_attribution.py` | Broker cash-change reconciliation that refuses to treat deposits, balance moves, or NLV changes as realized options profit without transaction history | `reports/cash_attribution_latest.txt` |
+| `inferno_ticket_cap_policy.py` | Research-only operator construction band, simulated paper budget visibility, and call-options posture; never changes risk constants or live authority | `reports/ticket_cap_policy_latest.txt` |
 | `inferno_usage_optimizer.py` | Compact read-first / do-not-paste handoff packet for new model sessions | `reports/usage_optimizer_latest.txt` |
 | `run_inferno_paper_evidence_harvest.sh` | One-command paper evidence refresh across director/reducer/observations/reviews/backtest | market prep + after close |
 | `run_inferno_paper_mark_to_market.sh` | Refresh current mids for open paper tickets | before trade-management review |
@@ -196,7 +199,7 @@ Safety            — authority, risk, secrets
 
 | Module | Purpose | Artifact |
 |---|---|---|
-| `inferno_paper_test_director.py` | Coordinator for paper-staged tickets | `data/inferno_paper_test_director.json` |
+| `inferno_paper_test_director.py` | Coordinator for paper-staged tickets plus construction-watch alternatives while paper risk is paused | `data/inferno_paper_test_director.json` |
 | `inferno_paper_bottleneck_reducer.py` | Builds a 10+ scenario paper/shadow evidence slate without widening authority | `data/inferno_paper_bottleneck_reducer.json` |
 | `inferno_scenario_evidence.py` | Tracks reducer names as non-tradable underlying observations | `data/inferno_scenario_evidence.json` |
 | `inferno_paper_evidence_loop.py` | Track paper outcomes from staging through close | `data/inferno_paper_evidence_loop.json` |
