@@ -74,6 +74,17 @@ from server import (
 )
 
 
+def int_from_env(name: str, default: int) -> int:
+    raw_value = os.environ.get(name, "").strip()
+    if not raw_value:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 DEFAULT_BACKTEST_ROOT = default_backtest_root()
 LOCK_FILE = DATA_DIR / "inferno_dawn.lock"
 MARKET_CONTEXT_AUDIT_FILE = DATA_DIR / "inferno_market_context_audit.json"
@@ -89,6 +100,8 @@ CONVICTION_CONFIG = {
 }
 UPDATER_SCRIPT_RETRIES = 3
 UPDATER_SCRIPT_RETRY_DELAY_SECONDS = 8
+UPDATER_SCRIPT_TIMEOUT_SECONDS = int_from_env("INFERNO_UPDATER_SCRIPT_TIMEOUT_SECONDS", 180)
+UPDATER_SCRIPT_TIMEOUT_RETURN_CODE = 124
 UPDATER_COLUMN_NA_THRESHOLD = 0.82
 GOOGLE_SHEETS_RETRIES = 5
 GOOGLE_SHEETS_RETRY_BASE_SECONDS = 3
@@ -1516,12 +1529,30 @@ def run_script_with_retries(script_name: str, backtest_root: Path, python_bin: P
     attempts: list[dict[str, Any]] = []
     final_result: subprocess.CompletedProcess[str] | None = None
     for attempt in range(1, UPDATER_SCRIPT_RETRIES + 1):
-        completed = subprocess.run(
-            [str(python_bin), script_name],
-            cwd=backtest_root,
-            capture_output=True,
-            text=True,
-        )
+        timed_out = False
+        command = [str(python_bin), script_name]
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=backtest_root,
+                capture_output=True,
+                text=True,
+                timeout=UPDATER_SCRIPT_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            stderr_prefix = (
+                f"{script_name} timed out after {UPDATER_SCRIPT_TIMEOUT_SECONDS}s; "
+                "falling back if retries do not recover."
+            )
+            stderr_tail = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            completed = subprocess.CompletedProcess(
+                command,
+                UPDATER_SCRIPT_TIMEOUT_RETURN_CODE,
+                stdout=stdout,
+                stderr=f"{stderr_prefix}\n{stderr_tail}".strip(),
+            )
         final_result = completed
         attempts.append(
             {
@@ -1529,6 +1560,8 @@ def run_script_with_retries(script_name: str, backtest_root: Path, python_bin: P
                 "returncode": completed.returncode,
                 "stdout": completed.stdout.strip(),
                 "stderr": completed.stderr.strip(),
+                "timedOut": timed_out,
+                "timeoutSeconds": UPDATER_SCRIPT_TIMEOUT_SECONDS if timed_out else None,
             }
         )
         if completed.returncode == 0:
