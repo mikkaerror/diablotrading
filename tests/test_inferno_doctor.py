@@ -23,6 +23,7 @@ from inferno_doctor import (
     action_pulse_status,
     research_cycle_status,
     schwab_oauth_status,
+    strategy_shadow_comparison_status,
     trade_management_status,
     watchdog_run_status,
 )
@@ -387,6 +388,21 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
 
+    def test_strategy_shadow_comparison_warns_when_older_than_pricing(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = strategy_shadow_comparison_status(
+                {
+                    "generatedAt": "2026-07-06T10:10:00-06:00",
+                    "verdict": "shadow-comparison-ready",
+                    "researchOnly": True,
+                    "sourcePricing": {"generatedAt": "2026-07-06T10:00:00-06:00"},
+                },
+                {"generatedAt": "2026-07-06T10:05:00-06:00"},
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("stale relative to strategy pricing", detail)
+
     def test_conviction_research_status_accepts_research_only_payload(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):
             ok, detail = conviction_research_status(
@@ -472,7 +488,8 @@ class InfernoDoctorInformationalSignalsTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertIn("no-viable-paper-tests", detail)
-        self.assertIn("shadow-fallback=ready", detail)
+        self.assertIn("scenario-fallback=ready", detail)
+        self.assertIn("shadow=12", detail)
 
     def test_paper_test_director_status_accepts_auto_paper_selection(self) -> None:
         now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
@@ -487,6 +504,26 @@ class InfernoDoctorInformationalSignalsTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("auto-paper-selected", detail)
         self.assertIn("auto-paper=2", detail)
+
+    def test_paper_test_director_status_accepts_research_selection(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        director = {
+            "generatedAt": "2026-05-19T08:55:00-06:00",
+            "verdict": "paper-research-selected",
+            "counts": {
+                "stageableNow": 0,
+                "autoPaperSelected": 0,
+                "paperResearchSelected": 2,
+                "approvalOnly": 0,
+                "hardBlocked": 1,
+            },
+        }
+
+        ok, detail = paper_test_director_status(director, {}, now)
+
+        self.assertTrue(ok)
+        self.assertIn("paper-research-selected", detail)
+        self.assertIn("paper-research=2", detail)
 
     def test_paper_test_director_status_warns_without_shadow_fallback(self) -> None:
         now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")

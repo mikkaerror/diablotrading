@@ -61,6 +61,38 @@ def age_hours(value: Any, now: datetime) -> float | None:
     return max(0.0, (now - parsed.astimezone(now.tzinfo)).total_seconds() / 3600.0)
 
 
+def explicit_oauth_block(*payloads: dict[str, Any]) -> bool:
+    """Return True when a source explicitly reports an OAuth/authorization block."""
+    needles = ("oauth", "auth", "unauthorized", "reauthorization")
+    for payload in payloads:
+        values = [
+            payload.get("status"),
+            payload.get("sourceStatus"),
+            payload.get("verdict"),
+            payload.get("message"),
+            payload.get("error"),
+        ]
+        haystack = " ".join(str(value or "").lower() for value in values)
+        if any(needle in haystack for needle in needles):
+            return True
+    return False
+
+
+def broker_truth_status(
+    *,
+    broker_data_fresh: bool,
+    account: dict[str, Any],
+    options: dict[str, Any],
+    price_history: dict[str, Any],
+) -> str:
+    """Classify the broker-data action without blaming OAuth for stale tape."""
+    if broker_data_fresh:
+        return "ready"
+    if explicit_oauth_block(account, options, price_history):
+        return "blocked-on-oauth"
+    return "refresh-needed"
+
+
 def load_inputs() -> dict[str, dict[str, Any]]:
     """Load the small canonical artifact set used by this plan."""
     return {
@@ -219,9 +251,14 @@ def build_plan(
             "priority": "P0",
             "category": "data",
             "title": "Restore fresh Schwab account and option truth",
-            "status": "ready" if broker_data_fresh else "blocked-on-oauth",
+            "status": broker_truth_status(
+                broker_data_fresh=broker_data_fresh,
+                account=account,
+                options=options,
+                price_history=price_history,
+            ),
             "why": "Sizing and timing decisions are invalid when account, quote, or option-chain inputs are stale.",
-            "action": "Complete OAuth, refresh account/options/price history, then rerun risk and capital reports.",
+            "action": "Refresh account/options/price history, then rerun risk and capital reports; only restart OAuth if status says reauthorization is required.",
             "doneWhen": (
                 f"Account, options, and price-history artifacts are each <= "
                 f"{FRESH_ACCOUNT_HOURS:.0f} hours old with healthy source status."
@@ -322,7 +359,7 @@ def build_plan(
     next_actions = [
         f"{task['id']}: {task['title']} - {task['action']}"
         for task in tasks
-        if task["status"] in {"blocked-on-oauth", "action-now", "build-next"}
+        if task["status"] in {"blocked-on-oauth", "refresh-needed", "action-now", "build-next"}
     ][:6]
 
     return {

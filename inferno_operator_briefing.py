@@ -770,10 +770,10 @@ def render_text(payload: dict[str, Any]) -> str:
     lines.extend([
         "NEXT STEPS (the seven-step checklist)",
         "-" * 60,
-        "  1. python3 inferno_doctor.py            (confirm desk healthy)",
+        "  1. ./inferno doctor                    (confirm desk healthy)",
         "  2. python3 inferno_brain_console.py     (one-screen state)",
         "  3. Apply the five gates above to today's slate",
-        "  4. ./run_inferno_strike_cycle.sh        (paper-stage strikes)",
+        "  4. ./inferno strike-cycle              (paper-stage strikes)",
         "  5. ./run_inferno_broker_preview.sh      (read the order ticket)",
         "  6. Place the trade yourself in the already-open TOS window",
         "  7. ./run_inferno_tos_fill_ingest.sh     (log fills for feedback loop)",
@@ -869,10 +869,10 @@ def render_html(payload: dict[str, Any]) -> str:
 
   <h2>Next Steps</h2>
   <ol>
-    <li><code>python3 inferno_doctor.py</code> &mdash; confirm desk healthy</li>
+    <li><code>./inferno doctor</code> &mdash; confirm desk healthy</li>
     <li><code>python3 inferno_brain_console.py</code> &mdash; one-screen state</li>
     <li>Apply the five gates above to today&rsquo;s slate</li>
-    <li><code>./run_inferno_strike_cycle.sh</code> &mdash; paper-stage strikes</li>
+    <li><code>./inferno strike-cycle</code> &mdash; paper-stage strikes</li>
     <li><code>./run_inferno_broker_preview.sh</code> &mdash; read the order ticket</li>
     <li>Place the trade yourself in the already-open TOS window</li>
     <li><code>./run_inferno_tos_fill_ingest.sh</code> &mdash; log fills for feedback loop</li>

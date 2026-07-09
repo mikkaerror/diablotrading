@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import inferno_reporting_summary as summary
 
@@ -83,6 +85,26 @@ class InfernoReportingSummaryTests(unittest.TestCase):
 
         self.assertIn("TOS is running, but no main window is visible", clean)
         self.assertNotIn("intentionally closed", clean)
+
+    def test_options_tape_gets_session_gate_after_market_open_refresh_window(self) -> None:
+        now = datetime(2026, 7, 7, 7, 36, tzinfo=ZoneInfo("America/Denver"))
+
+        self.assertEqual(
+            summary.market_open_options_status("2026-07-06T18:30:00-06:00", now=now),
+            "stale",
+        )
+        self.assertEqual(
+            summary.market_open_options_status("2026-07-07T07:34:00-06:00", now=now),
+            "fresh",
+        )
+
+    def test_options_tape_uses_overnight_age_before_refresh_window(self) -> None:
+        now = datetime(2026, 7, 7, 7, 20, tzinfo=ZoneInfo("America/Denver"))
+
+        self.assertEqual(
+            summary.market_open_options_status("2026-07-06T18:30:00-06:00", now=now),
+            "fresh",
+        )
 
 
 if __name__ == "__main__":

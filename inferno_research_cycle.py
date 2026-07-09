@@ -123,6 +123,9 @@ def build_research_cycle() -> dict[str, Any]:
             "verdict": score_calibration.get("verdict"),
             "closedScenarioObservations": (score_calibration.get("counts") or {}).get("closedScenarioObservations"),
             "scenarioScoreRows": (score_calibration.get("counts") or {}).get("scenarioScoreRows"),
+            "optionScoreRows": (score_calibration.get("counts") or {}).get("optionScoreRows"),
+            "optionEntryScoreRows": (score_calibration.get("counts") or {}).get("optionEntryScoreRows"),
+            "openOptionEntryScoreRows": (score_calibration.get("counts") or {}).get("openOptionEntryScoreRows"),
             "promotable": bool(score_calibration.get("promotable")),
         },
         "expectedMoveLedger": {
@@ -204,7 +207,10 @@ def research_cycle_text(report: dict[str, Any]) -> str:
         "Calibration lane:",
         f"- score calibration: {(report.get('scoreCalibration') or {}).get('verdict')} | "
         f"closed observations {(report.get('scoreCalibration') or {}).get('closedScenarioObservations')} | "
-        f"score rows {(report.get('scoreCalibration') or {}).get('scenarioScoreRows')} | "
+        f"scenario score rows {(report.get('scoreCalibration') or {}).get('scenarioScoreRows')} | "
+        f"closed option score rows {(report.get('scoreCalibration') or {}).get('optionScoreRows')} | "
+        f"entry score rows {(report.get('scoreCalibration') or {}).get('optionEntryScoreRows')} "
+        f"(open {(report.get('scoreCalibration') or {}).get('openOptionEntryScoreRows')}) | "
         f"promotable {(report.get('scoreCalibration') or {}).get('promotable')}",
         f"- expected move: {(report.get('expectedMoveLedger') or {}).get('verdict')} | "
         f"regime {(report.get('expectedMoveLedger') or {}).get('regimeVerdict')} | "

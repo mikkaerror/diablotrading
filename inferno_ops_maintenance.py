@@ -46,6 +46,7 @@ from inferno_live_position_review import build_live_position_review
 from inferno_model_command_center import build_command_center
 from inferno_research_cycle import build_research_cycle, save_research_cycle
 from inferno_schwab_account_sync import build_schwab_account_sync, save_schwab_account_sync
+from inferno_ticket_cap_policy import build_ticket_cap_policy, save_ticket_cap_policy
 from inferno_ticker_universe_audit import build_ticker_universe_audit_from_sheet
 from inferno_watchdog import run_watchdog_check
 from morning_inferno_pipeline import append_log
@@ -106,6 +107,11 @@ def load_env_file(path: Path) -> None:
         import os
 
         os.environ[key.strip()] = value.strip()
+
+
+def error_detail(exc: Exception) -> str:
+    """Return one compact failure string for operator-facing status artifacts."""
+    return f"{type(exc).__name__}: {exc}"
 
 
 def repair_morning_email(*, force: bool = False) -> dict[str, Any]:
@@ -485,6 +491,34 @@ def refresh_live_position_review() -> dict[str, Any]:
     }
 
 
+def refresh_ticket_cap_policy() -> dict[str, Any]:
+    """Refresh the operator ticket-cap policy before strategy pricing."""
+    try:
+        report = build_ticket_cap_policy()
+        save_ticket_cap_policy(report)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "refresh-failed",
+            "error": str(exc),
+        }
+    construction = report.get("constructionBand") or {}
+    effective = report.get("effectiveBand") or {}
+    live = report.get("liveCapitalBand") or {}
+    posture = report.get("callOptionsPosture") or {}
+    return {
+        "ok": True,
+        "status": str(report.get("verdict") or "unknown"),
+        "generatedAt": report.get("generatedAt"),
+        "hardCapDollars": construction.get("hardCapDollars"),
+        "minTargetDollars": construction.get("minTargetDollars"),
+        "paperStageHardCapDollars": effective.get("hardCapDollars"),
+        "liveCapitalHardCapDollars": live.get("hardCapDollars"),
+        "liveDrawdownLevel": live.get("drawdownLevel"),
+        "callPosture": posture.get("mode"),
+    }
+
+
 def refresh_model_command_center() -> dict[str, Any]:
     """Rebuild the shared multi-model command center artifact.
 
@@ -559,24 +593,33 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
     ticker_audit = report.get("tickerUniverseAudit") or {}
     if ticker_audit:
         counts = ticker_audit.get("counts") or {}
-        lines.append(
+        line = (
             f"Ticker universe: {ticker_audit.get('verdict')} | "
             f"critical {counts.get('criticalIssueCount', 0)} | "
             f"advisory {counts.get('advisoryIssueCount', 0)}"
         )
+        if ticker_audit.get("error"):
+            line += f" | error {ticker_audit.get('error')}"
+        lines.append(line)
     data_audit = report.get("dataReadinessAudit") or {}
     if data_audit:
-        lines.append(
+        line = (
             f"Data readiness: {data_audit.get('verdict')} | "
             f"daily-safe {data_audit.get('dailyPrepReady')} | "
             f"research-ready {data_audit.get('researchReady')}"
         )
+        if data_audit.get("error"):
+            line += f" | error {data_audit.get('error')}"
+        lines.append(line)
     downloads_watch = report.get("downloadsWatch") or {}
     if downloads_watch:
-        lines.append(
+        line = (
             f"Downloads watch: skipped {downloads_watch.get('skipped')} | "
             f"imported {(downloads_watch.get('downloadsManager') or {}).get('importedFiles', 0)} files"
         )
+        if downloads_watch.get("error"):
+            line += f" | error {downloads_watch.get('error')}"
+        lines.append(line)
     email_repair = report.get("emailRepair") or {}
     if email_repair:
         lines.append(f"Email repair: {email_repair.get('status')}")
@@ -603,7 +646,7 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
         counts = paper_director.get("counts") or {}
         lines.append(
             f"Paper test director: {paper_director.get('status')} | "
-            f"stageable {counts.get('stageableNow', 0)} | "
+            f"operator-routable {counts.get('stageableNow', 0)} | "
             f"auto-paper {counts.get('autoPaperSelected', 0)} | "
             f"approval-only {counts.get('approvalOnly', 0)}"
         )
@@ -700,6 +743,15 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"review {counts.get('review', 0)} | "
             f"fragile {counts.get('fragile', 0)}"
         )
+    ticket_cap = report.get("ticketCapPolicy") or {}
+    if ticket_cap:
+        lines.append(
+            f"Ticket cap policy: {ticket_cap.get('status')} | "
+            f"construction ${ticket_cap.get('minTargetDollars')}-${ticket_cap.get('hardCapDollars')} | "
+            f"paper cap ${ticket_cap.get('paperStageHardCapDollars')} | "
+            f"live cap ${ticket_cap.get('liveCapitalHardCapDollars')} | "
+            f"call posture {ticket_cap.get('callPosture')}"
+        )
     model_command_center = report.get("modelCommandCenter") or {}
     if model_command_center:
         metrics = model_command_center.get("headlineMetrics") or {}
@@ -753,9 +805,36 @@ def run_maintenance(
     """Run the safe maintenance sweep and persist the result."""
     load_env_file(ROOT / ".env.smtp")
     ensure_dirs()
-    ticker_audit = build_ticker_universe_audit_from_sheet(backtest_root, sheet_name)
-    data_audit = run_audit()
-    downloads_watch = run_watch(automation=False, export_first=False)
+    try:
+        ticker_audit = build_ticker_universe_audit_from_sheet(backtest_root, sheet_name)
+    except Exception as exc:  # noqa: BLE001 - maintenance must write a status artifact.
+        ticker_audit = {
+            "ok": False,
+            "verdict": "refresh-failed",
+            "counts": {},
+            "error": error_detail(exc),
+        }
+    try:
+        data_audit = run_audit()
+    except Exception as exc:  # noqa: BLE001
+        data_audit = {
+            "ok": False,
+            "verdict": "refresh-failed",
+            "dailyPrepReady": False,
+            "researchReady": False,
+            "error": error_detail(exc),
+        }
+    try:
+        downloads_watch = run_watch(automation=False, export_first=False)
+    except Exception as exc:  # noqa: BLE001
+        downloads_watch = {
+            "generatedAt": local_now().isoformat(),
+            "skipped": True,
+            "skipReason": "refresh-failed",
+            "error": error_detail(exc),
+            "downloadsManager": {},
+            "fillIngest": {},
+        }
     email_repair = (
         {"attempted": False, "ok": True, "status": "skipped"}
         if skip_email_repair or skip_outbound
@@ -779,10 +858,22 @@ def run_maintenance(
     schwab_account_sync = refresh_schwab_account_sync()
     live_account_sync = refresh_live_account_sync()
     live_position_review = refresh_live_position_review()
+    ticket_cap_policy = refresh_ticket_cap_policy()
     model_command_center = refresh_model_command_center()
     research_cycle = refresh_research_cycle()
-    watchdog_status, watchdog_exit = run_watchdog_check(send_alerts=False)
-    watchdog = normalize_watchdog_status(watchdog_status, watchdog_exit)
+    try:
+        watchdog_status, watchdog_exit = run_watchdog_check(send_alerts=False)
+        watchdog = normalize_watchdog_status(watchdog_status, watchdog_exit)
+    except Exception as exc:  # noqa: BLE001
+        watchdog_exit = 1
+        watchdog = {
+            "ok": False,
+            "status": "attention",
+            "rawOk": False,
+            "rawExitCode": watchdog_exit,
+            "detail": "watchdog refresh failed",
+            "error": error_detail(exc),
+        }
     advisories = advisory_failures(
         ("cloud-control-plane", cloud_control_plane),
         ("cloud-execution-audit", cloud_execution_audit),
@@ -792,16 +883,19 @@ def run_maintenance(
         "tickerUniverseAudit": {
             "verdict": ticker_audit.get("verdict"),
             "counts": ticker_audit.get("counts"),
+            "error": ticker_audit.get("error"),
         },
         "dataReadinessAudit": {
             "verdict": data_audit.get("verdict"),
             "dailyPrepReady": data_audit.get("dailyPrepReady"),
             "researchReady": data_audit.get("researchReady"),
+            "error": data_audit.get("error"),
         },
         "downloadsWatch": {
             "generatedAt": downloads_watch.get("generatedAt"),
             "skipped": downloads_watch.get("skipped"),
             "skipReason": downloads_watch.get("skipReason"),
+            "error": downloads_watch.get("error"),
             "downloadsManager": downloads_watch.get("downloadsManager"),
             "fillIngest": downloads_watch.get("fillIngest"),
         },
@@ -821,6 +915,7 @@ def run_maintenance(
         "schwabAccountSync": schwab_account_sync,
         "liveAccountSync": live_account_sync,
         "livePositionReview": live_position_review,
+        "ticketCapPolicy": ticket_cap_policy,
         "modelCommandCenter": model_command_center,
         "researchCycle": research_cycle,
         "watchdog": watchdog,
@@ -838,6 +933,7 @@ def run_maintenance(
             and bool(approval_dispatch.get("ok"))
             and bool(live_account_sync.get("ok"))
             and bool(live_position_review.get("ok"))
+            and bool(ticket_cap_policy.get("ok"))
             and bool(model_command_center.get("ok"))
             and bool(research_cycle.get("ok"))
             and bool(watchdog.get("ok"))
@@ -849,7 +945,7 @@ def run_maintenance(
         status="ok" if report.get("ok") else "fail",
         summary="ops maintenance sweep complete" if report.get("ok") else "ops maintenance needs attention",
         detail={
-            "paperStageable": (paper_test_director.get("counts") or {}).get("stageableNow"),
+            "paperOperatorRoutable": (paper_test_director.get("counts") or {}).get("stageableNow"),
             "paperScenarios": (paper_bottleneck_reducer.get("counts") or {}).get("scenarios"),
             "researchCycle": research_cycle.get("status"),
             "watchdogExit": watchdog_exit,

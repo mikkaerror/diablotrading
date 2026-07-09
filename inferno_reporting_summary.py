@@ -17,7 +17,7 @@ Safety contract:
 
 import json
 import subprocess
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,9 @@ TOS_EXPORT_VERIFIER_FILE = DATA_DIR / "inferno_tos_export_verifier.json"
 ACTION_PULSE_FILE = DATA_DIR / "inferno_action_pulse.json"
 DOCTOR_TEXT_FILE = REPORTS_DIR / "doctor_latest.txt"
 MORNING_BRIEF_TEXT_FILE = REPORTS_DIR / "morning_brief_latest.txt"
+
+MARKET_OPEN_TAPE_READY_LOCAL = time(7, 35)
+MARKET_OPEN_TAPE_MIN_TIMESTAMP_LOCAL = time(7, 30)
 
 
 def text(value: Any, default: str = "") -> str:
@@ -120,6 +123,27 @@ def freshness_status(timestamp: str | None, *, max_age_hours: float, now: dateti
     return "stale"
 
 
+def market_open_options_status(timestamp: str | None, *, now: datetime | None = None) -> str:
+    """Require same-session Schwab options tape after the market-open refresh window."""
+    current = now or local_now()
+    if current.timetz().replace(tzinfo=None) < MARKET_OPEN_TAPE_READY_LOCAL:
+        return freshness_status(timestamp, max_age_hours=18, now=current)
+    parsed = parse_timestamp(timestamp)
+    if parsed is None:
+        return "missing"
+    if parsed.tzinfo is None and current.tzinfo is not None:
+        parsed = parsed.replace(tzinfo=current.tzinfo)
+    elif parsed.tzinfo is not None and current.tzinfo is not None:
+        parsed = parsed.astimezone(current.tzinfo)
+    if parsed.date() != current.date():
+        return "stale"
+    if parsed.timetz().replace(tzinfo=None) < MARKET_OPEN_TAPE_MIN_TIMESTAMP_LOCAL:
+        return "stale"
+    if (age_hours(timestamp, now=current) or 0.0) > 2:
+        return "stale"
+    return "fresh"
+
+
 def latest_morning_email_event(log_file: Path = LOG_FILE) -> dict[str, Any]:
     """Return the latest morning brief log row without exposing email secrets."""
     if not log_file.exists():
@@ -147,6 +171,7 @@ def _freshness_entry(
     max_age_hours: float,
     timestamp: str | None = None,
     now: datetime | None = None,
+    status: str | None = None,
 ) -> dict[str, Any]:
     """Build one compact freshness row for reports."""
     generated_at = timestamp or artifact_generated_at(path)
@@ -156,7 +181,7 @@ def _freshness_entry(
         "path": str(path),
         "generatedAt": generated_at,
         "ageHours": round(age, 2) if age is not None else None,
-        "status": freshness_status(generated_at, max_age_hours=max_age_hours, now=now),
+        "status": status or freshness_status(generated_at, max_age_hours=max_age_hours, now=now),
     }
 
 
@@ -164,10 +189,26 @@ def build_freshness_panel(*, now: datetime | None = None) -> dict[str, Any]:
     """Build the shared freshness panel for command-center and email reports."""
     current = now or local_now()
     morning_event = latest_morning_email_event()
+    schwab_options_timestamp = artifact_generated_at(SCHWAB_OPTIONS_FILE)
+    schwab_daily_ops_timestamp = artifact_generated_at(SCHWAB_DAILY_OPS_FILE)
     rows = [
         _freshness_entry("tracker snapshot", TRACKER_SNAPSHOT_FILE, max_age_hours=18, now=current),
-        _freshness_entry("Schwab options tape", SCHWAB_OPTIONS_FILE, max_age_hours=18, now=current),
-        _freshness_entry("Schwab daily ops", SCHWAB_DAILY_OPS_FILE, max_age_hours=18, now=current),
+        _freshness_entry(
+            "Schwab options tape",
+            SCHWAB_OPTIONS_FILE,
+            max_age_hours=18,
+            timestamp=schwab_options_timestamp,
+            now=current,
+            status=market_open_options_status(schwab_options_timestamp, now=current),
+        ),
+        _freshness_entry(
+            "Schwab daily ops",
+            SCHWAB_DAILY_OPS_FILE,
+            max_age_hours=18,
+            timestamp=schwab_daily_ops_timestamp,
+            now=current,
+            status=market_open_options_status(schwab_daily_ops_timestamp, now=current),
+        ),
         _freshness_entry("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
         _freshness_entry("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
         _freshness_entry("doctor", DOCTOR_TEXT_FILE, max_age_hours=8, now=current),

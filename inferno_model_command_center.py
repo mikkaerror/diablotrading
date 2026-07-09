@@ -16,6 +16,7 @@ It does not place trades, touch broker order entry, or change authority.
 
 import argparse
 import json
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ from inferno_reporting_summary import (
     render_freshness_lines,
     render_tos_visibility_line,
 )
+from inferno_strategy_shadow_comparison import source_pricing_freshness
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -51,6 +53,9 @@ SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
+DEPOSIT_PLAN_FILE = DATA_DIR / "inferno_deposit_plan.json"
+CASH_ATTRIBUTION_FILE = DATA_DIR / "inferno_cash_attribution.json"
+TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
@@ -95,6 +100,26 @@ PROCESS_COMPLIANCE_FILE = DATA_DIR / "inferno_process_compliance.json"
 PORTFOLIO_HEAT_FILE = DATA_DIR / "inferno_portfolio_heat.json"
 WHEEL_SHADOW_FILE = DATA_DIR / "inferno_wheel_shadow.json"
 
+CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
+    {"command": "./inferno status", "description": "show the latest unified desk state"},
+    {"command": "./inferno sync", "description": "run the full tracker, Schwab, research, command-center, and doctor refresh"},
+    {"command": "./inferno today", "description": "open the one-letter operator decision screen"},
+    {"command": "./inferno doctor", "description": "run the full health verdict"},
+    {"command": "./inferno preflight", "description": "check reporting readiness without refreshing data"},
+    {"command": "./inferno usage", "description": "build the low-context handoff packet"},
+    {"command": "./inferno oauth", "description": "run Schwab OAuth status, refresh, or restart"},
+    {"command": "./inferno daily-ops", "description": "refresh the Schwab daily options operations tape"},
+    {"command": "./inferno action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
+    {"command": "./inferno deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "./inferno cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
+    {"command": "./inferno ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
+    {"command": "./inferno capital-check", "description": "run the capital launch check with explicit cash"},
+    {"command": "./inferno strike-cycle", "description": "run the strike cycle with explicit cash"},
+    {"command": "./inferno approvals", "description": "show approval queue status only"},
+    {"command": "./inferno schedule", "description": "show LaunchAgent and Codex automation schedules"},
+    {"command": "./inferno onboard", "description": "print the compact handoff packet"},
+)
+
 
 REPORTING_MAP: tuple[dict[str, str], ...] = (
     {
@@ -131,6 +156,24 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "capital-scenarios",
         "question": "How does the desk behave across likely cash amounts?",
         "artifact": "reports/capital_scenario_matrix_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "deposit-plan",
+        "question": "Which incoming cash is planned versus broker-confirmed?",
+        "artifact": "reports/deposit_plan_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "cash-attribution",
+        "question": "Which broker cash changes are known versus unattributed?",
+        "artifact": "reports/cash_attribution_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "ticket-cap-policy",
+        "question": "What paper/research ticket band and call posture should pricing lanes use?",
+        "artifact": "reports/ticket_cap_policy_latest.txt",
         "owner": "codex",
     },
     {
@@ -231,7 +274,7 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
     },
     {
         "lane": "strategy-alternatives",
-        "question": "Which non-call defined-risk structure beats pressured long vol?",
+        "question": "Which defined-risk structure beats pressured long vol?",
         "artifact": "reports/strategy_alternative_scorer_latest.txt",
         "owner": "shared",
     },
@@ -463,6 +506,34 @@ def command_cash_arg(value: Any) -> str:
     return f"{cash:.2f}"
 
 
+def fast_paper_next_actions(
+    next_actions: list[str],
+    *,
+    fast_paper_counts: dict[str, Any],
+    fast_paper_backlog_count: int,
+) -> list[str]:
+    """Remove stale fast-paper close instructions after the slate is empty."""
+    open_count = int(fast_paper_counts.get("open") or 0)
+    closed_today = int(fast_paper_counts.get("closedToday") or 0)
+    close_due_pattern = re.compile(
+        r"close and score the \d+ fast-paper simulations?",
+        re.IGNORECASE,
+    )
+    filtered: list[str] = []
+    removed_close_due = False
+    for action in next_actions:
+        if open_count <= 0 and close_due_pattern.search(action):
+            removed_close_due = True
+            continue
+        filtered.append(action)
+
+    if removed_close_due and closed_today > 0 and fast_paper_backlog_count <= 0:
+        filtered.append(
+            "Fast-paper due simulations are closed; wait for market-open refresh to find new priceable candidates."
+        )
+    return filtered
+
+
 def load_active_missions() -> list[dict[str, Any]]:
     """Load the active mission queue safely."""
     data = load_json_file(ACTIVE_MISSIONS_FILE)
@@ -655,6 +726,10 @@ def build_executive_summary(
             "Capital: "
             f"{status_value(status.get('capitalDeploymentReadiness') or {})}; "
             f"optimization={metrics.get('accountOptimizationVerdict')}; "
+            f"construction cap=${metrics.get('ticketCapConstructionMinTarget')}-{metrics.get('ticketCapConstructionHardCap')}; "
+            f"paper cap=${metrics.get('ticketCapHardCap')} "
+            f"(live cap=${metrics.get('ticketCapLiveHardCap')}; live drawdown={metrics.get('ticketCapLiveDrawdownLevel')}); "
+            f"calls={metrics.get('ticketCapCallPosture')}; "
             f"edge-adjusted options max loss=${metrics.get('edgeAdjustedLiveOptionsMaxLoss', 0):,.2f}; "
             f"risk gates {status_value(status.get('riskGateAudit') or {})}; "
             f"auto-live allowed={metrics.get('autoLiveAllowed')}"
@@ -671,6 +746,7 @@ def build_executive_summary(
             f"blocker-swarm={metrics.get('paperBlockerSwarmVerdict')}; "
             f"goal-loop={metrics.get('evidenceGoalLoopVerdict')}; "
             f"fast-paper={metrics.get('fastPaperVerdict')}; "
+            f"fast backlog={metrics.get('fastPaperBacklog', 0)}; "
             f"fast closed={metrics.get('fastPaperClosedLifetime', 0)}; "
             f"scenarios={metrics.get('paperScenarioCount', 0)}; "
             f"scenario evidence={metrics.get('scenarioClosedEvidenceCount', 0)}; "
@@ -700,6 +776,9 @@ def build_command_center() -> dict[str, Any]:
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
+    deposit_plan = load_json_file(DEPOSIT_PLAN_FILE) or {}
+    cash_attribution = load_json_file(CASH_ATTRIBUTION_FILE) or {}
+    ticket_cap_policy = load_json_file(TICKET_CAP_POLICY_FILE) or {}
     account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
@@ -717,6 +796,10 @@ def build_command_center() -> dict[str, Any]:
     strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
     strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
     strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
+    strategy_shadow_pricing_freshness = source_pricing_freshness(
+        strategy_shadow_comparison,
+        strategy_alt_pricing,
+    )
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
@@ -745,6 +828,8 @@ def build_command_center() -> dict[str, Any]:
     live_counts = live_review.get("counts") or {}
     live_packet_counts = live_book_packet.get("counts") or {}
     paper_counts = paper_director.get("counts") or {}
+    fast_paper_counts = fast_paper.get("counts") or {}
+    fast_paper_backlog_count = len(fast_paper.get("backlogSlate") or [])
     loop_counts = paper_loop.get("counts") or {}
     deployable_cash_arg = command_cash_arg((capital_readiness.get("guardrails") or {}).get("deployableCash"))
 
@@ -756,6 +841,13 @@ def build_command_center() -> dict[str, Any]:
     next_actions.extend(paper_director.get("nextActions") or [])
     next_actions.extend(paper_blocker_swarm.get("nextActions") or [])
     next_actions.extend(paper_loop.get("actions") or [])
+    if not strategy_shadow_pricing_freshness.get("freshForPricing"):
+        next_actions.insert(0, "Rerun strategy shadow comparison after strategy alternative pricing; current register is stale.")
+    next_actions = fast_paper_next_actions(
+        next_actions,
+        fast_paper_counts=fast_paper_counts,
+        fast_paper_backlog_count=fast_paper_backlog_count,
+    )
     if not next_actions:
         next_actions.append("No explicit next actions were found; review the latest artifacts manually.")
 
@@ -769,6 +861,9 @@ def build_command_center() -> dict[str, Any]:
         "whileAwayPacket": artifact_summary(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
         "capitalScenarioMatrix": artifact_summary(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
+        "depositPlan": artifact_summary(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "cashAttribution": artifact_summary(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
@@ -827,6 +922,11 @@ def build_command_center() -> dict[str, Any]:
         "portfolioHeat": artifact_summary(PORTFOLIO_HEAT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "wheelShadow": artifact_summary(WHEEL_SHADOW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
     }
+    system_status["strategyShadowComparison"]["freshForPricing"] = bool(
+        strategy_shadow_pricing_freshness.get("freshForPricing")
+    )
+    if not strategy_shadow_pricing_freshness.get("freshForPricing"):
+        system_status["strategyShadowComparison"]["verdict"] = "stale-vs-pricing"
     strategy_alt_pricing_ranked = sorted(
         [item for item in strategy_alt_pricing.get("items") or [] if isinstance(item, dict)],
         key=lambda item: (
@@ -843,6 +943,38 @@ def build_command_center() -> dict[str, Any]:
             live_sync.get("netLiquidatingValue"), schwab_account_sync.get("netLiquidatingValue")
         ),
         "accountTotalCash": first_display_value(live_sync.get("totalCash"), schwab_account_sync.get("totalCash")),
+        "depositAmountDollars": (deposit_plan.get("plan") or {}).get("amountDollars"),
+        "depositIntervalDays": (deposit_plan.get("plan") or {}).get("intervalDays"),
+        "depositNextDate": (deposit_plan.get("schedule") or {}).get("nextDepositDate"),
+        "depositDaysUntilNext": (deposit_plan.get("schedule") or {}).get("daysUntilNextDeposit"),
+        "depositForecast30Days": ((deposit_plan.get("forecastWindows") or {}).get("30Days") or {}).get("grossDeposits"),
+        "depositForecast90Days": ((deposit_plan.get("forecastWindows") or {}).get("90Days") or {}).get("grossDeposits"),
+        "depositAnnualPlanned": (deposit_plan.get("plan") or {}).get("annualPlannedDollars"),
+        "cashAttributionVerdict": cash_attribution.get("verdict"),
+        "cashAttributionBrokerCash": (cash_attribution.get("brokerCash") or {}).get("cash"),
+        "cashAttributionLatestDelta": (cash_attribution.get("latestCashChange") or {}).get("deltaCash"),
+        "cashAttributionClassification": (cash_attribution.get("latestCashClassification") or {}).get("classification"),
+        "cashAttributionRealizedOptionsKnown": (
+            cash_attribution.get("realizedOptionsProfit") or {}
+        ).get("known"),
+        "ticketCapVerdict": ticket_cap_policy.get("verdict"),
+        "ticketCapMinTarget": (ticket_cap_policy.get("effectiveBand") or {}).get("minTargetDollars"),
+        "ticketCapTarget": (ticket_cap_policy.get("effectiveBand") or {}).get("targetTicketDollars"),
+        "ticketCapHardCap": (ticket_cap_policy.get("effectiveBand") or {}).get("hardCapDollars"),
+        "ticketCapConstructionMinTarget": (ticket_cap_policy.get("constructionBand") or {}).get("minTargetDollars"),
+        "ticketCapConstructionTarget": (ticket_cap_policy.get("constructionBand") or {}).get("targetTicketDollars"),
+        "ticketCapConstructionHardCap": (ticket_cap_policy.get("constructionBand") or {}).get("hardCapDollars"),
+        "ticketCapNewEntriesAllowed": (ticket_cap_policy.get("effectiveBand") or {}).get("newEntriesAllowed"),
+        "ticketCapDrawdownLevel": (ticket_cap_policy.get("effectiveBand") or {}).get("drawdownLevel"),
+        "ticketCapRiskSource": (ticket_cap_policy.get("effectiveBand") or {}).get("sourceRiskCapSource"),
+        "ticketCapLiveHardCap": (ticket_cap_policy.get("liveCapitalBand") or {}).get("hardCapDollars"),
+        "ticketCapLiveNewEntriesAllowed": (ticket_cap_policy.get("liveCapitalBand") or {}).get("newEntriesAllowed"),
+        "ticketCapLiveDrawdownLevel": (ticket_cap_policy.get("liveCapitalBand") or {}).get("drawdownLevel"),
+        "ticketCapLiveRiskSource": (ticket_cap_policy.get("liveCapitalBand") or {}).get("sourceRiskCapSource"),
+        "ticketCapCallPosture": (ticket_cap_policy.get("callOptionsPosture") or {}).get("mode"),
+        "ticketCapAggressiveCalls": (
+            ticket_cap_policy.get("callOptionsPosture") or {}
+        ).get("aggressiveCallResearchEnabled"),
         "accountOptimizationVerdict": account_optimization.get("verdict"),
         "targetMonthlyReturnAnnualizedPct": (
             account_optimization.get("targetStressTest") or {}
@@ -867,7 +999,10 @@ def build_command_center() -> dict[str, Any]:
         "whileAwayVerdict": while_away_packet.get("verdict"),
         "paperStageable": paper_counts.get("stageableNow", 0),
         "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
+        "paperResearchSelected": paper_counts.get("paperResearchSelected", 0),
+        "paperResearchEvents": paper_counts.get("distinctPaperResearchEvents", 0),
         "paperApprovalOnly": paper_counts.get("approvalOnly", 0),
+        "paperConstructionWatch": paper_counts.get("constructionWatch", 0),
         "paperBlockerSwarmVerdict": paper_blocker_swarm.get("verdict"),
         "paperBlockerSwarmDominantLane": paper_blocker_swarm.get("dominantLane"),
         "paperBlockerSwarmFixableByTooling": (
@@ -880,13 +1015,16 @@ def build_command_center() -> dict[str, Any]:
             paper_blocker_swarm.get("rewards") or {}
         ).get("outcomeReward"),
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
+        "paperScenarioResearchSelected": (paper_reducer.get("counts") or {}).get("paperResearchSelected", 0),
+        "paperScenarioShadowOnly": (paper_reducer.get("counts") or {}).get("shadowOnly", 0),
         "fastPaperVerdict": fast_paper.get("verdict"),
         "evidenceGoalLoopVerdict": evidence_goal_loop.get("verdict"),
         "evidenceGoalLoopIterations": evidence_goal_loop.get("iterationCount", 0),
-        "fastPaperSelectedToday": (fast_paper.get("counts") or {}).get("selectedToday", 0),
-        "fastPaperClosedToday": (fast_paper.get("counts") or {}).get("closedToday", 0),
-        "fastPaperOpen": (fast_paper.get("counts") or {}).get("open", 0),
-        "fastPaperClosedLifetime": (fast_paper.get("counts") or {}).get("closedLifetime", 0),
+        "fastPaperSelectedToday": fast_paper_counts.get("selectedToday", 0),
+        "fastPaperClosedToday": fast_paper_counts.get("closedToday", 0),
+        "fastPaperOpen": fast_paper_counts.get("open", 0),
+        "fastPaperClosedLifetime": fast_paper_counts.get("closedLifetime", 0),
+        "fastPaperBacklog": fast_paper_backlog_count,
         "fastPaperPromotionEligible": False,
         "paperMtmFetchStatus": paper_mtm.get("fetchStatus"),
         "paperMtmOpenPositions": paper_mtm.get("openPositionCount"),
@@ -911,6 +1049,9 @@ def build_command_center() -> dict[str, Any]:
         "scoreCalibrationVerdict": score_calibration.get("verdict"),
         "scoreCalibrationClosedObservations": (score_calibration.get("counts") or {}).get("closedScenarioObservations"),
         "scoreCalibrationScenarioScoreRows": (score_calibration.get("counts") or {}).get("scenarioScoreRows"),
+        "scoreCalibrationOptionScoreRows": (score_calibration.get("counts") or {}).get("optionScoreRows"),
+        "scoreCalibrationOptionEntryScoreRows": (score_calibration.get("counts") or {}).get("optionEntryScoreRows"),
+        "scoreCalibrationOpenOptionEntryScoreRows": (score_calibration.get("counts") or {}).get("openOptionEntryScoreRows"),
         "scoreThresholdAuditVerdict": score_threshold_audit.get("verdict"),
         "scoreThresholdAuditCounts": score_threshold_audit.get("counts") or {},
         "expectedMoveVerdict": expected_move.get("verdict"),
@@ -958,6 +1099,12 @@ def build_command_center() -> dict[str, Any]:
         ],
         "strategyShadowComparisonVerdict": strategy_shadow_comparison.get("verdict"),
         "strategyShadowComparisonCounts": strategy_shadow_comparison.get("counts") or {},
+        "strategyShadowComparisonFreshForPricing": strategy_shadow_pricing_freshness.get("freshForPricing"),
+        "strategyShadowComparisonFreshnessReason": strategy_shadow_pricing_freshness.get("reason"),
+        "strategyShadowComparisonSourcePricingGeneratedAt": strategy_shadow_pricing_freshness.get(
+            "sourcePricingGeneratedAt"
+        ),
+        "strategyAlternativePricingGeneratedAt": strategy_shadow_pricing_freshness.get("pricingGeneratedAt"),
         "strategyShadowComparisonTop": [
             {
                 "ticker": item.get("ticker"),
@@ -1033,6 +1180,10 @@ def build_command_center() -> dict[str, Any]:
         "headlineMetrics": headline_metrics,
         "freshnessPanel": freshness_panel,
         "tosVisibility": tos_visibility,
+        "controlSurface": {
+            "entrypoint": "./inferno",
+            "commands": list(CONTROL_SURFACE_COMMANDS),
+        },
         "executiveSummary": build_executive_summary(
             status=system_status,
             metrics=headline_metrics,
@@ -1041,9 +1192,21 @@ def build_command_center() -> dict[str, Any]:
         "reportingMap": list(REPORTING_MAP),
         "recommendedCommands": [
             f'cd "{ROOT}"',
-            "python3 inferno_doctor.py",
+            "./inferno status",
+            "./inferno sync",
+            "./inferno today",
+            "./inferno doctor",
+            "./inferno preflight",
+            "./inferno usage",
+            "./inferno schedule",
+            "./inferno oauth",
+            "./inferno daily-ops",
+            "./inferno deposit-plan",
+            "./inferno cash-ledger",
+            "./inferno ticket-cap",
+            "./inferno approvals",
             "./run_inferno_dawn_cycle.sh",
-            "./run_inferno_strike_cycle.sh",
+            "./inferno strike-cycle",
             "./run_inferno_ops_maintenance.sh",
             "./run_inferno_paper_evidence_harvest.sh",
             "./run_inferno_paper_blocker_swarm.sh",
@@ -1060,20 +1223,20 @@ def build_command_center() -> dict[str, Any]:
             "./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12",
             "./run_inferno_tos_metric_theory_audit.sh --limit 12",
             "./run_inferno_strategy_alternative_scorer.sh",
-            "./run_inferno_strategy_alternative_pricing.sh --limit 4 --variants-per-ticker 2",
+            "./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3",
             "./run_inferno_strategy_shadow_comparison.sh",
             "./run_inferno_schwab_account_sync.sh",
             "./run_inferno_live_account_sync.sh",
             "./run_inferno_live_position_review.sh",
             "./run_inferno_live_book_review_packet.sh",
             "./run_inferno_while_away_packet.sh",
-            "./run_inferno_usage_optimizer.sh",
-            f"./run_inferno_action_pulse.sh --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
+            "./inferno usage",
+            f"./inferno action-pulse --phase manual --deployable-cash {deployable_cash_arg} --fast --send --force-send",
             "./run_inferno_capital_scenario_matrix.sh --deployable-cash 500 3000 5000",
             "./run_inferno_account_optimization.sh",
-            f"./run_inferno_capital_launch_check.sh --deployable-cash {deployable_cash_arg}",
+            f"./inferno capital-check --deployable-cash {deployable_cash_arg}",
             f"./run_inferno_capital_deployment_readiness.sh --deployable-cash {deployable_cash_arg}",
-            f"./run_inferno_strike_cycle.sh --deployable-cash {deployable_cash_arg}",
+            f"./inferno strike-cycle --deployable-cash {deployable_cash_arg}",
             "./run_inferno_risk_gate_audit.sh",
             "./run_inferno_conviction_research.sh",
             "./run_inferno_market_mastery_plan.sh",
@@ -1097,6 +1260,9 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/action_pulse_latest.txt"),
             str(ROOT / "reports/capital_launch_check_latest.txt"),
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
+            str(ROOT / "reports/deposit_plan_latest.txt"),
+            str(ROOT / "reports/cash_attribution_latest.txt"),
+            str(ROOT / "reports/ticket_cap_policy_latest.txt"),
             str(ROOT / "reports/account_optimization_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/paper_blocker_swarm_latest.txt"),
@@ -1158,6 +1324,11 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
     for rail in payload.get("safetyRails") or []:
         lines.append(f"- {rail}")
 
+    control = payload.get("controlSurface") or {}
+    lines.extend(["", f"Unified control surface: {control.get('entrypoint', './inferno')}"])
+    for item in control.get("commands") or []:
+        lines.append(f"- {item.get('command')} - {item.get('description')}")
+
     lines.extend(["", "Executive summary:"])
     for item in payload.get("executiveSummary") or []:
         lines.append(f"- {item}")
@@ -1178,6 +1349,9 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live book review packet: {status_value(status.get('liveBookReviewPacket') or {})}",
             f"- While away packet: {status_value(status.get('whileAwayPacket') or {})}",
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
+            f"- Deposit plan: {status_value(status.get('depositPlan') or {})}",
+            f"- Cash attribution: {status_value(status.get('cashAttribution') or {})}",
+            f"- Ticket cap policy: {status_value(status.get('ticketCapPolicy') or {})}",
             f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
@@ -1212,24 +1386,46 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Account source: {metrics.get('accountDataSource') or '-'}",
             f"- Account NLV: {display_value(metrics.get('accountNetLiquidatingValue'))}",
             f"- Account cash: {display_value(metrics.get('accountTotalCash'))}",
+            f"- Deposit plan: ${display_value(metrics.get('depositAmountDollars'))} every {metrics.get('depositIntervalDays') or '-'} day(s) | "
+            f"next {metrics.get('depositNextDate') or '-'} | 30d ${display_value(metrics.get('depositForecast30Days'))}",
+            f"- Cash attribution: {metrics.get('cashAttributionVerdict') or '-'} | "
+            f"broker cash ${display_value(metrics.get('cashAttributionBrokerCash'))} | "
+            f"latest delta ${display_value(metrics.get('cashAttributionLatestDelta'))} | "
+            f"{metrics.get('cashAttributionClassification') or '-'} | "
+            f"realized options known {metrics.get('cashAttributionRealizedOptionsKnown')}",
+            f"- Ticket cap policy: {metrics.get('ticketCapVerdict') or '-'} | "
+            f"construction ${display_value(metrics.get('ticketCapConstructionMinTarget'))}-${display_value(metrics.get('ticketCapConstructionHardCap'))} | "
+            f"paper cap ${display_value(metrics.get('ticketCapHardCap'))} | "
+            f"paper entries {metrics.get('ticketCapNewEntriesAllowed')} | "
+            f"paper source {metrics.get('ticketCapRiskSource') or '-'} | "
+            f"live cap ${display_value(metrics.get('ticketCapLiveHardCap'))} | "
+            f"live drawdown {metrics.get('ticketCapLiveDrawdownLevel') or '-'} | "
+            f"call posture {metrics.get('ticketCapCallPosture') or '-'} | "
+            f"aggressive calls {metrics.get('ticketCapAggressiveCalls')}",
             f"- Live supported: {metrics.get('liveSupported', 0)}",
             f"- Live fragile: {metrics.get('liveFragile', 0)}",
             f"- Live hard blockers: {metrics.get('liveBookHardBlockers', 0)}",
             f"- Live review warnings: {metrics.get('liveBookWarnings', 0)}",
             f"- While away verdict: {metrics.get('whileAwayVerdict') or '-'}",
-            f"- Paper stageable: {metrics.get('paperStageable', 0)}",
+            f"- Paper operator-routable: {metrics.get('paperStageable', 0)}",
             f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
+            f"- Paper research-selected: {metrics.get('paperResearchSelected', 0)} "
+            f"({metrics.get('paperResearchEvents', 0)} distinct event(s))",
             f"- Paper approval-only: {metrics.get('paperApprovalOnly', 0)}",
+            f"- Paper construction-watch: {metrics.get('paperConstructionWatch', 0)}",
             f"- Paper blocker swarm: {metrics.get('paperBlockerSwarmVerdict') or '-'} | "
             f"dominant {metrics.get('paperBlockerSwarmDominantLane') or '-'} | "
             f"tooling-fixable {metrics.get('paperBlockerSwarmFixableByTooling', 0)} | "
             f"fallbacks {metrics.get('paperBlockerSwarmFallbacks', 0)} | "
             f"outcome reward {metrics.get('paperBlockerSwarmOutcomeReward')}",
-            f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)}",
+            f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)} | "
+            f"research {metrics.get('paperScenarioResearchSelected', 0)} | "
+            f"shadow {metrics.get('paperScenarioShadowOnly', 0)}",
             f"- Fast paper: {metrics.get('fastPaperVerdict') or '-'} | "
             f"opened {metrics.get('fastPaperSelectedToday', 0)} | "
             f"closed {metrics.get('fastPaperClosedToday', 0)} | "
             f"open {metrics.get('fastPaperOpen', 0)} | "
+            f"backlog {metrics.get('fastPaperBacklog', 0)} | "
             f"lifetime closed {metrics.get('fastPaperClosedLifetime', 0)} | "
             "promotion credit off",
             f"- Evidence goal loop: {metrics.get('evidenceGoalLoopVerdict') or '-'} | "
@@ -1250,7 +1446,10 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Scenario backtest focus: {', '.join(metrics.get('scenarioBacktestTopFocus') or []) or 'none'}",
             f"- Score calibration: {metrics.get('scoreCalibrationVerdict')} | "
             f"closed observations {metrics.get('scoreCalibrationClosedObservations')} | "
-            f"score rows {metrics.get('scoreCalibrationScenarioScoreRows')}",
+            f"scenario score rows {metrics.get('scoreCalibrationScenarioScoreRows')} | "
+            f"closed option score rows {metrics.get('scoreCalibrationOptionScoreRows')} | "
+            f"entry score rows {metrics.get('scoreCalibrationOptionEntryScoreRows')} "
+            f"(open {metrics.get('scoreCalibrationOpenOptionEntryScoreRows')})",
             f"- Score threshold audit: {metrics.get('scoreThresholdAuditVerdict')} | "
             f"counts {json.dumps(metrics.get('scoreThresholdAuditCounts') or {})}",
             f"- Expected move ledger: {metrics.get('expectedMoveVerdict')} | "
@@ -1266,6 +1465,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"counts {json.dumps(metrics.get('strategyAlternativePricingCounts') or {})}",
             f"- Strategy alternative priced top: {json.dumps(metrics.get('strategyAlternativePricedTop') or [])}",
             f"- Strategy shadow comparison: {metrics.get('strategyShadowComparisonVerdict')} | "
+            f"fresh-for-pricing {metrics.get('strategyShadowComparisonFreshForPricing')} | "
             f"counts {json.dumps(metrics.get('strategyShadowComparisonCounts') or {})}",
             f"- Strategy shadow comparison top: {json.dumps(metrics.get('strategyShadowComparisonTop') or [])}",
             f"- Promotion gap: {metrics.get('paperRemainingForPromotion', 0)}",
@@ -1379,6 +1579,12 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
         f"hard blockers {metrics.get('liveBookHardBlockers', 0)}",
         f"- Capital deployment: {status_value(status.get('capitalDeploymentReadiness') or {})} | "
         f"date {metrics.get('capitalDeploymentDate')}",
+        f"- Deposit plan: {status_value(status.get('depositPlan') or {})} | "
+        f"next {metrics.get('depositNextDate') or '-'} | "
+        f"30d ${display_value(metrics.get('depositForecast30Days'))}",
+        f"- Cash attribution: {status_value(status.get('cashAttribution') or {})} | "
+        f"latest delta ${display_value(metrics.get('cashAttributionLatestDelta'))} | "
+        f"{metrics.get('cashAttributionClassification') or '-'}",
         f"- Risk gates: {status_value(status.get('riskGateAudit') or {})} | "
         f"hard fails {metrics.get('riskGateHardFails')}",
         f"- Strategy lab: {status_value(status.get('strategyLab') or {})} | "

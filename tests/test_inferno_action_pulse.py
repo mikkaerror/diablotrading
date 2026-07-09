@@ -175,7 +175,7 @@ class InfernoActionPulseTests(unittest.TestCase):
                 },
                 "decisionSummary": ["GDS hard-blocks-new-capital"],
                 "warningSummary": ["Live position review has 1 fragile holding."],
-                "operatorCommands": ["./run_inferno_capital_launch_check.sh --deployable-cash 1000"],
+                "operatorCommands": ["./inferno capital-check --deployable-cash 1000"],
                 "operatorRule": "No broker submit.",
             }
         )
@@ -193,7 +193,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("Paper evidence queue", rendered)
         self.assertIn("scenarios=12", rendered)
         self.assertIn("MOD: SHADOW", rendered)
-        self.assertIn("only executablePaper=true may be staged", rendered)
+        self.assertIn("./inferno capital-check --deployable-cash 1000", rendered)
+        self.assertIn("executablePaper=true means operator-routable paper candidate", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
 

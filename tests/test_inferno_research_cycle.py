@@ -48,7 +48,13 @@ class InfernoResearchCycleTests(unittest.TestCase):
         score_calibration = {
             "stage": "score-calibration-research-only",
             "verdict": "calibration-building",
-            "counts": {"closedScenarioObservations": 5, "scenarioScoreRows": 5},
+            "counts": {
+                "closedScenarioObservations": 5,
+                "scenarioScoreRows": 5,
+                "optionScoreRows": 0,
+                "optionEntryScoreRows": 9,
+                "openOptionEntryScoreRows": 7,
+            },
             "promotable": False,
         }
         expected_move = {
@@ -109,6 +115,8 @@ class InfernoResearchCycleTests(unittest.TestCase):
         self.assertFalse(report["scenarioBacktest"]["promotable"])
         self.assertEqual(report["scenarioBacktest"]["topFocusTickers"], ["MOD", "THR"])
         self.assertEqual(report["scoreCalibration"]["verdict"], "calibration-building")
+        self.assertEqual(report["scoreCalibration"]["optionEntryScoreRows"], 9)
+        self.assertEqual(report["scoreCalibration"]["openOptionEntryScoreRows"], 7)
         self.assertFalse(report["scoreCalibration"]["promotable"])
         self.assertEqual(report["expectedMoveLedger"]["closedLongVolRecords"], 1)
         self.assertEqual(report["expectedMoveLedger"]["hurdleCounts"], {"hard": 1, "extreme": 1})

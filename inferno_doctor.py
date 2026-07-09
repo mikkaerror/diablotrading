@@ -30,6 +30,7 @@ from inferno_market_calendar import is_market_session, previous_market_session
 from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
 from inferno_schwab_oauth import load_config as load_schwab_oauth_config
 from inferno_schwab_oauth import token_status as load_schwab_oauth_status
+from inferno_strategy_shadow_comparison import source_pricing_freshness
 from server import (
     DATA_DIR,
     EXECUTION_QUEUE_FILE,
@@ -56,6 +57,8 @@ EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
+CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
+TICKET_CAP_POLICY_FILE = ROOT / "data" / "inferno_ticket_cap_policy.json"
 OUTCOME_ATTRIBUTION_FILE = ROOT / "data" / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = ROOT / "data" / "inferno_rule_edge_decay.json"
 SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
@@ -631,6 +634,43 @@ def outcome_attribution_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def cash_attribution_status(report: dict) -> tuple[bool, str]:
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "unknown")
+    authority_safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    ok = fresh and authority_safe and verdict in {
+        "attribution-incomplete",
+        "transaction-ledger-present-review-required",
+    }
+    broker_cash = _float_value((report.get("brokerCash") or {}).get("cash"))
+    latest_delta = _float_value((report.get("latestCashChange") or {}).get("deltaCash"))
+    broker_cash_text = f"${broker_cash:,.2f}"
+    latest_delta_text = f"{'-$' if latest_delta < 0 else '$'}{abs(latest_delta):,.2f}"
+    classification = (report.get("latestCashClassification") or {}).get("classification") or "-"
+    realized_known = (report.get("realizedOptionsProfit") or {}).get("known")
+    detail = (
+        f"{verdict} | broker cash={broker_cash_text} | latest delta={latest_delta_text} | "
+        f"{classification} | realized-options-known={realized_known}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "authoritySafe": authority_safe,
+            }
+        )
+    )
+    return ok, detail
+
+
 def rule_edge_decay_status(report: dict) -> tuple[bool, str]:
     return _research_module_status(
         report,
@@ -776,14 +816,27 @@ def strategy_alternative_pricing_status(report: dict) -> tuple[bool, str]:
     )
 
 
-def strategy_shadow_comparison_status(report: dict) -> tuple[bool, str]:
-    return _research_module_status(
+def strategy_shadow_comparison_status(report: dict, pricing: dict | None = None) -> tuple[bool, str]:
+    ok, detail = _research_module_status(
         report,
         ok_verdicts={
             "shadow-comparison-ready",
             "no-passing-alternatives",
         },
     )
+    if not ok:
+        return ok, detail
+    freshness = source_pricing_freshness(report, pricing or {})
+    if not freshness.get("freshForPricing"):
+        return (
+            False,
+            (
+                f"{report.get('verdict')} | stale relative to strategy pricing | "
+                f"source pricing {freshness.get('sourcePricingGeneratedAt') or 'missing'} | "
+                f"pricing {freshness.get('pricingGeneratedAt') or 'missing'}"
+            ),
+        )
+    return ok, detail
 
 
 def portfolio_correlation_status(report: dict) -> tuple[bool, str]:
@@ -894,10 +947,12 @@ def fast_paper_cohort_status(report: dict) -> tuple[bool, str]:
         "no-priceable-candidates",
     }
     counts = report.get("counts") or {}
+    backlog_count = len(report.get("backlogSlate") or [])
     ok = fresh and research_only and non_promotable and verdict in valid_verdicts
     detail = (
         f"{verdict} | opened={counts.get('selectedToday', 0)} | "
         f"closed={counts.get('closedToday', 0)} | open={counts.get('open', 0)} | "
+        f"backlog={backlog_count} | "
         "promotion-credit=off"
     )
     return ok, detail
@@ -1006,6 +1061,49 @@ def capital_scaling_status(report: dict) -> tuple[bool, str]:
             "build-failed",
         },
     )
+
+
+def ticket_cap_policy_status(report: dict) -> tuple[bool, str]:
+    """Evaluate ticket-cap policy freshness and authority safety."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "unknown")
+    authority_safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    ok = fresh and authority_safe and verdict in {
+        "active",
+        "clamped-to-risk-cap",
+        "cap-below-target-band",
+        "clamped-to-paper-budget",
+        "paper-budget-below-target-band",
+    }
+    construction = report.get("constructionBand") or {}
+    effective = report.get("effectiveBand") or {}
+    live = report.get("liveCapitalBand") or {}
+    posture = report.get("callOptionsPosture") or {}
+    detail = (
+        f"{verdict} | construction=${_float_value(construction.get('minTargetDollars')):,.2f}-"
+        f"${_float_value(construction.get('hardCapDollars')):,.2f} | "
+        f"paperCap=${_float_value(effective.get('hardCapDollars')):,.2f} | "
+        f"liveCap=${_float_value(live.get('hardCapDollars')):,.2f} | "
+        f"callPosture={posture.get('mode')}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": report.get("generatedAt"),
+                "verdict": verdict,
+                "researchOnly": report.get("researchOnly"),
+                "authorityChanged": report.get("authorityChanged"),
+            }
+        )
+    )
+    return ok, detail
 
 
 def schwab_edge_signals_status(report: dict) -> tuple[bool, str]:
@@ -1129,17 +1227,26 @@ def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> 
     counts = director.get("counts") or {}
     reducer_fresh = in_current_service_cycle(str(reducer.get("generatedAt", "")), now=now)
     reducer_counts = reducer.get("counts") or {}
+    reducer_research_count = int(reducer_counts.get("paperResearchSelected") or 0)
+    reducer_shadow_count = int(reducer_counts.get("shadowOnly") or 0)
     shadow_fallback_ready = (
         reducer_fresh
         and reducer.get("verdict") == "scenario-slate-ready"
         and int(reducer_counts.get("scenarios") or 0) > 0
-        and int(reducer_counts.get("shadowOnly") or 0) > 0
+        and (reducer_shadow_count > 0 or reducer_research_count > 0)
     )
-    ok_verdicts = {"ready-to-paper-stage", "auto-paper-selected", "approval-bottleneck", "research-watch"}
+    ok_verdicts = {
+        "operator-paper-candidates",
+        "auto-paper-selected",
+        "paper-research-selected",
+        "approval-bottleneck",
+        "research-watch",
+    }
     ok = director_fresh and (verdict in ok_verdicts or (verdict == "no-viable-paper-tests" and shadow_fallback_ready))
     detail = (
         f"{verdict} | stageable={counts.get('stageableNow', 0)} | "
         f"auto-paper={counts.get('autoPaperSelected', 0)} | "
+        f"paper-research={counts.get('paperResearchSelected', 0)} | "
         f"approval-only={counts.get('approvalOnly', 0)} | "
         f"hard-blocked={counts.get('hardBlocked', 0)}"
         if director_fresh
@@ -1151,7 +1258,10 @@ def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> 
         )
     )
     if director_fresh and shadow_fallback_ready:
-        detail += f" | shadow-fallback=ready ({reducer_counts.get('shadowOnly', 0)})"
+        detail += (
+            f" | scenario-fallback=ready "
+            f"(paper-research={reducer_research_count}, shadow={reducer_shadow_count})"
+        )
     return ok, detail
 
 
@@ -1556,6 +1666,12 @@ def main() -> int:
     if schwab_account and not schwab_account_ok:
         warnings += 1
 
+    cash_attribution = load_json_file(CASH_ATTRIBUTION_FILE) or {}
+    cash_attribution_ok, cash_attribution_detail = cash_attribution_status(cash_attribution)
+    lines.append(summarize_status("Cash attribution", cash_attribution_ok, cash_attribution_detail))
+    if not cash_attribution_ok:
+        warnings += 1
+
     attribution = load_json_file(OUTCOME_ATTRIBUTION_FILE) or {}
     attribution_ok, attribution_detail = outcome_attribution_status(attribution)
     lines.append(summarize_status("Outcome attribution", attribution_ok, attribution_detail))
@@ -1605,7 +1721,10 @@ def main() -> int:
         warnings += 1
 
     strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
-    strategy_shadow_ok, strategy_shadow_detail = strategy_shadow_comparison_status(strategy_shadow_comparison)
+    strategy_shadow_ok, strategy_shadow_detail = strategy_shadow_comparison_status(
+        strategy_shadow_comparison,
+        strategy_alt_pricing,
+    )
     lines.append(summarize_status("Strategy shadow comparison", strategy_shadow_ok, strategy_shadow_detail))
     if not strategy_shadow_ok:
         warnings += 1
@@ -1736,6 +1855,12 @@ def main() -> int:
     capital_scaling_ok, capital_scaling_detail = capital_scaling_status(capital_scaling)
     lines.append(summarize_status("Capital scaling", capital_scaling_ok, capital_scaling_detail))
     if not capital_scaling_ok:
+        warnings += 1
+
+    ticket_cap_policy = load_json_file(TICKET_CAP_POLICY_FILE) or {}
+    ticket_cap_ok, ticket_cap_detail = ticket_cap_policy_status(ticket_cap_policy)
+    lines.append(summarize_status("Ticket cap policy", ticket_cap_ok, ticket_cap_detail))
+    if not ticket_cap_ok:
         warnings += 1
 
     blowup_guardrails = load_json_file(BLOWUP_GUARDRAILS_FILE) or {}
@@ -1954,6 +2079,7 @@ def main() -> int:
     paper_reducer_detail = (
         f"{paper_reducer.get('verdict')} | scenarios={paper_reducer_counts.get('scenarios', 0)} | "
         f"paper={paper_reducer_counts.get('executablePaper', 0)} | "
+        f"paper-research={paper_reducer_counts.get('paperResearchSelected', 0)} | "
         f"shadow={paper_reducer_counts.get('shadowOnly', 0)}"
         if paper_reducer_today
         else json.dumps(
@@ -1971,7 +2097,7 @@ def main() -> int:
     paper_loop_today = in_current_service_cycle(str(paper_evidence_loop.get("generatedAt", "")), now=now)
     paper_loop_verdict = str(paper_evidence_loop.get("verdict") or "")
     paper_loop_ok = paper_loop_today and paper_loop_verdict in {
-        "ready-to-stage",
+        "operator-paper-candidates",
         "approval-bottleneck",
         "collect-paper-outcomes",
         "evidence-building",

@@ -320,7 +320,7 @@ def build_action_pulse(
             row.update({"generatedAt": generated_at, "ageHours": 0.0, "status": "fresh"})
     tos_visibility = build_tos_visibility_summary()
     cash_arg = command_cash_arg(deployable_cash)
-    pulse_command = f'./run_inferno_action_pulse.sh --phase manual --deployable-cash {cash_arg}'
+    pulse_command = f'./inferno action-pulse --phase manual --deployable-cash {cash_arg}'
     if fast:
         pulse_command += " --fast"
 
@@ -353,11 +353,11 @@ def build_action_pulse(
         "decisionSummary": summarize_decisions(launch),
         "warningSummary": summarize_warnings(launch),
         "operatorCommands": [
-            "./run_inferno_schwab_daily_ops.sh",
+            "./inferno daily-ops",
             f"{pulse_command} --send --force-send",
-            f'./run_inferno_capital_launch_check.sh --deployable-cash {cash_arg}',
-            f'./run_inferno_strike_cycle.sh --deployable-cash {cash_arg}',
-            'python3 inferno_approval_queue.py status',
+            f'./inferno capital-check --deployable-cash {cash_arg}',
+            f'./inferno strike-cycle --deployable-cash {cash_arg}',
+            "./inferno approvals",
         ],
         "operatorRule": "If this says blocked, do not deploy fresh capital. Real orders still require explicit final confirmation.",
     }
@@ -426,7 +426,7 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         )
         lines.extend(f"- {item}" for item in schwab.get("summaryLines") or ["No Schwab rows summarized."])
     else:
-        lines.append("- No Schwab daily ops report yet. Run ./run_inferno_schwab_daily_ops.sh.")
+        lines.append("- No Schwab daily ops report yet. Run ./inferno daily-ops.")
     paper_evidence = payload.get("paperEvidence") or {}
     lines.extend(["", "Paper evidence queue"])
     if paper_evidence.get("available"):
@@ -459,7 +459,7 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
             f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
             f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
             "- Broker submit: False",
-            "- Paper rule: only executablePaper=true may be staged in paperMoney; shadow scenarios are watch-only.",
+            "- Paper rule: executablePaper=true means operator-routable paper candidate; unattended agents must not stage tickets.",
             f"- Rule: {payload.get('operatorRule')}",
             "",
             "Operator commands",

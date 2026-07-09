@@ -111,6 +111,104 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_deposit_plan.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:36-06:00",
+                        "stage": "deposit-plan-research-only",
+                        "verdict": "configured",
+                        "researchOnly": True,
+                        "authorityChanged": False,
+                        "plan": {
+                            "amountDollars": 250.0,
+                            "intervalDays": 14,
+                            "annualPlannedDollars": 6500.0,
+                        },
+                        "schedule": {
+                            "nextDepositDate": "2026-05-15",
+                            "daysUntilNextDeposit": 5,
+                        },
+                        "forecastWindows": {
+                            "30Days": {"depositCount": 2, "grossDeposits": 500.0},
+                            "90Days": {"depositCount": 6, "grossDeposits": 1500.0},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_cash_attribution.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:37-06:00",
+                        "stage": "cash-attribution-research-only",
+                        "verdict": "attribution-incomplete",
+                        "researchOnly": True,
+                        "authorityChanged": False,
+                        "brokerCash": {"cash": 0.0},
+                        "latestCashChange": {"deltaCash": -250.0},
+                        "latestCashClassification": {
+                            "classification": "cash-decrease-unattributed-without-transaction-ledger"
+                        },
+                        "realizedOptionsProfit": {"known": False},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_ticket_cap_policy.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:38-06:00",
+                        "stage": "ticket-cap-policy-research-only",
+                        "verdict": "active",
+                        "researchOnly": True,
+                        "authorityChanged": False,
+                        "requestedBand": {
+                            "minTicketDollars": 250.0,
+                            "targetTicketDollars": 250.0,
+                            "maxTicketDollars": 500.0,
+                        },
+                        "constructionBand": {
+                            "minTargetDollars": 250.0,
+                            "targetTicketDollars": 250.0,
+                            "hardCapDollars": 500.0,
+                        },
+                        "effectiveBand": {
+                            "minTargetDollars": 250.0,
+                            "targetTicketDollars": 250.0,
+                            "hardCapDollars": 500.0,
+                            "sourceRiskCapSource": "paper-budget",
+                        },
+                        "liveCapitalBand": {
+                            "hardCapDollars": 0.0,
+                            "sourceRiskCapSource": "ack",
+                            "drawdownLevel": "pause",
+                            "newEntriesAllowed": False,
+                        },
+                        "callOptionsPosture": {
+                            "mode": "aggressive-defined-risk",
+                            "aggressiveCallResearchEnabled": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_account_optimization.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:39-06:00",
+                        "stage": "account-optimization-research-only",
+                        "verdict": "protect-and-prove",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "authorityChanged": False,
+                        "nextActions": [
+                            "Close and score the 4 fast-paper simulations at the first eligible later-session quote, then open the next diversified cohort.",
+                            "Keep live options max-loss authority at $0 until the strategy lab becomes promotable.",
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_live_book_review_packet.json").write_text(
                 json.dumps(
                     {
@@ -150,7 +248,19 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (data_dir / "inferno_paper_test_director.json").write_text(
-                json.dumps({"generatedAt": "2026-05-10T10:03:00-06:00", "verdict": "auto-paper-selected", "counts": {"stageableNow": 0, "autoPaperSelected": 2, "approvalOnly": 1}, "nextActions": ["Stage FLNC in paper only."]}),
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:00-06:00",
+                        "verdict": "auto-paper-selected",
+                        "counts": {
+                            "stageableNow": 0,
+                            "autoPaperSelected": 2,
+                            "approvalOnly": 1,
+                            "constructionWatch": 3,
+                        },
+                        "nextActions": ["Stage FLNC in paper only."],
+                    }
+                ),
                 encoding="utf-8",
             )
             (data_dir / "inferno_paper_blocker_swarm.json").write_text(
@@ -180,6 +290,27 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                         "scenarioTarget": 12,
                         "counts": {"scenarios": 12, "executablePaper": 0, "shadowOnly": 12},
                         "topFiveFocus": [{"ticker": "FLNC"}, {"ticker": "THR"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_fast_paper_cohort.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:32-06:00",
+                        "stage": "fast-paper-cohort-research-only",
+                        "verdict": "no-priceable-candidates",
+                        "researchOnly": True,
+                        "promotable": False,
+                        "brokerSubmitAllowed": False,
+                        "liveTradingAllowed": False,
+                        "counts": {
+                            "selectedToday": 0,
+                            "closedToday": 4,
+                            "open": 0,
+                            "closedLifetime": 24,
+                        },
+                        "backlogSlate": [],
                     }
                 ),
                 encoding="utf-8",
@@ -333,10 +464,15 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("SCHWAB_ACCOUNT_SYNC_FILE", data_dir / "inferno_schwab_account_sync.json"),
                 ("CAPITAL_DEPLOYMENT_READINESS_FILE", data_dir / "inferno_capital_deployment_readiness.json"),
                 ("CAPITAL_SCENARIO_MATRIX_FILE", data_dir / "inferno_capital_scenario_matrix.json"),
+                ("DEPOSIT_PLAN_FILE", data_dir / "inferno_deposit_plan.json"),
+                ("CASH_ATTRIBUTION_FILE", data_dir / "inferno_cash_attribution.json"),
+                ("TICKET_CAP_POLICY_FILE", data_dir / "inferno_ticket_cap_policy.json"),
+                ("ACCOUNT_OPTIMIZATION_FILE", data_dir / "inferno_account_optimization.json"),
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
                 ("PAPER_BLOCKER_SWARM_FILE", data_dir / "inferno_paper_blocker_swarm.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
+                ("FAST_PAPER_COHORT_FILE", data_dir / "inferno_fast_paper_cohort.json"),
                 ("PAPER_MTM_FILE", data_dir / "inferno_paper_mark_to_market.json"),
                 ("TRADE_MANAGEMENT_FILE", data_dir / "inferno_trade_management.json"),
                 ("SCENARIO_BACKTEST_FILE", data_dir / "inferno_scenario_backtest.json"),
@@ -371,6 +507,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["whileAwayVerdict"], "monitor-only")
             self.assertEqual(payload["headlineMetrics"]["paperAutoSelected"], 2)
             self.assertEqual(payload["headlineMetrics"]["paperApprovalOnly"], 1)
+            self.assertEqual(payload["headlineMetrics"]["paperConstructionWatch"], 3)
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmVerdict"], "fixable-blockers-present")
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmDominantLane"], "data_freshness")
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmFixableByTooling"], 1)
@@ -392,6 +529,20 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["capitalDeploymentVerdict"], "manual-ready-with-warnings")
             self.assertFalse(payload["headlineMetrics"]["autoLiveAllowed"])
             self.assertEqual(payload["systemStatus"]["capitalScenarioMatrix"]["verdict"], "all-blocked")
+            self.assertEqual(payload["systemStatus"]["depositPlan"]["verdict"], "configured")
+            self.assertEqual(payload["systemStatus"]["cashAttribution"]["verdict"], "attribution-incomplete")
+            self.assertEqual(payload["systemStatus"]["ticketCapPolicy"]["verdict"], "active")
+            self.assertEqual(payload["headlineMetrics"]["depositAmountDollars"], 250.0)
+            self.assertEqual(payload["headlineMetrics"]["depositNextDate"], "2026-05-15")
+            self.assertEqual(payload["headlineMetrics"]["depositForecast30Days"], 500.0)
+            self.assertEqual(payload["headlineMetrics"]["cashAttributionLatestDelta"], -250.0)
+            self.assertFalse(payload["headlineMetrics"]["cashAttributionRealizedOptionsKnown"])
+            self.assertEqual(payload["headlineMetrics"]["ticketCapConstructionHardCap"], 500.0)
+            self.assertEqual(payload["headlineMetrics"]["ticketCapHardCap"], 500.0)
+            self.assertEqual(payload["headlineMetrics"]["ticketCapLiveHardCap"], 0.0)
+            self.assertEqual(payload["headlineMetrics"]["ticketCapLiveDrawdownLevel"], "pause")
+            self.assertEqual(payload["headlineMetrics"]["ticketCapCallPosture"], "aggressive-defined-risk")
+            self.assertTrue(payload["headlineMetrics"]["ticketCapAggressiveCalls"])
             self.assertEqual(payload["headlineMetrics"]["riskGateVerdict"], "blocked")
             self.assertEqual(payload["headlineMetrics"]["riskGateHardFails"], 1)
             self.assertEqual(payload["headlineMetrics"]["mathVerifyVerdict"], "clean")
@@ -407,6 +558,19 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["accountNetLiquidatingValue"], 1000.0)
             self.assertEqual(payload["headlineMetrics"]["accountTotalCash"], 0.0)
             self.assertTrue(payload["executiveSummary"][0].startswith("Capital:"))
+            self.assertEqual(payload["controlSurface"]["entrypoint"], "./inferno")
+            self.assertIn("./inferno sync", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno usage", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno preflight", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno oauth", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno action-pulse", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno deposit-plan", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno cash-ledger", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno ticket-cap", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno daily-ops", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno capital-check", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno strike-cycle", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno approvals", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertEqual(payload["reportingMap"][0]["lane"], "handoff")
             self.assertEqual(payload["reportingMap"][1]["lane"], "health")
             self.assertIn("reports/usage_optimizer_latest.txt", payload["recommendedReads"][0])
@@ -420,10 +584,20 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Manual risk review: GDS.", payload["nextActions"])
             self.assertIn("Resolve GDS before sizing new capital.", payload["nextActions"])
             self.assertIn("Refresh divergent paper candidate data.", payload["nextActions"])
+            self.assertNotIn(
+                "Close and score the 4 fast-paper simulations at the first eligible later-session quote, then open the next diversified cohort.",
+                payload["nextActions"],
+            )
+            self.assertIn(
+                "Fast-paper due simulations are closed; wait for market-open refresh to find new priceable candidates.",
+                payload["nextActions"],
+            )
             self.assertTrue(payload["nextActions"][0].startswith("M01:"))
             text_report = (reports_dir / "model_command_center_latest.txt").read_text(encoding="utf-8")
             onboard_report = (reports_dir / "model_command_center_onboard_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Inferno Model Command Center", text_report)
+            self.assertIn("Unified control surface: ./inferno", text_report)
+            self.assertIn("./inferno sync", text_report)
             self.assertIn("Deploy preflight: ready-for-pilot", text_report)
             self.assertIn("Schwab account sync: healthy", text_report)
             self.assertIn("Account source: schwab-account-api", text_report)
@@ -432,6 +606,10 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("While away packet: monitor-only", text_report)
             self.assertIn("Capital deployment readiness: manual-ready-with-warnings", text_report)
             self.assertIn("Capital scenario matrix: all-blocked", text_report)
+            self.assertIn("Deposit plan: configured", text_report)
+            self.assertIn("Cash attribution: attribution-incomplete", text_report)
+            self.assertIn("Ticket cap policy: active", text_report)
+            self.assertIn("call posture aggressive-defined-risk", text_report)
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
             self.assertIn("Paper blocker swarm: fixable-blockers-present", text_report)
@@ -444,6 +622,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Scenario backtest: scenario-backtest-research-only", text_report)
             self.assertIn("Paper scenarios: 12", text_report)
             self.assertIn("Paper top five: FLNC, THR", text_report)
+            self.assertIn("Fast paper: no-priceable-candidates | opened 0 | closed 4 | open 0", text_report)
+            self.assertNotIn("Close and score the 4 fast-paper simulations", text_report)
+            self.assertIn("Fast-paper due simulations are closed; wait for market-open refresh", text_report)
             self.assertIn("Scenario backtest evidence: 4", text_report)
             self.assertIn("Scenario backtest focus: FLNC, THR, MOD", text_report)
             self.assertIn("Math verify: clean", text_report)
@@ -457,6 +638,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/usage_optimizer_latest.txt", text_report)
             self.assertIn("reports/while_away_latest.txt", text_report)
             self.assertIn("reports/capital_scenario_matrix_latest.txt", text_report)
+            self.assertIn("reports/deposit_plan_latest.txt", text_report)
+            self.assertIn("reports/cash_attribution_latest.txt", text_report)
+            self.assertIn("reports/ticket_cap_policy_latest.txt", text_report)
             self.assertIn("reports/paper_blocker_swarm_latest.txt", text_report)
             self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
             self.assertIn("reports/trade_management_latest.txt", text_report)

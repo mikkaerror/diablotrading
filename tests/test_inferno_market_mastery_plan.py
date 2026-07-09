@@ -46,7 +46,8 @@ class InfernoMarketMasteryPlanTests(unittest.TestCase):
         )
 
         by_id = {item["id"]: item for item in payload["tasks"]}
-        self.assertEqual(by_id["M01"]["status"], "blocked-on-oauth")
+        self.assertEqual(by_id["M01"]["status"], "refresh-needed")
+        self.assertIn("only restart OAuth", by_id["M01"]["action"])
         self.assertEqual(by_id["M02"]["status"], "action-now")
         self.assertEqual(by_id["M03"]["status"], "action-now")
         self.assertEqual(by_id["M05"]["status"], "action-now")
@@ -81,6 +82,33 @@ class InfernoMarketMasteryPlanTests(unittest.TestCase):
         by_id = {item["id"]: item for item in payload["tasks"]}
         self.assertEqual(by_id["M01"]["status"], "ready")
         self.assertEqual(by_id["M02"]["status"], "clear")
+
+    def test_explicit_auth_failure_remains_oauth_block(self) -> None:
+        now = datetime(2026, 6, 22, 8, 0, tzinfo=ZoneInfo("America/Denver"))
+        payload = mastery.build_plan(
+            {
+                "schwabAccount": {
+                    "generatedAt": "2026-06-22T07:30:00-06:00",
+                    "sourceStatus": "reauthorization-required",
+                    "message": "OAuth reauthorization required",
+                },
+                "schwabOptions": {
+                    "generatedAt": "2026-06-22T07:30:00-06:00",
+                    "status": "ok",
+                },
+                "schwabPriceHistory": {
+                    "generatedAt": "2026-06-22T07:30:00-06:00",
+                    "status": "ok",
+                },
+                "paperExitAudit": {"counts": {}},
+                "expectedMove": {"counts": {}, "overall": {}},
+                "strategyLab": {"overall": {}},
+                "sizing": {"currentSleeves": {}, "optionsSizing": {}},
+            },
+            now=now,
+        )
+        by_id = {item["id"]: item for item in payload["tasks"]}
+        self.assertEqual(by_id["M01"]["status"], "blocked-on-oauth")
 
 
 if __name__ == "__main__":

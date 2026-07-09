@@ -260,6 +260,21 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
+                        "refresh_ticket_cap_policy",
+                        return_value={
+                            "ok": True,
+                            "status": "active",
+                            "hardCapDollars": 500.0,
+                            "minTargetDollars": 250.0,
+                            "paperStageHardCapDollars": 500.0,
+                            "liveCapitalHardCapDollars": 0.0,
+                            "callPosture": "aggressive-defined-risk",
+                        },
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
                         "refresh_model_command_center",
                         return_value={
                             "ok": True,
@@ -331,6 +346,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["schwabAccountSync"]["status"], "healthy")
             self.assertEqual(saved["liveAccountSync"]["status"], "healthy")
             self.assertEqual(saved["livePositionReview"]["status"], "review")
+            self.assertEqual(saved["ticketCapPolicy"]["status"], "active")
             self.assertEqual(saved["modelCommandCenter"]["status"], "ready")
             self.assertEqual(saved["researchCycle"]["status"], "research-refreshed")
             self.assertEqual(saved["researchCycle"]["scenarioCount"], 12)
@@ -348,12 +364,97 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Approval inbox: idle", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Schwab account sync: healthy", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Ticket cap policy: active", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("construction $250.0-$500.0 | paper cap $500.0 | live cap $0.0", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Model command center: ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Research cycle: research-refreshed", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Watchdog: ok | market-closed-no-dawn-expected", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("scenarios 12", report_text_file.read_text(encoding="utf-8"))
             heartbeat.assert_called_once()
             self.assertEqual(heartbeat.call_args.args[0], "ops_maintenance")
+
+    def test_run_maintenance_records_ticker_audit_failure_instead_of_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            report_file = temp_root / "ops_maintenance.json"
+            report_text_file = temp_root / "ops_maintenance.txt"
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(ops_maintenance, "OPS_MAINTENANCE_FILE", report_file))
+                stack.enter_context(patch.object(ops_maintenance, "OPS_MAINTENANCE_TEXT_FILE", report_text_file))
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "local_now",
+                        return_value=datetime.fromisoformat("2026-07-01T13:00:00-06:00"),
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "build_ticker_universe_audit_from_sheet",
+                        side_effect=RuntimeError("Google Sheets unavailable"),
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "run_audit",
+                        return_value={"verdict": "ready", "dailyPrepReady": True, "researchReady": True},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "run_watch",
+                        return_value={"generatedAt": "2026-07-01T13:00:00-06:00", "skipped": False, "downloadsManager": {"importedFiles": 0}, "fillIngest": {}},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "refresh_cloud_control_plane",
+                        return_value={"ok": True, "status": "ready", "region": "us-central1", "projectId": "proj-123"},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
+                        "refresh_cloud_execution_audit",
+                        return_value={"ok": True, "status": "healthy", "region": "us-central1", "projectId": "proj-123"},
+                    )
+                )
+                stack.enter_context(patch.object(ops_maintenance, "refresh_paper_test_director", return_value={"ok": True, "status": "research-watch", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_paper_bottleneck_reducer", return_value={"ok": True, "status": "scenario-slate-ready", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_paper_evidence_loop", return_value={"ok": True, "status": "operator-paper-candidates", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_paper_exit_audit", return_value={"ok": True, "status": "clean", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_paper_mark_to_market", return_value={"ok": True, "status": "no-open-positions", "openPositionCount": 0, "markedTickets": 0}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_broker_preview", return_value={"ok": True, "status": "preview-built", "count": 0, "previewOnly": True}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_stale_approval_governor", return_value={"ok": True, "status": "no-action", "demoted": [], "ttlMarketDays": 5}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_approval_inbox", return_value={"ok": True, "status": "idle", "checkedCount": 0, "appliedCount": 0, "skippedCount": 0}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_schwab_account_sync", return_value={"ok": True, "status": "healthy", "matchedSuffix": "8499", "counts": {"accounts": 1, "approvedAccounts": 1, "positions": 4}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_live_account_sync", return_value={"ok": True, "status": "healthy", "matchedSuffix": "8499", "accountDataSource": "schwab-account-api", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_live_position_review", return_value={"ok": True, "status": "healthy", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_ticket_cap_policy", return_value={"ok": True, "status": "active", "hardCapDollars": 500.0, "minTargetDollars": 250.0, "paperStageHardCapDollars": 500.0, "liveCapitalHardCapDollars": 0.0, "callPosture": "aggressive-defined-risk"}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_model_command_center", return_value={"ok": True, "status": "ready", "missionCount": 0, "noteCount": 0, "headlineMetrics": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_research_cycle", return_value={"ok": True, "status": "research-refreshed", "shadowTrackedCount": 0, "shadowClosedCount": 0, "strategyScoredCount": 0, "scenarioCount": 0}))
+                stack.enter_context(patch.object(ops_maintenance, "run_watchdog_check", return_value=({"ok": True, "reasons": []}, 0)))
+                stack.enter_context(patch.object(ops_maintenance, "record_heartbeat", return_value={}))
+
+                report = ops_maintenance.run_maintenance(
+                    backtest_root=temp_root,
+                    sheet_name="Earnings Tracker",
+                    skip_outbound=True,
+                    cloud_region="us-central1",
+                )
+
+            saved = json.loads(report_file.read_text(encoding="utf-8"))
+            self.assertFalse(report["ok"])
+            self.assertEqual(saved["tickerUniverseAudit"]["verdict"], "refresh-failed")
+            self.assertIn("Google Sheets unavailable", saved["tickerUniverseAudit"]["error"])
+            text = report_text_file.read_text(encoding="utf-8")
+            self.assertIn("Ticker universe: refresh-failed", text)
+            self.assertIn("Google Sheets unavailable", text)
 
     def test_normalize_watchdog_status_accepts_no_dawn_on_market_closed_day(self) -> None:
         with patch.object(ops_maintenance, "local_now", return_value=datetime.fromisoformat("2026-06-27T13:00:00-06:00")):

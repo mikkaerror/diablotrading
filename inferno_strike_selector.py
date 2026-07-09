@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -218,12 +219,19 @@ def option_spread_pct(row: pd.Series) -> float:
     return round(max(0.0, (ask - bid) / mid), 4)
 
 
-def days_to_expiration(expiration: str) -> int:
-    """Return calendar days from the local service date to expiration."""
+@lru_cache(maxsize=512)
+def _days_to_expiration_cached(expiration: str, service_date: str) -> int:
+    """Return calendar days from a service date to expiration."""
     parsed = parse_date(expiration)
     if not parsed:
         return 1
-    return max(1, (parsed.date() - local_now().date()).days)
+    service_day = datetime.fromisoformat(service_date).date()
+    return max(1, (parsed.date() - service_day).days)
+
+
+def days_to_expiration(expiration: str) -> int:
+    """Return calendar days from the local service date to expiration."""
+    return _days_to_expiration_cached(str(expiration), local_now().date().isoformat())
 
 
 def normalized_iv_for_math(value: Any) -> float | None:

@@ -535,7 +535,7 @@ def main() -> int:
         for it in items:
             print(_candidate_line(it))
         print()
-        print("Done. (--quiet: no decisions taken; run ./today.sh to act.)")
+        print("Done. (--quiet: no decisions taken; run ./inferno today to act.)")
         return 0
 
     print(f"Today: {len(items)} candidate(s) waiting on you.")

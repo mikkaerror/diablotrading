@@ -82,20 +82,64 @@ DO_NOT_PASTE: tuple[str, ...] = (
 
 ONE_COMMANDS: tuple[dict[str, str], ...] = (
     {
-        "command": "./run_inferno_central_command.sh",
-        "purpose": "refresh supervisor packet, ops maintenance, command center, and doctor summary",
+        "command": "./inferno status",
+        "purpose": "show the latest unified desk state",
     },
     {
-        "command": "./run_inferno_central_command.sh onboard",
-        "purpose": "print the smallest new-model landing packet",
+        "command": "./inferno sync",
+        "purpose": "run the full tracker, Schwab, research, command-center, and doctor refresh",
     },
     {
-        "command": "./run_inferno_daily_loop.sh && python3 inferno_daily_loop.py onboard",
-        "purpose": "refresh deeper diagnostics when strategy context changed",
+        "command": "./inferno today",
+        "purpose": "open the one-letter operator decision screen",
     },
     {
-        "command": "python3 inferno_doctor.py",
-        "purpose": "single health verdict; warning lines become work queue items",
+        "command": "./inferno doctor",
+        "purpose": "run the full health verdict; warning lines become work queue items",
+    },
+    {
+        "command": "./inferno preflight",
+        "purpose": "check reporting readiness without triggering a data refresh",
+    },
+    {
+        "command": "./inferno usage",
+        "purpose": "rebuild this low-context handoff packet",
+    },
+    {
+        "command": "./inferno oauth",
+        "purpose": "check or refresh Schwab OAuth from the unified entrypoint",
+    },
+    {
+        "command": "./inferno daily-ops",
+        "purpose": "refresh the Schwab daily options operations tape",
+    },
+    {
+        "command": "./inferno action-pulse",
+        "purpose": "build the tactical action pulse without sending email by default",
+    },
+    {
+        "command": "./inferno deposit-plan",
+        "purpose": "show recurring deposit forecast separate from broker-confirmed cash",
+    },
+    {
+        "command": "./inferno cash-ledger",
+        "purpose": "reconcile broker cash changes without treating them as realized trading profit",
+    },
+    {
+        "command": "./inferno capital-check",
+        "purpose": "run the capital launch check; defaults to deployable cash 0",
+    },
+    {
+        "command": "./inferno strike-cycle",
+        "purpose": "run the strike cycle; defaults to deployable cash 0",
+    },
+    {
+        "command": "./inferno approvals",
+        "purpose": "show approval queue status only",
+    },
+    {
+        "command": "./inferno schedule",
+        "purpose": "show LaunchAgent and Codex automation schedules in one place",
     },
     {
         "command": "python3 inferno_math_verify.py && python3 inferno_secret_hygiene.py",
@@ -213,7 +257,7 @@ def build_usage_optimizer() -> dict[str, Any]:
         "oneCommands": list(ONE_COMMANDS),
         "nextActions": next_actions,
         "operatorRules": [
-            "Start new sessions with ./run_inferno_central_command.sh onboard, not a full chat transcript.",
+            "Start new sessions with ./inferno status, not a full chat transcript.",
             "Paste only the failing command plus final verdict lines unless debugging a stack trace.",
             "Use reports/model_command_center_latest.txt as truth; docs are secondary.",
             "Never place a trade or widen live authority from this packet.",
@@ -246,14 +290,14 @@ def render_usage_optimizer(payload: dict[str, Any]) -> str:
     for item in payload.get("readFirst") or []:
         status = "ok" if item.get("exists") else "missing"
         lines.append(
-            f"- {item.get('path')} [{status}, ~{item.get('estimatedTokens')} tokens] — {item.get('why')}"
+            f"- {item.get('path')} [{status}, ~{item.get('estimatedTokens')} tokens] - {item.get('why')}"
         )
 
     lines.extend(["", "Read only if the task needs it:"])
     for item in payload.get("readIfNeeded") or []:
         status = "ok" if item.get("exists") else "missing"
         lines.append(
-            f"- {item.get('path')} [{status}, ~{item.get('estimatedTokens')} tokens] — {item.get('why')}"
+            f"- {item.get('path')} [{status}, ~{item.get('estimatedTokens')} tokens] - {item.get('why')}"
         )
 
     lines.extend(["", "Do not paste by default:"])
@@ -262,7 +306,7 @@ def render_usage_optimizer(payload: dict[str, Any]) -> str:
 
     lines.extend(["", "One-command replacements:"])
     for item in payload.get("oneCommands") or []:
-        lines.append(f"- `{item.get('command')}` — {item.get('purpose')}")
+        lines.append(f"- `{item.get('command')}` - {item.get('purpose')}")
 
     lines.extend(["", "Top next actions from command center:"])
     actions = payload.get("nextActions") or []

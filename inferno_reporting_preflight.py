@@ -4,7 +4,8 @@ from __future__ import annotations
 
 The preflight answers one boring question before the desk sends or trusts a
 brief: are the reporting inputs fresh enough, are SMTP/Schwab configured, is
-TOS in an attach-only safe state, and did the doctor recently report healthy?
+TOS in an attach-only safe state, and did the doctor recently report healthy or
+only advisory attention items?
 
 It does not launch thinkorswim, send email, refresh the tracker, place orders,
 or mutate any authority flags. It only writes its own JSON/text artifact.
@@ -41,6 +42,9 @@ from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_f
 
 REPORTING_PREFLIGHT_FILE = DATA_DIR / "inferno_reporting_preflight.json"
 REPORTING_PREFLIGHT_TEXT_FILE = REPORTS_DIR / "reporting_preflight_latest.txt"
+DEPOSIT_PLAN_FILE = DATA_DIR / "inferno_deposit_plan.json"
+CASH_ATTRIBUTION_FILE = DATA_DIR / "inferno_cash_attribution.json"
+TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 
 
 def _artifact_check(label: str, path: Path, *, max_age_hours: float) -> dict[str, Any]:
@@ -67,17 +71,38 @@ def _doctor_check() -> dict[str, Any]:
     except OSError as exc:
         return {"name": "doctor", "ok": False, "severity": "fail", "detail": str(exc)}
     healthy = "Desk status: healthy" in body
+    attention = "Desk status:" in body and "need attention" in body
+    explicit_fail = "[FAIL]" in body
     generated_at = artifact_generated_at(DOCTOR_TEXT_FILE)
     age = age_hours(generated_at)
     fresh = age is not None and age <= 8
-    ok = healthy and fresh
+    if not fresh:
+        severity = "fail"
+        ok = False
+        detail = "doctor report is stale or missing timestamp"
+    elif explicit_fail:
+        severity = "fail"
+        ok = False
+        detail = "doctor report has explicit failed checks"
+    elif healthy:
+        severity = "pass"
+        ok = True
+        detail = "Desk status: healthy and fresh"
+    elif attention:
+        severity = "warn"
+        ok = True
+        detail = "doctor report is fresh with advisory attention items"
+    else:
+        severity = "fail"
+        ok = False
+        detail = "doctor report has an unrecognized status"
     return {
         "name": "doctor",
         "ok": ok,
-        "severity": "pass" if ok else "fail",
+        "severity": severity,
         "generatedAt": generated_at,
         "ageHours": round(age, 2) if age is not None else None,
-        "detail": "Desk status: healthy and fresh" if ok else "doctor report is stale or not healthy",
+        "detail": detail,
     }
 
 
@@ -109,13 +134,20 @@ def _schwab_check() -> dict[str, Any]:
     )
     expiry = parse_timestamp(status.get("accessTokenExpiresAt"))
     access_token_fresh = expiry is not None and expiry > local_now()
+    reauthorization_required = bool(status.get("reauthorizationRequired"))
     # Schwab access tokens are short-lived; a stored refresh token keeps the
     # desk operational, but the preflight should still surface that the next
     # tape pull may need to refresh first.
-    severity = "pass" if configured and access_token_fresh else "warn" if configured else "fail"
+    severity = (
+        "fail"
+        if reauthorization_required or not configured
+        else "pass"
+        if access_token_fresh
+        else "warn"
+    )
     return {
         "name": "schwab token",
-        "ok": configured,
+        "ok": configured and not reauthorization_required,
         "severity": severity,
         "detail": {
             "envFileExists": status.get("envFileExists"),
@@ -124,9 +156,11 @@ def _schwab_check() -> dict[str, Any]:
             "tokenFileExists": status.get("tokenFileExists"),
             "accessTokenPresent": status.get("accessTokenPresent"),
             "refreshTokenPresent": status.get("refreshTokenPresent"),
+            "reauthorizationRequired": reauthorization_required,
             "accessTokenFresh": access_token_fresh,
             "accessTokenExpiresAt": status.get("accessTokenExpiresAt"),
             "refreshTokenExpiresAt": status.get("refreshTokenExpiresAt"),
+            "lastRefreshErrorAt": status.get("lastRefreshErrorAt"),
         },
     }
 
@@ -194,6 +228,9 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
         _tos_session_probe_check(),
         _artifact_check("morning brief", MORNING_BRIEF_TEXT_FILE, max_age_hours=30),
         _artifact_check("action pulse", ACTION_PULSE_FILE, max_age_hours=8),
+        _artifact_check("deposit plan", DEPOSIT_PLAN_FILE, max_age_hours=30),
+        _artifact_check("cash attribution", CASH_ATTRIBUTION_FILE, max_age_hours=30),
+        _artifact_check("ticket cap policy", TICKET_CAP_POLICY_FILE, max_age_hours=30),
     ]
     hard_failures = [check for check in checks if check.get("severity") == "fail"]
     warnings = [check for check in checks if check.get("severity") == "warn"]
