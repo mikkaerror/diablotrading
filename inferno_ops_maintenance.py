@@ -124,6 +124,13 @@ def repair_morning_email(*, force: bool = False) -> dict[str, Any]:
         return {"attempted": False, "ok": False, "status": "missing-snapshot"}
     if ops_status.get("emailSent") and not force:
         return {"attempted": False, "ok": True, "status": "already-sent"}
+    if ops_status.get("emailSkipped") and not force:
+        return {
+            "attempted": False,
+            "ok": True,
+            "status": "intentionally-skipped",
+            "emailSkipReason": ops_status.get("emailSkipReason"),
+        }
     if not smtp_configured():
         return {"attempted": False, "ok": False, "status": "smtp-not-configured"}
 

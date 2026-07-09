@@ -2104,7 +2104,14 @@ def updater_status_entry(result: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
-def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, Any]], email_sent: bool, email_error: str | None = None) -> None:
+def write_ops_status(
+    payload: dict[str, Any],
+    updater_results: list[dict[str, Any]],
+    email_sent: bool,
+    email_error: str | None = None,
+    email_skipped: bool = False,
+    email_skip_reason: str | None = None,
+) -> None:
     repair_result = next((result for result in updater_results if result["script"] == "R-20DayATR self-heal"), None)
     formula_result = next((result for result in updater_results if result["script"] == "U:Y score sync"), None)
     review_tickers = payload["reviewQueueTickers"]
@@ -2117,6 +2124,8 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
             "ok": True,
             "sourceLabel": payload["sourceLabel"],
             "emailSent": email_sent,
+            "emailSkipped": email_skipped,
+            "emailSkipReason": email_skip_reason,
             "emailError": email_error,
             "trackedCount": len(payload["rows"]),
             "eligibleCount": len(payload["eligibleTickers"]),
@@ -2135,12 +2144,20 @@ def write_ops_status(payload: dict[str, Any], updater_results: list[dict[str, An
     try:
         record_heartbeat(
             "dawn_cycle",
-            status="ok" if email_sent else "warn",
-            summary="morning pipeline completed" if email_sent else "morning pipeline completed without email",
+            status="ok" if email_sent or email_skipped else "warn",
+            summary=(
+                "morning pipeline completed"
+                if email_sent
+                else "morning pipeline completed with email intentionally skipped"
+                if email_skipped
+                else "morning pipeline completed without email"
+            ),
             detail={
                 "eligibleCount": len(payload["eligibleTickers"]),
                 "topTickers": payload["eligibleTickers"][:5],
                 "emailSent": email_sent,
+                "emailSkipped": email_skipped,
+                "emailSkipReason": email_skip_reason,
             },
         )
     except Exception:  # noqa: BLE001
@@ -2866,7 +2883,16 @@ def main() -> int:
                         approval_dispatch = {"ok": False, "status": "dispatch-failed", "error": str(exc)}
 
             payload["approvalDispatch"] = approval_dispatch
-            write_ops_status(payload, updater_results, email_sent, email_error=email_error)
+            email_skipped = bool(args.skip_email)
+            email_skip_reason = "skip-email-flag" if email_skipped else None
+            write_ops_status(
+                payload,
+                updater_results,
+                email_sent,
+                email_error=email_error,
+                email_skipped=email_skipped,
+                email_skip_reason=email_skip_reason,
+            )
             append_paper_trade_journal(build_paper_trade_entries(payload))
             if args.cloud_native:
                 try:
@@ -2882,6 +2908,8 @@ def main() -> int:
                     "generatedAt": payload["generatedAt"],
                     "ok": True,
                     "emailSent": email_sent,
+                    "emailSkipped": email_skipped,
+                    "emailSkipReason": email_skip_reason,
                     "emailError": email_error,
                     "eligibleTickers": payload["eligibleTickers"],
                     "longTermTickers": payload["longTermTickers"],

@@ -59,7 +59,8 @@ def build_failure_reasons(ops_status: dict | None) -> list[str]:
 
     if not ops_status.get("ok", False):
         reasons.append(ops_status.get("error", "dawn cycle marked failed"))
-    if not ops_status.get("emailSent", False):
+    email_intentionally_skipped = bool(ops_status.get("emailSkipped")) and not ops_status.get("emailError")
+    if not ops_status.get("emailSent", False) and not email_intentionally_skipped:
         reasons.append("morning brief email did not send")
 
     failed_jobs = [entry.get("script") for entry in ops_status.get("updaterScripts", []) if not entry.get("ok")]
@@ -123,6 +124,9 @@ def build_diagnostics(ops_status: dict | None) -> list[str]:
         lines.append(f"- Last recorded run: {ops_status.get('generatedAt', 'unknown')}")
         lines.append(f"- Source: {ops_status.get('sourceLabel', 'unknown')}")
         lines.append(f"- Email sent: {ops_status.get('emailSent', 'unknown')}")
+        lines.append(f"- Email skipped: {ops_status.get('emailSkipped', False)}")
+        if ops_status.get("emailSkipReason"):
+            lines.append(f"- Email skip reason: {ops_status.get('emailSkipReason')}")
         lines.append(f"- Eligible count: {ops_status.get('eligibleCount', 'unknown')}")
         lines.append(f"- Top tickers: {', '.join(ops_status.get('topTickers', [])[:5]) or 'none'}")
         failed_jobs = [entry.get("script") for entry in ops_status.get("updaterScripts", []) if not entry.get("ok")]

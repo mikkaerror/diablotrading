@@ -104,6 +104,49 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(result["status"], "snapshot-mismatch")
             self.assertFalse(repaired["emailSent"])
 
+    def test_repair_morning_email_does_not_send_intentionally_skipped_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            ops_status_file = temp_root / "inferno_ops_status.json"
+            snapshot_file = temp_root / "latest_snapshot.json"
+            ops_status_file.write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-05T06:00:00-10:00",
+                        "ok": True,
+                        "emailSent": False,
+                        "emailSkipped": True,
+                        "emailSkipReason": "skip-email-flag",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            snapshot_file.write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-05T06:00:00-10:00",
+                        "brief": "Morning Brief",
+                        "sourceLabel": "Inferno Runner",
+                        "rows": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(ops_maintenance, "OPS_STATUS_FILE", ops_status_file),
+                patch.object(ops_maintenance, "SNAPSHOT_FILE", snapshot_file),
+                patch.object(ops_maintenance, "smtp_configured", return_value=True),
+                patch.object(ops_maintenance, "send_email", return_value=True) as send_email,
+            ):
+                result = ops_maintenance.repair_morning_email()
+
+            self.assertFalse(result["attempted"])
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["status"], "intentionally-skipped")
+            self.assertEqual(result["emailSkipReason"], "skip-email-flag")
+            send_email.assert_not_called()
+
     def test_run_maintenance_refreshes_cloud_artifacts_and_sets_ok(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
