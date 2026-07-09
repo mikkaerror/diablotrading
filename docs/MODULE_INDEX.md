@@ -115,6 +115,7 @@ Safety            — authority, risk, secrets
 | `inferno_hypothesis_ledger.py` | Append-only memory of every hypothesis; trajectory classifier | `data/inferno_hypothesis_ledger.json` |
 | `inferno_strategy_replay.py` | Research-only replay of strategy lab over closed shadow outcomes | `reports/strategy_replay_latest.txt` |
 | `inferno_strategy_lab.py` | Production strategy promotion gate (lab verdict) | `data/inferno_strategy_lab.json` |
+| `inferno_strategy_economics.py` | Research-only scale viability model for strategy P&L versus data cost | `reports/strategy_economics_latest.txt` |
 | `inferno_counterfactual.py` | Policy-level replay over closed shadow set with ranked verdicts | `reports/counterfactual_latest.txt` |
 | `inferno_devils_advocate.py` | Sign-flip-bootstrap falsification of every claimed edge | `reports/devils_advocate_latest.txt` |
 | `inferno_evidence_strength.py` | Composite 0–1 scalar over Wilson lower, expectancy lower, sample size, falsification | `reports/evidence_strength_latest.txt` |
