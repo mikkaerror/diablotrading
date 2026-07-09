@@ -45,6 +45,22 @@ class InfernoReportingPreflightTests(unittest.TestCase):
             self.assertIn("Warnings: 1", text_file.read_text(encoding="utf-8"))
             self.assertIn("ticket cap policy", [call.args[0] for call in artifact_check.call_args_list])
 
+    def test_tos_and_live_sync_are_not_required_when_schwab_account_truth_is_fresh(self) -> None:
+        with patch.object(preflight, "_account_api_source_ready", return_value=True), \
+             patch.object(preflight, "build_tos_visibility_summary", return_value={"level": "not-running"}):
+            tos = preflight._tos_check()
+            live = preflight._live_account_sync_check()
+            probe = preflight._tos_session_probe_check()
+
+        self.assertTrue(tos["ok"])
+        self.assertEqual(tos["severity"], "pass")
+        self.assertIn("not required", tos["detail"])
+        self.assertTrue(live["ok"])
+        self.assertEqual(live["severity"], "pass")
+        self.assertIn("covered by fresh Schwab", live["detail"])
+        self.assertTrue(probe["ok"])
+        self.assertEqual(probe["severity"], "pass")
+
     def test_schwab_check_fails_when_reauthorization_is_required(self) -> None:
         status = {
             "envFileExists": True,

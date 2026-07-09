@@ -655,6 +655,98 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/central_command_latest.txt", digest)
             self.assertEqual(onboard_report, digest)
 
+    def test_active_market_mastery_actions_skip_resolved_tasks(self) -> None:
+        actions = command_center.active_market_mastery_actions(
+            {
+                "tasks": [
+                    {
+                        "id": "M01",
+                        "title": "Restore fresh Schwab truth",
+                        "status": "ready",
+                        "action": "Refresh account/options/price history.",
+                    },
+                    {
+                        "id": "M02",
+                        "title": "Close due paper positions",
+                        "status": "clear",
+                        "action": "Resolve close-now paper positions.",
+                    },
+                    {
+                        "id": "M03",
+                        "title": "Fix stale command-center source",
+                        "status": "action-now",
+                        "action": "Prefer Schwab account truth over stale TOS statements.",
+                    },
+                    {
+                        "id": "M04",
+                        "title": "Decision card",
+                        "status": "implemented",
+                        "action": "Keep the current card.",
+                    },
+                    {
+                        "id": "M05",
+                        "title": "Research-only strategy check",
+                        "status": "build-next",
+                        "action": "Make the backtest reproducible before promotion.",
+                    },
+                ]
+            }
+        )
+
+        self.assertEqual(
+            actions,
+            [
+                "M03: Fix stale command-center source - Prefer Schwab account truth over stale TOS statements.",
+                "M05: Research-only strategy check - Make the backtest reproducible before promotion.",
+            ],
+        )
+
+    def test_active_market_mastery_actions_falls_back_to_legacy_next_actions(self) -> None:
+        actions = command_center.active_market_mastery_actions(
+            {"nextActions": ["legacy one", "legacy two", "legacy three"]},
+            limit=2,
+        )
+
+        self.assertEqual(actions, ["legacy one", "legacy two"])
+
+    def test_account_headline_prefers_healthy_schwab_over_tos_statement(self) -> None:
+        metrics = command_center.account_headline_metrics(
+            {
+                "accountDataSource": "tos-account-statement",
+                "netLiquidatingValue": "$1,108.08",
+                "totalCash": "$167.88",
+            },
+            {
+                "verdict": "healthy",
+                "brokerReadOnly": True,
+                "netLiquidatingValue": 767.31,
+                "totalCash": 0.0,
+            },
+        )
+
+        self.assertEqual(metrics["accountDataSource"], "schwab-account-api")
+        self.assertEqual(metrics["accountNetLiquidatingValue"], 767.31)
+        self.assertEqual(metrics["accountTotalCash"], 0.0)
+
+    def test_account_headline_keeps_live_sync_when_already_schwab_sourced(self) -> None:
+        metrics = command_center.account_headline_metrics(
+            {
+                "accountDataSource": "schwab-account-api",
+                "netLiquidatingValue": 1000.0,
+                "totalCash": 0.0,
+            },
+            {
+                "verdict": "healthy",
+                "brokerReadOnly": True,
+                "netLiquidatingValue": 999.0,
+                "totalCash": 200.0,
+            },
+        )
+
+        self.assertEqual(metrics["accountDataSource"], "schwab-account-api")
+        self.assertEqual(metrics["accountNetLiquidatingValue"], 1000.0)
+        self.assertEqual(metrics["accountTotalCash"], 0.0)
+
     def test_note_and_mission_helpers_persist_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

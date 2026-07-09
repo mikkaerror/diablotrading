@@ -764,6 +764,86 @@ def build_executive_summary(
     ]
 
 
+def active_market_mastery_actions(payload: dict[str, Any], limit: int = 3) -> list[str]:
+    """Return unresolved market-mastery actions for the operator surface."""
+    tasks = payload.get("tasks") or []
+    if tasks:
+        resolved_statuses = {
+            "ready",
+            "clear",
+            "implemented",
+            "implemented-guarding",
+            "implemented-watch",
+            "implemented-research",
+            "implemented-shadow-only",
+        }
+        actions: list[str] = []
+        for task in tasks:
+            if text(task.get("status")).lower() in resolved_statuses:
+                continue
+            identifier = text(task.get("id"))
+            title = text(task.get("title"))
+            action = text(task.get("action"))
+            heading = f"{identifier}: {title}" if identifier and title else identifier or title
+            if heading and action:
+                actions.append(f"{heading} - {action}")
+            elif action:
+                actions.append(action)
+            elif heading:
+                actions.append(heading)
+        return [action for action in actions if action][:limit]
+    return list(payload.get("nextActions") or [])[:limit]
+
+
+def schwab_account_headline_available(payload: dict[str, Any]) -> bool:
+    """Return whether Schwab has usable read-only account truth for headlines."""
+    return (
+        text(payload.get("verdict")).lower() == "healthy"
+        and bool(payload.get("brokerReadOnly"))
+        and (
+            has_display_value(payload.get("netLiquidatingValue"))
+            or has_display_value(payload.get("totalCash"))
+        )
+    )
+
+
+def account_headline_metrics(
+    live_sync: dict[str, Any],
+    schwab_account_sync: dict[str, Any],
+) -> dict[str, Any]:
+    """Pick headline account truth without letting stale TOS statements outrank Schwab."""
+    live_source = text(live_sync.get("accountDataSource"))
+    if live_source == "schwab-account-api":
+        return {
+            "accountDataSource": live_sync.get("accountDataSource"),
+            "accountNetLiquidatingValue": first_display_value(
+                live_sync.get("netLiquidatingValue"),
+                schwab_account_sync.get("netLiquidatingValue"),
+            ),
+            "accountTotalCash": first_display_value(
+                live_sync.get("totalCash"),
+                schwab_account_sync.get("totalCash"),
+            ),
+        }
+    if schwab_account_headline_available(schwab_account_sync):
+        return {
+            "accountDataSource": "schwab-account-api",
+            "accountNetLiquidatingValue": schwab_account_sync.get("netLiquidatingValue"),
+            "accountTotalCash": schwab_account_sync.get("totalCash"),
+        }
+    return {
+        "accountDataSource": live_sync.get("accountDataSource"),
+        "accountNetLiquidatingValue": first_display_value(
+            live_sync.get("netLiquidatingValue"),
+            schwab_account_sync.get("netLiquidatingValue"),
+        ),
+        "accountTotalCash": first_display_value(
+            live_sync.get("totalCash"),
+            schwab_account_sync.get("totalCash"),
+        ),
+    }
+
+
 def build_command_center() -> dict[str, Any]:
     """Aggregate the latest desk state into one shared command-center artifact."""
     ensure_command_center_dirs()
@@ -834,7 +914,7 @@ def build_command_center() -> dict[str, Any]:
     deployable_cash_arg = command_cash_arg((capital_readiness.get("guardrails") or {}).get("deployableCash"))
 
     next_actions: list[str] = []
-    next_actions.extend((market_mastery.get("nextActions") or [])[:3])
+    next_actions.extend(active_market_mastery_actions(market_mastery, limit=3))
     next_actions.extend((account_optimization.get("nextActions") or [])[:2])
     next_actions.extend(live_book_packet.get("unlockChecklist") or [])
     next_actions.extend(live_review.get("nextActions") or [])
@@ -938,11 +1018,7 @@ def build_command_center() -> dict[str, Any]:
         ),
     )
     headline_metrics = {
-        "accountDataSource": live_sync.get("accountDataSource"),
-        "accountNetLiquidatingValue": first_display_value(
-            live_sync.get("netLiquidatingValue"), schwab_account_sync.get("netLiquidatingValue")
-        ),
-        "accountTotalCash": first_display_value(live_sync.get("totalCash"), schwab_account_sync.get("totalCash")),
+        **account_headline_metrics(live_sync, schwab_account_sync),
         "depositAmountDollars": (deposit_plan.get("plan") or {}).get("amountDollars"),
         "depositIntervalDays": (deposit_plan.get("plan") or {}).get("intervalDays"),
         "depositNextDate": (deposit_plan.get("schedule") or {}).get("nextDepositDate"),

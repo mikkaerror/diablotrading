@@ -85,6 +85,30 @@ class InfernoCashAttributionTests(unittest.TestCase):
             rendered = (reports_dir / "cash_attribution_latest.txt").read_text(encoding="utf-8")
             self.assertIn("Never infer realized options profit", rendered)
 
+    def test_cash_snapshot_prefers_healthy_schwab_over_tos_statement(self) -> None:
+        source, payload = cash_attribution.broker_cash_payload(
+            {
+                "generatedAt": "2026-07-09T07:00:00-06:00",
+                "ok": True,
+                "verdict": "healthy",
+                "accountDataSource": "tos-account-statement",
+                "totalCash": "$167.88",
+                "netLiquidatingValue": "$1,108.08",
+            },
+            {
+                "generatedAt": "2026-07-09T09:50:00-06:00",
+                "ok": True,
+                "verdict": "healthy",
+                "brokerReadOnly": True,
+                "totalCash": 0.0,
+                "netLiquidatingValue": 767.31,
+            },
+        )
+
+        self.assertEqual(source, "schwab-account-sync")
+        self.assertEqual(payload["totalCash"], 0.0)
+        self.assertEqual(payload["netLiquidatingValue"], 767.31)
+
     def test_cash_increase_near_schedule_is_likely_deposit_not_profit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

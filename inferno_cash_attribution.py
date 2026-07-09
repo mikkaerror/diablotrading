@@ -88,21 +88,48 @@ def parse_day(value: Any) -> date | None:
         return None
 
 
+def schwab_account_cash_available(payload: dict[str, Any]) -> bool:
+    """Return whether Schwab has usable read-only cash/account truth."""
+    return (
+        text(payload.get("verdict")).lower() == "healthy"
+        and bool(payload.get("brokerReadOnly"))
+        and (
+            payload.get("totalCash") not in (None, "")
+            or payload.get("netLiquidatingValue") not in (None, "")
+        )
+    )
+
+
+def broker_cash_payload(
+    live_sync: dict[str, Any],
+    schwab_sync: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Choose the current broker-cash source using Schwab before stale TOS statements."""
+    if text(live_sync.get("accountDataSource")) == "schwab-account-api":
+        return "live-account-sync", live_sync
+    if schwab_account_cash_available(schwab_sync):
+        return "schwab-account-sync", schwab_sync
+    if live_sync.get("totalCash") not in (None, ""):
+        return "live-account-sync", live_sync
+    if schwab_sync:
+        return "schwab-account-sync", schwab_sync
+    return "live-account-sync", live_sync
+
+
 def broker_cash_snapshot() -> dict[str, Any]:
     """Return the latest approved broker cash snapshot."""
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     schwab_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
-    source = "live-account-sync"
-    payload = live_sync
-    if live_sync.get("totalCash") in (None, "") and schwab_sync:
-        source = "schwab-account-sync"
-        payload = schwab_sync
+    source, payload = broker_cash_payload(live_sync, schwab_sync)
+    account_data_source = payload.get("accountDataSource")
+    if not account_data_source and source == "schwab-account-sync":
+        account_data_source = "schwab-account-api"
     return {
         "source": source,
         "generatedAt": payload.get("generatedAt"),
         "ok": bool(payload.get("ok")),
         "verdict": payload.get("verdict"),
-        "accountDataSource": payload.get("accountDataSource") or source,
+        "accountDataSource": account_data_source or source,
         "matchedSuffix": payload.get("matchedSuffix"),
         "cash": round(float(number(payload.get("totalCash"), 0.0) or 0.0), 2),
         "netLiquidatingValue": round(float(number(payload.get("netLiquidatingValue"), 0.0) or 0.0), 2),

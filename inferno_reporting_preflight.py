@@ -166,13 +166,27 @@ def _schwab_check() -> dict[str, Any]:
 
 
 def _account_api_source_ready() -> bool:
-    """Return True when live account sync is already sourced from Schwab."""
+    """Return True when fresh Schwab account truth removes the TOS dependency."""
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
-    return (
+    live_age = age_hours(artifact_generated_at(LIVE_ACCOUNT_SYNC_FILE))
+    live_ready = (
         bool(live_sync.get("ok"))
         and live_sync.get("accountDataSource") == "schwab-account-api"
         and live_sync.get("tosRequiredForAccountSync") is False
+        and live_age is not None
+        and live_age <= 8
     )
+    schwab_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
+    schwab_age = age_hours(artifact_generated_at(SCHWAB_ACCOUNT_SYNC_FILE))
+    schwab_ready = (
+        bool(schwab_sync.get("ok"))
+        and schwab_sync.get("verdict") == "healthy"
+        and bool(schwab_sync.get("brokerReadOnly"))
+        and schwab_sync.get("orderEndpointsAllowed") is False
+        and schwab_age is not None
+        and schwab_age <= 8
+    )
+    return live_ready or schwab_ready
 
 
 def _tos_check() -> dict[str, Any]:
@@ -212,6 +226,18 @@ def _tos_session_probe_check() -> dict[str, Any]:
     return _artifact_check("TOS session probe", TOS_SESSION_PROBE_FILE, max_age_hours=8)
 
 
+def _live_account_sync_check() -> dict[str, Any]:
+    """Check live account sync only when Schwab account truth is not fresh enough."""
+    if _account_api_source_ready():
+        return {
+            "name": "live account sync",
+            "ok": True,
+            "severity": "pass",
+            "detail": "covered by fresh Schwab account API sync",
+        }
+    return _artifact_check("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8)
+
+
 def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
     """Build the read-only reporting preflight artifact."""
     ensure_dirs()
@@ -224,7 +250,7 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
         _artifact_check("Schwab options tape", SCHWAB_OPTIONS_FILE, max_age_hours=max_age_hours),
         _artifact_check("Schwab daily ops", SCHWAB_DAILY_OPS_FILE, max_age_hours=max_age_hours),
         _artifact_check("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, max_age_hours=8),
-        _artifact_check("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8),
+        _live_account_sync_check(),
         _tos_session_probe_check(),
         _artifact_check("morning brief", MORNING_BRIEF_TEXT_FILE, max_age_hours=30),
         _artifact_check("action pulse", ACTION_PULSE_FILE, max_age_hours=8),
