@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inferno - One Screen</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#141922; --panel2:#1b2230; --line:#26303f;
+    --txt:#e6edf3; --muted:#8b98a9; --accent:#ff6a3d;
+    --ok:#2ecc71; --warn:#f1c40f; --bad:#ff4d4f; --info:#4aa3ff;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .brand{font-weight:800;letter-spacing:.5px;font-size:22px}
+  .brand span{color:var(--accent)}
+  .pill{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .pill.ok{background:rgba(46,204,113,.15);color:var(--ok)}
+  .pill.warn{background:rgba(241,196,15,.15);color:var(--warn)}
+  .pill.bad{background:rgba(255,77,79,.15);color:var(--bad)}
+  .spacer{flex:1}
+  .meta{color:var(--muted);font-size:13px}
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .banner{border-radius:8px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--line)}
+  .banner.ok{background:rgba(46,204,113,.08);border-color:rgba(46,204,113,.35)}
+  .banner.bad{background:rgba(255,77,79,.08);border-color:rgba(255,77,79,.45)}
+  .banner h2{margin:0 0 4px;font-size:15px}
+  code{font-family:var(--mono);background:#000;padding:2px 7px;border-radius:6px;color:#ffd7c9;font-size:13px}
+  .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+  .grid>*{min-width:0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card table{display:block;overflow-x:auto;white-space:nowrap}
+  @media(max-width:480px){
+    .wrap{padding:12px 12px 48px}
+    .brand{font-size:19px}
+    .big{font-size:24px}
+    table{font-size:12.5px}
+    th,td{padding:6px 5px}
+    .banner h2{font-size:14px}
+    header{gap:8px}
+  }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+  .card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .big{font-size:30px;font-weight:800}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:0}
+  .k{color:var(--muted)} .v{font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pos{color:var(--ok)} .neg{color:var(--bad)}
+  .flags{color:var(--warn);font-size:12px}
+  .bar{height:12px;background:var(--panel2);border-radius:999px;overflow:hidden;margin:8px 0}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffab8c)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px}
+  .chip b{font-variant-numeric:tabular-nums}
+  .chip.stale{border-color:var(--bad);color:var(--bad)}
+  .chip.fresh{border-color:rgba(46,204,113,.4)}
+  .attn li{margin:0 0 7px;list-style:none}
+  .attn ul{padding:0;margin:0}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)} .dot.ok{background:var(--ok)}
+  .strip{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:16px}
+  .striplabel{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-right:6px}
+  .foot{color:var(--muted);font-size:12px;margin-top:22px;text-align:center}
+  .err{color:var(--bad)}
+  .full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">INFERNO<span>.</span></div>
+    <div id="overall"></div>
+    <div class="spacer"></div>
+    <div class="meta" id="updated">loading...</div>
+    <button onclick="load()">Reload</button>
+  </header>
+
+  <div id="changed"></div>
+  <div id="oauth"></div>
+
+  <div class="grid">
+    <div class="card" id="account"><h3>Account</h3><div class="meta">loading...</div></div>
+    <div class="card" id="evidence"><h3>Evidence &amp; edge</h3><div class="meta">loading...</div></div>
+    <div class="card full" id="nlvtrend"><h3>Account trajectory</h3><div class="meta">loading...</div></div>
+    <div class="card full" id="wouldtrade"><h3>Strategy pricing blockers</h3><div class="meta">loading...</div></div>
+    <div class="card full" id="freshness"><h3>Data freshness</h3><div class="meta">loading...</div></div>
+    <div class="card full" id="attention"><h3>Needs attention</h3><div class="meta">loading...</div></div>
+  </div>
+
+  <div class="foot">Read-only view - auto-refreshes every 5 min - data from <code>model_command_center</code> + <code>live_account_sync</code>.<br>
+  This screen never places a trade or changes authority. liveTradingAllowed / brokerSubmitAllowed stay off.</div>
+</div>
+
+<script>
+const STALE_H = 28;            // hours before a source is "stale"
+const REAUTH = "./inferno oauth restart";
+const REFRESH = "./inferno sync";
+
+const $ = id => document.getElementById(id);
+const pick = (o,...ks)=>{ for(const k of ks){ if(o && o[k]!=null) return o[k]; } return null; };
+const num = v => (typeof v==="number"&&isFinite(v)) ? v : (v!=null&&!isNaN(parseFloat(v))?parseFloat(v):null);
+const money = v => v==null ? "-" : "$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+const pct = v => v==null ? "-" : Number(v).toFixed(1)+"%";
+function hoursAgo(iso){ if(!iso) return null; const t=Date.parse(iso); if(isNaN(t)) return null; return (Date.now()-t)/3.6e6; }
+function ago(iso){ const h=hoursAgo(iso); if(h==null) return "-"; if(h<1) return Math.round(h*60)+"m ago"; if(h<48) return h.toFixed(1)+"h ago"; return Math.round(h/24)+"d ago"; }
+
+async function getJSON(path){
+  const r = await fetch(path + "?t=" + Date.now(), {cache:"no-store"});
+  if(!r.ok) throw new Error(path+" -> "+r.status);
+  return r.json();
+}
+async function getText(path){
+  const r = await fetch(path + "?t=" + Date.now(), {cache:"no-store"});
+  if(!r.ok) throw new Error(path+" -> "+r.status);
+  return r.text();
+}
+
+async function load(){
+  $("updated").textContent = "refreshing...";
+  let cc={}, acct={}, nlvCsv=null, pricing=null;
+  const errs=[];
+  try{ cc = await getJSON("data/inferno_model_command_center.json"); }catch(e){ errs.push(e.message); }
+  try{ acct = await getJSON("data/inferno_live_account_sync.json"); }catch(e){ errs.push(e.message); }
+  try{ nlvCsv = await getText("data/nlv_history.csv"); }catch(e){ /* optional */ }
+  try{ pricing = await getJSON("data/inferno_strategy_alternative_pricing.json"); }catch(e){ /* optional */ }
+
+  if(errs.length && !cc.generatedAt && !acct.generatedAt){
+    $("updated").innerHTML = '<span class="err">can\'t read desk files</span>';
+    $("oauth").innerHTML = '<div class="banner bad"><h2>Dashboard can\'t reach the desk data.</h2>'+
+      '<div class="meta">Serve this file from the repo root so it can read <code>data/*.json</code>:<br>'+
+      '<code>cd "Documents/New project" &amp;&amp; python3 -m http.server 8787</code> then open '+
+      '<code>http://localhost:8787/inferno_dashboard.html</code></div>'+
+      '<div class="meta" style="margin-top:8px">'+errs.map(e=>"- "+e).join("<br>")+'</div></div>';
+    return;
+  }
+
+  renderOverall(cc);
+  renderChanged(cc, acct, nlvCsv);
+  renderOAuth(cc, acct);
+  renderAccount(cc, acct);
+  renderEvidence(cc);
+  renderNLV(nlvCsv);
+  renderWouldTrade(pricing);
+  renderFreshness(cc, acct);
+  renderAttention(cc);
+
+  const gen = acct.generatedAt || cc.generatedAt;
+  $("updated").innerHTML = "desk data: <b>"+ago(gen)+"</b> - view refreshed just now";
+}
+
+function statusClass(v){ v=(v||"").toLowerCase();
+  if(/healthy|clear|ready|ok|clean|productive|supported/.test(v)) return "ok";
+  if(/attention|watch|building|review|blocked|drift|warming/.test(v)) return "warn";
+  if(/fail|error|dead|reauth|stale|breach/.test(v)) return "bad";
+  return "warn"; }
+
+function renderOverall(cc){
+  const cap = pick(cc.executiveSummary||{},"capital") || "";
+  const anyBad = JSON.stringify(cc.systemStatus||{}).match(/reauthorization|invalid_grant/i);
+  const cls = anyBad ? "bad" : "warn";
+  $("overall").innerHTML = '<span class="pill '+cls+'">'+(anyBad?"needs you":"research-only")+'</span>';
+}
+
+function oauthHealthy(cc, acct){
+  // OAuth is healthy when the Schwab account artifact is fresh and verdict healthy.
+  const gen = acct.schwabAccountGeneratedAt || pick(cc.systemStatus?.schwabAccountSync||{}, "generatedAt");
+  const verdict = (acct.schwabAccountVerdict || pick(cc.systemStatus?.schwabAccountSync||{}, "verdict") || "").toLowerCase();
+  const h = hoursAgo(gen);
+  const blob = JSON.stringify(cc.systemStatus||{}).toLowerCase();
+  if(blob.includes("reauthorization") || blob.includes("invalid_grant")) {
+    return {ok:false, age:h, reason:"reauthorization"};
+  }
+  if(h==null) return {ok:false, age:null, reason:"missing"};
+  return {ok:(h < STALE_H && (verdict.includes("healthy")||verdict==="") ), age:h};
+}
+
+function renderOAuth(cc, acct){
+  const s = oauthHealthy(cc, acct);
+  if(s.ok){
+    $("oauth").innerHTML = '<div class="banner ok"><h2>Schwab connection healthy'+
+      (s.age!=null?' <span class="meta">(synced '+s.age.toFixed(1)+'h ago)</span>':'')+'</h2>'+
+      '<div class="meta">Daily refresh can run hands-off while the token is valid (~weekly re-consent by Schwab\'s design).</div></div>';
+  } else {
+    $("oauth").innerHTML = '<div class="banner bad"><h2>Schwab needs re-authorization</h2>'+
+      '<div class="meta">'+(s.reason==="reauthorization"
+        ? 'The token status requires a fresh Schwab consent. Latest account artifact: '+(s.age!=null?ago((acct.schwabAccountGeneratedAt || pick(cc.systemStatus?.schwabAccountSync||{}, "generatedAt"))):'missing')+'.'
+        : 'The account data is stale or missing.')+
+      ' Re-consent in the browser, then run the daily refresh:</div>'+
+      '<div style="margin-top:8px"><code>'+REAUTH+'</code></div>'+
+      '<div style="margin-top:6px"><code>'+REFRESH+'</code></div></div>';
+  }
+}
+
+function renderAccount(cc, acct){
+  const nlv = num(pick(acct,"netLiquidatingValue","netLiq"));
+  const cash = num(pick(acct,"totalCash"));
+  const invested = (nlv!=null && cash!=null && nlv>0) ? (100*(nlv-cash)/nlv) : null;
+  const pos = Array.isArray(acct.positions) ? acct.positions : [];
+  let rows = pos.map(p=>{
+    const sym = pick(p,"symbol")||"?";
+    const mv = num(pick(p,"markValue","marketValue","mv"));
+    const w = num(pick(p,"weightPct","weight"));
+    const pl = num(pick(p,"plPercent","plPct"));
+    const flags = (pick(p,"riskFlags","flags")||[]).join(", ");
+    const plc = pl==null?"":(pl>=0?"pos":"neg");
+    return '<tr><td><b>'+sym+'</b></td>'+
+      '<td class="num">'+money(mv)+'</td>'+
+      '<td class="num">'+pct(w)+'</td>'+
+      '<td class="num '+plc+'">'+(pl==null?"-":(pl>=0?"+":"")+pl.toFixed(1)+"%")+'</td>'+
+      '<td class="flags">'+flags+'</td></tr>';
+  }).join("");
+  if(!rows) rows = '<tr><td colspan="5" class="meta">no positions</td></tr>';
+
+  $("account").innerHTML = '<h3>Account</h3>'+
+    '<div class="big">'+money(nlv)+'</div>'+
+    '<div class="row"><span class="k">Cash</span><span class="v">'+money(cash)+
+      (invested!=null?' <span class="meta">('+invested.toFixed(0)+'% invested)</span>':'')+'</span></div>'+
+    '<table style="margin-top:10px"><thead><tr><th>Name</th><th class="num">Value</th><th class="num">Wt</th><th class="num">P/L</th><th>Flags</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>';
+}
+
+function renderEvidence(cc){
+  const hm = cc.headlineMetrics || {};
+  const gap = num(pick(hm,"paperRemainingForPromotion","promotionGap"));
+  const scored = gap!=null ? Math.max(0,30-gap) : num(pick(hm,"strategyScoredOutcomes","scoredPaperTickets"));
+  const target = 30;
+  const p = scored!=null ? Math.min(100, 100*scored/target) : 0;
+  const em = (pick(cc.systemStatus?.expectedMoveLedger||{},"verdict") || pick(hm,"expectedMoveLedger") || "").toString();
+  const cal = (pick(cc.systemStatus?.scoreCalibration||{},"verdict") || "").toString();
+  const alt = (pick(cc.systemStatus?.strategyAlternativeScorer||{},"verdict") || "").toString();
+
+  $("evidence").innerHTML = '<h3>Evidence &amp; edge</h3>'+
+    '<div class="row"><span class="k">Scored paper outcomes</span><span class="v">'+
+      (scored==null?"-":scored)+' / '+target+'</span></div>'+
+    '<div class="bar"><i style="width:'+p.toFixed(0)+'%"></i></div>'+
+    '<div class="row"><span class="k">Promotable</span><span class="v">No - research-only</span></div>'+
+    (em?'<div class="row"><span class="k">Long-vol edge</span><span class="v">'+em+'</span></div>':'')+
+    (cal?'<div class="row"><span class="k">Score calibration</span><span class="v">'+cal+'</span></div>':'')+
+    (alt?'<div class="row"><span class="k">Preferred structures</span><span class="v">'+alt+'</span></div>':'');
+}
+
+function renderFreshness(cc, acct){
+  // Prefer a freshnessPanel if present; else derive from a few known artifacts.
+  let items=[];
+  const fp = cc.freshnessPanel || cc.freshness || null;
+  if(fp && Array.isArray(fp.rows)){
+    items = fp.rows.map(row => [
+      row.label || row.name || row.path || "source",
+      row.generatedAt || row.timestamp,
+      row.status || "",
+    ]);
+  } else if(fp && typeof fp==="object"){
+    for(const [k,v] of Object.entries(fp)){
+      const iso = (v && (v.generatedAt||v.timestamp)) || (typeof v==="string"?v:null);
+      const status = v && v.status ? v.status : "";
+      items.push([k, iso, status]);
+    }
+  }
+  if(!items.length){
+    const ss = cc.systemStatus||{};
+    const src = {
+      "command center": cc.generatedAt,
+      "live account": acct.generatedAt,
+      "schwab account": acct.schwabAccountGeneratedAt,
+      "ops maintenance": pick(ss.opsMaintenance||{},"generatedAt")
+    };
+    items = Object.entries(src);
+  }
+  const chips = items.map(([k,iso,status])=>{
+    const h = hoursAgo(iso);
+    const state = String(status || "").toLowerCase();
+    const stale = state === "stale" || state === "missing" || (h!=null && h>STALE_H);
+    const suffix = state ? " - "+state : "";
+    return '<div class="chip '+(stale?"stale":"fresh")+'"><b>'+k+'</b> - '+ago(iso)+suffix+'</div>';
+  }).join("");
+  $("freshness").innerHTML = '<h3>Data freshness</h3><div class="chips">'+(chips||'<span class="meta">no timestamps</span>')+'</div>';
+}
+
+// Only genuinely actionable verdicts - not every informational research state.
+// Genuinely human-actionable flags only. Data-starvation symptoms
+// (no-viable / no-priceable / awaiting-closed / thin-data) are the Evidence
+// card's story, not separate to-dos - the desk's own nextActions carry those.
+const ACTIONABLE = /attention|blocked|not-ready|stalled|ack-required|drift|high-theme-heat|needs-review|reauth|invalid_grant|fail|breach|stale|formula-drift/i;
+const HARD = /fail|reauth|breach|blocked|not-ready|stale|invalid_grant/i;
+function renderAttention(cc){
+  const ss = cc.systemStatus || {};
+  const flagged=[];
+  for(const [k,v] of Object.entries(ss)){
+    const verdict = (v && v.verdict) ? String(v.verdict) : "";
+    if(!verdict || !ACTIONABLE.test(verdict)) continue;
+    const cls = HARD.test(verdict) ? "bad" : "warn";
+    flagged.push([k,verdict,cls,(v&&v.message)||""]);
+  }
+  flagged.sort((a,b)=> (a[2]==="bad"?-1:1) - (b[2]==="bad"?-1:1));
+  const na = Array.isArray(cc.nextActions) ? cc.nextActions.slice(0,6) : [];
+  const list = flagged.slice(0,14).map(([k,v,cls,msg])=>
+    '<li><span class="dot '+cls+'"></span><b>'+k+'</b> - '+v+(msg?' <span class="meta">- '+msg+'</span>':'')+'</li>').join("");
+  const acts = na.map(a=>'<li><span class="dot warn"></span>'+a+'</li>').join("");
+  $("attention").innerHTML = '<h3>Needs attention</h3><div class="grid" style="grid-template-columns:1fr 1fr">'+
+    '<div class="attn"><div class="meta" style="margin-bottom:6px">Module verdicts</div><ul>'+(list||'<li class="meta">all healthy</li>')+'</ul></div>'+
+    '<div class="attn"><div class="meta" style="margin-bottom:6px">Next actions</div><ul>'+(acts||'<li class="meta">none listed</li>')+'</ul></div></div>';
+}
+
+function renderNLV(csv){
+  const el = $("nlvtrend");
+  if(!csv){ el.innerHTML = '<h3>Account trajectory</h3><div class="meta">no nlv_history.csv yet</div>'; return; }
+  const lines = csv.trim().split(/\r?\n/);
+  if(lines.length<2){ el.innerHTML='<h3>Account trajectory</h3><div class="meta">not enough history</div>'; return; }
+  const head = lines[0].split(",").map(s=>s.trim().toLowerCase());
+  const di = head.indexOf("date"), ni = head.indexOf("nlv");
+  const pts=[];
+  for(let i=1;i<lines.length;i++){
+    const c = lines[i].split(",");
+    const v = parseFloat(c[ni]); if(!isFinite(v)) continue;
+    pts.push({d:(c[di]||"").trim(), v});
+  }
+  if(pts.length<2){ el.innerHTML='<h3>Account trajectory</h3><div class="meta">not enough datapoints</div>'; return; }
+  const vals = pts.map(p=>p.v), cur=vals[vals.length-1], peak=Math.max(...vals), min=Math.min(...vals), first=vals[0];
+  const W=680,H=70,pad=4;
+  const xs = i => pad + i*(W-2*pad)/(vals.length-1);
+  const ys = v => H-pad - (v-min)*(H-2*pad)/((peak-min)||1);
+  const poly = vals.map((v,i)=>xs(i).toFixed(1)+","+ys(v).toFixed(1)).join(" ");
+  const lastX=xs(vals.length-1), lastY=ys(cur);
+  const dropPeak = peak>0 ? (100*(cur-peak)/peak) : 0;
+  const cls = dropPeak<0 ? "neg":"pos";
+  el.innerHTML = '<h3>Account trajectory</h3>'+
+    '<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px">'+
+      '<div><div class="meta">now</div><div class="big" style="font-size:22px">'+money(cur)+'</div></div>'+
+      '<div><div class="meta">peak</div><div class="v">'+money(peak)+'</div></div>'+
+      '<div><div class="meta">from peak</div><div class="v '+cls+'">'+(dropPeak>=0?"+":"")+dropPeak.toFixed(1)+'%</div></div>'+
+      '<div><div class="meta">first tracked</div><div class="v">'+money(first)+'</div></div>'+
+    '</div>'+
+    '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="70" preserveAspectRatio="none">'+
+      '<polyline fill="none" stroke="'+(dropPeak<0?"#ff6a3d":"#2ecc71")+'" stroke-width="2" points="'+poly+'"/>'+
+      '<circle cx="'+lastX.toFixed(1)+'" cy="'+lastY.toFixed(1)+'" r="3.2" fill="#fff"/>'+
+    '</svg>'+
+    '<div class="meta" style="margin-top:4px">'+pts[0].d+' -> '+pts[pts.length-1].d+' - '+pts.length+' snapshots (deposits show as jumps)</div>';
+}
+
+function blockReason(it){
+  const sp = it.strikePlan||{};
+  const ob = sp.optimizerBlocks;
+  if(Array.isArray(ob) && ob.length){
+    const f = ob[0];
+    if(typeof f==="string") return f;
+    if(f && Array.isArray(f.blocks) && f.blocks.length) return f.blocks[0];
+  }
+  return it.riskVerdict || "blocked";
+}
+function renderWouldTrade(p){
+  const el = $("wouldtrade");
+  if(!p || !Array.isArray(p.items) || !p.items.length){
+    el.innerHTML = '<h3>Strategy pricing blockers</h3><div class="meta">no priced candidates right now</div>'; return;
+  }
+  const items = p.items.slice().sort((a,b)=>(num(b.sourceAlternativeScore)||0)-(num(a.sourceAlternativeScore)||0)).slice(0,6);
+  const passed = p.items.filter(x=>x.combinedPassed).length;
+  const capBlocked = p.items.some(x=>JSON.stringify(x.strikePlan?.optimizerBlocks||"").includes("cap $0.00"));
+  const rows = items.map(it=>{
+    const sp = it.strikePlan||{};
+    const credit = num(sp.estimatedCredit), maxloss = num(sp.estimatedMaxLoss), cr = num(sp.creditRisk);
+    const ok = it.combinedPassed;
+    return '<tr><td><b>'+(it.ticker||"?")+'</b></td>'+
+      '<td>'+(it.recommendedStrategy||"-").replace(/_/g," ").toLowerCase()+'</td>'+
+      '<td class="num">'+(credit!=null?"$"+credit.toFixed(2):"-")+'</td>'+
+      '<td class="num">'+(maxloss!=null?money(maxloss):"-")+'</td>'+
+      '<td class="num">'+(cr!=null?cr.toFixed(2):"-")+'</td>'+
+      '<td>'+(ok?'<span class="pos">pricing pass</span>':'<span class="flags">'+blockReason(it)+'</span>')+'</td></tr>';
+  }).join("");
+  el.innerHTML = '<h3>Strategy pricing blockers</h3>'+
+    '<div class="row"><span class="k">Pricing verdict</span><span class="v">'+(p.verdict||"-")+' - '+passed+' of '+p.items.length+' passed</span></div>'+
+    (capBlocked?'<div class="meta" style="margin:6px 0">Dominant blocker: live risk budget is <b>$0</b> until the desk earns promotion (1/30), plus thin option chains on these names. A pricing pass is not an approval, broker ticket, or autonomous paper-stage instruction.</div>':'')+
+    '<table style="margin-top:6px"><thead><tr><th>Ticker</th><th>Structure</th><th class="num">Credit</th><th class="num">Max loss</th><th class="num">Cr/Risk</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+// "What changed since yesterday"
+function flagList(cc){
+  const ss = cc.systemStatus || {}; const out=[];
+  for(const [k,v] of Object.entries(ss)){
+    const verdict = (v && v.verdict) ? String(v.verdict) : "";
+    if(verdict && ACTIONABLE.test(verdict)) out.push(k);
+  }
+  return out;
+}
+function nlvDelta(csv){
+  if(!csv) return null;
+  const lines = csv.trim().split(/\r?\n/); if(lines.length<3) return null;
+  const head = lines[0].split(",").map(s=>s.trim().toLowerCase());
+  const di=head.indexOf("date"), ni=head.indexOf("nlv");
+  const pts=[];
+  for(let i=1;i<lines.length;i++){ const c=lines[i].split(","); const v=parseFloat(c[ni]); if(isFinite(v)) pts.push({d:(c[di]||"").trim(), v}); }
+  if(pts.length<2) return null;
+  const cur=pts[pts.length-1], prev=pts[pts.length-2];
+  return {d:cur.v-prev.v, p: prev.v? 100*(cur.v-prev.v)/prev.v : 0, prevDate: prev.d};
+}
+function loadSnaps(){ try{ return JSON.parse(localStorage.getItem("inferno_snaps")||"{}"); }catch(e){ return {}; } }
+function saveSnaps(s){ try{ localStorage.setItem("inferno_snaps", JSON.stringify(s)); }catch(e){} }
+
+function renderChanged(cc, acct, nlvCsv){
+  const el = $("changed");
+  const today = (acct.generatedAt || cc.generatedAt || new Date().toISOString()).slice(0,10);
+  const hm = cc.headlineMetrics || {};
+  const gap = num(pick(hm,"paperRemainingForPromotion","promotionGap"));
+  const scored = gap!=null ? Math.max(0,30-gap) : null;
+  const flags = flagList(cc);
+  const oauthOk = oauthHealthy(cc, acct).ok;
+
+  const snaps = loadSnaps();
+  const priorKey = Object.keys(snaps).filter(k=>k<today).sort().pop();
+  const prior = priorKey ? snaps[priorKey] : null;
+
+  const chips=[];
+  const nlv = nlvDelta(nlvCsv);
+  if(nlv){
+    const c = nlv.d<0 ? "neg":"pos";
+    chips.push('<span class="chip"><b>NLV</b> <span class="'+c+'">'+(nlv.d>=0?"+":"")+money(nlv.d)+
+      ' ('+(nlv.p>=0?"+":"")+nlv.p.toFixed(1)+'%)</span> <span class="meta">vs '+nlv.prevDate+'</span></span>');
+  }
+  if(prior){
+    if(scored!=null && prior.scored!=null && scored!==prior.scored){
+      const d = scored-prior.scored;
+      chips.push('<span class="chip"><b>Evidence</b> <span class="'+(d>0?"pos":"neg")+'">'+(d>0?"+":"")+d+'</span> -> '+scored+'/30</span>');
+    }
+    const pf = prior.flags||[];
+    const newFlags = flags.filter(f=>!pf.includes(f));
+    const cleared = pf.filter(f=>!flags.includes(f));
+    if(newFlags.length) chips.push('<span class="chip stale"><b>New flag</b> '+newFlags.join(", ")+'</span>');
+    if(cleared.length)  chips.push('<span class="chip fresh"><b>Cleared</b> '+cleared.join(", ")+'</span>');
+    if(oauthOk!==prior.oauthOk) chips.push('<span class="chip '+(oauthOk?"fresh":"stale")+'"><b>OAuth</b> '+(oauthOk?"recovered":"went stale")+'</span>');
+  }
+
+  // persist today's snapshot (keep last 10 days)
+  snaps[today] = {scored, flags, oauthOk};
+  const keys = Object.keys(snaps).sort(); while(keys.length>10){ delete snaps[keys.shift()]; }
+  saveSnaps(snaps);
+
+  if(!chips.length){
+    el.innerHTML = '<div class="strip"><span class="striplabel">Since '+(priorKey||"-")+'</span>'+
+      '<span class="meta">'+(prior?"No material change.":"Baseline captured - day-over-day changes appear here from tomorrow.")+'</span></div>';
+    return;
+  }
+  el.innerHTML = '<div class="strip"><span class="striplabel">Since '+(priorKey||"yesterday")+'</span>'+chips.join("")+'</div>';
+}
+
+load();
+setInterval(load, 5*60*1000);
+</script>
+</body>
+</html>
