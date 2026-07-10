@@ -568,6 +568,33 @@ class InfernoDoctorInformationalSignalsTests(unittest.TestCase):
         self.assertIn("paper-research-selected", detail)
         self.assertIn("paper-research=2", detail)
 
+    def test_paper_test_director_status_accepts_construction_watch_with_shadow_fallback(self) -> None:
+        now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
+        director = {
+            "generatedAt": "2026-05-19T08:55:00-06:00",
+            "verdict": "construction-watch",
+            "counts": {
+                "stageableNow": 0,
+                "autoPaperSelected": 0,
+                "paperResearchSelected": 0,
+                "approvalOnly": 0,
+                "constructionWatch": 3,
+                "hardBlocked": 12,
+            },
+        }
+        reducer = {
+            "generatedAt": "2026-05-19T08:56:00-06:00",
+            "verdict": "scenario-slate-ready",
+            "counts": {"scenarios": 12, "paperResearchSelected": 0, "shadowOnly": 12},
+        }
+
+        ok, detail = paper_test_director_status(director, reducer, now)
+
+        self.assertTrue(ok)
+        self.assertIn("construction-watch", detail)
+        self.assertIn("scenario-fallback=ready", detail)
+        self.assertIn("shadow=12", detail)
+
     def test_paper_test_director_status_warns_without_shadow_fallback(self) -> None:
         now = datetime.fromisoformat("2026-05-19T09:00:00-06:00")
         director = {

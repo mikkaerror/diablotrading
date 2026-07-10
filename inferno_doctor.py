@@ -1221,10 +1221,11 @@ def schwab_oauth_status(status: dict) -> tuple[bool, str]:
 def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> tuple[bool, str]:
     """Evaluate paper-test readiness with a shadow-evidence fallback.
 
-    A `no-viable-paper-tests` director verdict is a real warning when nothing
-    else can advance. It is *not* a desk failure when the bottleneck reducer has
-    already produced a fresh shadow-only scenario slate, because the research
-    loop can keep collecting evidence without broker staging or live authority.
+    A `no-viable-paper-tests` or `construction-watch` director verdict is a real
+    warning when nothing else can advance. It is *not* a desk failure when the
+    bottleneck reducer has already produced a fresh shadow/research scenario
+    slate, because the research loop can keep collecting evidence without broker
+    staging or live authority.
     """
     if not director:
         return False, "missing"
@@ -1249,7 +1250,10 @@ def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> 
         "approval-bottleneck",
         "research-watch",
     }
-    ok = director_fresh and (verdict in ok_verdicts or (verdict == "no-viable-paper-tests" and shadow_fallback_ready))
+    ok = director_fresh and (
+        verdict in ok_verdicts
+        or (verdict in {"no-viable-paper-tests", "construction-watch"} and shadow_fallback_ready)
+    )
     detail = (
         f"{verdict} | stageable={counts.get('stageableNow', 0)} | "
         f"auto-paper={counts.get('autoPaperSelected', 0)} | "
