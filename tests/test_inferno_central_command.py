@@ -194,6 +194,54 @@ class InfernoCentralCommandTests(unittest.TestCase):
         self.assertEqual(by_id["schwab-oauth-early-warning"]["schedule"], "daily at 05:45")
         self.assertEqual(by_id["inferno-strategy-shadow-engine-daily"]["status"], "ACTIVE")
         self.assertIn("MO,TU,WE,TH,FR", by_id["inferno-strategy-shadow-engine-daily"]["schedule"])
+        strategy_audit = by_id["inferno-strategy-shadow-engine-daily"]["promptAudit"]
+        self.assertFalse(strategy_audit["ok"])
+        self.assertIn("./run_inferno_paper_test_director.sh build", strategy_audit["missing"])
+
+    def test_strategy_shadow_automation_prompt_audit_accepts_paper_sync_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            automations = root / "automations"
+            strategy_dir = automations / "inferno-strategy-shadow-engine-daily"
+            strategy_dir.mkdir(parents=True)
+            prompt = " ".join(
+                [
+                    "./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3",
+                    "./run_inferno_strategy_shadow_comparison.sh",
+                    "./run_inferno_paper_test_director.sh build",
+                    "./run_inferno_paper_blocker_swarm.sh run",
+                    "./run_inferno_paper_bottleneck_reducer.sh",
+                ]
+            )
+            (strategy_dir / "automation.toml").write_text(
+                '\n'.join(
+                    [
+                        'id = "inferno-strategy-shadow-engine-daily"',
+                        'kind = "cron"',
+                        'name = "Inferno Strategy Shadow Engine Daily"',
+                        f'prompt = "{prompt}"',
+                        'status = "ACTIVE"',
+                        'rrule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=18;BYMINUTE=55"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(central_command, "LAUNCH_AGENTS_DIR", root / "LaunchAgents"),
+                patch.object(central_command, "CODEX_AUTOMATIONS_DIR", automations),
+                patch.object(central_command, "LAUNCH_AGENT_SCHEDULES", ()),
+                patch.object(central_command, "CODEX_AUTOMATIONS", ()),
+            ):
+                payload = central_command.build_schedule_status()
+                rendered = central_command.render_schedule_status(payload)
+
+        strategy = {item["id"]: item for item in payload["codexAutomations"]}[
+            "inferno-strategy-shadow-engine-daily"
+        ]
+        self.assertTrue(strategy["promptAudit"]["ok"])
+        self.assertEqual(strategy["promptAudit"]["status"], "prompt-sync-ok")
+        self.assertIn("prompt-sync-ok", rendered)
 
     def test_parser_accepts_central_tactical_options(self) -> None:
         parser = central_command.build_parser()

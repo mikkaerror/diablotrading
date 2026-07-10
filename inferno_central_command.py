@@ -72,6 +72,23 @@ CODEX_AUTOMATIONS: tuple[str, ...] = (
     "schwab-oauth-early-warning",
     "morning-conviction-brief",
 )
+CODEX_AUTOMATION_PROMPT_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "inferno-strategy-shadow-engine-daily": (
+        "./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3",
+        "./run_inferno_strategy_shadow_comparison.sh",
+        "./run_inferno_paper_test_director.sh build",
+        "./run_inferno_paper_blocker_swarm.sh run",
+        "./run_inferno_paper_bottleneck_reducer.sh",
+    ),
+    "inferno-market-open-options-research-refresh": (
+        "./inferno daily-ops --quiet",
+        "./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3",
+        "./run_inferno_strategy_shadow_comparison.sh",
+        "inferno_paper_test_director.py",
+        "inferno_paper_blocker_swarm.py",
+        "inferno_paper_bottleneck_reducer.py",
+    ),
+}
 
 
 def run_command(args: list[str], *, timeout_seconds: int = 300) -> dict[str, Any]:
@@ -183,6 +200,18 @@ def _describe_rrule(rrule: str | None) -> str:
     return rrule
 
 
+def _prompt_audit(automation_id: str, body: str) -> dict[str, Any] | None:
+    requirements = CODEX_AUTOMATION_PROMPT_REQUIREMENTS.get(automation_id)
+    if not requirements:
+        return None
+    missing = [snippet for snippet in requirements if snippet not in body]
+    return {
+        "ok": not missing,
+        "status": "prompt-sync-ok" if not missing else "prompt-sync-attention",
+        "missing": missing,
+    }
+
+
 def _read_codex_automation(automation_id: str) -> dict[str, Any]:
     path = CODEX_AUTOMATIONS_DIR / automation_id / "automation.toml"
     if not path.exists():
@@ -198,14 +227,16 @@ def _read_codex_automation(automation_id: str) -> dict[str, Any]:
             "error": str(exc),
         }
     rrule = _toml_string(body, "rrule")
+    automation_id_value = _toml_string(body, "id") or automation_id
     return {
-        "id": _toml_string(body, "id") or automation_id,
+        "id": automation_id_value,
         "kind": _toml_string(body, "kind") or "codex-automation",
         "name": _toml_string(body, "name") or automation_id,
         "status": _toml_string(body, "status") or "unknown",
         "path": str(path),
         "rrule": rrule,
         "schedule": _describe_rrule(rrule),
+        "promptAudit": _prompt_audit(automation_id_value, body),
     }
 
 
@@ -248,8 +279,10 @@ def render_schedule_status(payload: dict[str, Any]) -> str:
         )
     lines.extend(["", "Codex automations:"])
     for item in payload.get("codexAutomations") or []:
+        prompt_audit = item.get("promptAudit") or {}
+        audit_suffix = f" | {prompt_audit.get('status')}" if prompt_audit else ""
         lines.append(
-            f"- {item.get('name')}: {item.get('status')} | {item.get('schedule')} | {item.get('id')}"
+            f"- {item.get('name')}: {item.get('status')} | {item.get('schedule')} | {item.get('id')}{audit_suffix}"
         )
     lines.extend(
         [
@@ -380,7 +413,10 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
             for item in schedules.get("launchAgents", [])
         ],
         *[
-            f"- {item.get('name')}: {item.get('status')} | {item.get('schedule')}"
+            (
+                f"- {item.get('name')}: {item.get('status')} | {item.get('schedule')}"
+                + (f" | {(item.get('promptAudit') or {}).get('status')}" if item.get("promptAudit") else "")
+            )
             for item in schedules.get("codexAutomations", [])
         ],
         "",
