@@ -1,0 +1,42 @@
+---
+type: agent-loop-operations
+updated: "2026-07-14"
+research_only: true
+live_trading_allowed: false
+tags:
+  - inferno
+  - agent-loop
+  - operations
+  - storage
+---
+
+# Storage Hygiene
+
+Links: [[Loop Optimization Principles]] · [[Authority Boundary]] · [[Current Loop State]]
+
+## Durable rule
+
+Unattended housekeeping may bound runtime log growth, but it must not delete or
+compact paper ledgers, cycle evidence, market-data snapshots, broker exports, or
+other evaluator inputs. Rebuildable caches and Git maintenance require an
+explicit housekeeping invocation.
+
+## Measured baseline
+
+- Repository size before cleanup: 172 MB; after normal Git packing and cache
+  cleanup: 98 MB.
+- `.git` before cleanup: 69 MB with 8,197 loose objects and 26 temporary
+  fragments; after `git gc`: 4.8 MB with no loose-object garbage.
+- External Inferno logs before trimming: 7.3 MB / 145,295 lines; after trimming
+  to the configured 500-line cap: 292 KB / 5,195 lines.
+- The 90-cycle journal and durable paper ledgers were preserved.
+
+## Falsifier
+
+This policy is failing if nightly housekeeping changes any canonical evidence
+artifact, if an operator loses data needed to reproduce an evaluator result, or
+if external runtime logs again grow materially beyond their configured cap after
+a successful nightly run.
+
+Housekeeping changes storage operations only. They cannot change authority,
+risk constants, the eligible universe, broker state, or paper-ticket decisions.

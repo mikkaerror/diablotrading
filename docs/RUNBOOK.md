@@ -1256,7 +1256,18 @@ Once a name becomes `approval-ready`, use the desk's `Copy Ticket` action to gra
 ```bash
 python3 inferno_housekeeping.py --dry-run
 python3 inferno_housekeeping.py
+
+# Optional machine cleanup: preview first, then apply. This trims launch-agent
+# logs to the configured line cap, removes only rebuildable caches, and runs
+# normal Git maintenance. It does not touch ledgers, cycle evidence, market data,
+# reports, secrets, or broker exports beyond the existing dated-file retention.
+python3 inferno_housekeeping.py --dry-run --include-external-logs --prune-caches --git-gc
+python3 inferno_housekeeping.py --include-external-logs --prune-caches --git-gc
 ```
+
+The nightly optimization loop runs `--logs-only --include-external-logs` after
+its research steps. That unattended mode only bounds runtime log growth; cache
+deletion, Git maintenance, and dated-artifact pruning remain explicit/manual.
 
 ### Rank the slate without trusting absolute score scale
 

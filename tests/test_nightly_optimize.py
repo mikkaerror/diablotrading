@@ -103,6 +103,16 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertIn('cd "${INFERNO_ROOT:-$(dirname "$0")}"', text)
         self.assertIn('RUN_LOG="${INFERNO_NIGHTLY_LOG:-data/nightly_optimize_run.log}"', text)
 
+    def test_nightly_housekeeping_is_logs_only(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'run_step "runtime log housekeeping" "$PYTHON" inferno_housekeeping.py --logs-only --include-external-logs',
+            text,
+        )
+        self.assertNotIn("inferno_housekeeping.py --prune-caches", text)
+        self.assertNotIn("inferno_housekeeping.py --git-gc", text)
+
 
 if __name__ == "__main__":
     unittest.main()

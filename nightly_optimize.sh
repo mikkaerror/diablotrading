@@ -141,5 +141,8 @@ if [[ "$DRY_RUN" == "0" ]]; then
     >> "$RUN_LOG" 2>&1 || true
 fi
 
+# 7) bound runtime log growth without deleting research or paper evidence.
+run_step "runtime log housekeeping" "$PYTHON" inferno_housekeeping.py --logs-only --include-external-logs
+
 echo "=== done $TIMESTAMP ===" >> "$RUN_LOG"
 echo "nightly optimize complete -- tail $RUN_LOG for details"

@@ -104,7 +104,7 @@ Safety            — authority, risk, secrets
 | `install_inferno_nightly_optimize_service.py` | Installs the weekday 18:30 research-only refresh loop in launchd | local LaunchAgent |
 | `inferno_evidence_goal_loop.py` | Evaluated paper-evidence control loop with value classification, adaptive cadence, cost-per-accepted-outcome governance, falsifiable beliefs, and hard authority stops | `reports/evidence_goal_loop_latest.txt` + `knowledge/agent-loop/` |
 | `install_inferno_evidence_goal_loop_service.py` | Installs the weekday 13:40 bounded evidence loop in launchd | local LaunchAgent |
-| `inferno_housekeeping.py` | Prune stale artifacts after they exceed retention | side-effects on `data/` |
+| `inferno_housekeeping.py` | Prune dated artifacts after retention; optionally trim launch-agent logs, remove rebuildable caches, and run normal Git maintenance | side-effects on retained artifacts/logs/caches and `.git/` only when explicitly requested |
 
 ## Thinking (math, hypotheses, proof)
 
