@@ -31,6 +31,9 @@ from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_f
 APPROVAL_INBOX_FILE = DATA_DIR / "inferno_approval_inbox.json"
 APPROVAL_INBOX_TEXT_FILE = REPORTS_DIR / "approval_inbox_latest.txt"
 APPROVAL_INBOX_STATE_FILE = DATA_DIR / "inferno_approval_inbox_state.json"
+DEFAULT_APPROVAL_INBOX_SEARCH = 'UNSEEN SUBJECT "[Inferno Approval]"'
+MAX_TRANSIENT_PROCESSED_UIDS = 5_000
+DURABLE_PROCESSED_STATUSES = {"applied"}
 APPROVAL_REPLY_PREFIX_RE = re.compile(r"^(approve|deny|reject|pending|reset|yes|no)\b", re.IGNORECASE)
 APPROVAL_PROMPT_MARKERS = (
     "reply with one word only:",
@@ -68,7 +71,8 @@ def imap_settings() -> dict[str, Any]:
         "password": password.strip(),
         "mailbox": os.getenv("APPROVAL_INBOX_MAILBOX", "INBOX").strip() or "INBOX",
         "allowlist": allowlist,
-        "search": os.getenv("APPROVAL_INBOX_SEARCH", "UNSEEN").strip() or "UNSEEN",
+        "search": os.getenv("APPROVAL_INBOX_SEARCH", DEFAULT_APPROVAL_INBOX_SEARCH).strip()
+        or DEFAULT_APPROVAL_INBOX_SEARCH,
         "max_messages": int(os.getenv("APPROVAL_INBOX_MAX_MESSAGES", "25") or "25"),
     }
 
@@ -91,8 +95,42 @@ def load_state() -> dict[str, Any]:
     return payload
 
 
+def compact_processed_uids(
+    processed_uids: Any,
+    *,
+    max_transient: int = MAX_TRANSIENT_PROCESSED_UIDS,
+) -> dict[str, Any]:
+    """Bound dedupe noise while retaining every record that changed the queue."""
+    if not isinstance(processed_uids, dict):
+        return {}
+    durable: list[tuple[str, Any]] = []
+    transient: list[tuple[str, Any]] = []
+    for uid, record in processed_uids.items():
+        status = str(record.get("status") or "") if isinstance(record, dict) else ""
+        target = durable if status in DURABLE_PROCESSED_STATUSES else transient
+        target.append((str(uid), record))
+
+    def recency(item: tuple[str, Any]) -> tuple[str, str]:
+        uid, record = item
+        processed_at = str(record.get("processedAt") or "") if isinstance(record, dict) else ""
+        return processed_at, uid
+
+    kept_transient = sorted(transient, key=recency, reverse=True)[: max(0, int(max_transient))]
+    return dict(durable + kept_transient)
+
+
 def save_state(state: dict[str, Any]) -> None:
-    """Persist the inbox poller state ledger."""
+    """Persist bounded inbox dedupe state without dropping applied records."""
+    processed_uids = state.get("processedUids")
+    before_count = len(processed_uids) if isinstance(processed_uids, dict) else 0
+    compacted = compact_processed_uids(processed_uids)
+    state["processedUids"] = compacted
+    state["retention"] = {
+        "maxTransientProcessedUids": MAX_TRANSIENT_PROCESSED_UIDS,
+        "durableStatuses": sorted(DURABLE_PROCESSED_STATUSES),
+        "retainedCount": len(compacted),
+        "prunedOnLastSave": max(0, before_count - len(compacted)),
+    }
     atomic_write_json(APPROVAL_INBOX_STATE_FILE, state)
 
 

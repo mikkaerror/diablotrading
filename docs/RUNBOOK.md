@@ -863,6 +863,12 @@ subjects already carry the queue token, so a reply body of only `approve` or
 `deny` is sufficient. Ops maintenance backfills any unsent prompts without
 re-sending the same token repeatedly.
 
+The inbox poller defaults to unread messages whose subject contains
+`[Inferno Approval]`; `APPROVAL_INBOX_SEARCH` can override that query. Its UID
+dedupe state retains every applied command and only the 5,000 most recent
+non-action records, preventing unrelated mailbox traffic from creating an
+unbounded local state file.
+
 ### Demote stale pending approvals
 
 ```bash

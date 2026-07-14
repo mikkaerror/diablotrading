@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from email.message import EmailMessage
 from unittest.mock import patch
@@ -47,22 +48,40 @@ class InfernoApprovalInboxTests(unittest.TestCase):
     """Verify inbox replies can drive the approval desk safely."""
 
     def test_imap_settings_derives_gmail_defaults_from_smtp(self) -> None:
-        with patch.object(
-            approval_inbox,
-            "smtp_settings",
-            return_value={
-                "host": "smtp.gmail.com",
-                "username": "operator@example.com",
-                "password": "app-password",
-                "from_addr": "operator@example.com",
-                "to_addr": "operator@example.com",
-            },
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            patch.object(
+                approval_inbox,
+                "smtp_settings",
+                return_value={
+                    "host": "smtp.gmail.com",
+                    "username": "operator@example.com",
+                    "password": "app-password",
+                    "from_addr": "operator@example.com",
+                    "to_addr": "operator@example.com",
+                },
+            ),
         ):
+            os.environ.pop("APPROVAL_INBOX_SEARCH", None)
             settings = approval_inbox.imap_settings()
 
         self.assertEqual(settings["host"], "imap.gmail.com")
         self.assertEqual(settings["username"], "operator@example.com")
         self.assertIn("operator@example.com", settings["allowlist"])
+        self.assertEqual(settings["search"], 'UNSEEN SUBJECT "[Inferno Approval]"')
+
+    def test_compact_processed_uids_retains_actions_and_recent_noise(self) -> None:
+        processed = {
+            "applied-old": {"status": "applied", "processedAt": "2026-01-01T00:00:00-07:00"},
+            "noise-old": {"status": "sender-not-allowed", "processedAt": "2026-07-01T00:00:00-06:00"},
+            "noise-middle": {"status": "not-approval-mail", "processedAt": "2026-07-02T00:00:00-06:00"},
+            "noise-new": {"status": "sender-not-allowed", "processedAt": "2026-07-03T00:00:00-06:00"},
+        }
+
+        compacted = approval_inbox.compact_processed_uids(processed, max_transient=2)
+
+        self.assertEqual(set(compacted), {"applied-old", "noise-middle", "noise-new"})
+        self.assertEqual(compacted["applied-old"]["status"], "applied")
 
     def test_poll_approval_inbox_applies_simple_approve_reply(self) -> None:
         queue = ensure_queue_tokens(

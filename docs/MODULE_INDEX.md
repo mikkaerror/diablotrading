@@ -74,7 +74,7 @@ Safety            — authority, risk, secrets
 | `inferno_promotion_gap.py` | Gate-by-gate distance from broker promotion | `reports/promotion_gap_latest.txt` |
 | `inferno_threshold_sensitivity.py` | Sweep four threshold profiles and report what each would promote | `reports/threshold_sensitivity_latest.txt` |
 | `inferno_approval_queue.py` | Operator approve/reject/expire commands | `data/inferno_approval_queue.json` |
-| `inferno_approval_inbox.py` | Pending-ticket inbox view | `reports/approval_inbox_latest.txt` |
+| `inferno_approval_inbox.py` | Narrow IMAP approval-reply ingestor with bounded UID dedupe state | `reports/approval_inbox_latest.txt` |
 | `inferno_approval_dispatch.py` | Route approved tickets to the staging lanes | side-effects on staging |
 | `inferno_schwab_daily_ops.py` | Refresh and classify Schwab option-chain tape for daily decisions | `reports/schwab_daily_ops_latest.txt` |
 | `inferno_strike_selector.py` | Choose strikes for approved tickets, with concentration governor | `data/inferno_strike_plan.json` |
