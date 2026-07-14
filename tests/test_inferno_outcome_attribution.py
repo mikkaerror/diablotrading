@@ -36,7 +36,12 @@ class OutcomeAttributionTests(unittest.TestCase):
         # Use the live function — even if shadow + paper exist, the
         # closed-outcome count is currently 0, so verdict must be 'awaiting'.
         payload = build_outcome_attribution()
+        self.assertTrue(payload["researchOnly"])
+        self.assertTrue(payload["diagnosticOnly"])
         self.assertFalse(payload["promotable"])
+        self.assertFalse(payload["authorityChanged"])
+        self.assertFalse(payload["brokerSubmitAllowed"])
+        self.assertFalse(payload["liveTradingAllowed"])
         self.assertEqual(payload["stage"], ATTRIBUTION_STAGE)
         if payload["counts"]["closedOutcomes"] == 0:
             self.assertEqual(payload["verdict"], "awaiting-closed-outcomes")

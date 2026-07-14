@@ -6,7 +6,7 @@
 #   1) refresh upstream data sources (Schwab account / options / price history,
 #      live account sync, tracker)
 #   2) harvest paper/shadow evidence and close eligible observations
-#   3) re-run the research-only recommenders that consume them
+#   3) re-run the research-only diagnostics and recommenders that consume them
 #   4) regenerate the reports/ surfaces
 #   5) append a daily NLV snapshot to data/nlv_history.csv
 #   6) write a single coordination note summarizing what changed
@@ -81,6 +81,7 @@ fi
 if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
   run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_step "schwab edge signals"   "$PYTHON" inferno_schwab_edge_signals.py run
   run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
   run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
   run_step "basket market refresh" "$PYTHON" inferno_ai_basket_refresh.py run --skip-refresh
@@ -95,10 +96,18 @@ run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
 # included in the nightly summaries.
 run_step "evidence goal loop" "$PYTHON" inferno_evidence_goal_loop.py run --max-iterations 2
 
-# 3) recommenders (research-only)
+# 3) diagnostics and recommenders (research-only)
 run_step "capital scaling"       "$PYTHON" inferno_capital_scaling.py
 run_step "performance analytics" "$PYTHON" inferno_performance_analytics.py
 run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
+run_step "outcome attribution"   "$PYTHON" inferno_outcome_attribution.py run
+run_step "rule edge decay"       "$PYTHON" inferno_rule_edge_decay.py run
+run_step "slippage estimator"    "$PYTHON" inferno_slippage_estimator.py run
+run_step "portfolio correlation" "$PYTHON" inferno_portfolio_correlation.py run
+run_step "drawdown protocol"     "$PYTHON" inferno_drawdown_protocol.py run
+if [[ "$SCHWAB_READY" == "1" ]]; then
+  run_step "consensus monitor"    "$PYTHON" inferno_consensus_monitor.py run
+fi
 run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
@@ -111,6 +120,7 @@ run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
 run_step "short premium study"   "$PYTHON" inferno_short_premium_study.py run
 run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
+run_step "score threshold audit" "$PYTHON" inferno_score_threshold_audit.py run
 run_step "basket data contract"  "$PYTHON" inferno_ai_basket_data_contract.py run
 run_step "tech cohort evaluator" "$PYTHON" inferno_tech_cohort_evaluator.py run
 

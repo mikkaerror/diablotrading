@@ -36,6 +36,15 @@ class WilsonLowerTests(unittest.TestCase):
     def test_zero_n_returns_zero(self):
         self.assertEqual(wilson_lower(0, 0), 0.0)
 
+    def test_payload_preserves_research_only_authority_boundary(self):
+        payload = build_rule_edge_decay()
+        self.assertTrue(payload["researchOnly"])
+        self.assertTrue(payload["diagnosticOnly"])
+        self.assertFalse(payload["promotable"])
+        self.assertFalse(payload["authorityChanged"])
+        self.assertFalse(payload["brokerSubmitAllowed"])
+        self.assertFalse(payload["liveTradingAllowed"])
+
     def test_all_wins_below_one(self):
         """Wilson lower is strictly less than 1.0 even at perfect record."""
         self.assertTrue(0 < wilson_lower(10, 10) < 1.0)

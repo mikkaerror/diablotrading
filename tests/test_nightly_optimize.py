@@ -72,6 +72,31 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(contract, cohort)
         self.assertLess(cohort, command)
 
+    def test_nightly_refreshes_diagnostics_in_dependency_order(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        options = text.index('run_step "schwab options chain"')
+        edge = text.index('run_step "schwab edge signals"')
+        performance = text.index('run_step "performance analytics"')
+        outcome = text.index('run_step "outcome attribution"')
+        decay = text.index('run_step "rule edge decay"')
+        slippage = text.index('run_step "slippage estimator"')
+        correlation = text.index('run_step "portfolio correlation"')
+        drawdown = text.index('run_step "drawdown protocol"')
+        consensus = text.index('run_step "consensus monitor"')
+        dte = text.index('run_step "DTE policy analysis"')
+        thresholds = text.index('run_step "score threshold audit"')
+        command = text.index('run_step "central command"')
+
+        self.assertLess(options, edge)
+        self.assertLess(performance, outcome)
+        self.assertLess(outcome, decay)
+        self.assertLess(decay, slippage)
+        self.assertLess(slippage, correlation)
+        self.assertLess(correlation, drawdown)
+        self.assertLess(drawdown, consensus)
+        self.assertLess(dte, thresholds)
+        self.assertLess(thresholds, command)
+
     def test_deployed_copy_can_use_repo_root(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 

@@ -303,7 +303,12 @@ def build_rule_edge_decay(now: Any | None = None) -> dict[str, Any]:
     payload = {
         "version": 1,
         "stage": DECAY_STAGE,
+        "researchOnly": True,
+        "diagnosticOnly": True,
         "promotable": False,
+        "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
         "generatedAt": str(now or local_now()),
         "verdict": verdict,
         "counts": {

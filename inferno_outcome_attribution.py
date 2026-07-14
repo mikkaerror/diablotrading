@@ -345,7 +345,12 @@ def build_outcome_attribution(now: Any | None = None) -> dict[str, Any]:
     payload = {
         "version": 1,
         "stage": ATTRIBUTION_STAGE,
+        "researchOnly": True,
+        "diagnosticOnly": True,
         "promotable": False,
+        "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
         "generatedAt": str(now or local_now()),
         "verdict": summary_verdict,
         "counts": {
