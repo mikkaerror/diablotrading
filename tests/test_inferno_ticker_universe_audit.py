@@ -129,6 +129,23 @@ class InfernoTickerUniverseAuditTests(unittest.TestCase):
         self.assertEqual(audit["counts"]["missingLongTermRows"], 1)
         self.assertIn("SHOP", audit["advisoryTickers"])
 
+    def test_audit_surfaces_fresh_price_provider_skips_as_advisories(self) -> None:
+        raw_rows = [make_row(Ticker="THR")]
+        enriched_rows = read_sheet_rows_from_table(HEADERS, raw_rows)
+
+        audit = build_ticker_universe_audit(
+            HEADERS,
+            raw_rows,
+            enriched_rows,
+            provider_skipped_tickers=["thr", "THR", "REMOVED", ""],
+        )
+
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["verdict"], "healthy-with-advisories")
+        self.assertEqual(audit["counts"]["providerPriceSkippedTickers"], 1)
+        self.assertEqual(audit["issues"]["providerPriceSkippedTickers"], ["THR"])
+        self.assertIn("THR", audit["advisoryTickers"])
+
     @patch("morning_inferno_pipeline.update_sheet_range")
     @patch("morning_inferno_pipeline.download_history_with_retries")
     @patch("morning_inferno_pipeline.get_sheet")

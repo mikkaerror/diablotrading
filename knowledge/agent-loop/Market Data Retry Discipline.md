@@ -21,6 +21,9 @@ failure classes. Consecutive empty history responses receive one retry and are
 then cached as an empty, schema-stable frame for the rest of the process.
 Transport exceptions retain the full bounded retry budget.
 
+The ticker-universe audit must also surface provider-skipped price symbols as
+advisories even when an older sheet value still appears structurally valid.
+
 ## Evidence
 
 The 2026-07-14 unified sync retried unsupported GLDD and THR history requests

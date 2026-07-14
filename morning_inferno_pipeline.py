@@ -1791,6 +1791,8 @@ def build_ticker_universe_audit(
     headers: list[str],
     raw_rows: list[list[str]],
     enriched_rows: list[dict[str, Any]],
+    *,
+    provider_skipped_tickers: list[str] | None = None,
 ) -> dict[str, Any]:
     """Summarize tracker hydration quality so new ticker additions cannot silently drift."""
     header_index = {header.strip(): idx for idx, header in enumerate(headers)}
@@ -1920,6 +1922,13 @@ def build_ticker_universe_audit(
 
     duplicate_tickers = sorted([ticker for ticker, count in duplicate_counter.items() if count > 1])
     raw_ticker_set = set(raw_tickers)
+    provider_skipped = sorted(
+        {
+            str(ticker or "").strip().upper()
+            for ticker in (provider_skipped_tickers or [])
+            if str(ticker or "").strip().upper() in raw_ticker_set
+        }
+    )
     enriched_ticker_set = {str(row.get("ticker") or "").upper() for row in enriched_rows if row.get("ticker")}
     snapshot_missing_tickers = sorted(raw_ticker_set - enriched_ticker_set)
 
@@ -1940,6 +1949,7 @@ def build_ticker_universe_audit(
             *[item["ticker"] for item in missing_long_term_rows],
             *[item["ticker"] for item in unknown_earnings_rows],
             *[item["ticker"] for item in invalid_trend_rows],
+            *provider_skipped,
         }
     )
 
@@ -1959,6 +1969,7 @@ def build_ticker_universe_audit(
         + len(missing_long_term_rows)
         + len(unknown_earnings_rows)
         + len(invalid_trend_rows)
+        + len(provider_skipped)
         + blank_ticker_rows
     )
     verdict = "healthy" if critical_issue_count == 0 and advisory_issue_count == 0 else (
@@ -1991,6 +2002,7 @@ def build_ticker_universe_audit(
             "unknownEarningsRows": len(unknown_earnings_rows),
             "invalidLevelRows": len(invalid_level_rows),
             "invalidTrendRows": len(invalid_trend_rows),
+            "providerPriceSkippedTickers": len(provider_skipped),
             "blankTickerRows": blank_ticker_rows,
             "criticalIssueCount": critical_issue_count,
             "advisoryIssueCount": advisory_issue_count,
@@ -2009,6 +2021,7 @@ def build_ticker_universe_audit(
             "unknownEarningsRows": unknown_earnings_rows[:20],
             "invalidLevelRows": invalid_level_rows[:20],
             "invalidTrendRows": invalid_trend_rows[:20],
+            "providerPriceSkippedTickers": provider_skipped[:20],
             "unsupportedTickers": unsupported_tickers[:20],
         },
     }
@@ -2037,6 +2050,9 @@ def ticker_universe_audit_text(audit: dict[str, Any]) -> str:
         lines.extend(["", "Hydration needed:", ", ".join(audit.get("hydrationNeededTickers") or [])])
     if audit.get("advisoryTickers"):
         lines.extend(["", "Advisory review:", ", ".join(audit.get("advisoryTickers") or [])])
+    provider_skipped = (audit.get("issues") or {}).get("providerPriceSkippedTickers") or []
+    if provider_skipped:
+        lines.extend(["", "Fresh price unavailable:", ", ".join(provider_skipped)])
     if audit.get("unsupportedTickers"):
         lines.extend(["", "Unavailable tickers (vendor gap):", ", ".join(audit.get("unsupportedTickers") or [])])
     return "\n".join(lines).rstrip() + "\n"
@@ -2046,10 +2062,17 @@ def write_ticker_universe_audit(
     headers: list[str],
     raw_rows: list[list[str]],
     enriched_rows: list[dict[str, Any]],
+    *,
+    provider_skipped_tickers: list[str] | None = None,
 ) -> dict[str, Any]:
     """Persist tracker-hydration artifacts so new sheet additions get checked automatically."""
     ensure_dirs()
-    audit = build_ticker_universe_audit(headers, raw_rows, enriched_rows)
+    audit = build_ticker_universe_audit(
+        headers,
+        raw_rows,
+        enriched_rows,
+        provider_skipped_tickers=provider_skipped_tickers,
+    )
     atomic_write_json(TICKER_UNIVERSE_AUDIT_FILE, audit)
     atomic_write_text(TICKER_UNIVERSE_AUDIT_TEXT_FILE, ticker_universe_audit_text(audit))
     return audit
@@ -2611,6 +2634,7 @@ def main() -> int:
 
     try:
         with acquire_run_lock():
+            price_sync_summary: dict[str, Any] = {}
             if not args.skip_updates:
                 earnings_sync_summary = sync_earnings_dates(backtest_root, args.sheet_name)
                 updater_results.append(
@@ -2710,7 +2734,12 @@ def main() -> int:
             # Authority reads the latest snapshot from disk, so write a fresh
             # base snapshot before downstream risk artifacts ask for it.
             write_payload(payload)
-            ticker_universe_audit = write_ticker_universe_audit(headers, raw_sheet_rows, rows)
+            ticker_universe_audit = write_ticker_universe_audit(
+                headers,
+                raw_sheet_rows,
+                rows,
+                provider_skipped_tickers=price_sync_summary.get("skippedTickers") or [],
+            )
             payload["tickerUniverseAudit"] = ticker_universe_audit
             try:
                 from inferno_downloads_manager import import_downloads
