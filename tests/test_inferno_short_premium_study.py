@@ -60,6 +60,41 @@ class ShortPremiumStudyTests(unittest.TestCase):
         self.assertAlmostEqual(cap["meanR"], 0.50, places=2)
         self.assertEqual(cap["winRatePct"], 100.0)
 
+    def test_move_ratio_fails_closed_for_partial_or_invalid_rows(self):
+        self.assertIsNone(study._move_ratio({"impliedMovePct": 10.0, "realizedAbsMovePct": None}))
+        self.assertIsNone(study._move_ratio({"impliedMovePct": 0, "realizedAbsMovePct": 5.0}))
+        self.assertIsNone(study._move_ratio({"impliedMovePct": "bad", "realizedAbsMovePct": 5.0}))
+        self.assertAlmostEqual(
+            study._move_ratio({"impliedMovePct": "20", "realizedAbsMovePct": "5"}),
+            0.25,
+        )
+
+    def test_partial_rows_do_not_crash_or_change_valid_observations(self):
+        recs = [
+            _rec("VALID", 20.0, 8.0),
+            {"ticker": "PARTIAL", "impliedMovePct": 12.0, "realizedAbsMovePct": None},
+        ]
+
+        p = self._build(recs)
+
+        self.assertEqual(p["caps"]["3.0"]["n"], 1)
+        self.assertAlmostEqual(p["caps"]["3.0"]["meanR"], 0.5)
+
+    def test_all_partial_rows_render_insufficient_data(self):
+        p = self._build([
+            {"ticker": "PARTIAL", "impliedMovePct": 12.0, "realizedAbsMovePct": None},
+        ])
+
+        self.assertEqual(p["verdict"], "insufficient-realized-move-data")
+        self.assertEqual(p["usableBackwardRecords"], 0)
+        self.assertEqual(p["caps"]["3.0"]["n"], 0)
+        self.assertIsNone(p["caps"]["3.0"]["meanR"])
+        self.assertEqual(p["forwardCampaign"]["clusterCI95"], (None, None))
+        self.assertIsNone(p["dataIntegrity"]["replicationRatio"])
+        rendered = study.study_text(p)
+        self.assertIn("no usable backward realized-move observations", rendered)
+        self.assertNotIn("DATA INTEGRITY FAIL", rendered)
+
     def test_tail_is_capped_by_wings(self):
         # A blowout (realized 5x implied) must not lose more than the cap.
         recs = [_rec("BLOWUP", 10.0, 50.0)]  # moveRatio 5 -> raw -4.10
@@ -72,6 +107,9 @@ class ShortPremiumStudyTests(unittest.TestCase):
         self.assertTrue(p["researchOnly"])
         self.assertFalse(p["promotable"])
         self.assertFalse(p["authorityChanged"])
+        self.assertFalse(p["brokerSubmitAllowed"])
+        self.assertFalse(p["liveTradingAllowed"])
+        self.assertTrue(p["generatedAt"])
 
     def test_verdict_negative_when_center_negative(self):
         # realized above implied for most -> seller loses -> not supported.

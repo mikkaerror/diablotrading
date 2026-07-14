@@ -26,6 +26,7 @@ from inferno_doctor import (
     action_pulse_status,
     research_cycle_status,
     schwab_oauth_status,
+    short_premium_study_status,
     strategy_shadow_comparison_status,
     trade_management_status,
     watchdog_run_status,
@@ -192,6 +193,41 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         self.assertFalse(ok)
         self.assertIn("fail-closed", detail)
+
+    def test_short_premium_status_accepts_honest_insufficient_data(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = short_premium_study_status(
+                {
+                    "generatedAt": "2026-07-14T13:30:00-06:00",
+                    "verdict": "insufficient-realized-move-data",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "usableBackwardRecords": 0,
+                    "forwardCampaign": {"verdict": "forward-awaiting-short-premium-records"},
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("usable-backward=0", detail)
+        self.assertIn("authority-safe=True", detail)
+
+    def test_short_premium_status_rejects_authority_drift(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = short_premium_study_status(
+                {
+                    "generatedAt": "2026-07-14T13:30:00-06:00",
+                    "verdict": "promising-unproven-needs-forward-test",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": True,
+                    "liveTradingAllowed": False,
+                }
+            )
+        self.assertFalse(ok)
+        self.assertIn("authority-safe=False", detail)
 
     def test_action_pulse_status_accepts_sent_pulse(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

@@ -30,6 +30,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/ai_basket_refresh_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_short_premium_study(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "short-premium-study")
+        self.assertEqual(row["artifact"], "reports/short_premium_study_latest.txt")
+        self.assertEqual(row["owner"], "shared")
+
     def test_build_command_center_aggregates_artifacts_and_queue_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

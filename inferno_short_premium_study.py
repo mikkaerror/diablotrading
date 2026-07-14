@@ -42,6 +42,9 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Optional
 
+from inferno_config import ROOT, local_now
+from inferno_io import atomic_write_json, atomic_write_text
+
 SHORT_PREMIUM_STAGE = "short-premium-study-research-only"
 
 FRICTION_R = 0.10                     # round-trip spread as fraction of credit
@@ -53,6 +56,8 @@ LEDGER_FILE = os.environ.get(
 PAPER_LEDGER_FILE = os.environ.get(
     "INFERNO_PAPER_LEDGER_FILE", "data/inferno_paper_execution_ledger.json"
 )
+OUTPUT_FILE = ROOT / "data" / "inferno_short_premium_study.json"
+REPORT_FILE = ROOT / "reports" / "short_premium_study_latest.txt"
 
 # Confirm/kill thresholds for the sell-side lead (pre-registered; see the memo).
 CONFIRM_MIN_MEAN_R = 0.15            # conservative-cap mean net-R, ex-two-best
@@ -85,12 +90,15 @@ def _find_records(obj: Any, best=None) -> list:
 
 
 def _move_ratio(r: dict) -> Optional[float]:
-    mr = r.get("moveRatio")
+    """Return a usable realized/implied ratio or fail closed for partial rows."""
+    mr = _num(r.get("moveRatio"))
     if mr is not None:
-        return mr
-    im = r.get("impliedMovePct")
-    rm = r.get("realizedAbsMovePct")
-    return (rm / im) if im else None
+        return mr if mr >= 0 else None
+    im = _num(r.get("impliedMovePct"))
+    rm = _num(r.get("realizedAbsMovePct"))
+    if rm is None or im is None or im <= 0:
+        return None
+    return rm / im
 
 
 def _sell_r(mr: float, loss_cap_r: float) -> float:
@@ -100,12 +108,12 @@ def _sell_r(mr: float, loss_cap_r: float) -> float:
 
 
 def _cluster_bootstrap_ci(by_name: dict[str, list], iters: int = 4000,
-                          seed: int = 7) -> tuple[float, float]:
+                          seed: int = 7) -> tuple[float | None, float | None]:
     """Resample NAMES with replacement (not events) -> honest CI under clustering."""
     rng = random.Random(seed)
     names = list(by_name.keys())
     if len(names) < 2:
-        return (float("nan"), float("nan"))
+        return (None, None)
     means = []
     for _ in range(iters):
         picks = [rng.choice(names) for _ in names]
@@ -268,7 +276,8 @@ def forward_summary(records: list[dict[str, Any]], *, today: date | None = None)
     )
     best2 = sorted(name_sums, key=lambda name: name_sums[name], reverse=True)[:2]
     ex_best = [value for name, items in by_name.items() if name not in best2 for value in items]
-    ci = _cluster_bootstrap_ci(by_name) if by_name else (float("nan"), float("nan"))
+    ci = _cluster_bootstrap_ci(by_name)
+    ci_low = ci[0]
     worst_loss_share = _loss_share_pct(name_sums, sum(values)) if values else None
     max_single_loss = min(values) if values else None
     mean_ex_best = round(st.mean(ex_best), 3) if ex_best else None
@@ -281,12 +290,17 @@ def forward_summary(records: list[dict[str, Any]], *, today: date | None = None)
         and distinct_events >= FORWARD_MIN_EVENTS
         and mean_ex_best is not None
         and mean_ex_best > FORWARD_CONFIRM_MIN_EX_BEST_R
-        and ci[0] > FORWARD_CONFIRM_MIN_CI_LOW
+        and ci_low is not None
+        and ci_low > FORWARD_CONFIRM_MIN_CI_LOW
         and (worst_loss_share is not None and worst_loss_share < FORWARD_MAX_WORST_TWO_LOSS_SHARE_PCT)
         and (max_name_risk_share is not None and max_name_risk_share <= FORWARD_MAX_NAME_RISK_SHARE_PCT)
     )
     kill_reasons: list[str] = []
-    if distinct_events >= FORWARD_MIN_EVENTS and ci[0] <= FORWARD_CONFIRM_MIN_CI_LOW:
+    if (
+        distinct_events >= FORWARD_MIN_EVENTS
+        and ci_low is not None
+        and ci_low <= FORWARD_CONFIRM_MIN_CI_LOW
+    ):
         kill_reasons.append("cluster-ci-crosses-zero")
     if distinct_events >= FORWARD_MIN_EVENTS and mean_ex_best is not None and mean_ex_best <= 0:
         kill_reasons.append("mean-ex-two-best-nonpositive")
@@ -351,21 +365,25 @@ def data_integrity(recs: list) -> dict[str, Any]:
     constant within a name) and implausible earnings-move magnitudes."""
     by_name: dict[str, set] = defaultdict(set)
     for r in recs:
-        rm = r.get("realizedAbsMovePct")
+        rm = _num(r.get("realizedAbsMovePct"))
         if rm is not None:
-            by_name[r.get("ticker")].add(round(rm, 2))
-    n_records = sum(1 for r in recs if r.get("realizedAbsMovePct") is not None)
+            by_name[_txt(r.get("ticker")) or "UNKNOWN"].add(round(rm, 2))
+    n_records = sum(1 for r in recs if _num(r.get("realizedAbsMovePct")) is not None)
     n_distinct = sum(len(v) for v in by_name.values())
     implausible = sum(
         1 for r in recs
-        if (r.get("realizedAbsMovePct") or 0) > 40.0  # >40% is not an earnings-day move
+        if (_num(r.get("realizedAbsMovePct"), 0.0) or 0.0) > 40.0  # >40% is not an earnings-day move
     )
     # names whose realized value never changes across multiple records
-    frozen = [nm for nm, v in by_name.items()
-              if len(v) == 1 and sum(1 for r in recs if r.get("ticker") == nm) > 2]
-    replication_ratio = (n_records / n_distinct) if n_distinct else float("inf")
+    frozen = [
+        nm for nm, values in by_name.items()
+        if len(values) == 1
+        and sum(1 for r in recs if (_txt(r.get("ticker")) or "UNKNOWN") == nm) > 2
+    ]
+    replication_ratio = (n_records / n_distinct) if n_distinct else None
     reliable = (
-        replication_ratio <= 1.5
+        replication_ratio is not None
+        and replication_ratio <= 1.5
         and implausible == 0
         and not frozen
     )
@@ -373,14 +391,19 @@ def data_integrity(recs: list) -> dict[str, Any]:
         "records": n_records,
         "distinctRealizedValues": n_distinct,
         "effectiveObservations": n_distinct,
-        "replicationRatio": round(replication_ratio, 2),
+        "replicationRatio": round(replication_ratio, 2) if replication_ratio is not None else None,
         "implausibleMagnitudeRecords": implausible,
         "frozenRealizedNames": frozen,
         "reliable": reliable,
     }
 
 
-def build_study(path: str = LEDGER_FILE, *, paper_ledger_path: str = PAPER_LEDGER_FILE) -> dict[str, Any]:
+def build_study(
+    path: str = LEDGER_FILE,
+    *,
+    paper_ledger_path: str = PAPER_LEDGER_FILE,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as fh:
         recs = _find_records(json.load(fh))
 
@@ -410,11 +433,11 @@ def build_study(path: str = LEDGER_FILE, *, paper_ledger_path: str = PAPER_LEDGE
             "lossCapR": cap,
             "n": len(allv),
             "distinctNames": len(by_name),
-            "winRatePct": round(100 * sum(1 for x in allv if x > 0) / len(allv), 1),
-            "meanR": round(st.mean(allv), 3),
-            "medianR": round(st.median(allv), 3),
-            "minR": round(min(allv), 3),
-            "clusterCI95": ci,
+            "winRatePct": round(100 * sum(1 for x in allv if x > 0) / len(allv), 1) if allv else None,
+            "meanR": round(st.mean(allv), 3) if allv else None,
+            "medianR": round(st.median(allv), 3) if allv else None,
+            "minR": round(min(allv), 3) if allv else None,
+            "clusterCI95": ci if allv else (None, None),
             "namesNetPositive": sum(1 for s in name_sums.values() if s > 0),
             "meanR_exTwoBest": round(st.mean(ex_best), 3) if ex_best else None,
             "twoBestNames": best2,
@@ -429,39 +452,56 @@ def build_study(path: str = LEDGER_FILE, *, paper_ledger_path: str = PAPER_LEDGE
     ex_best = cons["meanR_exTwoBest"]
     ci_low = cons["clusterCI95"][0]
     names = cons["distinctNames"]
-    if not integrity["reliable"]:
+    if not ratios:
+        verdict = "insufficient-realized-move-data"
+    elif not integrity["reliable"]:
         # The backward realized-move column is corrupted (pseudo-replication and/or
         # implausible magnitudes). No backward verdict can be trusted; only the
         # forward, per-event, friction-real paper test can decide. See
         # docs/DATA_INTEGRITY_REALIZED_MOVE_2026-07-07.md.
         verdict = "data-unreliable-cannot-conclude-backward"
     elif (ex_best is not None and ex_best >= CONFIRM_MIN_MEAN_R
-            and names >= CONFIRM_MIN_NAMES and ci_low > CONFIRM_MIN_CI_LOW):
+            and names >= CONFIRM_MIN_NAMES and ci_low is not None
+            and ci_low > CONFIRM_MIN_CI_LOW):
         verdict = "sell-side-edge-supported-backward"
     elif ex_best is not None and ex_best > 0:
         verdict = "promising-unproven-needs-forward-test"
     else:
         verdict = "sell-side-negative-backward"
 
+    caveats = [
+        "Forward paper test with real condor pricing is the deciding evidence.",
+    ]
+    if ratios:
+        caveats[:0] = [
+            "Backward study; friction-charged but credit-cost of protective wings "
+            "NOT modeled -> tighter caps OVERSTATE the edge.",
+            "Current backward sample remains small; cluster confidence intervals are wide.",
+        ]
+    else:
+        caveats.insert(
+            0,
+            "The current ledger has no usable realized/implied move pairs; backward metrics are intentionally blank.",
+        )
+
     return {
+        "generatedAt": generated_at or local_now().isoformat(),
         "stage": SHORT_PREMIUM_STAGE,
         "researchOnly": True,
         "promotable": False,
         "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
         "ledger": path,
         "friction_R": FRICTION_R,
         "conservativeCapR": CONSERVATIVE_CAP_R,
         "dataIntegrity": integrity,
         "forwardCampaign": forward,
         "forwardRecords": forward_records,
+        "usableBackwardRecords": len(ratios),
         "caps": caps,
         "verdict": verdict,
-        "caveats": [
-            "Backward study; friction-charged but credit-cost of protective wings "
-            "NOT modeled -> tighter caps OVERSTATE the edge.",
-            "Only ~18 names / 100 events; cluster CI is wide.",
-            "Forward paper test with real condor pricing is the deciding evidence.",
-        ],
+        "caveats": caveats,
         "citations": [
             "data/inferno_expected_move_ledger.json",
             "docs/DECISIVE_MOVE_EDGE_KILL_2026-07-07.md",
@@ -476,7 +516,12 @@ def study_text(p: dict[str, Any]) -> str:
     L.append(f"Ledger: {p['ledger']} | friction {p['friction_R']}R/trade")
     L.append(f"VERDICT: {p['verdict']}")
     di = p.get("dataIntegrity", {})
-    if not di.get("reliable", True):
+    if not di.get("records"):
+        L.append(
+            "BACKWARD DATA: no usable realized-move observations; backward metrics "
+            "are blank and the forward paper campaign remains the evidence path."
+        )
+    elif not di.get("reliable", True):
         L.append(
             f"** DATA INTEGRITY FAIL: {di.get('records')} records but only "
             f"{di.get('distinctRealizedValues')} distinct realized values "
@@ -491,20 +536,28 @@ def study_text(p: dict[str, Any]) -> str:
     for key in sorted(p["caps"], key=lambda k: -float(k)):
         c = p["caps"][key]
         ci = f"[{c['clusterCI95'][0]},{c['clusterCI95'][1]}]"
+        win_rate = f"{c['winRatePct']:>7.1f}" if c["winRatePct"] is not None else f"{'-':>7}"
+        mean_r = f"{c['meanR']:>8.2f}" if c["meanR"] is not None else f"{'-':>8}"
+        median_r = f"{c['medianR']:>8.2f}" if c["medianR"] is not None else f"{'-':>8}"
+        min_r = f"{c['minR']:>7.1f}" if c["minR"] is not None else f"{'-':>7}"
         L.append(
-            f"{c['lossCapR']:>8.1f}{c['n']:>5}{c['distinctNames']:>7}{c['winRatePct']:>7}"
-            f"{c['meanR']:>8.2f}{c['medianR']:>8.2f}{c['minR']:>7.1f}{ci:>16}"
+            f"{c['lossCapR']:>8.1f}{c['n']:>5}{c['distinctNames']:>7}{win_rate}"
+            f"{mean_r}{median_r}{min_r}{ci:>16}"
             f"{(c['meanR_exTwoBest'] if c['meanR_exTwoBest'] is not None else 0):>9.2f}"
         )
     cons = p["caps"][f"{p['conservativeCapR']:.1f}"]
     L.append("")
-    L.append(f"Conservative read (widest {p['conservativeCapR']:.0f}R cap): "
-             f"mean {cons['meanR']}R, median {cons['medianR']}R, "
-             f"{cons['namesNetPositive']}/{cons['distinctNames']} names net-positive.")
-    L.append(f"Two best names: {cons['twoBestNames']} | two worst (the tail): "
-             f"{cons['twoWorstNames']} carry {cons['worstTwoShareOfLossPct']}% of net.")
-    L.append(f"Ex-two-best, clustered: mean {cons['meanR_exTwoBest']}R, "
-             f"95% CI {cons['clusterCI95']}.")
+    if cons["n"]:
+        L.append(f"Conservative read (widest {p['conservativeCapR']:.0f}R cap): "
+                 f"mean {cons['meanR']}R, median {cons['medianR']}R, "
+                 f"{cons['namesNetPositive']}/{cons['distinctNames']} names net-positive.")
+        L.append(f"Two best names: {cons['twoBestNames']} | two worst (the tail): "
+                 f"{cons['twoWorstNames']} carry {cons['worstTwoShareOfLossPct']}% of net.")
+        L.append(f"Ex-two-best, clustered: mean {cons['meanR_exTwoBest']}R, "
+                 f"95% CI {cons['clusterCI95']}.")
+    else:
+        L.append("Conservative read: no usable backward realized-move observations; "
+                 "retain the forward campaign as the only decision-grade evidence path.")
     L.append("")
     fwd = p.get("forwardCampaign") or {}
     L.append("Forward SHORT_PREMIUM_DEFINED campaign:")
@@ -531,12 +584,10 @@ def study_text(p: dict[str, Any]) -> str:
 
 
 def save_study(p: dict[str, Any]) -> None:
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("reports", exist_ok=True)
-    with open("data/inferno_short_premium_study.json", "w", encoding="utf-8") as fh:
-        json.dump(p, fh, indent=2)
-    with open("reports/short_premium_study_latest.txt", "w", encoding="utf-8") as fh:
-        fh.write(study_text(p))
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(OUTPUT_FILE, p)
+    atomic_write_text(REPORT_FILE, study_text(p) + "\n")
 
 
 def main(argv: Optional[list] = None) -> int:

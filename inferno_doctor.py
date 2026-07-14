@@ -65,6 +65,7 @@ SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
 SCORE_CALIBRATION_FILE = ROOT / "data" / "inferno_score_calibration.json"
 SCORE_THRESHOLD_AUDIT_FILE = ROOT / "data" / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
+SHORT_PREMIUM_STUDY_FILE = ROOT / "data" / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
 STRATEGY_SHADOW_COMPARISON_FILE = ROOT / "data" / "inferno_strategy_shadow_comparison.json"
@@ -849,6 +850,35 @@ def expected_move_ledger_status(report: dict) -> tuple[bool, str]:
             ),
         )
     return ok, detail
+
+
+def short_premium_study_status(report: dict) -> tuple[bool, str]:
+    """Require a fresh, fail-closed, authority-safe short-premium study."""
+    ok, detail = _research_module_status(
+        report,
+        ok_verdicts={
+            "insufficient-realized-move-data",
+            "data-unreliable-cannot-conclude-backward",
+            "sell-side-edge-supported-backward",
+            "promising-unproven-needs-forward-test",
+            "sell-side-negative-backward",
+        },
+    )
+    if not ok:
+        return ok, detail
+    safe = (
+        report.get("researchOnly") is True
+        and report.get("promotable") is False
+        and report.get("authorityChanged") is False
+        and report.get("brokerSubmitAllowed") is False
+        and report.get("liveTradingAllowed") is False
+    )
+    forward = report.get("forwardCampaign") or {}
+    detail = (
+        f"{detail} | usable-backward={report.get('usableBackwardRecords', 0)} | "
+        f"forward={forward.get('verdict') or 'missing'} | authority-safe={safe}"
+    )
+    return safe, detail
 
 
 def strategy_alternative_scorer_status(report: dict) -> tuple[bool, str]:
@@ -1797,6 +1827,12 @@ def main() -> int:
     expected_move_ok, expected_move_detail = expected_move_ledger_status(expected_move)
     lines.append(summarize_status("Expected move ledger", expected_move_ok, expected_move_detail))
     if not expected_move_ok:
+        warnings += 1
+
+    short_premium = load_json_file(SHORT_PREMIUM_STUDY_FILE) or {}
+    short_premium_ok, short_premium_detail = short_premium_study_status(short_premium)
+    lines.append(summarize_status("Short premium study", short_premium_ok, short_premium_detail))
+    if not short_premium_ok:
         warnings += 1
 
     strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}

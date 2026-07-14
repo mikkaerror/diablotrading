@@ -121,6 +121,7 @@ Safety            — authority, risk, secrets
 | `inferno_evidence_strength.py` | Composite 0–1 scalar over Wilson lower, expectancy lower, sample size, falsification | `reports/evidence_strength_latest.txt` |
 | `inferno_kelly_sizing.py` | Conservative quarter-Kelly fractional sizing with bootstrap CI bounds | `reports/kelly_sizing_latest.txt` |
 | `inferno_vol_premium.py` | IV-bucket VRP discriminator via two-sample bootstrap on mean R | `reports/vol_premium_latest.txt` |
+| `inferno_short_premium_study.py` | Fail-closed defined-risk short-premium evidence study; separates backward realized/implied pairs from the forward paper campaign | `reports/short_premium_study_latest.txt` |
 | `inferno_bayesian_winrate.py` | Beta-binomial Bayesian posterior on win rate; Wilson's complement | `reports/bayesian_winrate_latest.txt` |
 | `inferno_regime_drift.py` | Two-sided CUSUM change-point detection per strategy stream | `reports/regime_drift_latest.txt` |
 | `inferno_information_gain.py` | Mutual information ranking of features over win/loss outcomes | `reports/information_gain_latest.txt` |

@@ -62,6 +62,7 @@ Generated artifacts beat durable docs when they disagree.
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
 | Runtime storage hygiene | Nightly logs-only trimming via `inferno_housekeeping.py`; evidence retention and Git maintenance remain manual |
 | AI-basket input trust | `reports/ai_basket_data_contract_latest.txt` |
+| Defined-risk short-premium evidence | `reports/short_premium_study_latest.txt` |
 
 `reports/ticket_cap_policy_latest.txt` separates the operator's research
 construction cap from live capital authority. Live sizing still inherits the
