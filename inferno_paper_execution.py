@@ -280,6 +280,29 @@ def paper_fill_friction_model(
     }
 
 
+def paper_ledger_schwab_summary(value: Any) -> dict[str, Any]:
+    """Keep decision metrics without copying the full option chain into the ledger.
+
+    The selected ticket already persists its exact legs and quotes. Raw Schwab
+    contract arrays remain in the source options artifact, while the canonical
+    paper ledger retains the compact quality, liquidity, Greek, and provenance
+    fields used by downstream evaluators.
+    """
+    if not isinstance(value, dict):
+        return {}
+    summary = {
+        key: field_value
+        for key, field_value in value.items()
+        if key not in {"contracts", "topLiquidContracts"}
+    }
+    contracts = value.get("contracts")
+    top_liquid = value.get("topLiquidContracts")
+    summary["fullContractArraysPersisted"] = False
+    summary["omittedContractCount"] = len(contracts) if isinstance(contracts, list) else 0
+    summary["omittedTopLiquidContractCount"] = len(top_liquid) if isinstance(top_liquid, list) else 0
+    return summary
+
+
 def ledger_leg_symbols(entry: dict[str, Any]) -> str:
     """Return a stable leg signature for deduping refreshed tickets."""
     return ",".join(str(leg.get("symbol", "")) for leg in entry.get("legs", []))
@@ -619,7 +642,7 @@ def build_ledger_entry(
         "ivRankChange": item.get("ivRankChange"),
         "atrPercent": item.get("atrPercent"),
         "marketContextSummary": item.get("marketContextSummary") or {},
-        "schwabOptions": item.get("schwabOptions") or {},
+        "schwabOptions": paper_ledger_schwab_summary(item.get("schwabOptions")),
         "decisionCard": card,
         "expiration": strike_plan.get("expiration"),
         "entryCostType": cost_type,

@@ -270,6 +270,52 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(entry["frictionModel"], "full-atm-spread-per-crossing")
         self.assertFalse(entry["liveTradingAllowed"])
 
+    def test_ledger_entry_omits_full_schwab_contract_arrays(self) -> None:
+        item = {
+            "ticker": "WSC",
+            "setupRec": "Straddle",
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "schwabOptions": {
+                "quoteQualityScore": 88,
+                "paperFillFrictionPct": 0.12,
+                "qualityFlags": ["context-only"],
+                "contracts": [{"symbol": f"RAW{i}", "bid": 1.0, "ask": 1.1} for i in range(200)],
+                "topLiquidContracts": [{"symbol": "RAW1"}],
+            },
+            "strikePlan": {
+                "strategy": "LONG_STRADDLE",
+                "expiration": "2026-07-17",
+                "estimatedDebit": 5.0,
+                "estimatedMaxLoss": 500.0,
+                "legs": [
+                    {"symbol": "WSC260717C00050000", "instruction": "BUY_TO_OPEN", "ask": 2.5},
+                    {"symbol": "WSC260717P00050000", "instruction": "BUY_TO_OPEN", "ask": 2.5},
+                ],
+            },
+        }
+        with patch("inferno_paper_execution.load_json_file", return_value={}):
+            with patch(
+                "inferno_paper_execution.paper_status_for_item",
+                return_value=("paper-staged", [], {"passed": True}, "ok"),
+            ):
+                entry = paper_execution.build_ledger_entry(
+                    item,
+                    strike_plan_generated_at=paper_execution.local_now().isoformat(),
+                    ledger={"items": []},
+                )
+
+        schwab = entry["schwabOptions"]
+        self.assertNotIn("contracts", schwab)
+        self.assertNotIn("topLiquidContracts", schwab)
+        self.assertEqual(schwab["quoteQualityScore"], 88)
+        self.assertEqual(schwab["paperFillFrictionPct"], 0.12)
+        self.assertEqual(schwab["qualityFlags"], ["context-only"])
+        self.assertFalse(schwab["fullContractArraysPersisted"])
+        self.assertEqual(schwab["omittedContractCount"], 200)
+        self.assertEqual(schwab["omittedTopLiquidContractCount"], 1)
+        self.assertEqual(len(entry["legs"]), 2)
+
     def test_campaign_arm_assignment_is_always_registered(self) -> None:
         item = {"ticker": "SMR", "strikePlan": {"strategy": "CALL_DEBIT_SPREAD"}}
 
