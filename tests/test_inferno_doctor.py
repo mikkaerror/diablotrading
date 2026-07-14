@@ -28,6 +28,7 @@ from inferno_doctor import (
     schwab_oauth_status,
     short_premium_study_status,
     strategy_shadow_comparison_status,
+    tos_export_bridge_status,
     trade_management_status,
     watchdog_run_status,
 )
@@ -92,6 +93,52 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                 service_hour=6,
             )
         )
+
+    def test_disabled_tos_export_bridge_labels_stale_success_inactive(self) -> None:
+        ok, detail = tos_export_bridge_status(
+            {
+                "generatedAt": "2026-05-14T16:18:52-06:00",
+                "ok": True,
+                "status": "triggered",
+            },
+            enabled=False,
+            shortcut="command+shift+e",
+        )
+
+        self.assertTrue(ok)
+        self.assertIn("inactive-safe", detail)
+        self.assertIn("automation disabled", detail)
+        self.assertIn("2026-05-14", detail)
+
+    def test_enabled_tos_export_bridge_rejects_stale_success(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=False):
+            ok, detail = tos_export_bridge_status(
+                {
+                    "generatedAt": "2026-05-14T16:18:52-06:00",
+                    "ok": True,
+                    "status": "triggered",
+                },
+                enabled=True,
+                shortcut="command+shift+e",
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("stale", detail)
+
+    def test_enabled_tos_export_bridge_accepts_fresh_trigger(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tos_export_bridge_status(
+                {
+                    "generatedAt": "2026-07-14T15:00:00-06:00",
+                    "ok": True,
+                    "status": "triggered",
+                },
+                enabled=True,
+                shortcut="command+shift+e",
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("triggered", detail)
 
     def test_watchdog_run_status_accepts_no_dawn_on_market_closed_day(self) -> None:
         now = datetime.fromisoformat("2026-06-27T13:00:00-06:00")

@@ -373,6 +373,27 @@ def recent_or_today(timestamp: str, *, max_age_hours: int = 36, future_grace_sec
     return -future_grace_seconds <= age_seconds <= max_age_hours * 3600
 
 
+def tos_export_bridge_status(
+    report: dict,
+    *,
+    enabled: bool,
+    shortcut: str,
+) -> tuple[bool, str]:
+    """Keep historical export results from masquerading as current execution."""
+    status = str(report.get("status") or "not-run")
+    generated = str(report.get("generatedAt") or "")
+    if not enabled:
+        last_run = f"{generated} ({status})" if generated else "none"
+        return True, f"inactive-safe | automation disabled | last run {last_run} | shortcut {shortcut}"
+
+    fresh = recent_or_today(generated, max_age_hours=36)
+    accepted_statuses = {"triggered", "dry-run", "cooldown-skipped"}
+    ok = fresh and bool(report.get("ok")) and status in accepted_statuses
+    if not fresh:
+        return False, f"stale | generated {generated or 'missing'} | status {status} | shortcut {shortcut}"
+    return ok, f"{status} | generated {generated} | shortcut {shortcut}"
+
+
 def block_reason_top_bucket_status(performance: dict) -> tuple[bool, str]:
     """Return (ok, detail) for the top block-reason bucket line.
 
@@ -2161,9 +2182,14 @@ def main() -> int:
         warnings += 1
 
     export_bridge = load_json_file(TOS_EXPORT_BRIDGE_FILE) or {}
-    export_status = export_bridge.get("status") or ("enabled" if TOS_EXPORT_AUTOMATION_ENABLED else "disabled")
-    # A disabled export bridge is a deliberate safe mode, not an unhealthy desk state.
-    lines.append(summarize_status("TOS export bridge", True, f"{export_status} | shortcut {export_shortcut}"))
+    export_bridge_ok, export_bridge_detail = tos_export_bridge_status(
+        export_bridge,
+        enabled=TOS_EXPORT_AUTOMATION_ENABLED,
+        shortcut=str(export_shortcut),
+    )
+    lines.append(summarize_status("TOS export bridge", export_bridge_ok, export_bridge_detail))
+    if not export_bridge_ok:
+        warnings += 1
 
     sandbox = load_json_file(TOS_SANDBOX_FILE) or {}
     sandbox_today = in_current_service_cycle(str(sandbox.get("generatedAt", "")), now=now)

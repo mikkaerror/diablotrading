@@ -751,6 +751,9 @@ automation, not a broker API. On macOS the live trading window commonly belongs
 to the `java-arm` process, so the session probe should stay in the loop.
 The live bridge also has a cooldown guard now, so repeated runs within the
 cooldown window will skip cleanly instead of re-firing the shortcut.
+Doctor reports the bridge as `inactive-safe` while automation is disabled and
+labels the last historical run explicitly. When automation is enabled, a stale
+bridge artifact is a warning rather than evidence of a current export.
 
 ### Verify the thinkorswim export path first
 
