@@ -166,6 +166,7 @@ ALLOWED_TREND_LABELS = {
     "Breakdown",
 }
 HISTORY_CACHE: dict[tuple[str, str, str], pd.DataFrame] = {}
+HISTORY_EMPTY_RETRY_LIMIT = 2
 
 
 class PipelineLockActive(RuntimeError):
@@ -832,6 +833,7 @@ def download_history_with_retries(
         return cached_history.copy()
 
     last_error = None
+    empty_attempts = 0
     for attempt in range(retries):
         try:
             history = yf.download(
@@ -850,9 +852,13 @@ def download_history_with_retries(
                 HISTORY_CACHE[cache_key] = cleaned_history.copy()
                 return cleaned_history.copy()
             last_error = RuntimeError("empty price history")
+            empty_attempts += 1
+            if empty_attempts >= min(retries, HISTORY_EMPTY_RETRY_LIMIT):
+                break
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-        time.sleep(min(8, 1.6**attempt))
+        if attempt < retries - 1:
+            time.sleep(min(8, 1.6**attempt))
 
     # Some watchlist names are intentionally broad or occasionally unsupported
     # by the data vendor. Return an empty but schema-stable frame so callers can

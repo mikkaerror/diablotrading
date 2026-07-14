@@ -9,8 +9,10 @@ from unittest.mock import patch
 import pandas as pd
 
 from morning_inferno_pipeline import (
+    HISTORY_CACHE,
     build_market_context,
     compute_market_context_from_history,
+    download_history_with_retries,
     read_sheet_rows_from_table,
     sync_market_context_columns,
 )
@@ -18,6 +20,33 @@ from morning_inferno_pipeline import (
 
 class MorningInfernoMarketContextTests(unittest.TestCase):
     """Verify bias-confirmation metrics stay stable and deterministic."""
+
+    def tearDown(self) -> None:
+        HISTORY_CACHE.clear()
+
+    @patch("morning_inferno_pipeline.time.sleep")
+    @patch("morning_inferno_pipeline.yf.download")
+    def test_history_download_bounds_repeated_empty_results(self, download_mock, sleep_mock) -> None:
+        download_mock.return_value = pd.DataFrame()
+
+        first = download_history_with_retries("MISSING", period="10d", retries=4)
+        second = download_history_with_retries("MISSING", period="10d", retries=4)
+
+        self.assertTrue(first.empty)
+        self.assertTrue(second.empty)
+        self.assertEqual(download_mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 1)
+
+    @patch("morning_inferno_pipeline.time.sleep")
+    @patch("morning_inferno_pipeline.yf.download")
+    def test_history_download_keeps_exception_retry_budget(self, download_mock, sleep_mock) -> None:
+        download_mock.side_effect = RuntimeError("temporary network failure")
+
+        result = download_history_with_retries("RETRY", period="10d", retries=4)
+
+        self.assertTrue(result.empty)
+        self.assertEqual(download_mock.call_count, 4)
+        self.assertEqual(sleep_mock.call_count, 3)
 
     def test_compute_market_context_from_history_builds_real_levels(self) -> None:
         history = pd.DataFrame(
