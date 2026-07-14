@@ -83,6 +83,7 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
   run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
   run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
+  run_step "basket market refresh" "$PYTHON" inferno_ai_basket_refresh.py run --skip-refresh
 fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
 
@@ -110,6 +111,8 @@ run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
 run_step "short premium study"   "$PYTHON" inferno_short_premium_study.py run
 run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
+run_step "basket data contract"  "$PYTHON" inferno_ai_basket_data_contract.py run
+run_step "tech cohort evaluator" "$PYTHON" inferno_tech_cohort_evaluator.py run
 
 # 4) meta surfaces
 run_step "central command"       "$PYTHON" inferno_model_command_center.py

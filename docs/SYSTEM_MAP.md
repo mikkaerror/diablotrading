@@ -59,6 +59,8 @@ Generated artifacts beat durable docs when they disagree.
 | Ticket cap and call posture | `reports/ticket_cap_policy_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
+| AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
+| AI-basket input trust | `reports/ai_basket_data_contract_latest.txt` |
 
 `reports/ticket_cap_policy_latest.txt` separates the operator's research
 construction cap from live capital authority. Live sizing still inherits the

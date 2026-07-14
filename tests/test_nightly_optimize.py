@@ -62,6 +62,16 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(funnel, short_premium)
         self.assertLess(short_premium, mastery)
 
+    def test_nightly_refreshes_tech_cohort_before_command_center(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        refresh = text.index('run_step "basket market refresh"')
+        contract = text.index('run_step "basket data contract"')
+        cohort = text.index('run_step "tech cohort evaluator"')
+        command = text.index('run_step "central command"')
+        self.assertLess(refresh, contract)
+        self.assertLess(contract, cohort)
+        self.assertLess(cohort, command)
+
     def test_deployed_copy_can_use_repo_root(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 

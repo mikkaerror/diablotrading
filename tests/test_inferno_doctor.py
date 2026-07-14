@@ -8,6 +8,8 @@ from datetime import datetime
 from unittest.mock import patch
 
 from inferno_doctor import (
+    ai_basket_data_contract_status,
+    ai_basket_refresh_status,
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
@@ -154,6 +156,42 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         ok, detail = model_command_center_status({})
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
+
+    def test_ai_basket_refresh_status_requires_complete_safe_publication(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = ai_basket_refresh_status(
+                {
+                    "generatedAt": "2026-07-14T11:00:00-06:00",
+                    "verdict": "complete",
+                    "published": True,
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "counts": {"publishedCount": 27, "expectedCount": 27, "missingCount": 0},
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("coverage=27/27", detail)
+
+    def test_ai_basket_data_contract_status_rejects_fail_closed_inputs(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = ai_basket_data_contract_status(
+                {
+                    "generatedAt": "2026-07-14T11:00:00-06:00",
+                    "verdict": "fail-closed",
+                    "signalsTrusted": False,
+                    "expectedCount": 27,
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                }
+            )
+        self.assertFalse(ok)
+        self.assertIn("fail-closed", detail)
 
     def test_action_pulse_status_accepts_sent_pulse(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

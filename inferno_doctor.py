@@ -108,6 +108,8 @@ PAPER_EXIT_AUDIT_FILE = ROOT / "data" / "inferno_paper_exit_audit.json"
 LIVE_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_live_account_sync.json"
 LIVE_POSITION_REVIEW_FILE = ROOT / "data" / "inferno_live_position_review.json"
 MODEL_COMMAND_CENTER_FILE = ROOT / "data" / "inferno_model_command_center.json"
+AI_BASKET_REFRESH_FILE = ROOT / "data" / "inferno_ai_basket_refresh.json"
+AI_BASKET_DATA_CONTRACT_FILE = ROOT / "data" / "inferno_ai_basket_data_contract.json"
 SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
@@ -456,6 +458,55 @@ def model_command_center_status(payload: dict) -> tuple[bool, str]:
                 "status": status,
             }
         )
+    )
+    return ok, detail
+
+
+def ai_basket_refresh_status(payload: dict) -> tuple[bool, str]:
+    """Require a fresh, complete, research-only basket market-data refresh."""
+    if not payload:
+        return False, "missing"
+    generated = str(payload.get("generatedAt") or "")
+    counts = payload.get("counts") or {}
+    safe = (
+        bool(payload.get("researchOnly"))
+        and not bool(payload.get("promotable"))
+        and not bool(payload.get("authorityChanged"))
+        and not bool(payload.get("brokerSubmitAllowed"))
+        and not bool(payload.get("liveTradingAllowed"))
+    )
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(payload.get("verdict") or "unknown")
+    ok = fresh and safe and verdict == "complete" and bool(payload.get("published"))
+    detail = (
+        f"{verdict} | coverage={counts.get('publishedCount', 0)}/{counts.get('expectedCount', 0)} | "
+        f"blocked={counts.get('missingCount', 0)} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "published": payload.get("published")})
+    )
+    return ok, detail
+
+
+def ai_basket_data_contract_status(payload: dict) -> tuple[bool, str]:
+    """Require fresh, fully covered, explicitly timestamped basket inputs."""
+    if not payload:
+        return False, "missing"
+    generated = str(payload.get("generatedAt") or "")
+    safe = (
+        bool(payload.get("researchOnly"))
+        and not bool(payload.get("promotable"))
+        and not bool(payload.get("authorityChanged"))
+        and not bool(payload.get("brokerSubmitAllowed"))
+        and not bool(payload.get("liveTradingAllowed"))
+    )
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(payload.get("verdict") or "unknown")
+    expected = int(payload.get("expectedCount") or 0)
+    ok = fresh and safe and verdict == "trusted" and bool(payload.get("signalsTrusted")) and expected > 0
+    detail = (
+        f"{verdict} | trusted={bool(payload.get('signalsTrusted'))} | expected={expected} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "signalsTrusted": payload.get("signalsTrusted")})
     )
     return ok, detail
 
@@ -2197,6 +2248,18 @@ def main() -> int:
     command_center_ok, command_center_detail = model_command_center_status(model_command_center)
     lines.append(summarize_status("Model command center", command_center_ok, command_center_detail))
     if not command_center_ok:
+        warnings += 1
+
+    ai_basket_refresh = load_json_file(AI_BASKET_REFRESH_FILE) or {}
+    basket_refresh_ok, basket_refresh_detail = ai_basket_refresh_status(ai_basket_refresh)
+    lines.append(summarize_status("AI basket refresh", basket_refresh_ok, basket_refresh_detail))
+    if not basket_refresh_ok:
+        warnings += 1
+
+    ai_basket_contract = load_json_file(AI_BASKET_DATA_CONTRACT_FILE) or {}
+    basket_contract_ok, basket_contract_detail = ai_basket_data_contract_status(ai_basket_contract)
+    lines.append(summarize_status("AI basket data contract", basket_contract_ok, basket_contract_detail))
+    if not basket_contract_ok:
         warnings += 1
 
     action_pulse = load_json_file(ACTION_PULSE_FILE) or {}

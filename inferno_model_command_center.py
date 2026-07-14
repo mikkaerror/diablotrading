@@ -73,6 +73,9 @@ EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
 STRATEGY_SHADOW_COMPARISON_FILE = DATA_DIR / "inferno_strategy_shadow_comparison.json"
+TECH_COHORT_EVALUATOR_FILE = DATA_DIR / "inferno_tech_cohort_evaluator.json"
+AI_BASKET_REFRESH_FILE = DATA_DIR / "inferno_ai_basket_refresh.json"
+AI_BASKET_DATA_CONTRACT_FILE = DATA_DIR / "inferno_ai_basket_data_contract.json"
 PAPER_EVIDENCE_LOOP_FILE = DATA_DIR / "inferno_paper_evidence_loop.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
 STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
@@ -139,6 +142,24 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "What matters right now?",
         "artifact": "reports/model_command_center_latest.txt",
         "owner": "codex",
+    },
+    {
+        "lane": "tech-cohort",
+        "question": "How do AI-infrastructure shares and defined-risk option overlays compare at common risk?",
+        "artifact": "reports/tech_cohort_evaluator_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "ai-basket-refresh",
+        "question": "Did the fixed AI basket receive complete read-only Schwab trend and momentum inputs?",
+        "artifact": "reports/ai_basket_refresh_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "ai-basket-data-contract",
+        "question": "Are basket trend and momentum inputs complete, fresh, and explicitly timestamped?",
+        "artifact": "reports/ai_basket_data_contract_latest.txt",
+        "owner": "shared",
     },
     {
         "lane": "while-away",
@@ -970,6 +991,9 @@ def build_command_center() -> dict[str, Any]:
         "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyAlternativePricing": artifact_summary(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyShadowComparison": artifact_summary(STRATEGY_SHADOW_COMPARISON_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "techCohortEvaluator": artifact_summary(TECH_COHORT_EVALUATOR_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "aiBasketRefresh": artifact_summary(AI_BASKET_REFRESH_FILE, keys=("stage", "verdict", "generatedAt", "published", "researchOnly", "authorityChanged")),
+        "aiBasketDataContract": artifact_summary(AI_BASKET_DATA_CONTRACT_FILE, keys=("stage", "verdict", "generatedAt", "signalsTrusted", "researchOnly", "authorityChanged")),
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),

@@ -15,6 +15,21 @@ import inferno_model_command_center as command_center
 class InfernoModelCommandCenterTests(unittest.TestCase):
     """Protect the shared model brain from drifting or losing queue state."""
 
+    def test_reporting_map_includes_common_risk_tech_cohort(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tech-cohort")
+        self.assertEqual(row["artifact"], "reports/tech_cohort_evaluator_latest.txt")
+        self.assertEqual(row["owner"], "shared")
+
+    def test_reporting_map_includes_basket_data_contract(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "ai-basket-data-contract")
+        self.assertEqual(row["artifact"], "reports/ai_basket_data_contract_latest.txt")
+        self.assertEqual(row["owner"], "shared")
+
+    def test_reporting_map_includes_basket_market_refresh(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "ai-basket-refresh")
+        self.assertEqual(row["artifact"], "reports/ai_basket_refresh_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
     def test_build_command_center_aggregates_artifacts_and_queue_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
