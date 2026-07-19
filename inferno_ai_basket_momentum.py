@@ -25,27 +25,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from inferno_ai_basket_config import BASKET as CATS
+from inferno_ai_basket_config import SYMBOLS
+from inferno_io import atomic_write_json, atomic_write_text
+
 ROOT = Path(__file__).resolve().parent
 OUT_JSON = ROOT / "data" / "ai_basket_momentum.json"
 OUT_TXT = ROOT / "reports" / "ai_basket_momentum_latest.txt"
-
-CATS = {
-    "NVDA": "Compute", "AVGO": "Compute", "AMD": "Compute", "TXN": "Compute",
-    "ASML": "Compute", "QCOM": "Compute", "ARM": "Compute", "MRVL": "Networking Si",
-    "DELL": "Server OEM", "HPE": "Server OEM", "SMCI": "Server OEM",
-    "VRT": "Power/Cooling", "ETN": "Power/Cooling", "MOD": "Power/Cooling",
-    "GLW": "Optical", "LITE": "Optical", "AAOI": "Optical", "ANET": "Networking",
-    "VNET": "DC Operator", "STX": "Storage", "WDC": "Storage", "AEHR": "Semi Test",
-    "MSFT": "Hyperscaler", "GOOG": "Hyperscaler", "ORCL": "Cloud Rails",
-    "FTNT": "Security", "OTEX": "Cloud Rails",
-    "RBC": "Bearings", "RRX": "Bearings", "TKR": "Bearings",
-}
-
 
 def _num(v: Any) -> Optional[float]:
     try:
@@ -54,13 +44,20 @@ def _num(v: Any) -> Optional[float]:
         return None
 
 
-def rank(records: list[dict]) -> list[dict]:
+def rank(records: list[dict], *, expected_universe: list[str] | None = None) -> list[dict]:
     rows = []
+    expected = {
+        str(symbol or "").strip().upper()
+        for symbol in (expected_universe if expected_universe is not None else SYMBOLS)
+        if str(symbol or "").strip()
+    }
+    seen: set[str] = set()
     for r in records:
-        sym = r.get("symbol")
+        sym = str(r.get("symbol") or "").strip().upper()
         m1, m3, m6 = _num(r.get("1M")), _num(r.get("3M")), _num(r.get("6M"))
-        if sym is None or m3 is None or m6 is None:
+        if sym not in expected or sym in seen or m3 is None or m6 is None:
             continue
+        seen.add(sym)
         blended = (m3 + m6) / 2.0
         pace3 = m3 / 3.0                     # avg monthly pace over 3 months
         pace6 = m6 / 6.0                     # avg monthly pace over 6 months
@@ -78,24 +75,56 @@ def rank(records: list[dict]) -> list[dict]:
     return rows
 
 
-def build(records: list[dict]) -> dict[str, Any]:
-    rows = rank(records)
+def build(records: list[dict], *, expected_universe: list[str] | None = None) -> dict[str, Any]:
+    expected = [
+        str(symbol or "").strip().upper()
+        for symbol in (expected_universe if expected_universe is not None else SYMBOLS)
+        if str(symbol or "").strip()
+    ]
+    expected = list(dict.fromkeys(expected))
+    rows = rank(records, expected_universe=expected)
+    ranked_symbols = {row["symbol"] for row in rows}
+    input_symbols = [
+        str(row.get("symbol") or "").strip().upper()
+        for row in records
+        if isinstance(row, dict) and str(row.get("symbol") or "").strip()
+    ]
+    duplicate_symbols = sorted(
+        symbol for symbol in set(input_symbols) if symbol in set(expected) and input_symbols.count(symbol) > 1
+    )
+    missing_symbols = sorted(set(expected) - ranked_symbols)
+    extra_symbols = sorted(set(input_symbols) - set(expected))
+    signals_trusted = bool(expected) and not missing_symbols and not duplicate_symbols
     return {
         "stage": "ai-basket-momentum-research-only",
         "researchOnly": True,
+        "promotable": False,
+        "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
         "generatedAt": datetime.now(timezone.utc).astimezone().isoformat(),
+        "verdict": "trusted" if signals_trusted else "fail-closed",
+        "signalsTrusted": signals_trusted,
+        "expectedUniverse": expected,
+        "expectedCount": len(expected),
+        "coverageCount": len(ranked_symbols),
+        "missingSymbols": missing_symbols,
+        "extraSymbolsIgnored": extra_symbols,
+        "duplicateSymbols": duplicate_symbols,
         "count": len(rows),
         "ranking": rows,
-        "leaders": [d["symbol"] for d in rows[:5]],
-        "laggards": [d["symbol"] for d in rows[-5:]],
-        "accelerating": [d["symbol"] for d in rows if d["accelerating"]],
-        "fading": [d["symbol"] for d in rows if d["fading"]],
+        "leaders": [d["symbol"] for d in rows[:5]] if signals_trusted else [],
+        "laggards": [d["symbol"] for d in rows[-5:]] if signals_trusted else [],
+        "accelerating": [d["symbol"] for d in rows if d["accelerating"]] if signals_trusted else [],
+        "fading": [d["symbol"] for d in rows if d["fading"]] if signals_trusted else [],
     }
 
 
 def text(p: dict[str, Any]) -> str:
     L = ["AI / data-center basket — trailing-return momentum (3M/6M blend)",
-         f"Generated: {p['generatedAt']}", ""]
+         f"Generated: {p['generatedAt']}",
+         f"Verdict: {p.get('verdict')} | signals trusted: {p.get('signalsTrusted')}",
+         f"Coverage: {p.get('coverageCount', 0)}/{p.get('expectedCount', 0)}", ""]
     L.append(f"{'#':>2} {'sym':<5}{'cat':<15}{'1M':>7}{'3M':>7}{'6M':>7}{'blend':>7}  flags")
     for d in p["ranking"]:
         fl = []
@@ -117,8 +146,8 @@ def text(p: dict[str, Any]) -> str:
 def save(p: dict[str, Any]) -> None:
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(p, indent=2), encoding="utf-8")
-    OUT_TXT.write_text(text(p) + "\n", encoding="utf-8")
+    atomic_write_json(OUT_JSON, p)
+    atomic_write_text(OUT_TXT, text(p) + "\n")
 
 
 def main(argv: Optional[list] = None) -> int:

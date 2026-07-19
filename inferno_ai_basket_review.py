@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Basket weekly review — one runner that chains all four engines (research-only).
+
+Consolidates the pipeline so the scheduled task makes one call instead of four.
+Given the data files the task fetches from the market-data MCP, it runs:
+  1. trend-crossing alerts (200d/50d)      -> optional email via .env.smtp
+  2. trailing-return momentum (3M/6M)
+  3. composite relative-strength + tags
+  4. vs-SMH sector benchmark
+and prints ONE combined digest (also saved to reports/ai_basket_review_latest.txt).
+
+Usage (files produced by the weekly task):
+  python3 inferno_ai_basket_review.py \
+     --quotes data/ai_basket_quotes_latest.json \
+     --changes data/ai_basket_changes_latest.json \
+     --bench-quotes data/ai_basket_bench_quotes.json [--send]
+
+Boundary: research-only, decision-support. Places no trades. Not financial advice.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any, Optional
+
+import inferno_ai_basket_alerts as alerts
+import inferno_ai_basket_momentum as momentum
+import inferno_ai_basket_composite as composite
+import inferno_ai_basket_vs_benchmark as benchmark
+from inferno_ai_basket_config import load_data_contract
+
+ROOT = Path(__file__).resolve().parent
+OUT_TXT = ROOT / "reports" / "ai_basket_review_latest.txt"
+
+
+def _load(path: str) -> Any:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
+        send: bool = False) -> dict[str, Any]:
+    contract = load_data_contract()
+    # 1) crossings (also updates saved state, optional email)
+    al = alerts.run(quotes_path, send=send, data_contract=contract)
+
+    # 2) momentum
+    recs = _load(changes_path)
+    if isinstance(recs, dict):
+        recs = recs.get("data") or recs.get("records") or []
+    mp = momentum.build(recs)
+    momentum.save(mp)
+
+    # 3) composite
+    quotes = _load(quotes_path)
+    if isinstance(quotes, dict):
+        quotes = quotes.get("data") or quotes.get("quotes") or []
+    cp = composite.build(quotes, mp, data_contract=contract)
+    composite.save(cp)
+
+    # 4) vs-benchmark
+    bq = _load(bench_quotes_path)
+    if isinstance(bq, dict):
+        bq = bq.get("data") or bq.get("quotes") or []
+    bp = benchmark.build(bq, "SMH", data_contract=contract)
+    if not bp.get("error"):
+        benchmark.save(bp)
+
+    return {"alerts": al, "momentum": mp, "composite": cp, "benchmark": bp}
+
+
+def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
+    """Operationalize the momentum verdict (docs/MOMENTUM_VS_BUYLOW_VERDICT).
+
+    - doNotAverageDown: AVOID-tagged names (below their 200-day). On this basket,
+      'cheap and falling' persisted lower — these are stand-asides, not discounts.
+    - reentryConfirmed: names that reclaimed their 200-day this week. The
+      disciplined way to buy a fallen name back: after the turn confirms, not by
+      guessing the low.
+    """
+    avoid = [x["symbol"] for x in cp.get("ranking", []) if x.get("tag") == "AVOID"]
+    reentry = [e["sym"] for e in al.get("events", []) if e.get("kind") == "REENTRY"]
+    return {"doNotAverageDown": avoid, "reentryConfirmed": reentry}
+
+
+def digest(r: dict[str, Any]) -> str:
+    al, cp, bp = r["alerts"], r["composite"], r["benchmark"]
+    L = ["===== AI / data-center basket — weekly review =====", ""]
+
+    # crossings
+    ev = al.get("events", [])
+    if not ev:
+        L.append("CROSSINGS: none this week — basket unchanged.")
+    else:
+        L.append(f"CROSSINGS ({len(ev)}):")
+        for e in ev:
+            L.append(f"  [{e['kind']}] {e['sym']} ${e['price']:.2f} — {e['msg']}")
+        em = al.get("emailed", {})
+        L.append(f"  email: {'sent to '+em.get('recipient','') if em.get('ok') else em.get('reason','not sent')}")
+    L.append("")
+
+    # composite tags
+    lead = [x["symbol"] for x in cp["ranking"] if x["tag"] == "LEADER"]
+    red = [x["symbol"] for x in cp["ranking"] if x["tag"] == "REDUCE"]
+    avoid = [x["symbol"] for x in cp["ranking"] if x["tag"] == "AVOID"]
+    accel = [x["symbol"] for x in cp["ranking"] if x.get("accelerating")]
+    fade = [x["symbol"] for x in cp["ranking"] if x.get("fading")]
+    L.append("COMPOSITE TAGS:")
+    L.append(f"  LEADERS: {', '.join(lead) or '—'}")
+    L.append(f"  REDUCE:  {', '.join(red) or '—'}")
+    L.append(f"  AVOID:   {', '.join(avoid) or '—'}")
+    if accel:
+        L.append(f"  ▲ accelerating: {', '.join(accel)}")
+    if fade:
+        L.append(f"  ▼ fading: {', '.join(fade)}")
+    L.append("")
+
+    # vs sector
+    if bp.get("error"):
+        L.append(f"VS SECTOR: {bp['error']}")
+    else:
+        beats_basket = "BEATS SMH" if bp["basketBeatsBenchmark"] else "LAGS SMH"
+        top = [x["symbol"] for x in bp["ranking"][:3]]
+        bot = [x["symbol"] for x in bp["ranking"][-3:]]
+        L.append(f"VS SECTOR (SMH): {bp['namesBeatingSector']}/{bp['count']} names beat the sector; "
+                 f"equal-weight basket {beats_basket}.")
+        L.append(f"  strongest vs sector: {', '.join(top)}   weakest: {', '.join(bot)}")
+        conc = bp.get("concentration") or {}
+        if conc:
+            parts = [f"{v['pct']}% {b}" for b, v in sorted(
+                conc.items(), key=lambda kv: -kv[1]["count"])]
+            L.append("  concentration: " + " · ".join(parts))
+        for c in (bp.get("byCategory") or [])[:3]:
+            L.append(f"    ▲ {c['category']}: {c['count']} names, "
+                     f"{c['avgRelStrength']:+.0f} vs SMH")
+    L.append("")
+
+    # discipline watch — enforces the momentum lane (no averaging down)
+    dw = discipline_watch(al, cp)
+    L.append("DISCIPLINE WATCH (momentum lane — see MOMENTUM_VS_BUYLOW_VERDICT):")
+    L.append(f"  ⛔ do NOT average down (below 200-day / AVOID): "
+             f"{', '.join(dw['doNotAverageDown']) or '—'}")
+    L.append(f"  ✅ confirmed re-entry (reclaimed 200-day this week): "
+             f"{', '.join(dw['reentryConfirmed']) or '—'}")
+    L.append("  Rule: weakness is a stand-aside, not a discount. Re-enter only on a "
+             "confirmed 200-day reclaim.")
+    L.append("")
+    L.append("Decision-support only — hold the leaders, cut the AVOIDs. Not financial advice.")
+    return "\n".join(L)
+
+
+def main(argv: Optional[list] = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--quotes", required=True)
+    ap.add_argument("--changes", required=True)
+    ap.add_argument("--bench-quotes", required=True)
+    ap.add_argument("--send", action="store_true")
+    args = ap.parse_args(argv)
+    r = run(args.quotes, args.changes, args.bench_quotes, send=args.send)
+    out = digest(r)
+    print(out)
+    OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
+    OUT_TXT.write_text(out + "\n", encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,289 @@
+{
+  "generatedAt": "2026-07-14T11:10:44.203162-06:00",
+  "stage": "ai-basket-refresh-research-only",
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "source": {
+    "provider": "schwab-price-history",
+    "generatedAt": "2026-07-14T11:10:58.185899-06:00",
+    "status": "ok",
+    "endpoint": "/marketdata/v1/pricehistory"
+  },
+  "expectedUniverse": [
+    "NVDA",
+    "AVGO",
+    "AMD",
+    "TXN",
+    "ASML",
+    "QCOM",
+    "ARM",
+    "MRVL",
+    "DELL",
+    "HPE",
+    "SMCI",
+    "VRT",
+    "ETN",
+    "MOD",
+    "GLW",
+    "LITE",
+    "AAOI",
+    "ANET",
+    "VNET",
+    "STX",
+    "WDC",
+    "AEHR",
+    "MSFT",
+    "GOOG",
+    "ORCL",
+    "FTNT",
+    "OTEX"
+  ],
+  "records": [
+    {
+      "symbol": "NVDA",
+      "cat": "Compute",
+      "price": 203.53,
+      "priceAvg50": 209.0846,
+      "priceAvg200": 191.796,
+      "yearHigh": 236.54,
+      "yearLow": 162.02
+    },
+    {
+      "symbol": "AVGO",
+      "cat": "Compute",
+      "price": 384.05,
+      "priceAvg50": 406.0224,
+      "priceAvg200": 362.672,
+      "yearHigh": 495.0,
+      "yearLow": 269.58
+    },
+    {
+      "symbol": "AMD",
+      "cat": "Compute",
+      "price": 534.39,
+      "priceAvg50": 485.841,
+      "priceAvg200": 289.5311,
+      "yearHigh": 584.73,
+      "yearLow": 141.9
+    },
+    {
+      "symbol": "TXN",
+      "cat": "Compute",
+      "price": 298.57,
+      "priceAvg50": 300.1719,
+      "priceAvg200": 219.1865,
+      "yearHigh": 334.03,
+      "yearLow": 152.73
+    },
+    {
+      "symbol": "ASML",
+      "cat": "Compute",
+      "price": 1726.04,
+      "priceAvg50": 1689.9168,
+      "priceAvg200": 1340.5013,
+      "yearHigh": 1999.96,
+      "yearLow": 683.48
+    },
+    {
+      "symbol": "QCOM",
+      "cat": "Compute",
+      "price": 183.98,
+      "priceAvg50": 207.3844,
+      "priceAvg200": 168.948,
+      "yearHigh": 259.92,
+      "yearLow": 121.99
+    },
+    {
+      "symbol": "ARM",
+      "cat": "Compute",
+      "price": 298.99,
+      "priceAvg50": 311.1418,
+      "priceAvg200": 182.1271,
+      "yearHigh": 452.7,
+      "yearLow": 100.02
+    },
+    {
+      "symbol": "MRVL",
+      "cat": "Networking Si",
+      "price": 217.53,
+      "priceAvg50": 232.6888,
+      "priceAvg200": 127.4797,
+      "yearHigh": 329.88,
+      "yearLow": 61.44
+    },
+    {
+      "symbol": "DELL",
+      "cat": "Server OEM",
+      "price": 427.11,
+      "priceAvg50": 349.151,
+      "priceAvg200": 195.6859,
+      "yearHigh": 469.47,
+      "yearLow": 110.22
+    },
+    {
+      "symbol": "HPE",
+      "cat": "Server OEM",
+      "price": 47.24,
+      "priceAvg50": 41.511,
+      "priceAvg200": 27.9059,
+      "yearHigh": 64.25,
+      "yearLow": 19.635
+    },
+    {
+      "symbol": "SMCI",
+      "cat": "Server OEM",
+      "price": 27.66,
+      "priceAvg50": 33.4484,
+      "priceAvg200": 34.4694,
+      "yearHigh": 62.358,
+      "yearLow": 19.48
+    },
+    {
+      "symbol": "VRT",
+      "cat": "Power/Cooling",
+      "price": 305.87,
+      "priceAvg50": 324.7316,
+      "priceAvg200": 237.6646,
+      "yearHigh": 379.935,
+      "yearLow": 118.7
+    },
+    {
+      "symbol": "ETN",
+      "cat": "Power/Cooling",
+      "price": 402.85,
+      "priceAvg50": 405.4056,
+      "priceAvg200": 372.3556,
+      "yearHigh": 436.74,
+      "yearLow": 311.915
+    },
+    {
+      "symbol": "MOD",
+      "cat": "Power/Cooling",
+      "price": 234.28,
+      "priceAvg50": 269.124,
+      "priceAvg200": 199.787,
+      "yearHigh": 323.25,
+      "yearLow": 88.48
+    },
+    {
+      "symbol": "GLW",
+      "cat": "Optical",
+      "price": 183.11,
+      "priceAvg50": 191.4396,
+      "priceAvg200": 130.487,
+      "yearHigh": 271.78,
+      "yearLow": 51.32
+    },
+    {
+      "symbol": "LITE",
+      "cat": "Optical",
+      "price": 768.15,
+      "priceAvg50": 885.7146,
+      "priceAvg200": 560.3748,
+      "yearHigh": 1085.68,
+      "yearLow": 90.98
+    },
+    {
+      "symbol": "AAOI",
+      "cat": "Optical",
+      "price": 111.88,
+      "priceAvg50": 165.0804,
+      "priceAvg200": 84.89,
+      "yearHigh": 233.67,
+      "yearLow": 18.5
+    },
+    {
+      "symbol": "ANET",
+      "cat": "Networking",
+      "price": 181.15,
+      "priceAvg50": 160.5956,
+      "priceAvg200": 144.1335,
+      "yearHigh": 189.817,
+      "yearLow": 104.681
+    },
+    {
+      "symbol": "VNET",
+      "cat": "DC Operator",
+      "price": 7.72,
+      "priceAvg50": 9.0754,
+      "priceAvg200": 9.5987,
+      "yearHigh": 14.48,
+      "yearLow": 7.17
+    },
+    {
+      "symbol": "STX",
+      "cat": "Storage",
+      "price": 860.66,
+      "priceAvg50": 873.0957,
+      "priceAvg200": 476.2952,
+      "yearHigh": 1145.0,
+      "yearLow": 138.3
+    },
+    {
+      "symbol": "WDC",
+      "cat": "Storage",
+      "price": 555.55,
+      "priceAvg50": 549.1328,
+      "priceAvg200": 304.2436,
+      "yearHigh": 799.87,
+      "yearLow": 65.24
+    },
+    {
+      "symbol": "AEHR",
+      "cat": "Semi Test",
+      "price": 68.02,
+      "priceAvg50": 94.9149,
+      "priceAvg200": 49.4847,
+      "yearHigh": 126.62,
+      "yearLow": 12.93
+    },
+    {
+      "symbol": "MSFT",
+      "cat": "Hyperscaler",
+      "price": 390.99,
+      "priceAvg50": 402.9464,
+      "priceAvg200": 441.6874,
+      "yearHigh": 555.45,
+      "yearLow": 349.2
+    },
+    {
+      "symbol": "GOOG",
+      "cat": "Hyperscaler",
+      "price": 350.67,
+      "priceAvg50": 370.0048,
+      "priceAvg200": 318.7426,
+      "yearHigh": 404.47,
+      "yearLow": 180.7109
+    },
+    {
+      "symbol": "ORCL",
+      "cat": "Cloud Rails",
+      "price": 131.54,
+      "priceAvg50": 182.4214,
+      "priceAvg200": 194.8124,
+      "yearHigh": 345.72,
+      "yearLow": 131.35
+    },
+    {
+      "symbol": "FTNT",
+      "cat": "Security",
+      "price": 160.62,
+      "priceAvg50": 135.7634,
+      "priceAvg200": 95.4709,
+      "yearHigh": 165.2799,
+      "yearLow": 70.12
+    },
+    {
+      "symbol": "OTEX",
+      "cat": "Cloud Rails",
+      "price": 23.57,
+      "priceAvg50": 22.8188,
+      "priceAvg200": 28.2145,
+      "yearHigh": 39.9,
+      "yearLow": 19.775
+    }
+  ]
+}
