@@ -10,6 +10,7 @@ approval state, broker state, or authority.
 
 import argparse
 import json
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
@@ -646,6 +647,35 @@ def top_filter(
     return sorted([row for row in rows if predicate(row)], key=lambda item: item.get(key, 0), reverse=True)[:limit]
 
 
+def coverage_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize full tracker coverage without turning it into an allocation list.
+
+    The tracker is the operator-maintained research universe. Every scored row
+    stays in the artifact so DCA and concentration research can inspect the
+    full set; the short named sections are a readable digest, not an implicit
+    exclusion list or a funding instruction.
+    """
+    action_counts = Counter(
+        str(row.get("researchAction") or "watch only") for row in rows
+    )
+    grade_counts = Counter(
+        str(row.get("evidenceGrade") or "unknown") for row in rows
+    )
+    long_term_qualified = sum(
+        1
+        for row in rows
+        if number(row.get("longTermConvictionScore")) >= 66
+        and number(row.get("support")) > 0
+    )
+    return {
+        "retainedRankedRows": len(rows),
+        "researchActionCounts": dict(sorted(action_counts.items())),
+        "evidenceGradeCounts": dict(sorted(grade_counts.items())),
+        "longTermResearchQualified": long_term_qualified,
+        "fullTrackerRetained": True,
+    }
+
+
 def build_conviction_research(
     rows: list[dict[str, Any]] | None = None,
     edge_research: dict[str, Any] | None = None,
@@ -688,6 +718,7 @@ def build_conviction_research(
         lambda item: number(item["readiness"]) >= 85 and bool(item["riskFlags"]),
         limit=limit,
     )
+    coverage = coverage_summary(ranked)
 
     return {
         "generatedAt": local_now().isoformat(),
@@ -697,6 +728,7 @@ def build_conviction_research(
         "mathVersion": "conviction-v2-balance-uncertainty",
         "trackedRows": len(snapshot_rows),
         "scoredRows": len(ranked),
+        "coverage": coverage,
         "regimeThesis": "AI/data-center semiconductor bull cycle remains strong; the desk still requires local ticker evidence and sizing discipline.",
         "regimeReferences": list(REGIME_REFERENCES),
         "strategyReferences": list(STRATEGY_REFERENCES),
@@ -717,7 +749,10 @@ def build_conviction_research(
         "bestBalanced": balanced,
         "longTermBuyZone": long_term_buy_zone,
         "contradictions": contradictions,
-        "ranked": ranked[: max(limit * 3, 30)],
+        # The report sections are compact, but no tracker name disappears from
+        # durable allocation, diversification, or audit research because it
+        # falls outside a top-N digest.
+        "ranked": ranked,
         "safety": [
             "Research-only; never changes approval, broker, or authority state.",
             "Strong theme is not a trade. A trade still needs paper evidence, strike gates, and explicit confirmation.",
@@ -757,6 +792,11 @@ def conviction_research_text(report: dict[str, Any]) -> str:
         f"Stage: {report.get('stage')}",
         f"Tracked rows: {report.get('trackedRows')} | scored rows: {report.get('scoredRows')}",
         f"Regime thesis: {report.get('regimeThesis')}",
+        "",
+        "Full tracker coverage:",
+        f"- retained in durable ranking: {(report.get('coverage') or {}).get('retainedRankedRows', 0)}",
+        f"- long-term research-qualified: {(report.get('coverage') or {}).get('longTermResearchQualified', 0)}",
+        "- named sections below are a digest; the JSON artifact retains every tracked row.",
         "",
         "Metrics that matter:",
     ]

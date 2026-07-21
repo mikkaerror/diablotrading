@@ -156,6 +156,28 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertIn("risk-flagged", risky["reasonCodes"])
         self.assertIn(giant["evidenceGrade"], {"A", "B", "C"})
 
+    def test_full_tracker_ranking_is_retained_beyond_report_digest_limit(self) -> None:
+        rows = []
+        for index in range(40):
+            row = dict(sample_rows()[1])
+            row["ticker"] = f"FULL{index:02d}"
+            rows.append(row)
+
+        report = conviction.build_conviction_research(
+            rows=rows,
+            edge_research={"ranked": []},
+            limit=5,
+        )
+
+        self.assertEqual(report["trackedRows"], 40)
+        self.assertEqual(len(report["ranked"]), 40)
+        self.assertEqual(report["coverage"]["retainedRankedRows"], 40)
+        self.assertTrue(report["coverage"]["fullTrackerRetained"])
+        self.assertEqual(
+            sum(report["coverage"]["researchActionCounts"].values()),
+            40,
+        )
+
     def test_pillar_balance_penalizes_one_pillar_wonders(self) -> None:
         balanced = {
             "theme": 75,
@@ -191,6 +213,7 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertIn("Behemoths / giants", text)
         self.assertIn("Sleepers to investigate", text)
         self.assertIn("Best balanced conviction", text)
+        self.assertIn("Full tracker coverage", text)
         self.assertIn("Research references", text)
         self.assertIn("Research-only", text)
 

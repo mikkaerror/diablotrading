@@ -2,17 +2,17 @@
   {
     "id": "mission-9b615675",
     "createdAt": "2026-05-10T15:10:09.054079-06:00",
-    "updatedAt": "2026-05-18T22:05:35.633074-06:00",
+    "updatedAt": "2026-07-20T21:41:25.911250-06:00",
     "title": "Capital readiness and risk-rail maintenance",
-    "body": "Codex owns readiness briefs, allocator guardrails, tests, and command-center hygiene. Rerun capital readiness before sizing any new cash. No live submit; explicit user confirmation only.",
+    "body": "Current step: retain and summarize full 146-name tracker conviction coverage so allocation research uses the full operator-maintained universe while candidate gates, concentration checks, risk constants, and broker authority remain unchanged.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "done",
     "priority": "high",
     "tags": [
-      "capital",
-      "readiness",
-      "risk",
-      "ops"
+      "capital-readiness",
+      "full-tracker",
+      "allocation-research",
+      "safety"
     ]
   },
   {

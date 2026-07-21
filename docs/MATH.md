@@ -783,6 +783,12 @@ survive cross-examination" layer. It is research-only: it cannot approve,
 reject, size, stage, or submit a trade. It ranks the whole tracker universe
 into four operator-readable groups:
 
+The durable JSON artifact retains every scored tracker row, not just the
+operator-readable top sections. This lets downstream allocation and
+concentration research inspect the full universe while preserving the existing
+long-term and paper-entry gates; full coverage is not an instruction to fund
+every name.
+
 | Group | Meaning |
 |---|---|
 | Behemoths / giants | Bell-cow AI, semis, cloud, and data-center names where theme relevance is already obvious |
