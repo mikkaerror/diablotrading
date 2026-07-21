@@ -135,5 +135,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-b4144374",
+    "createdAt": "2026-07-20T23:41:26.670749-06:00",
+    "updatedAt": "2026-07-20T23:48:32.437887-06:00",
+    "title": "Operator-owned full-tracker role review queue",
+    "body": "Build a research-only role and diversification review queue for all 146 tracker names. It may surface existing operator-declared long-term holdings as evidence, but it must not infer portfolio roles, approve additions, define target weights, change policy, eligibility, risk constants, tickets, broker actions, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "full-tracker",
+      "role-review",
+      "dca",
+      "research-only",
+      "safety"
+    ]
   }
 ]

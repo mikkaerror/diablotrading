@@ -108,6 +108,7 @@ def taxonomy_fields(
     reference_covered = reference_row.get("referenceStatus") == "reference-covered"
     reference_exposure = str(reference_row.get("economicExposure") or "").strip()
     return {
+        "companyName": str(reference_row.get("companyName") or "").strip(),
         "category": category if theme_classified else "Unclassified",
         "themeEconomicExposure": theme_exposure or "Unclassified",
         "themeTaxonomyStatus": "mapped-from-existing-research" if theme_classified else "unclassified-research-theme",

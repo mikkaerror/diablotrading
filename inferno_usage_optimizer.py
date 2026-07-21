@@ -65,6 +65,10 @@ READ_IF_NEEDED: tuple[dict[str, str], ...] = (
         "why": "full-tracker taxonomy and holdings coverage before DCA construction research",
     },
     {
+        "path": "reports/tracker_role_review_latest.txt",
+        "why": "operator-owned role and diversification decision queue; it does not create any DCA weights",
+    },
+    {
         "path": "docs/MODEL_COLLABORATION_BRIEF.md",
         "why": "mission, safety rails, division of labor",
     },
@@ -136,6 +140,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
     {
         "command": "./inferno tracker-registry",
         "purpose": "show full-tracker taxonomy and holdings coverage before DCA construction research",
+    },
+    {
+        "command": "./inferno tracker-role-review",
+        "purpose": "show unresolved operator role and DCA-inclusion decisions without producing a buy list",
     },
     {
         "command": "./inferno cash-ledger",

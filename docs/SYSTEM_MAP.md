@@ -72,6 +72,7 @@ Generated artifacts beat durable docs when they disagree.
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
 | Full-tracker reference taxonomy | `reports/tracker_taxonomy_latest.txt` |
 | Full-tracker registry | `reports/tracker_registry_latest.txt` |
+| Full-tracker role review | `reports/tracker_role_review_latest.txt` |
 | Runtime storage hygiene | Nightly logs-only trimming via `inferno_housekeeping.py`; evidence retention and Git maintenance remain manual |
 | AI-basket input trust | `reports/ai_basket_data_contract_latest.txt` |
 | Defined-risk short-premium evidence | `reports/short_premium_study_latest.txt` |
@@ -129,6 +130,7 @@ tested subsystems instead of replacing them:
 - `./inferno usage` — low-context handoff packet
 - `./inferno tracker-taxonomy` — source-labelled full-tracker sector, industry, and broad economic-exposure coverage
 - `./inferno tracker-registry` — full-tracker taxonomy and holdings coverage before DCA research
+- `./inferno tracker-role-review` — operator-owned role and diversification decision queue; no weights or purchases
 - `./inferno oauth` — Schwab OAuth status/refresh/restart
 - `./inferno daily-ops` — Schwab daily options operations tape
 - `./inferno action-pulse` — tactical action pulse; no email unless `--send`

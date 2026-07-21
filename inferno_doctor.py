@@ -57,6 +57,7 @@ EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
 TRACKER_TAXONOMY_FILE = ROOT / "data" / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
+TRACKER_ROLE_REVIEW_FILE = ROOT / "data" / "inferno_tracker_role_review.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
 CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
@@ -690,6 +691,8 @@ def tracker_registry_status(report: dict) -> tuple[bool, str]:
     )
     coverage = report.get("coverage") or {}
     taxonomy = coverage.get("taxonomyCoverage") or {}
+    reference = coverage.get("referenceCoverage") or {}
+    roles = coverage.get("portfolioRolePolicyCoverage") or {}
     tracked_rows = coverage.get("trackedRows")
     conviction_coverage = coverage.get("convictionCoverage")
     complete_research_coverage = tracked_rows is not None and tracked_rows == conviction_coverage
@@ -700,12 +703,17 @@ def tracker_registry_status(report: dict) -> tuple[bool, str]:
         "reference-covered-role-policy-pending",
         "reference-coverage-incomplete",
     }
-    detail = (
-        f"{verdict} | tracker={tracked_rows} | taxonomy-missing={taxonomy.get('needsOperatorTaxonomy', 0)} | "
-        f"research-only={safe}"
-        if fresh
-        else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
-    )
+    if fresh:
+        if reference:
+            detail = (
+                f"{verdict} | tracker={tracked_rows} | reference={reference.get('referenceCoveredRows', 0)}/{tracked_rows} | "
+                f"reference-missing={reference.get('referenceMissingRows', 0)} | roles={roles.get('definedRows', 0)}/{tracked_rows} | "
+                f"research-only={safe}"
+            )
+        else:
+            detail = f"{verdict} | tracker={tracked_rows} | taxonomy-missing={taxonomy.get('needsOperatorTaxonomy', 0)} | research-only={safe}"
+    else:
+        detail = json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     return ok, detail
 
 
@@ -721,6 +729,7 @@ def tracker_taxonomy_status(report: dict) -> tuple[bool, str]:
         and not bool(report.get("authorityChanged"))
         and not bool(report.get("brokerSubmitAllowed"))
         and not bool(report.get("liveTradingAllowed"))
+        and not bool((report.get("authorityBoundary") or {}).get("operatorPolicyChanged"))
     )
     coverage = report.get("coverage") or {}
     tracked_rows = coverage.get("trackedRows")
@@ -731,6 +740,35 @@ def tracker_taxonomy_status(report: dict) -> tuple[bool, str]:
     ok = fresh and safe and valid_coverage and verdict in {"reference-coverage-complete", "reference-coverage-incomplete"}
     detail = (
         f"{verdict} | reference={covered_rows}/{tracked_rows} | missing={missing_rows} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
+    )
+    return ok, detail
+
+
+def tracker_role_review_status(report: dict) -> tuple[bool, str]:
+    """Check that the role queue is fresh and authority-safe, not policy-complete."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+        and not bool((report.get("authorityBoundary") or {}).get("operatorPolicyChanged"))
+    )
+    coverage = report.get("coverage") or {}
+    tracked_rows = coverage.get("trackedRows")
+    role_rows = coverage.get("portfolioRoleDefinedRows")
+    required_rows = coverage.get("rowsRequiringOperatorRoleDecision")
+    verdict = str(report.get("verdict") or "unknown")
+    valid_coverage = all(isinstance(value, int) for value in (tracked_rows, role_rows, required_rows))
+    ok = fresh and safe and valid_coverage and verdict == "operator-role-review-required"
+    detail = (
+        f"{verdict} | tracker={tracked_rows} | roles={role_rows} | review-required={required_rows} | research-only={safe}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     )
@@ -1858,6 +1896,12 @@ def main() -> int:
     tracker_registry_ok, tracker_registry_detail = tracker_registry_status(tracker_registry)
     lines.append(summarize_status("Full-tracker registry", tracker_registry_ok, tracker_registry_detail))
     if not tracker_registry_ok:
+        warnings += 1
+
+    tracker_role_review = load_json_file(TRACKER_ROLE_REVIEW_FILE) or {}
+    tracker_role_review_ok, tracker_role_review_detail = tracker_role_review_status(tracker_role_review)
+    lines.append(summarize_status("Full-tracker role review", tracker_role_review_ok, tracker_role_review_detail))
+    if not tracker_role_review_ok:
         warnings += 1
 
     schwab_edge = load_json_file(SCHWAB_EDGE_SIGNALS_FILE) or {}

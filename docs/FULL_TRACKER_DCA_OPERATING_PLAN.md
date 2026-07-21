@@ -72,6 +72,9 @@ Operator-maintained tracker (146 names)       Read-only broker book
                  +--> concentration / overlap diagnostics
                  |
                  v
+      Operator role / DCA-inclusion review queue
+                 |
+                 v
       Deposit-plan decision support (future research-only build)
                  |
                  v
@@ -113,6 +116,11 @@ operator-reviewed metadata is:
 
 Unknown is a valid value. The system must not fabricate classifications simply
 to make a dashboard look complete.
+
+`./inferno tracker-role-review` now creates the full 146-name review queue.
+It surfaces the four existing operator-declared long-term holdings as context
+only; those declarations do not approve new additions, portfolio roles,
+DCA-inclusion, or target weights.
 
 **Gate:** resolve the explicit reference-source gap without guessing, then have
 the operator approve a portfolio-role and diversification policy for every row

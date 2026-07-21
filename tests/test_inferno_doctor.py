@@ -13,6 +13,7 @@ from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
+    tracker_role_review_status,
     tracker_taxonomy_status,
     tracker_registry_status,
     cycle_days,
@@ -572,12 +573,15 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                         "trackedRows": 146,
                         "convictionCoverage": 146,
                         "taxonomyCoverage": {"needsOperatorTaxonomy": 117},
+                        "referenceCoverage": {"referenceCoveredRows": 145, "referenceMissingRows": 1},
+                        "portfolioRolePolicyCoverage": {"definedRows": 0},
                     },
                 }
             )
 
         self.assertTrue(ok)
-        self.assertIn("taxonomy-missing=117", detail)
+        self.assertIn("reference=145/146", detail)
+        self.assertIn("roles=0/146", detail)
 
     def test_tracker_registry_status_rejects_incomplete_research_coverage(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):
@@ -614,6 +618,28 @@ class InfernoDoctorCycleTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertIn("reference=145/146", detail)
+
+    def test_tracker_role_review_status_accepts_open_human_policy_work(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_role_review_status(
+                {
+                    "generatedAt": "2026-07-20T23:00:00-06:00",
+                    "verdict": "operator-role-review-required",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "coverage": {
+                        "trackedRows": 146,
+                        "portfolioRoleDefinedRows": 0,
+                        "rowsRequiringOperatorRoleDecision": 146,
+                    },
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("review-required=146", detail)
 
 
 class InfernoDoctorInformationalSignalsTests(unittest.TestCase):

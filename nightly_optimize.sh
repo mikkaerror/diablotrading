@@ -89,6 +89,7 @@ fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
 run_step "full tracker taxonomy" "$PYTHON" inferno_tracker_taxonomy.py run
 run_step "full tracker registry" "$PYTHON" inferno_tracker_registry.py run
+run_step "full tracker role review" "$PYTHON" inferno_tracker_role_review.py run
 
 # 2) bounded evidence goal loop (research-only; no approval or live mutation)
 #

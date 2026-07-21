@@ -81,7 +81,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | System map + cleanup | shipped | docs/SYSTEM_MAP.md slotted as the read-this-first doc; MODULE_INDEX now covers 97/97 modules (was 89/97); obsolete root shims removed while root static dashboard files remain preserved for GitHub Pages; OPERATING_MODEL frontend refs updated to point at frontend/modules/ |
 | Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
-| Full-tracker registry | active foundation | 146 tracker rows and 4 broker holdings reconciled; 29 names map to existing economic-exposure categories; 117 names require canonical taxonomy before diversified DCA research; no target weights or broker action |
+| Full-tracker DCA foundation | active foundation | 146 tracker rows and 4 broker holdings reconciled; 145 fresh source-labelled reference profiles, 1 explicit `GLDD` gap, and a 146-name operator role-review queue; no roles, DCA-inclusion decisions, target weights, or broker action |
 | Theory references | shipped | one place for primary literature tags used by the audit |
 | Scenario backtest | shipped | daily 10+ scenario slate now compares against closed paper/shadow evidence by ticker, strategy family, and DTE window |
 | Scenario evidence | shipped | daily 10+ slate now records research-only underlying observations so the backtest can learn before fills close |
@@ -141,13 +141,13 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: broker cash is currently zero. Planned deposits remain forecasts until broker-confirmed cash exists; no automated submission, and every real order still requires explicit final confirmation.
-- Full-tracker DCA construction: source-labelled reference coverage is 145/146 fresh; `GLDD` remains explicitly unknown after a failed reference lookup. Portfolio roles and diversification policy are still intentionally undefined for all 146 rows, so no DCA weights or proposal exist.
+- Full-tracker DCA construction: source-labelled reference coverage is 145/146 fresh; `GLDD` remains explicitly unknown after a failed reference lookup. `./inferno tracker-role-review` now queues all 146 operator role and DCA-inclusion decisions, while keeping the four existing long-term-hold declarations as context only. No DCA weights or proposal exist.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Review `./inferno tracker-taxonomy` and `./inferno tracker-registry`; resolve the explicit `GLDD` source gap and define operator-owned role/diversification policy before any DCA-weight research.
+1. Review `./inferno tracker-taxonomy`, `./inferno tracker-registry`, and `./inferno tracker-role-review`; resolve the explicit `GLDD` source gap and define operator-owned role/diversification policy before any DCA-weight research.
 2. Treat deployable cash as manual-review-only: broker cash is currently zero; keep live submit OFF and require explicit final confirmation before any real order.
 3. Run the command center, capital readiness, Schwab daily ops tape, and risk
    gate audit before sizing any ticket.
