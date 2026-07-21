@@ -717,6 +717,9 @@ def build_director() -> dict[str, Any]:
     scored_tickets = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
     remaining_for_promotion = max(0, PROMOTION_TARGET - scored_tickets)
     auto_paper_stageable = [candidate for candidate in stageable if candidate.get("paperAutoSelected")]
+    operator_routable_stageable = [
+        candidate for candidate in stageable if not candidate.get("paperAutoSelected")
+    ]
     combined_auto_paper = auto_paper_stageable + auto_paper
     priced_variant_watch = priced_paper_variant_watchlist(strategy_pricing, paper_ledger)
     construction_watch = construction_watchlist(strategy_pricing)
@@ -724,9 +727,9 @@ def build_director() -> dict[str, Any]:
         candidate for candidate in priced_variant_watch if candidate.get("paperResearchSelected")
     ]
 
-    if stageable:
+    if operator_routable_stageable:
         verdict = "operator-paper-candidates"
-    elif auto_paper:
+    elif combined_auto_paper:
         verdict = "auto-paper-selected"
     elif event_capped:
         verdict = "event-capped"
@@ -744,11 +747,11 @@ def build_director() -> dict[str, Any]:
         verdict = "no-viable-paper-tests"
 
     next_actions: list[str] = []
-    if stageable:
+    if operator_routable_stageable:
         next_actions.append(
             "Operator-routable paper candidates exist now; record them for the operator-owned paper workflow and do not stage autonomously."
         )
-    elif auto_paper:
+    elif combined_auto_paper:
         next_actions.append(
             "Auto-paper-selected names are research-only candidates for the operator-owned paper workflow; do not stage, approve, reject, or close them autonomously."
         )
@@ -802,7 +805,10 @@ def build_director() -> dict[str, Any]:
         "expandedUniverseTickers": expanded_tickers,
         "counts": {
             "totalCandidates": len(candidates),
+            # Retained for compatibility: this is the total executable
+            # paper-workflow slate and includes auto-paper candidates.
             "stageableNow": len(stageable),
+            "operatorRoutablePaper": len(operator_routable_stageable),
             "autoPaperSelected": len(combined_auto_paper),
             "eventCapped": len(event_capped),
             "distinctAutoPaperEvents": len({candidate.get("eventId") for candidate in combined_auto_paper if candidate.get("eventId")}),
@@ -823,6 +829,7 @@ def build_director() -> dict[str, Any]:
         "authorityWarnings": (authority.get("decision") or {}).get("warnings") or [],
         "blockerCounts": blocker_table(candidates),
         "stageableSlate": stageable,
+        "operatorRoutableSlate": operator_routable_stageable,
         "autoPaperSlate": combined_auto_paper,
         "eventCappedSlate": event_capped,
         "approvalSlate": approval_only,
@@ -850,7 +857,8 @@ def director_text(payload: dict[str, Any]) -> str:
         "",
         "Counts:",
         f"- total candidates: {counts.get('totalCandidates', 0)}",
-        f"- operator-routable now: {counts.get('stageableNow', 0)}",
+        f"- executable in paper workflow: {counts.get('stageableNow', 0)}",
+        f"- operator-routable now: {counts.get('operatorRoutablePaper', 0)}",
         f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
         f"- event capped: {counts.get('eventCapped', 0)}",
         f"- distinct auto paper events: {counts.get('distinctAutoPaperEvents', 0)}",
@@ -907,7 +915,7 @@ def director_text(payload: dict[str, Any]) -> str:
         lines.append(f"  approve: {candidate.get('approveCommand')}")
 
     lines.extend(["", "Operator-routable now:"])
-    stageable = payload.get("stageableSlate") or []
+    stageable = payload.get("operatorRoutableSlate") or []
     if not stageable:
         lines.append("- none")
     for candidate in stageable:

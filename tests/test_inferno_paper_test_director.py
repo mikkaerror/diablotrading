@@ -5,7 +5,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from inferno_paper_test_director import build_director, blocker_table, load_strike_plan, split_candidates
+from inferno_paper_test_director import (
+    blocker_table,
+    build_director,
+    director_text,
+    load_strike_plan,
+    split_candidates,
+)
 
 
 class InfernoPaperTestDirectorTests(unittest.TestCase):
@@ -209,6 +215,51 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
         self.assertIn("operator-owned paper workflow", payload["nextActions"][0])
         self.assertIn("do not stage autonomously", payload["nextActions"][0])
         self.assertNotIn("Rehearse", payload["nextActions"][0])
+
+    @patch("inferno_paper_test_director.classify_candidates")
+    @patch("inferno_paper_test_director.load_strike_plan")
+    @patch("inferno_paper_test_director.load_json_file")
+    def test_auto_paper_stageable_row_is_not_operator_routable(
+        self,
+        mock_load_json_file,
+        mock_load_strike_plan,
+        mock_classify_candidates,
+    ) -> None:
+        mock_load_strike_plan.return_value = ({"items": []}, False)
+        mock_load_json_file.side_effect = [
+            {"rows": []},
+            {"items": []},
+            {"items": []},
+            {},
+            {"decision": {"authorityLevel": "paper-evidence-only", "nextMilestones": []}},
+            {"closedMetrics": {"scoredCount": 1}},
+            {"items": []},
+            {"items": []},
+        ]
+        mock_classify_candidates.return_value = [
+            {
+                "ticker": "FLR",
+                "category": "stageable-now",
+                "paperAutoSelected": True,
+                "strategy": "CALL_DEBIT_SPREAD",
+                "priorityScore": 77.95,
+                "estimatedMaxLoss": 135.0,
+                "eventId": "FLR|2026-08-07",
+                "eventTicketCount": 0,
+                "maxPaperTicketsPerEvent": 2,
+            }
+        ]
+
+        payload = build_director()
+
+        self.assertEqual(payload["verdict"], "auto-paper-selected")
+        self.assertEqual(payload["counts"]["stageableNow"], 1)
+        self.assertEqual(payload["counts"]["operatorRoutablePaper"], 0)
+        self.assertEqual(payload["operatorRoutableSlate"], [])
+        self.assertIn("Auto-paper-selected names", payload["nextActions"][0])
+        rendered = director_text(payload)
+        self.assertIn("- operator-routable now: 0", rendered)
+        self.assertIn("Operator-routable now:\n- none", rendered)
 
     @patch("inferno_paper_test_director.save_strike_plan")
     @patch("inferno_paper_test_director.build_strike_plan")

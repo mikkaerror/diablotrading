@@ -34,17 +34,17 @@
   {
     "id": "mission-f765f5f1",
     "createdAt": "2026-05-10T15:10:09.158120-06:00",
-    "updatedAt": "2026-05-18T22:05:35.744612-06:00",
+    "updatedAt": "2026-07-20T21:12:37.728657-06:00",
     "title": "Advance paper evidence bottleneck",
-    "body": "Shared lane: convert auto-paper selections and shadow scenarios into scored paper evidence. Approval-only is live-style discretion, not a paper bottleneck. Keep promotion gated on closed outcomes; no live authority expansion.",
+    "body": "Current shared-lane step: make the paper-test director distinguish operator-routable candidates from research-only auto-paper candidates. Reporting and safety only: no ticket staging, approvals, rejections, closes, promotions, broker action, risk-constant change, or universe edit.",
     "owner": "shared",
-    "status": "in-progress",
+    "status": "done",
     "priority": "high",
     "tags": [
-      "paper",
-      "backtest",
-      "risk",
-      "evidence"
+      "paper-evidence",
+      "reporting",
+      "safety",
+      "research-only"
     ]
   },
   {
