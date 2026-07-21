@@ -118,5 +118,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-857d3102",
+    "createdAt": "2026-07-20T22:17:44.713217-06:00",
+    "updatedAt": "2026-07-20T22:29:59.819721-06:00",
+    "title": "Canonical full-tracker taxonomy coverage",
+    "body": "Establish a research-only taxonomy source for the 146-name tracker using existing cached reference metadata and bounded reference refreshes. Join sector, industry, and conservative economic-exposure labels into the full-tracker registry while retaining explicit unknowns and keeping portfolio-role policy, target weights, eligibility, risk constants, tickets, broker actions, and authority unchanged.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "full-tracker",
+      "taxonomy",
+      "dca",
+      "research-only",
+      "safety"
+    ]
   }
 ]

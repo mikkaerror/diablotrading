@@ -92,6 +92,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("oauth", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("action-pulse", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("deposit-plan", {item["command"] for item in saved["controlPlane"]["commands"]})
+            self.assertIn("tracker-taxonomy", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("cash-ledger", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("ticket-cap", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("daily-ops", {item["command"] for item in saved["controlPlane"]["commands"]})
@@ -106,6 +107,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("./inferno usage", saved["shortcutCommands"])
             self.assertIn("./inferno action-pulse", saved["shortcutCommands"])
             self.assertIn("./inferno deposit-plan", saved["shortcutCommands"])
+            self.assertIn("./inferno tracker-taxonomy", saved["shortcutCommands"])
             self.assertIn("./inferno cash-ledger", saved["shortcutCommands"])
             self.assertIn("./inferno ticket-cap", saved["shortcutCommands"])
             self.assertIn("./inferno approvals", saved["shortcutCommands"])
@@ -304,6 +306,10 @@ class InfernoCentralCommandTests(unittest.TestCase):
         self.assertEqual(deposit_plan.amount, 250)
         self.assertEqual(deposit_plan.interval_days, 14)
         self.assertEqual(deposit_plan.first_date, "2026-07-03")
+
+        tracker_taxonomy = parser.parse_args(["tracker-taxonomy", "status"])
+        self.assertEqual(tracker_taxonomy.command, "tracker-taxonomy")
+        self.assertEqual(tracker_taxonomy.tracker_taxonomy_action, "status")
 
         cash_ledger = parser.parse_args(["cash-ledger", "status"])
         self.assertEqual(cash_ledger.command, "cash-ledger")

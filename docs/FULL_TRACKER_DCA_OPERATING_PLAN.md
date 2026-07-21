@@ -41,6 +41,9 @@ As of the 2026-07-20 command-center read:
 - The conviction engine retains all 146 scored tracker rows. Current research
   output has 12 long-term research-qualified rows; that is coverage, not a
   funding instruction.
+- Reference taxonomy is fresh for 145 of 146 tracker names. `GLDD` remains an
+  explicit source gap after its reference endpoint returned no sector/industry
+  record; it is not guessed or silently excluded.
 - The AI basket is a complete 30-name research sleeve, separate from the
   broader tracker.
 - The options/paper lane has a 29-outcome promotion gap. It remains an
@@ -59,6 +62,9 @@ Generated artifacts are the source of current truth. See
 Operator-maintained tracker (146 names)       Read-only broker book
                  |                                      |
                  v                                      v
+    Reference taxonomy (sector / industry / broad exposure)
+                 |
+                 v
           Full-tracker registry  <----- holdings / tracker reconciliation
                  |
                  +--> taxonomy + data-quality coverage
@@ -94,7 +100,10 @@ held name outside the tracker is visible.
 
 ### 2. Complete canonical taxonomy — next
 
-For every tracker name, establish operator-reviewed metadata:
+The automated reference layer establishes fresh, source-labelled sector,
+industry, and broad economic exposure for every tracker name it can verify.
+It is deliberately not a portfolio-role or allocation policy. The remaining
+operator-reviewed metadata is:
 
 - economic exposure and sector/industry taxonomy;
 - role in a portfolio (core compounder, cyclical, thematic satellite,
@@ -105,9 +114,10 @@ For every tracker name, establish operator-reviewed metadata:
 Unknown is a valid value. The system must not fabricate classifications simply
 to make a dashboard look complete.
 
-**Gate:** 100% of active tracker rows have canonical taxonomy or are explicitly
-excluded by the operator from DCA construction research. This is a metadata
-and governance gate, not an eligibility change.
+**Gate:** resolve the explicit reference-source gap without guessing, then have
+the operator approve a portfolio-role and diversification policy for every row
+considered in DCA construction research. This is a metadata and governance
+gate, not an eligibility change.
 
 ### 3. Build deposit-sized DCA decision support — after taxonomy
 
@@ -174,7 +184,8 @@ so plainly. It must not claim productive progress merely because it ran.
 2. Generate the first coverage report and inventory missing taxonomy.
 3. Reconcile its holdings join with the separate basket/holdings work already
    in the repository; do not overwrite that work.
-4. Define an operator-controlled taxonomy source and coverage review process.
+4. Review the source-labelled taxonomy coverage, resolve explicit source gaps,
+   and define the operator-controlled role/diversification policy.
 5. Only then design the deposit-plan allocation policy and its explicit
    user-input contract.
 

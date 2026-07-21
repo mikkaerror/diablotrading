@@ -59,6 +59,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "daily-ops", "description": "refresh the Schwab daily options operations tape"},
     {"command": "action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "tracker-taxonomy", "description": "show full-tracker reference sector, industry, and economic-exposure coverage"},
     {"command": "tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
@@ -550,6 +551,7 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} daily-ops",
             f"{CONTROL_ENTRYPOINT} action-pulse",
             f"{CONTROL_ENTRYPOINT} deposit-plan",
+            f"{CONTROL_ENTRYPOINT} tracker-taxonomy",
             f"{CONTROL_ENTRYPOINT} tracker-registry",
             f"{CONTROL_ENTRYPOINT} cash-ledger",
             f"{CONTROL_ENTRYPOINT} ticket-cap",
@@ -607,6 +609,9 @@ def build_parser() -> argparse.ArgumentParser:
     deposit_plan_parser.add_argument("--amount", type=float, default=250.0)
     deposit_plan_parser.add_argument("--interval-days", type=int, default=14)
     deposit_plan_parser.add_argument("--first-date")
+
+    tracker_taxonomy_parser = subparsers.add_parser("tracker-taxonomy")
+    tracker_taxonomy_parser.add_argument("tracker_taxonomy_action", nargs="?", choices=("run", "status"), default="run")
 
     tracker_registry_parser = subparsers.add_parser("tracker-registry")
     tracker_registry_parser.add_argument("tracker_registry_action", nargs="?", choices=("run", "status"), default="run")
@@ -771,6 +776,13 @@ def main() -> int:
             if args.first_date:
                 command_args.extend(["--first-date", args.first_date])
         result = run_passthrough_command(command_args, timeout_seconds=600)
+        return int(result["returncode"])
+
+    if command == "tracker-taxonomy":
+        result = run_passthrough_command(
+            ["python3", "inferno_tracker_taxonomy.py", args.tracker_taxonomy_action],
+            timeout_seconds=600,
+        )
         return int(result["returncode"])
 
     if command == "tracker-registry":

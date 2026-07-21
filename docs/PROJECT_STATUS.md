@@ -141,13 +141,13 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: broker cash is currently zero. Planned deposits remain forecasts until broker-confirmed cash exists; no automated submission, and every real order still requires explicit final confirmation.
-- Full-tracker DCA construction: canonical taxonomy is incomplete. Finish the 117-name taxonomy work before a diversified deposit-sized research proposal is built.
+- Full-tracker DCA construction: source-labelled reference coverage is 145/146 fresh; `GLDD` remains explicitly unknown after a failed reference lookup. Portfolio roles and diversification policy are still intentionally undefined for all 146 rows, so no DCA weights or proposal exist.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Complete canonical taxonomy and tracker/holding coverage through `./inferno tracker-registry`; do not build DCA weights from incomplete exposure data.
+1. Review `./inferno tracker-taxonomy` and `./inferno tracker-registry`; resolve the explicit `GLDD` source gap and define operator-owned role/diversification policy before any DCA-weight research.
 2. Treat deployable cash as manual-review-only: broker cash is currently zero; keep live submit OFF and require explicit final confirmation before any real order.
 3. Run the command center, capital readiness, Schwab daily ops tape, and risk
    gate audit before sizing any ticket.

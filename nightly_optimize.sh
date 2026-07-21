@@ -87,6 +87,7 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "basket market refresh" "$PYTHON" inferno_ai_basket_refresh.py run --skip-refresh
 fi
 run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
+run_step "full tracker taxonomy" "$PYTHON" inferno_tracker_taxonomy.py run
 run_step "full tracker registry" "$PYTHON" inferno_tracker_registry.py run
 
 # 2) bounded evidence goal loop (research-only; no approval or live mutation)

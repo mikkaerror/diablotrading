@@ -35,6 +35,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/tracker_registry_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_full_tracker_reference_taxonomy(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tracker-taxonomy")
+        self.assertEqual(row["artifact"], "reports/tracker_taxonomy_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
     def test_reporting_map_includes_short_premium_study(self) -> None:
         row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "short-premium-study")
         self.assertEqual(row["artifact"], "reports/short_premium_study_latest.txt")
@@ -507,6 +512,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("SHADOW_EVIDENCE_FILE", data_dir / "inferno_shadow_evidence.json"),
                 ("EDGE_RESEARCH_FILE", data_dir / "inferno_edge_research.json"),
                 ("CONVICTION_RESEARCH_FILE", data_dir / "inferno_conviction_research.json"),
+                ("TRACKER_TAXONOMY_FILE", data_dir / "inferno_tracker_taxonomy.json"),
                 ("TRACKER_REGISTRY_FILE", data_dir / "inferno_tracker_registry.json"),
                 ("MATH_VERIFY_FILE", data_dir / "inferno_math_verify.json"),
                 ("MARKET_MASTERY_PLAN_FILE", data_dir / "inferno_market_mastery_plan.json"),
@@ -591,6 +597,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("./inferno oauth", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno action-pulse", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno deposit-plan", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno tracker-taxonomy", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno tracker-registry", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno cash-ledger", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno ticket-cap", {item["command"] for item in payload["controlSurface"]["commands"]})

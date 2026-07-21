@@ -30,6 +30,7 @@ TRACKER_SNAPSHOT_FILE = DATA_DIR / "latest_snapshot.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
 LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
+TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 TRACKER_REGISTRY_TEXT_FILE = REPORTS_DIR / "tracker_registry_latest.txt"
 
@@ -95,16 +96,31 @@ def account_positions(account: dict[str, Any]) -> list[dict[str, Any]]:
     return [position for position in candidates if isinstance(position, dict) and ticker(position.get("symbol") or position.get("ticker"))]
 
 
-def taxonomy_fields(conviction_row: dict[str, Any] | None) -> dict[str, Any]:
-    """Expose existing classification truth and explicitly mark missing coverage."""
+def taxonomy_fields(
+    conviction_row: dict[str, Any] | None,
+    reference_row: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Keep thematic research distinct from reference data and portfolio policy."""
     category = str((conviction_row or {}).get("category") or "").strip()
-    exposure = ECONOMIC_EXPOSURE_BY_CATEGORY.get(category)
-    classified = bool(exposure)
+    theme_exposure = ECONOMIC_EXPOSURE_BY_CATEGORY.get(category)
+    theme_classified = bool(theme_exposure)
+    reference_row = reference_row or {}
+    reference_covered = reference_row.get("referenceStatus") == "reference-covered"
+    reference_exposure = str(reference_row.get("economicExposure") or "").strip()
     return {
-        "category": category if classified else "Unclassified",
-        "economicExposure": exposure or "Unclassified",
-        "taxonomyStatus": "mapped-from-existing-research" if classified else "needs-operator-taxonomy",
-        "taxonomySource": "existing-conviction-category" if classified else "no-canonical-taxonomy-yet",
+        "category": category if theme_classified else "Unclassified",
+        "themeEconomicExposure": theme_exposure or "Unclassified",
+        "themeTaxonomyStatus": "mapped-from-existing-research" if theme_classified else "unclassified-research-theme",
+        "sector": str(reference_row.get("sector") or "Unknown"),
+        "industry": str(reference_row.get("industry") or "Unknown"),
+        "economicExposure": reference_exposure if reference_covered and reference_exposure else (theme_exposure or "Unclassified"),
+        "taxonomyStatus": "reference-backed" if reference_covered else "reference-missing",
+        "taxonomySource": str(reference_row.get("referenceSource") or "no-reference-taxonomy-yet"),
+        "referenceStatus": str(reference_row.get("referenceStatus") or "reference-missing"),
+        "referenceFresh": bool(reference_row.get("referenceFresh")),
+        "referenceAsOf": reference_row.get("referenceAsOf"),
+        "portfolioRole": str(reference_row.get("portfolioRole") or "not-defined-by-reference-data"),
+        "portfolioRoleStatus": str(reference_row.get("portfolioRoleStatus") or "requires-operator-policy"),
     }
 
 
@@ -114,11 +130,12 @@ def entry_for(
     holding: dict[str, Any] | None,
     eligible: set[str],
     research_rank: int | None,
+    reference_row: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Build one full-tracker record without generating a funding recommendation."""
     symbol = ticker(row.get("ticker"))
     market_context = row.get("marketContext") if isinstance(row.get("marketContext"), dict) else {}
-    classification = taxonomy_fields(conviction_row)
+    classification = taxonomy_fields(conviction_row, reference_row)
     evidence_grade = str((conviction_row or {}).get("evidenceGrade") or "unknown")
     source_status = str(market_context.get("sourceStatus") or "unknown")
     long_term_research_qualified = (
@@ -158,22 +175,45 @@ def entry_for(
 def coverage_summary(entries: list[dict[str, Any]], positions: list[dict[str, Any]]) -> dict[str, Any]:
     """State exactly what is ready for portfolio construction and what is not."""
     taxonomy_counts = Counter(item["taxonomy"]["taxonomyStatus"] for item in entries)
+    theme_taxonomy_counts = Counter(item["taxonomy"]["themeTaxonomyStatus"] for item in entries)
     category_counts = Counter(item["taxonomy"]["category"] for item in entries)
+    sector_counts = Counter(item["taxonomy"]["sector"] for item in entries if item["taxonomy"]["referenceStatus"] == "reference-covered")
+    exposure_counts = Counter(item["taxonomy"]["economicExposure"] for item in entries if item["taxonomy"]["referenceStatus"] == "reference-covered")
+    role_counts = Counter(item["taxonomy"]["portfolioRoleStatus"] for item in entries)
     grade_counts = Counter(item["research"]["evidenceGrade"] for item in entries)
     action_counts = Counter(item["research"]["researchAction"] for item in entries)
     tracked = {item["ticker"] for item in entries}
     held = {ticker(position.get("symbol") or position.get("ticker")) for position in positions}
     matched_holdings = sorted(symbol for symbol in held if symbol in tracked)
     untracked_holdings = sorted(symbol for symbol in held if symbol and symbol not in tracked)
-    taxonomy_complete = taxonomy_counts.get("needs-operator-taxonomy", 0) == 0 and bool(entries)
+    reference_covered = taxonomy_counts.get("reference-backed", 0)
+    reference_missing = taxonomy_counts.get("reference-missing", 0)
+    stale_reference = sum(
+        1
+        for item in entries
+        if item["taxonomy"]["referenceStatus"] == "reference-covered" and not item["taxonomy"]["referenceFresh"]
+    )
     return {
         "trackedRows": len(entries),
         "convictionCoverage": sum(1 for item in entries if item["research"]["rank"] is not None),
+        "referenceCoverage": {
+            "referenceCoveredRows": reference_covered,
+            "referenceMissingRows": reference_missing,
+            "staleReferenceRows": stale_reference,
+            "complete": reference_covered == len(entries) and bool(entries),
+            "bySector": dict(sorted(sector_counts.items())),
+            "byEconomicExposure": dict(sorted(exposure_counts.items())),
+        },
         "taxonomyCoverage": {
-            "mappedRows": taxonomy_counts.get("mapped-from-existing-research", 0),
-            "needsOperatorTaxonomy": taxonomy_counts.get("needs-operator-taxonomy", 0),
-            "complete": taxonomy_complete,
+            "mappedRows": theme_taxonomy_counts.get("mapped-from-existing-research", 0),
+            "needsOperatorTaxonomy": category_counts.get("Unclassified", 0),
+            "complete": category_counts.get("Unclassified", 0) == 0 and bool(entries),
             "byCategory": dict(sorted(category_counts.items())),
+        },
+        "portfolioRolePolicyCoverage": {
+            "definedRows": sum(1 for item in entries if item["taxonomy"]["portfolioRoleStatus"] == "operator-policy-defined"),
+            "requiresOperatorPolicy": role_counts.get("requires-operator-policy", 0),
+            "complete": role_counts.get("requires-operator-policy", 0) == 0 and bool(entries),
         },
         "researchCoverage": {
             "byEvidenceGrade": dict(sorted(grade_counts.items())),
@@ -195,11 +235,13 @@ def build_tracker_registry(
     snapshot: dict[str, Any] | None = None,
     conviction: dict[str, Any] | None = None,
     account: dict[str, Any] | None = None,
+    taxonomy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Join the full tracker, research ranking, and broker holdings safely."""
+    """Join tracker, research, reference taxonomy, and broker holdings safely."""
     snapshot = snapshot if snapshot is not None else (load_json_file(TRACKER_SNAPSHOT_FILE) or {})
     conviction = conviction if conviction is not None else (load_json_file(CONVICTION_RESEARCH_FILE) or {})
     account = account if account is not None else (load_json_file(LIVE_ACCOUNT_SYNC_FILE) or load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {})
+    taxonomy = taxonomy if taxonomy is not None else (load_json_file(TRACKER_TAXONOMY_FILE) or {})
 
     rows = snapshot_rows(snapshot)
     counts = Counter(ticker(row.get("ticker")) for row in rows)
@@ -214,6 +256,9 @@ def build_tracker_registry(
     positions = account_positions(account)
     holdings_by_ticker = indexed_rows(positions, key="symbol")
     eligible = existing_eligible_tickers(snapshot)
+    taxonomy_by_ticker = indexed_rows(
+        [row for row in (taxonomy.get("entries") or []) if isinstance(row, dict)]
+    )
 
     entries = [
         entry_for(
@@ -222,6 +267,7 @@ def build_tracker_registry(
             holdings_by_ticker.get(ticker(row.get("ticker"))),
             eligible,
             research_rank_by_ticker.get(ticker(row.get("ticker"))),
+            taxonomy_by_ticker.get(ticker(row.get("ticker"))),
         )
         for row in rows
     ]
@@ -231,14 +277,22 @@ def build_tracker_registry(
         item["ticker"],
     ))
     coverage = coverage_summary(entries, positions)
-    taxonomy_complete = bool((coverage.get("taxonomyCoverage") or {}).get("complete"))
-    verdict = "tracker-mapped" if taxonomy_complete else "taxonomy-incomplete"
+    reference_coverage = coverage.get("referenceCoverage") or {}
+    reference_complete = bool(reference_coverage.get("complete"))
+    role_coverage = coverage.get("portfolioRolePolicyCoverage") or {}
+    verdict = "reference-covered-role-policy-pending" if reference_complete else "reference-coverage-incomplete"
     blockers = []
     if duplicate_tickers:
         blockers.append(f"duplicate tracker symbols: {', '.join(duplicate_tickers)}")
-    missing_taxonomy = int((coverage.get("taxonomyCoverage") or {}).get("needsOperatorTaxonomy") or 0)
-    if missing_taxonomy:
-        blockers.append(f"{missing_taxonomy} tracked name(s) need canonical taxonomy before diversified DCA construction")
+    missing_reference = int(reference_coverage.get("referenceMissingRows") or 0)
+    stale_reference = int(reference_coverage.get("staleReferenceRows") or 0)
+    if missing_reference:
+        blockers.append(f"{missing_reference} tracked name(s) lack reference sector/industry coverage")
+    if stale_reference:
+        blockers.append(f"{stale_reference} tracked name(s) have stale reference sector/industry coverage")
+    missing_role_policy = int(role_coverage.get("requiresOperatorPolicy") or 0)
+    if missing_role_policy:
+        blockers.append(f"{missing_role_policy} tracked name(s) require an operator-approved portfolio-role policy before diversified DCA research")
     if coverage.get("convictionCoverage") != len(entries):
         blockers.append("conviction coverage is incomplete; refresh research before using this registry")
 
@@ -263,15 +317,17 @@ def build_tracker_registry(
             "trackerGeneratedAt": snapshot.get("generatedAt"),
             "convictionGeneratedAt": conviction.get("generatedAt"),
             "accountGeneratedAt": account.get("generatedAt"),
+            "referenceTaxonomyGeneratedAt": taxonomy.get("generatedAt"),
         },
         "coverage": coverage,
         "blockers": blockers,
         "nextBuildGate": {
-            "readyForDiversifiedDcaConstruction": taxonomy_complete and not duplicate_tickers,
+            "readyForDiversifiedDcaConstruction": False,
             "requirements": [
                 "Keep all tracker rows retained and conviction-covered.",
-                "Assign canonical taxonomy to every currently unclassified tracker name.",
+                "Resolve any missing or stale reference sector-and-industry record without guessing.",
                 "Define operator-approved diversification and deposit allocation policy separately from research ranks.",
+                "Keep portfolio roles, target weights, and purchases outside this coverage artifact.",
             ],
         },
         "entries": entries,
@@ -279,6 +335,7 @@ def build_tracker_registry(
             "data/latest_snapshot.json",
             "data/inferno_conviction_research.json",
             "data/inferno_live_account_sync.json",
+            "data/inferno_tracker_taxonomy.json",
             "docs/FULL_TRACKER_DCA_OPERATING_PLAN.md",
         ],
     }
@@ -287,7 +344,9 @@ def build_tracker_registry(
 def tracker_registry_text(payload: dict[str, Any]) -> str:
     """Render a concise operational report without presenting an allocation."""
     coverage = payload.get("coverage") or {}
+    reference = coverage.get("referenceCoverage") or {}
     taxonomy = coverage.get("taxonomyCoverage") or {}
+    roles = coverage.get("portfolioRolePolicyCoverage") or {}
     research = coverage.get("researchCoverage") or {}
     holdings = coverage.get("holdingsCoverage") or {}
     lines = [
@@ -296,14 +355,16 @@ def tracker_registry_text(payload: dict[str, Any]) -> str:
         f"Generated: {payload.get('generatedAt')}",
         f"Verdict: {payload.get('verdict')}",
         f"Tracker coverage: {coverage.get('trackedRows', 0)} rows | conviction matched {coverage.get('convictionCoverage', 0)}",
-        f"Taxonomy: {taxonomy.get('mappedRows', 0)} mapped | {taxonomy.get('needsOperatorTaxonomy', 0)} need canonical taxonomy",
+        f"Reference taxonomy: {reference.get('referenceCoveredRows', 0)} covered | {reference.get('referenceMissingRows', 0)} missing | {reference.get('staleReferenceRows', 0)} stale",
+        f"Research themes: {taxonomy.get('mappedRows', 0)} mapped | {taxonomy.get('needsOperatorTaxonomy', 0)} unclassified",
+        f"Portfolio roles: {roles.get('definedRows', 0)} defined | {roles.get('requiresOperatorPolicy', 0)} require operator policy",
         f"Research: {research.get('longTermResearchQualified', 0)} long-term research-qualified | evidence {research.get('byEvidenceGrade', {})}",
         f"Holdings join: {holdings.get('matchedToTracker', 0)}/{holdings.get('brokerPositions', 0)} broker positions match the tracker",
         "",
-        "Economic-exposure coverage",
+        "Reference economic-exposure coverage",
     ]
-    for category, count in (taxonomy.get("byCategory") or {}).items():
-        lines.append(f"- {category}: {count}")
+    for exposure, count in (reference.get("byEconomicExposure") or {}).items():
+        lines.append(f"- {exposure}: {count}")
     lines.extend(["", "DCA construction gate"])
     gate = payload.get("nextBuildGate") or {}
     lines.append(f"- Ready for diversified DCA construction: {bool(gate.get('readyForDiversifiedDcaConstruction'))}")

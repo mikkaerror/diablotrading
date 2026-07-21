@@ -124,7 +124,8 @@ echo "14/18 Portfolio heat and wheel feasibility"
 run_advisory "portfolio heat" ./run_inferno_portfolio_heat.sh
 run_advisory "wheel shadow" ./run_inferno_wheel_shadow.sh
 
-echo "15/18 Full-tracker registry, capital, and market-mastery refresh"
+echo "15/18 Full-tracker taxonomy, registry, capital, and market-mastery refresh"
+run_advisory "full-tracker taxonomy" python3 inferno_tracker_taxonomy.py run
 run_advisory "full-tracker registry" python3 inferno_tracker_registry.py run
 run_advisory "deposit plan" python3 inferno_deposit_plan.py
 run_advisory "cash attribution" python3 inferno_cash_attribution.py

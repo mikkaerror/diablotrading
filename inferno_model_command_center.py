@@ -83,6 +83,7 @@ STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
+TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 SCHWAB_EDGE_SIGNALS_FILE = DATA_DIR / "inferno_schwab_edge_signals.json"
 OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
@@ -116,6 +117,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno daily-ops", "description": "refresh the Schwab daily options operations tape"},
     {"command": "./inferno action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "./inferno deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "./inferno tracker-taxonomy", "description": "show full-tracker reference sector, industry, and exposure coverage"},
     {"command": "./inferno tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "./inferno cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "./inferno ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
@@ -372,6 +374,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "conviction-research",
         "question": "Which giants, sleepers, and near-term winners deserve attention?",
         "artifact": "reports/conviction_research_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tracker-taxonomy",
+        "question": "Do all tracker names have fresh, source-labelled sector, industry, and broad economic-exposure data?",
+        "artifact": "reports/tracker_taxonomy_latest.txt",
         "owner": "codex",
     },
     {
@@ -922,6 +930,7 @@ def build_command_center() -> dict[str, Any]:
     shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
     edge = load_json_file(EDGE_RESEARCH_FILE) or {}
     conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
+    tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
     math_verify = load_json_file(MATH_VERIFY_FILE) or {}
     tos_formula_audit = load_json_file(TOS_FORMULA_AUDIT_FILE) or {}
     tos_custom_metrics = load_json_file(TOS_CUSTOM_METRICS_FILE) or {}
@@ -1016,6 +1025,7 @@ def build_command_center() -> dict[str, Any]:
         "shadowEvidence": artifact_summary(SHADOW_EVIDENCE_FILE, keys=("verdict", "generatedAt", "message")),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
+        "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "schwabEdgeSignals": artifact_summary(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
         "outcomeAttribution": artifact_summary(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
@@ -1259,6 +1269,9 @@ def build_command_center() -> dict[str, Any]:
             item.get("ticker")
             for item in (conviction_research.get("bestBalanced") or [])[:5]
         ],
+        "trackerReferenceCovered": (tracker_taxonomy.get("coverage") or {}).get("referenceCoveredRows"),
+        "trackerReferenceMissing": (tracker_taxonomy.get("coverage") or {}).get("referenceMissingRows"),
+        "trackerReferenceStale": (tracker_taxonomy.get("coverage") or {}).get("staleReferenceRows"),
         "mathVerifyVerdict": math_verify.get("verdict"),
         "mathViolations": math_verify.get("totalViolations"),
         "mathMissingArtifacts": math_verify.get("missingArtifacts"),
@@ -1319,6 +1332,7 @@ def build_command_center() -> dict[str, Any]:
             "./inferno oauth",
             "./inferno daily-ops",
             "./inferno deposit-plan",
+            "./inferno tracker-taxonomy",
             "./inferno cash-ledger",
             "./inferno ticket-cap",
             "./inferno approvals",

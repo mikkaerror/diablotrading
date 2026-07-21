@@ -147,6 +147,7 @@ Safety            — authority, risk, secrets
 | `inferno_fast_paper_cohort.py` | Cycles isolated next-session option simulations from the broader bootstrap slate; never counts toward promotion | `reports/fast_paper_cohort_latest.txt` |
 | `inferno_slate_normalizer.py` | Scale-invariant percentile ranks; fixes the broken absolute-threshold gates | `reports/slate_normalized_latest.txt` |
 | `inferno_conviction_research.py` | Research-only whole-universe map of giants, sleepers, near-term winners, and contradictions | `reports/conviction_research_latest.txt` |
+| `inferno_tracker_taxonomy.py` | Research-only source-labelled sector, industry, and conservative economic-exposure coverage for every tracker symbol; no roles, weights, or orders | `reports/tracker_taxonomy_latest.txt` |
 | `inferno_tracker_registry.py` | Research-only full-tracker join of existing membership, conviction, taxonomy coverage, and read-only holdings; emits no weights or orders | `reports/tracker_registry_latest.txt` |
 | `inferno_outcome_attribution.py` | Research-only Brinson-style decomposition of closed paper/shadow outcomes | `reports/outcome_attribution_latest.txt` |
 | `inferno_rule_edge_decay.py` | Research-only Wilson + half-life monitor for conviction-audit rule bullets | `reports/rule_edge_decay_latest.txt` |

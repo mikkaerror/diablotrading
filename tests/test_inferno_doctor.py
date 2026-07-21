@@ -13,6 +13,7 @@ from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
+    tracker_taxonomy_status,
     tracker_registry_status,
     cycle_days,
     cycle_reference_day,
@@ -595,6 +596,24 @@ class InfernoDoctorCycleTests(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertIn("tracker=146", detail)
+
+    def test_tracker_taxonomy_status_accepts_fresh_explicit_reference_gap(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_taxonomy_status(
+                {
+                    "generatedAt": "2026-07-20T11:00:00-06:00",
+                    "verdict": "reference-coverage-incomplete",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "coverage": {"trackedRows": 146, "referenceCoveredRows": 145, "referenceMissingRows": 1},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("reference=145/146", detail)
 
 
 class InfernoDoctorInformationalSignalsTests(unittest.TestCase):

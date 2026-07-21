@@ -55,6 +55,7 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+TRACKER_TAXONOMY_FILE = ROOT / "data" / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
@@ -693,10 +694,43 @@ def tracker_registry_status(report: dict) -> tuple[bool, str]:
     conviction_coverage = coverage.get("convictionCoverage")
     complete_research_coverage = tracked_rows is not None and tracked_rows == conviction_coverage
     verdict = str(report.get("verdict") or "unknown")
-    ok = fresh and safe and complete_research_coverage and verdict in {"tracker-mapped", "taxonomy-incomplete"}
+    ok = fresh and safe and complete_research_coverage and verdict in {
+        "tracker-mapped",
+        "taxonomy-incomplete",
+        "reference-covered-role-policy-pending",
+        "reference-coverage-incomplete",
+    }
     detail = (
         f"{verdict} | tracker={tracked_rows} | taxonomy-missing={taxonomy.get('needsOperatorTaxonomy', 0)} | "
         f"research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
+    )
+    return ok, detail
+
+
+def tracker_taxonomy_status(report: dict) -> tuple[bool, str]:
+    """Surface reference-data coverage without treating an explicit gap as broker authority work."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    coverage = report.get("coverage") or {}
+    tracked_rows = coverage.get("trackedRows")
+    covered_rows = coverage.get("referenceCoveredRows")
+    missing_rows = coverage.get("referenceMissingRows")
+    verdict = str(report.get("verdict") or "unknown")
+    valid_coverage = isinstance(tracked_rows, int) and isinstance(covered_rows, int) and isinstance(missing_rows, int)
+    ok = fresh and safe and valid_coverage and verdict in {"reference-coverage-complete", "reference-coverage-incomplete"}
+    detail = (
+        f"{verdict} | reference={covered_rows}/{tracked_rows} | missing={missing_rows} | research-only={safe}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     )
@@ -1812,6 +1846,12 @@ def main() -> int:
     conviction_ok, conviction_detail = conviction_research_status(conviction_research)
     lines.append(summarize_status("Conviction research", conviction_ok, conviction_detail))
     if not conviction_ok:
+        warnings += 1
+
+    tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
+    tracker_taxonomy_ok, tracker_taxonomy_detail = tracker_taxonomy_status(tracker_taxonomy)
+    lines.append(summarize_status("Full-tracker reference taxonomy", tracker_taxonomy_ok, tracker_taxonomy_detail))
+    if not tracker_taxonomy_ok:
         warnings += 1
 
     tracker_registry = load_json_file(TRACKER_REGISTRY_FILE) or {}
