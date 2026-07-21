@@ -93,6 +93,10 @@ class SlateSelectionTests(unittest.TestCase):
         self.assertFalse(entry["liveTradingAllowed"])
         self.assertFalse(entry["brokerSubmitAllowed"])
         self.assertEqual(entry["evidenceCohort"], "exploratory-fast")
+        self.assertTrue(entry["simulationOnly"])
+        self.assertFalse(entry["operatorTicket"])
+        self.assertFalse(entry["operatorApprovalRequired"])
+        self.assertEqual(fast.isolated_simulation_boundary_errors(entry), [])
 
     def test_same_day_cycle_tops_off_inside_remaining_daily_cap(self) -> None:
         existing = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 1400), now=NOW)
@@ -194,6 +198,33 @@ class ExitTests(unittest.TestCase):
         outcome = updated["items"][0]["outcome"]
         self.assertEqual(outcome["status"], "closed")
         self.assertEqual(outcome["estimatedPnl"], 50.0)
+
+    def test_operator_ticket_never_settles_from_fast_simulation_loop(self) -> None:
+        entry = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 400), now=NOW)
+        entry["operatorTicket"] = True
+        ledger = {"items": [entry]}
+        fresh_quote_ms = int(datetime(2026, 6, 22, 15, 30, tzinfo=fast.EASTERN).timestamp() * 1000)
+        mtm = {
+            "marksByTicketId": {
+                entry["ticketId"]: {
+                    "fetchStatus": "ok",
+                    "perLeg": [
+                        {
+                            "instruction": "BUY_TO_OPEN",
+                            "currentBid": 4.5,
+                            "currentAsk": 4.7,
+                            "quoteTimeInLong": fresh_quote_ms,
+                        }
+                    ],
+                }
+            }
+        }
+        monday = datetime(2026, 6, 22, 15, 30, tzinfo=MOUNTAIN)
+        updated, settled, pending = fast.close_due_entries(ledger, mtm, now=monday)
+
+        self.assertEqual(settled, [])
+        self.assertTrue(any("boundary failed" in message for message in pending))
+        self.assertEqual(updated["items"][0]["outcome"]["status"], "open")
 
 
 if __name__ == "__main__":

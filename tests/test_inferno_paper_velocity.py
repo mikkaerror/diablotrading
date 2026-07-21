@@ -8,10 +8,11 @@ Pinned invariants:
   - Weekly rate is the 30d count scaled to weeks; zero rate => projection is None.
   - Verdict tiers: ``stalled`` < 4 closed last 30d, ``slow`` 4-9, ``on-track`` >= 10,
     ``promotion-ready`` if total closed >= 30 regardless of recent rate.
-  - Approval-aging-out includes only ``paperOnly`` tickets with
-    ``approvalStatus=pending`` and future expirations inside the window.
-  - Approval zombies (past-expiration counterpart) are counted separately
-    so the operator sees both "fix this now" and "this is dead".
+  - Approval-aging-out includes only explicitly operator-routable ``paperOnly``
+    tickets with ``approvalStatus=pending`` and future expirations inside the
+    window.
+  - Expired never-opened rows and blocked pending rows are quarantined from
+    operator alerts without mutating their historical ledger state.
   - paperAutoBlockReason histogram excludes ``ok`` and ``not-evaluated``
     so the diagnostic surface highlights real failures.
   - Empty ledger produces a clean ``stalled`` verdict, not a crash.
@@ -60,6 +61,14 @@ def _aging_ticket(*, ticker: str, days_until_exp: int) -> dict:
         "approvalStatus": "pending",
         "expiration": (TODAY + timedelta(days=days_until_exp)).isoformat(),
         "ticketId": f"t-{ticker}",
+    }
+
+
+def _routable_aging_ticket(*, ticker: str, days_until_exp: int) -> dict:
+    """Return an explicitly operator-routable pending ticket."""
+    return {
+        **_aging_ticket(ticker=ticker, days_until_exp=days_until_exp),
+        "operatorRoutable": True,
     }
 
 
@@ -133,8 +142,8 @@ class VerdictTests(unittest.TestCase):
 class ApprovalAgingAlertTests(unittest.TestCase):
     def test_includes_pending_paper_only_tickets_in_window(self) -> None:
         items = [
-            _aging_ticket(ticker="AAA", days_until_exp=3),
-            _aging_ticket(ticker="BBB", days_until_exp=AGING_OUT_WINDOW_DAYS),
+            _routable_aging_ticket(ticker="AAA", days_until_exp=3),
+            _routable_aging_ticket(ticker="BBB", days_until_exp=AGING_OUT_WINDOW_DAYS),
         ]
         alert = _approval_aging_alert(items, today=TODAY, window_days=AGING_OUT_WINDOW_DAYS)
         tickers = {row["ticker"] for row in alert["agingOut"]}
@@ -155,9 +164,24 @@ class ApprovalAgingAlertTests(unittest.TestCase):
 
     def test_past_expiration_counted_as_zombie(self) -> None:
         item = _aging_ticket(ticker="AAA", days_until_exp=-5)
+        item["outcome"] = {"status": "not-opened"}
         alert = _approval_aging_alert([item], today=TODAY, window_days=AGING_OUT_WINDOW_DAYS)
         self.assertEqual(alert["zombieCount"], 1)
+        self.assertEqual(alert["quarantinedExpiredNeverOpenedCount"], 1)
         self.assertEqual(alert["agingOut"], [])
+
+    def test_blocked_pending_ticket_is_quarantined_not_actionable(self) -> None:
+        item = _aging_ticket(ticker="AAA", days_until_exp=3)
+        item.update(
+            {
+                "status": "paper-blocked",
+                "paperAutoBlockReason": "risk-verdict-failed",
+                "outcome": {"status": "not-opened"},
+            }
+        )
+        alert = _approval_aging_alert([item], today=TODAY, window_days=AGING_OUT_WINDOW_DAYS)
+        self.assertEqual(alert["agingOut"], [])
+        self.assertEqual(alert["quarantinedNonActionablePendingCount"], 1)
 
 
 class AutoBlockReasonHistogramTests(unittest.TestCase):
@@ -204,7 +228,8 @@ class BuildAndRenderTests(unittest.TestCase):
         self.assertIn("Inferno Paper Evidence Velocity", text)
         self.assertIn("Verdict:", text)
         self.assertIn("Closed-outcome velocity:", text)
-        self.assertIn("Approval alerts:", text)
+        self.assertIn("Operator approval alerts:", text)
+        self.assertIn("Historical quarantine (not actionable):", text)
         self.assertIn("Reminders:", text)
 
 

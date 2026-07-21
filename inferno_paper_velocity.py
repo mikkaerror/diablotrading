@@ -101,22 +101,36 @@ def _auto_block_reason_distribution(items: list[dict[str, Any]]) -> list[dict[st
     return [{"reason": reason, "count": count} for reason, count in counts.most_common()]
 
 
+def _is_operator_routable_pending(item: dict[str, Any]) -> bool:
+    """Return whether a pending ledger row is explicitly actionable.
+
+    A pending approval flag alone is not an action item: historical blocked
+    rows retain that flag for provenance.  Only a current director-produced
+    routable row, or its explicit approval-only equivalent, may enter the
+    operator alert queue.
+    """
+    if item.get("operatorRoutable") is True:
+        return True
+    return str(item.get("status") or "").lower() in {
+        "paper-approval-only",
+        "approval-only",
+    }
+
+
 def _approval_aging_alert(
     items: list[dict[str, Any]], *, today: date, window_days: int
 ) -> dict[str, Any]:
-    """Compute approval-only aging-out alerts and zombie count.
+    """Separate actionable approval alerts from non-actionable history.
 
-    Aging-out: paperOnly + approvalStatus=pending + expiration in the
-    next ``window_days`` days. The operator needs to know about these
-    before the clock runs out -- once expiration passes, the ticket is
-    unrecoverable as evidence.
-
-    Zombies: same shape but expiration already past. Diagnostic only;
-    these tickets are dead.
+    Expired, never-opened pending rows are immutable historical context for
+    this read-only report.  They must not look like a decision queue or add
+    pressure to an operator.  Likewise, a currently blocked row is not made
+    actionable merely because it retains a legacy ``pending`` flag.
     """
     horizon = today + timedelta(days=window_days)
     aging: list[dict[str, Any]] = []
-    zombies = 0
+    quarantined_expired = 0
+    quarantined_non_actionable = 0
     for item in items:
         if not item.get("paperOnly"):
             continue
@@ -126,7 +140,11 @@ def _approval_aging_alert(
         if expiration is None:
             continue
         if expiration < today:
-            zombies += 1
+            if str((item.get("outcome") or {}).get("status") or "").lower() == "not-opened":
+                quarantined_expired += 1
+            continue
+        if not _is_operator_routable_pending(item):
+            quarantined_non_actionable += 1
             continue
         if expiration <= horizon:
             aging.append(
@@ -139,7 +157,14 @@ def _approval_aging_alert(
                 }
             )
     aging.sort(key=lambda row: row["expiration"])
-    return {"agingOut": aging, "zombieCount": zombies, "windowDays": window_days}
+    return {
+        "agingOut": aging,
+        "quarantinedExpiredNeverOpenedCount": quarantined_expired,
+        "quarantinedNonActionablePendingCount": quarantined_non_actionable,
+        # Compatibility only: this legacy name is never rendered as an alert.
+        "zombieCount": quarantined_expired,
+        "windowDays": window_days,
+    }
 
 
 def _closed_outcome_velocity(items: list[dict[str, Any]], *, today: date) -> dict[str, Any]:
@@ -234,7 +259,7 @@ def build_paper_velocity(*, now: datetime | None = None) -> dict[str, Any]:
         "reminders": [
             "research-only: no authority changes",
             "the desk graduates only when 30 closed paper outcomes accrue",
-            "approval-only zombies cannot be recovered after expiration",
+            "expired never-opened rows are historical context, not operator actions",
         ],
     }
 
@@ -278,14 +303,23 @@ def paper_velocity_text(payload: dict[str, Any]) -> str:
     else:
         lines.append(f"  Projected clearance: ~{weeks} weeks (~{clear_date})")
     lines.append("")
-    lines.append("Approval alerts:")
-    lines.append(f"  Aging out next {aging.get('windowDays')}d: {len(aging.get('agingOut') or [])}")
-    lines.append(f"  Past-expiration zombies: {aging.get('zombieCount')}")
+    lines.append("Operator approval alerts:")
+    lines.append(f"  Explicitly routable, expiring next {aging.get('windowDays')}d: "
+                 f"{len(aging.get('agingOut') or [])}")
     for row in (aging.get("agingOut") or [])[:10]:
         lines.append(
             f"    {row.get('ticker')} | {row.get('strategy')} | "
             f"exp {row.get('expiration')} | {row.get('daysUntilExpiration')}d left"
         )
+    lines.append("Historical quarantine (not actionable):")
+    lines.append(
+        "  Expired, never-opened pending rows: "
+        f"{aging.get('quarantinedExpiredNeverOpenedCount', 0)}"
+    )
+    lines.append(
+        "  Current blocked/non-routable pending rows: "
+        f"{aging.get('quarantinedNonActionablePendingCount', 0)}"
+    )
     lines.append("")
     lines.append("Auto-paper block-reason frequency (paper-blocked tickets only):")
     if reasons:

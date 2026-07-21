@@ -92,6 +92,16 @@ ARTIFACT_PATHS: dict[str, Path] = {
     "universeCapFit": UNIVERSE_CAP_FIT_FILE,
 }
 
+LINEAGE_ARTIFACTS: tuple[str, ...] = (
+    "paperEvidenceLoop",
+    "paperDirector",
+    "paperBlockerSwarm",
+    "fastPaper",
+    "performance",
+    "paperVelocity",
+    "scenarioEvidence",
+)
+
 
 def _tail(value: str, limit: int = 4000) -> str:
     """Keep command diagnostics useful without making the state file unbounded."""
@@ -159,6 +169,39 @@ def load_artifacts() -> dict[str, dict[str, Any]]:
         name: load_json_file(path) or {}
         for name, path in ARTIFACT_PATHS.items()
     }
+
+
+def artifact_lineage(
+    artifacts: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Expose the exact artifact cut behind a goal-loop conclusion.
+
+    The evidence loop is intentionally a point-in-time evaluator.  A later
+    director refresh may legitimately disagree with its prior result, so the
+    report records each source timestamp instead of implying that its
+    candidate counts are live beyond that input cut.
+    """
+    current = now or local_now()
+    lineage: dict[str, dict[str, Any]] = {}
+    for name in LINEAGE_ARTIFACTS:
+        artifact = artifacts.get(name) or {}
+        generated_raw = artifact.get("generatedAt")
+        generated = _parse_datetime(generated_raw, fallback_tz=current.tzinfo)
+        age_seconds = (
+            round(max(0.0, (current - generated).total_seconds()), 1)
+            if generated is not None
+            else None
+        )
+        lineage[name] = {
+            "generatedAt": generated_raw,
+            "ageSeconds": age_seconds,
+            "fresh": bool(artifact and _artifact_fresh(artifact, now=current)),
+            "stage": artifact.get("stage"),
+            "verdict": artifact.get("verdict"),
+        }
+    return lineage
 
 
 def authority_boundary_errors(authority: dict[str, Any]) -> list[str]:
@@ -248,6 +291,12 @@ def verify_cycle(
             errors.append("fast-paper artifact lost liveTradingAllowed=false")
         if fast_paper.get("brokerSubmitAllowed") is not False:
             errors.append("fast-paper artifact lost brokerSubmitAllowed=false")
+        settlement_boundary = fast_paper.get("settlementBoundary") or {}
+        if settlement_boundary:
+            if settlement_boundary.get("operatorTicketMutation") is not False:
+                errors.append("fast-paper settlement boundary permits operator ticket mutation")
+            if settlement_boundary.get("promotionEligible") is not False:
+                errors.append("fast-paper settlement boundary permits promotion evidence")
 
     paper_swarm = artifacts.get("paperBlockerSwarm") or {}
     if paper_swarm:
@@ -438,7 +487,6 @@ def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, A
     )
     accepted_points = (
         promotion_evidence_delta * 100
-        + fast_closed_delta * 25
         + min(scenario_closed_delta, 10)
         + verified_candidate_delta * 50
         + min(paper_hard_blocked_reduction, 10)
@@ -448,7 +496,10 @@ def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, A
         "scoredPaperTicketsDelta": scored_delta,
         "remainingForPromotionReduction": remaining_reduction,
         "promotionEvidenceDelta": promotion_evidence_delta,
+        # Isolated simulations are research telemetry, never accepted paper
+        # evidence or progress toward the promotion gate.
         "fastPaperClosedDelta": fast_closed_delta,
+        "fastSimulationSettlementDelta": fast_closed_delta,
         "scenarioObservationsClosedDelta": scenario_closed_delta,
         "verifiedPaperCandidateDelta": verified_candidate_delta,
         "paperHardBlockedReduction": paper_hard_blocked_reduction,
@@ -982,6 +1033,7 @@ def build_goal_loop(
         "baselineProgress": baseline_progress,
         "progress": final_progress,
         "progressDelta": delta,
+        "sourceLineage": artifact_lineage(final_artifacts, now=generated),
         "artifactRepairs": repairs,
         "workSignature": signature,
         "cadence": cadence,
@@ -1009,6 +1061,7 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
     delta = payload.get("progressDelta") or {}
     economics = payload.get("economics") or {}
     governance = payload.get("governance") or {}
+    lineage = payload.get("sourceLineage") or {}
     lines = [
         "Inferno Evidence Goal Loop",
         "",
@@ -1022,7 +1075,6 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"Next adaptive check: {(payload.get('cadence') or {}).get('nextCheckAt')}",
         f"Authority: {payload.get('authorityLevel')}",
         "Authority contract: research-only; broker submit OFF; live trading OFF",
-        "",
         "Progress:",
         f"- scored paper tickets: {progress.get('scoredPaperTickets')}",
         f"- remaining for promotion: {progress.get('remainingForPromotion')}",
@@ -1038,7 +1090,7 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"fallbacks {progress.get('paperBlockerSwarmFallbacks')} | "
         f"outcome reward {progress.get('paperBlockerSwarmOutcomeReward')}",
         f"- fast paper: {progress.get('fastPaperVerdict')}",
-        f"- fast-paper closed lifetime: {progress.get('fastPaperClosedLifetime')}",
+        f"- isolated simulations settled lifetime: {progress.get('fastPaperClosedLifetime')}",
         f"- scenario observations closed: {progress.get('scenarioObservationsClosed')}",
         f"- universe cap fit: {progress.get('capFitVerdict')} | "
         f"{progress.get('capFitAnyFits')}/{progress.get('capFitTotal')} fit",
@@ -1048,7 +1100,8 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         "Fixed-evaluator delta:",
         f"- promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
         f"- verified paper candidates: +{delta.get('verifiedPaperCandidateDelta', 0)}",
-        f"- fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
+        f"- isolated-simulation settlements (non-promotable): "
+        f"+{delta.get('fastSimulationSettlementDelta', delta.get('fastPaperClosedDelta', 0))}",
         f"- scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
         f"- paper hard-blocked reduction: {delta.get('paperHardBlockedReduction', 0)}",
         f"- blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
@@ -1065,6 +1118,21 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- authority intact: {verification.get('authorityIntact')}",
         f"- paper entry gate open: {verification.get('paperEntryGateOpen')}",
     ]
+    lineage_lines = ["Source lineage (point-in-time input cut):"]
+    for name in LINEAGE_ARTIFACTS:
+        source = lineage.get(name) or {}
+        lineage_lines.append(
+            f"- {name}: generated {source.get('generatedAt') or 'missing'} | "
+            f"fresh {source.get('fresh')}"
+        )
+    lineage_lines.extend(
+        [
+            "- Candidate counts are true only as of the source timestamps above; "
+            "a later director refresh supersedes them.",
+            "",
+        ]
+    )
+    lines[lines.index("Progress:"):lines.index("Progress:")] = lineage_lines
     errors = verification.get("errors") or []
     lines.append("- errors:")
     lines.extend(f"  - {error}" for error in errors)
@@ -1317,7 +1385,8 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             "",
             f"- Promotion evidence: +{delta.get('promotionEvidenceDelta', 0)}",
             f"- Verified paper candidates: +{delta.get('verifiedPaperCandidateDelta', 0)}",
-            f"- Fast-paper closures: +{delta.get('fastPaperClosedDelta', 0)}",
+            f"- Isolated-simulation settlements (non-promotable): "
+            f"+{delta.get('fastSimulationSettlementDelta', delta.get('fastPaperClosedDelta', 0))}",
             f"- Scenario closures: +{delta.get('scenarioObservationsClosedDelta', 0)}",
             f"- Paper hard-blocked reduction: {delta.get('paperHardBlockedReduction', 0)}",
             f"- Dominant blocker reduction: {delta.get('dominantBlockerReduction', 0)}",
@@ -1508,6 +1577,7 @@ def build_verification_only() -> dict[str, Any]:
         "baselineProgress": progress,
         "progress": progress,
         "progressDelta": delta,
+        "sourceLineage": artifact_lineage(artifacts, now=started),
         "artifactRepairs": [],
         "workSignature": work_signature(progress, now=started),
         "authorityLevel": decision.get("authorityLevel"),

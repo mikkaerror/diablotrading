@@ -61,6 +61,7 @@ MAX_PER_STRATEGY = 3
 CONTRACT_MULTIPLIER = 100
 EASTERN = ZoneInfo("America/New_York")
 BACKLOG_LIMIT = 8
+EXPLORATORY_FAST_COHORT = "exploratory-fast"
 
 
 def number(value: Any, default: float = 0.0) -> float:
@@ -92,6 +93,41 @@ def open_items(ledger: dict[str, Any]) -> list[dict[str, Any]]:
         for item in ledger.get("items") or []
         if (item.get("outcome") or {}).get("status") == "open"
     ]
+
+
+def isolated_simulation_boundary_errors(item: dict[str, Any]) -> list[str]:
+    """Return contract failures that prohibit automated simulation settlement.
+
+    The fast ledger is deliberately separate from the operator's paper-ticket
+    ledger.  A row must prove that it is an isolated exploratory simulation
+    before this module can write a later-session research settlement.  Any
+    ambiguity fails closed and leaves the row untouched.
+    """
+    errors: list[str] = []
+    if str(item.get("status") or "") not in {"sim-open", "sim-closed"}:
+        errors.append("status is not an isolated simulation status")
+    if item.get("paperOnly") is not True:
+        errors.append("paperOnly is not true")
+    if item.get("autoSimulation") is not True:
+        errors.append("autoSimulation is not true")
+    if item.get("evidenceCohort") != EXPLORATORY_FAST_COHORT:
+        errors.append("evidence cohort is not exploratory-fast")
+    if item.get("promotionEligible") is not False or item.get("promotable") is not False:
+        errors.append("promotion eligibility is not hard-false")
+    if item.get("liveTradingAllowed") is not False or item.get("brokerSubmitAllowed") is not False:
+        errors.append("broker authority is not hard-false")
+    if item.get("operatorTicket") is True:
+        errors.append("row is marked as an operator ticket")
+    if item.get("operatorApprovalRequired") is True:
+        errors.append("row requires operator approval")
+    if item.get("approvalStatus") not in {None, "", "not-required"}:
+        errors.append("row has an approval status")
+    return errors
+
+
+def is_isolated_fast_simulation(item: dict[str, Any]) -> bool:
+    """Return whether a fast-ledger row is safe for simulation-only mutation."""
+    return not isolated_simulation_boundary_errors(item)
 
 
 def effective_candidate(item: dict[str, Any]) -> dict[str, Any]:
@@ -141,7 +177,7 @@ def candidate_pool(
                     **item,
                     "paperBootstrap": True,
                     "promotionEligible": False,
-                    "evidenceCohort": "exploratory-fast",
+                    "evidenceCohort": EXPLORATORY_FAST_COHORT,
                     "bootstrapScore": int(proposal.get("score") or 0),
                     "bootstrapFailedGates": list(proposal.get("failedGates") or []),
                 },
@@ -213,8 +249,8 @@ def backlog_slate(
 ) -> list[dict[str, Any]]:
     """List priceable candidates not opened this cycle.
 
-    This is intentionally a queue, not an approval surface. Rows here are
-    useful for the next autonomous fast-paper pass, but they never become
+    This is intentionally a research backlog, not an approval surface. Rows
+    are useful for a future isolated-simulation pass, but never become
     promotion evidence or broker actions by appearing in the backlog.
     """
     selected_tickers = {str(item.get("ticker") or "").upper() for item in selected}
@@ -263,7 +299,11 @@ def build_fast_entry(candidate: dict[str, Any], *, now: datetime) -> dict[str, A
         "paperOnly": True,
         "paperBootstrap": True,
         "autoSimulation": True,
-        "evidenceCohort": "exploratory-fast",
+        "simulationOnly": True,
+        "operatorTicket": False,
+        "operatorApprovalRequired": False,
+        "settlementMode": "isolated-research-only",
+        "evidenceCohort": EXPLORATORY_FAST_COHORT,
         "promotionEligible": False,
         "promotable": False,
         "liveTradingAllowed": False,
@@ -336,7 +376,7 @@ def close_due_entries(
     *,
     now: datetime,
 ) -> tuple[dict[str, Any], list[str], list[str]]:
-    """Close due simulations only when later-session Schwab quotes are proven."""
+    """Settle only boundary-qualified simulations from later-session quotes."""
     marks = mtm.get("marksByTicketId") or {}
     closed_ids: list[str] = []
     pending: list[str] = []
@@ -349,6 +389,14 @@ def close_due_entries(
         except ValueError:
             eligible = None
         if outcome.get("status") != "open" or eligible is None or now.date() < eligible:
+            updated_items.append(item)
+            continue
+        boundary_errors = isolated_simulation_boundary_errors(item)
+        if boundary_errors:
+            pending.append(
+                f"{item.get('ticker')}: isolated-simulation boundary failed; "
+                "no ticket mutation"
+            )
             updated_items.append(item)
             continue
 
@@ -378,7 +426,7 @@ def close_due_entries(
                     "reviewedAt": now.isoformat(),
                     "exitValue": exit_value,
                     "estimatedPnl": pnl,
-                    "notes": "closed at next-session conservative bid/ask liquidation",
+                    "notes": "settled as isolated simulation at next-session conservative bid/ask liquidation",
                     "exitMethod": "schwab-next-session-bid-ask",
                 },
             }
@@ -436,7 +484,8 @@ def build_fast_paper_cohort(
     ledger = ledger_override if ledger_override is not None else load_fast_ledger()
     due = [
         item for item in open_items(ledger)
-        if str(item.get("exitEligibleDate") or "") <= now.date().isoformat()
+        if is_isolated_fast_simulation(item)
+        and str(item.get("exitEligibleDate") or "") <= now.date().isoformat()
     ]
     if mtm_override is not None:
         mtm = mtm_override
@@ -510,6 +559,15 @@ def build_fast_paper_cohort(
         if (item.get("outcome") or {}).get("estimatedPnl") is not None
     ]
     current_open = open_items(ledger)
+    boundary_violations = [
+        {
+            "ticker": item.get("ticker"),
+            "ticketId": item.get("ticketId"),
+            "errors": isolated_simulation_boundary_errors(item),
+        }
+        for item in current_open
+        if not is_isolated_fast_simulation(item)
+    ]
     opened_ids = {
         build_fast_entry(item, now=now).get("ticketId") for item in selected
     } if selected else set()
@@ -560,6 +618,7 @@ def build_fast_paper_cohort(
             "priceableCandidates": len(pool),
             "selectedToday": len(opened_ids),
             "closedToday": len(closed_ids),
+            "settledToday": len(closed_ids),
             "closePending": len(close_pending),
             "open": len(current_open),
             "closedLifetime": len(closed),
@@ -588,8 +647,16 @@ def build_fast_paper_cohort(
         ],
         "backlogSlate": backlog,
         "openSlate": open_slate,
+        "settledSimulationIds": closed_ids,
         "closedTicketIds": closed_ids,
         "closePendingReasons": close_pending,
+        "settlementBoundary": {
+            "ledger": FAST_PAPER_LEDGER_FILE.name,
+            "operatorTicketMutation": False,
+            "promotionEligible": False,
+            "qualifiedOpenSimulations": len(current_open) - len(boundary_violations),
+            "quarantinedOpenEntries": boundary_violations,
+        },
         "performance": {
             "scoredCount": len(closed_pnls),
             "totalPnl": round(sum(closed_pnls), 2),
@@ -601,8 +668,8 @@ def build_fast_paper_cohort(
         },
         "reminders": [
             "exploratory simulations do not count toward the 30-trade promotion gate",
-            "entries use priced option structures; exits use later-session Schwab bid/ask quotes",
-            "no approval, broker, TOS, live-book, or authority mutation occurs",
+            "only boundary-qualified isolated simulations may settle from later-session Schwab bid/ask quotes",
+            "no operator paper ticket, approval, broker, TOS, live-book, or authority mutation occurs",
         ],
         "citations": [
             "data/latest_snapshot.json",
@@ -630,7 +697,7 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
         f"- scan performed this run: {'yes' if payload.get('scanPerformed') else 'no'}",
         f"- priceable candidates: {counts.get('priceableCandidates', 0)}",
         f"- selected today: {counts.get('selectedToday', 0)} / {payload.get('targetDailyTrades')}",
-        f"- closed today: {counts.get('closedToday', 0)}",
+        f"- isolated simulations settled today: {counts.get('settledToday', counts.get('closedToday', 0))}",
         f"- open now: {counts.get('open', 0)}",
         f"- close pending: {counts.get('closePending', 0)}",
         f"- opened-today max loss: ${number(risk.get('openedTodayMaxLoss')):,.2f}",
@@ -639,7 +706,7 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
         f"${number(risk.get('dailyMaxLossCap')):,.2f}",
         f"- open max loss: ${number(risk.get('openMaxLoss')):,.2f}",
         "",
-        "Open slate:",
+        "Open isolated-simulation slate:",
     ]
     slate = payload.get("openSlate") or []
     if not slate:
@@ -674,8 +741,19 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
     )
     pending = payload.get("closePendingReasons") or []
     if pending:
-        lines.extend(["", "Pending exits:"])
+        lines.extend(["", "Pending simulation settlements:"])
         lines.extend(f"- {reason}" for reason in pending)
+    boundary = payload.get("settlementBoundary") or {}
+    quarantined = boundary.get("quarantinedOpenEntries") or []
+    lines.extend(
+        [
+            "",
+            "Settlement boundary:",
+            f"- operator ticket mutation: {boundary.get('operatorTicketMutation')}",
+            f"- qualified isolated simulations: {boundary.get('qualifiedOpenSimulations', 0)}",
+            f"- quarantined non-simulation entries: {len(quarantined)}",
+        ]
+    )
     lines.extend(["", "Reminders:"])
     lines.extend(f"- {item}" for item in payload.get("reminders") or [])
     return "\n".join(lines).rstrip() + "\n"

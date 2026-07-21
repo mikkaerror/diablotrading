@@ -121,6 +121,21 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("paper-blocker-swarm outcomeReward must remain zero", result["errors"])
 
+    def test_verifier_rejects_fast_simulation_boundary_that_allows_ticket_mutation(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["fastPaper"]["settlementBoundary"] = {
+            "operatorTicketMutation": True,
+            "promotionEligible": False,
+        }
+
+        result = loop.verify_cycle(artifacts, [], now=NOW)
+
+        self.assertFalse(result["passed"])
+        self.assertIn(
+            "fast-paper settlement boundary permits operator ticket mutation",
+            result["errors"],
+        )
+
     def test_progress_prefers_active_swarm_blocker_over_historical_bucket(self) -> None:
         artifacts = safe_artifacts()
         artifacts["paperBlockerSwarm"]["dominantLane"] = "premium_hurdle"
@@ -270,6 +285,28 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertEqual(payload["progressDelta"]["verifiedPaperCandidateDelta"], 1)
         self.assertEqual(payload["progressDelta"]["paperHardBlockedReduction"], 1)
         self.assertEqual(payload["progressDelta"]["acceptedProgressPoints"], 51)
+
+    def test_isolated_simulation_settlements_do_not_create_accepted_progress(self) -> None:
+        before = loop.progress_snapshot(safe_artifacts(), now=NOW)
+        after_artifacts = safe_artifacts()
+        after_artifacts["fastPaper"]["counts"]["lifetimeClosed"] = 5
+        after = loop.progress_snapshot(after_artifacts, now=NOW)
+
+        delta = loop.progress_delta(before, after)
+
+        self.assertEqual(delta["fastSimulationSettlementDelta"], 1)
+        self.assertEqual(delta["acceptedProgressPoints"], 0)
+
+    def test_goal_loop_records_and_renders_input_lineage(self) -> None:
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {"name": name, "ok": True},
+            artifact_loader=safe_artifacts,
+            state_loader=lambda: {},
+            now=NOW,
+        )
+
+        self.assertEqual(payload["sourceLineage"]["paperDirector"]["generatedAt"], NOW.isoformat())
+        self.assertIn("Source lineage (point-in-time input cut):", loop.goal_loop_text(payload))
 
     def test_goal_loop_skips_recent_duplicate_when_no_useful_work_is_ready(self) -> None:
         artifacts = safe_artifacts()

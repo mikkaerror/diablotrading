@@ -15,12 +15,14 @@ scenario evidence, outcome review, paper evidence audit, exit audit, and
 scenario backtest. Use the individual commands below when you need to debug a
 specific stage.
 
-The accelerated cohort scans the broader bootstrap-ranked universe, selects
-the largest cap-fitting set of up to five structures, and closes each
-simulation after the next market session at conservative Schwab bid/ask
-liquidation prices. Its ledger is isolated from the true paper ledger. These
-trades accelerate exploratory learning but never reduce the 30-trade promotion
-gap.
+The accelerated cohort scans the broader bootstrap-ranked universe and may
+settle only an explicitly boundary-qualified isolated simulation after the
+next market session at conservative Schwab bid/ask prices. Its ledger is
+separate from the true paper ledger: any row that looks like an operator paper
+ticket, has an approval state, or lacks the hard research-only flags fails
+closed and remains untouched. These isolated settlements are exploratory
+telemetry; they never reduce the 30-trade promotion gap or count as accepted
+evidence-loop progress.
 
 The scheduled evidence goal loop also runs the universe cap-fit audit,
 paper-test director, and paper blocker swarm. The swarm decomposes failed paper
@@ -29,8 +31,10 @@ strike construction, premium hurdle, capital fit, alternative structure, and
 concentration/process. Its coverage and finish rewards are diagnostic only; the
 outcome reward remains zero until the fixed evaluator sees real paper progress.
 A run is productive only when that evaluator sees a real delta such as a newly
-verified paper candidate, a hard-blocker reduction, a closed fast-paper ticket,
-a closed scenario observation, or a scored paper outcome.
+verified paper candidate, a hard-blocker reduction, a closed scenario
+observation, or a scored paper outcome. The goal-loop report records its source
+timestamps, so a later paper-director refresh supersedes an earlier candidate
+count rather than silently contradicting it.
 
 2. Refresh the strike lane when the options plan itself needs rebuilding.
 
@@ -44,7 +48,7 @@ a closed scenario observation, or a scored paper outcome.
 ./run_inferno_paper_test_director.sh
 ./run_inferno_paper_blocker_swarm.sh
 ./run_inferno_paper_bottleneck_reducer.sh
-./run_inferno_fast_paper_cohort.sh
+./run_inferno_fast_paper_cohort.sh status
 ./run_inferno_scenario_evidence.sh
 ./run_inferno_paper_evidence_loop.sh
 ./run_inferno_paper_exit_auditor.sh

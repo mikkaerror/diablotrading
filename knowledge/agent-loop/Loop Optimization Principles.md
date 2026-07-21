@@ -28,6 +28,7 @@ Increase verified paper and research evidence per unit of time without widening 
 11. Keep swarm outcome reward separate from accepted progress unless the fixed evaluator records a real evidence delta.
 12. Freshness gates follow market sessions: on weekends and market holidays, the latest regular session plus same-day infrastructure checks are the active cycle.
 13. Operator-facing status must label stale action artifacts as historical or inactive; an old successful action is not proof of current execution.
+14. A convenience config may read a declared universe contract but cannot redefine or expand that universe; outsiders are diagnostic inputs and never signal candidates.
 
 ## Accepted progress
 
