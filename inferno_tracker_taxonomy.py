@@ -32,6 +32,49 @@ METADATA_CACHE_DAYS = 14
 MAX_REFERENCE_REFRESH_PER_RUN = 20
 REFERENCE_FAILURE_BACKOFF_HOURS = (1, 6, 24)
 
+# A delisted or acquired symbol may no longer resolve through a live quote API
+# even though its company classification remains verifiable.  These exceptions
+# are deliberately small, source-labelled, and review-dated—not inferred from
+# portfolio data or a theme score.  They only repair reference stewardship.
+VERIFIED_REFERENCE_OVERRIDES: dict[str, dict[str, Any]] = {
+    "GLDD": {
+        "ticker": "GLDD",
+        "shortName": "Great Lakes Dredge & Dock Corporation",
+        "sector": "Industrials",
+        "industry": "Engineering & Construction",
+        "quoteType": "Former public operating company",
+        "fetchedAt": "2026-07-21T01:42:00-06:00",
+        "reviewAfter": "2027-07-21T01:42:00-06:00",
+        "source": "verified-reference-override",
+        "referenceEvidence": [
+            {
+                "publisher": "Yahoo Finance",
+                "url": "https://uk.finance.yahoo.com/quote/GLDD/",
+                "claim": "Company profile labels GLDD as Industrials / Engineering & Construction.",
+                "accessedAt": "2026-07-21",
+            },
+            {
+                "publisher": "Great Lakes Dredge & Dock",
+                "url": "https://gldd.com/about-us",
+                "claim": "Company describes GLDD as the largest U.S. provider of dredging services with a specialized dredging fleet.",
+                "accessedAt": "2026-07-21",
+            },
+            {
+                "publisher": "U.S. Securities and Exchange Commission",
+                "url": "https://www.sec.gov/Archives/edgar/data/1372020/000119312526097043/gldd-20251231.htm",
+                "claim": "2025 Form 10-K/A verifies the Great Lakes Dredge & Dock Corporation registrant identity.",
+                "accessedAt": "2026-07-21",
+            },
+            {
+                "publisher": "Great Lakes Dredge & Dock Investor Relations",
+                "url": "https://investor.gldd.com/news-releases/news-release-details/saltchuk-welcomes-great-lakes-dredge-dock-its-family-companies",
+                "claim": "April 1, 2026 release confirms Saltchuk completed the acquisition and GLDD continues as a stand-alone business unit.",
+                "accessedAt": "2026-07-21",
+            },
+        ],
+    },
+}
+
 
 def ticker(value: Any) -> str:
     """Normalize a symbol without changing its tracker membership."""
@@ -64,6 +107,12 @@ def cache_entry_fresh(entry: dict[str, Any], *, now: datetime | None = None) -> 
     if fetched is None:
         return False
     current = now or local_now()
+    # Versioned, manually verified references are reviewed on their explicit
+    # date.  This avoids repeatedly replacing a valid historical company
+    # classification with a live-provider miss after a delisting.
+    review_after = parse_timestamp(entry.get("reviewAfter"))
+    if review_after is not None and entry.get("source") == "verified-reference-override":
+        return current <= review_after.astimezone(current.tzinfo)
     return current - fetched.astimezone(current.tzinfo) <= timedelta(days=METADATA_CACHE_DAYS)
 
 
@@ -111,6 +160,7 @@ def cache_tickers(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def source_metadata(
     symbol: str,
     *,
+    verified_reference_overrides: dict[str, dict[str, Any]],
     taxonomy_cache: dict[str, dict[str, Any]],
     edge_cache: dict[str, dict[str, Any]],
     ticker_cache: dict[str, dict[str, Any]],
@@ -118,6 +168,7 @@ def source_metadata(
 ) -> tuple[dict[str, Any] | None, str, bool]:
     """Select the strongest local reference record and label its provenance."""
     candidates = (
+        (verified_reference_overrides.get(symbol), "verified-reference-override"),
         (taxonomy_cache.get(symbol), "taxonomy-cache"),
         (edge_cache.get(symbol), "edge-metadata-cache"),
         (ticker_cache.get(symbol), "ticker-metadata-cache"),
@@ -224,6 +275,8 @@ def taxonomy_entry(symbol: str, metadata: dict[str, Any] | None, *, source: str,
         "referenceSource": f"{source}/{text(metadata.get('source'), 'unknown')}",
         "referenceFresh": fresh,
         "referenceAsOf": metadata.get("fetchedAt"),
+        "referenceReviewAfter": metadata.get("reviewAfter"),
+        "referenceEvidence": list(metadata.get("referenceEvidence") or []),
         "portfolioRole": "not-defined-by-reference-data",
         "portfolioRoleStatus": "requires-operator-policy",
     }
@@ -235,6 +288,7 @@ def build_tracker_taxonomy(
     taxonomy_cache_payload: dict[str, Any] | None = None,
     edge_cache_payload: dict[str, Any] | None = None,
     ticker_cache_payload: dict[str, Any] | None = None,
+    verified_reference_overrides: dict[str, dict[str, Any]] | None = None,
     refresh_missing: bool = True,
     max_refresh: int = MAX_REFERENCE_REFRESH_PER_RUN,
     now: datetime | None = None,
@@ -250,6 +304,7 @@ def build_tracker_taxonomy(
     taxonomy_cache = cache_tickers(taxonomy_cache_payload)
     edge_cache = cache_tickers(edge_cache_payload)
     ticker_cache = cache_tickers(ticker_cache_payload)
+    verified_reference_overrides = verified_reference_overrides if verified_reference_overrides is not None else VERIFIED_REFERENCE_OVERRIDES
     refreshed_symbols: list[str] = []
     refresh_failures: list[str] = []
     deferred_symbols: list[str] = []
@@ -258,6 +313,7 @@ def build_tracker_taxonomy(
     for symbol in snapshot_symbols(snapshot):
         metadata, source, fresh = source_metadata(
             symbol,
+            verified_reference_overrides=verified_reference_overrides,
             taxonomy_cache=taxonomy_cache,
             edge_cache=edge_cache,
             ticker_cache=ticker_cache,
@@ -281,6 +337,7 @@ def build_tracker_taxonomy(
     covered = [item for item in entries if item["referenceStatus"] == "reference-covered"]
     missing = [item["ticker"] for item in entries if item["referenceStatus"] != "reference-covered"]
     stale = [item["ticker"] for item in covered if not item["referenceFresh"]]
+    verified = [item["ticker"] for item in entries if item["referenceSource"].startswith("verified-reference-override/")]
     by_sector: dict[str, int] = {}
     by_exposure: dict[str, int] = {}
     for entry in covered:
@@ -311,6 +368,8 @@ def build_tracker_taxonomy(
             "referenceMissingRows": len(missing),
             "referenceComplete": reference_complete,
             "staleReferenceRows": len(stale),
+            "verifiedReferenceRows": len(verified),
+            "verifiedReferenceSymbols": verified,
             "missingSymbols": missing,
             "staleSymbols": stale,
             "bySector": dict(sorted(by_sector.items())),
@@ -339,6 +398,10 @@ def build_tracker_taxonomy(
             "data/inferno_edge_metadata_cache.json",
             "data/inferno_ticker_metadata_cache.json",
             "data/inferno_tracker_taxonomy_cache.json",
+            "Verified GLDD reference evidence: https://uk.finance.yahoo.com/quote/GLDD/",
+            "Verified GLDD operating-company profile: https://gldd.com/about-us",
+            "Verified GLDD registrant identity: https://www.sec.gov/Archives/edgar/data/1372020/000119312526097043/gldd-20251231.htm",
+            "Verified GLDD acquisition status: https://investor.gldd.com/news-releases/news-release-details/saltchuk-welcomes-great-lakes-dredge-dock-its-family-companies",
         ],
     }
     return report, {"tickers": taxonomy_cache}
@@ -355,6 +418,7 @@ def tracker_taxonomy_text(report: dict[str, Any]) -> str:
         f"Verdict: {report.get('verdict')}",
         f"Reference coverage: {coverage.get('referenceCoveredRows', 0)}/{coverage.get('trackedRows', 0)}",
         f"Missing: {coverage.get('referenceMissingRows', 0)} | stale: {coverage.get('staleReferenceRows', 0)}",
+        f"Verified static references: {coverage.get('verifiedReferenceRows', 0)}",
         f"Bounded refresh: {len(refresh.get('refreshedSymbols') or [])}/{refresh.get('maxPerRun', 0)} symbol(s)",
         f"Deferred retry: {len(refresh.get('deferredSymbols') or [])} symbol(s)",
         "",
@@ -367,6 +431,8 @@ def tracker_taxonomy_text(report: dict[str, Any]) -> str:
         lines.append(f"- {exposure}: {count}")
     lines.extend(["", "Missing reference symbols"])
     lines.extend(f"- {symbol}" for symbol in coverage.get("missingSymbols") or ["none"])
+    lines.extend(["", "Verified source-labelled reference symbols"])
+    lines.extend(f"- {symbol}" for symbol in coverage.get("verifiedReferenceSymbols") or ["none"])
     lines.extend(["", "DCA weights gate"])
     for requirement in (report.get("nextBuildGate") or {}).get("requirements") or []:
         lines.append(f"- {requirement}")

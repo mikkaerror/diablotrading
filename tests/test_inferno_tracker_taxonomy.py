@@ -157,6 +157,48 @@ class InfernoTrackerTaxonomyTests(unittest.TestCase):
         self.assertEqual(calls, ["MISS"])
         self.assertEqual(deferred["refresh"]["deferredSymbols"], ["MISS"])
 
+    def test_verified_override_closes_delisted_symbol_gap_without_network_or_policy_inference(self) -> None:
+        calls: list[str] = []
+
+        def unexpected_fetcher(symbol: str, *, now: datetime) -> dict:
+            calls.append(symbol)
+            raise AssertionError("a current verified override must not invoke the live provider")
+
+        override = {
+            "GLDD": {
+                "ticker": "GLDD",
+                "shortName": "Great Lakes Dredge & Dock Corporation",
+                "sector": "Industrials",
+                "industry": "Engineering & Construction",
+                "fetchedAt": NOW.isoformat(),
+                "reviewAfter": (NOW + timedelta(days=365)).isoformat(),
+                "source": "verified-reference-override",
+                "referenceEvidence": [{"publisher": "fixture", "url": "https://example.test/gldd"}],
+            }
+        }
+        report, cache = taxonomy.build_tracker_taxonomy(
+            snapshot={"rows": [{"ticker": "GLDD"}]},
+            taxonomy_cache_payload={"tickers": {}},
+            edge_cache_payload={"tickers": {}},
+            ticker_cache_payload={"tickers": {}},
+            verified_reference_overrides=override,
+            now=NOW,
+            fetcher=unexpected_fetcher,
+        )
+
+        entry = report["entries"][0]
+        self.assertEqual(calls, [])
+        self.assertEqual(cache, {"tickers": {}})
+        self.assertEqual(entry["sector"], "Industrials")
+        self.assertEqual(entry["industry"], "Engineering & Construction")
+        self.assertEqual(entry["economicExposure"], "infrastructure construction and services")
+        self.assertTrue(entry["referenceFresh"])
+        self.assertIn("verified-reference-override", entry["referenceSource"])
+        self.assertEqual(entry["referenceEvidence"][0]["publisher"], "fixture")
+        self.assertEqual(entry["portfolioRole"], "not-defined-by-reference-data")
+        self.assertEqual(report["coverage"]["verifiedReferenceSymbols"], ["GLDD"])
+        self.assertFalse(report["nextBuildGate"]["readyForDcaWeights"])
+
 
 if __name__ == "__main__":
     unittest.main()

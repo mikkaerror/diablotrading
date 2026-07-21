@@ -41,9 +41,12 @@ As of the 2026-07-20 command-center read:
 - The conviction engine retains all 146 scored tracker rows. Current research
   output has 12 long-term research-qualified rows; that is coverage, not a
   funding instruction.
-- Reference taxonomy is fresh for 145 of 146 tracker names. `GLDD` remains an
-  explicit source gap after its reference endpoint returned no sector/industry
-  record; it is not guessed or silently excluded.
+- Reference taxonomy covers all 146 tracker names. `GLDD` uses a bounded,
+  source-labelled verified reference because its live yfinance endpoint no
+  longer supplies sector/industry data after the 2026 acquisition/delisting.
+  The classification remains `Industrials / Engineering & Construction`, with
+  company, SEC-registrant, and provider-profile evidence retained in the
+  taxonomy artifact; it is not guessed or silently excluded.
 - The AI basket is a complete 30-name research sleeve, separate from the
   broader tracker.
 - The options/paper lane has a 29-outcome promotion gap. It remains an

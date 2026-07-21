@@ -169,5 +169,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-9f45b905",
+    "createdAt": "2026-07-21T01:42:57.166308-06:00",
+    "updatedAt": "2026-07-21T01:47:32.572286-06:00",
+    "title": "Resolve GLDD reference taxonomy evidence gap",
+    "body": "Verify whether the remaining GLDD sector/industry gap can be repaired with an authoritative, source-labelled reference. Any change must retain the ticker and remain research-only: no role, target-weight, eligibility, ticket, broker, risk, or authority mutation.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "full-tracker",
+      "taxonomy",
+      "reference-data",
+      "research-only",
+      "safety"
+    ]
   }
 ]
