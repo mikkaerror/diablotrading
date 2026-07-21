@@ -45,6 +45,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/tracker_role_review_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_full_tracker_blank_role_policy_packet(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tracker-role-policy-packet")
+        self.assertEqual(row["artifact"], "reports/tracker_role_policy_packet_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
     def test_reporting_map_includes_full_tracker_role_policy_contract(self) -> None:
         row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tracker-role-policy")
         self.assertEqual(row["artifact"], "reports/tracker_role_policy_latest.txt")
@@ -525,6 +530,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("TRACKER_TAXONOMY_FILE", data_dir / "inferno_tracker_taxonomy.json"),
                 ("TRACKER_REGISTRY_FILE", data_dir / "inferno_tracker_registry.json"),
                 ("TRACKER_ROLE_REVIEW_FILE", data_dir / "inferno_tracker_role_review.json"),
+                ("TRACKER_ROLE_POLICY_PACKET_FILE", data_dir / "inferno_tracker_role_policy_packet.json"),
                 ("TRACKER_ROLE_POLICY_FILE", data_dir / "inferno_tracker_role_policy.json"),
                 ("MATH_VERIFY_FILE", data_dir / "inferno_math_verify.json"),
                 ("MARKET_MASTERY_PLAN_FILE", data_dir / "inferno_market_mastery_plan.json"),
@@ -612,6 +618,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("./inferno tracker-taxonomy", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno tracker-registry", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno tracker-role-review", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno tracker-role-policy-packet", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno tracker-role-policy", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno cash-ledger", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno ticket-cap", {item["command"] for item in payload["controlSurface"]["commands"]})

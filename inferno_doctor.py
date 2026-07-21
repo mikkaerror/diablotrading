@@ -58,6 +58,7 @@ CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
 TRACKER_TAXONOMY_FILE = ROOT / "data" / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = ROOT / "data" / "inferno_tracker_role_review.json"
+TRACKER_ROLE_POLICY_PACKET_FILE = ROOT / "data" / "inferno_tracker_role_policy_packet.json"
 TRACKER_ROLE_POLICY_FILE = ROOT / "data" / "inferno_tracker_role_policy.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
@@ -809,6 +810,48 @@ def tracker_role_policy_status(report: dict) -> tuple[bool, str]:
     ok = fresh and safe and valid_coverage and verdict in expected
     detail = (
         f"{verdict} | tracker={tracked_rows} | valid={valid_rows} | pending={pending_rows} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
+    )
+    return ok, detail
+
+
+def tracker_role_policy_packet_status(report: dict) -> tuple[bool, str]:
+    """Check that the worksheet is current, complete, blank, and non-importable."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    boundary = report.get("authorityBoundary") or {}
+    handoff = report.get("operatorHandoff") or {}
+    coverage = report.get("coverage") or {}
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+        and not bool(boundary.get("operatorPolicyChanged"))
+        and not bool(boundary.get("operatorDecisionsProduced"))
+        and not bool(boundary.get("operatorDecisionsImported"))
+        and not bool(boundary.get("targetWeightsAccepted"))
+        and not bool(boundary.get("targetWeightsProduced"))
+        and not bool(handoff.get("packetCanBeImported"))
+        and not bool(handoff.get("weightFieldsIncluded"))
+    )
+    tracked_rows = coverage.get("trackedRows")
+    blank_rows = coverage.get("blankOperatorEntryRows")
+    decision_rows = coverage.get("operatorDecisionRows")
+    verdict = str(report.get("verdict") or "unknown")
+    complete_and_blank = (
+        isinstance(tracked_rows, int)
+        and tracked_rows > 0
+        and blank_rows == tracked_rows
+        and decision_rows == 0
+    )
+    ok = fresh and safe and complete_and_blank and verdict == "blank-operator-entry-packet-ready"
+    detail = (
+        f"{verdict} | tracker={tracked_rows} | blank={blank_rows} | decisions={decision_rows} | research-only={safe}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     )
@@ -1942,6 +1985,12 @@ def main() -> int:
     tracker_role_review_ok, tracker_role_review_detail = tracker_role_review_status(tracker_role_review)
     lines.append(summarize_status("Full-tracker role review", tracker_role_review_ok, tracker_role_review_detail))
     if not tracker_role_review_ok:
+        warnings += 1
+
+    tracker_role_policy_packet = load_json_file(TRACKER_ROLE_POLICY_PACKET_FILE) or {}
+    tracker_role_policy_packet_ok, tracker_role_policy_packet_detail = tracker_role_policy_packet_status(tracker_role_policy_packet)
+    lines.append(summarize_status("Full-tracker blank role-policy packet", tracker_role_policy_packet_ok, tracker_role_policy_packet_detail))
+    if not tracker_role_policy_packet_ok:
         warnings += 1
 
     tracker_role_policy = load_json_file(TRACKER_ROLE_POLICY_FILE) or {}

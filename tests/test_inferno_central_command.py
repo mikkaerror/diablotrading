@@ -94,6 +94,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("deposit-plan", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("tracker-taxonomy", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("tracker-role-review", {item["command"] for item in saved["controlPlane"]["commands"]})
+            self.assertIn("tracker-role-policy-packet", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("tracker-role-policy", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("cash-ledger", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("ticket-cap", {item["command"] for item in saved["controlPlane"]["commands"]})
@@ -111,6 +112,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("./inferno deposit-plan", saved["shortcutCommands"])
             self.assertIn("./inferno tracker-taxonomy", saved["shortcutCommands"])
             self.assertIn("./inferno tracker-role-review", saved["shortcutCommands"])
+            self.assertIn("./inferno tracker-role-policy-packet", saved["shortcutCommands"])
             self.assertIn("./inferno tracker-role-policy", saved["shortcutCommands"])
             self.assertIn("./inferno cash-ledger", saved["shortcutCommands"])
             self.assertIn("./inferno ticket-cap", saved["shortcutCommands"])
@@ -318,6 +320,10 @@ class InfernoCentralCommandTests(unittest.TestCase):
         tracker_role_review = parser.parse_args(["tracker-role-review", "status"])
         self.assertEqual(tracker_role_review.command, "tracker-role-review")
         self.assertEqual(tracker_role_review.tracker_role_review_action, "status")
+
+        tracker_role_policy_packet = parser.parse_args(["tracker-role-policy-packet", "status"])
+        self.assertEqual(tracker_role_policy_packet.command, "tracker-role-policy-packet")
+        self.assertEqual(tracker_role_policy_packet.tracker_role_policy_packet_action, "status")
 
         tracker_role_policy = parser.parse_args(["tracker-role-policy", "status"])
         self.assertEqual(tracker_role_policy.command, "tracker-role-policy")

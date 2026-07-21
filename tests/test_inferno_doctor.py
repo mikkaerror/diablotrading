@@ -13,6 +13,7 @@ from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
+    tracker_role_policy_packet_status,
     tracker_role_policy_status,
     tracker_role_review_status,
     tracker_taxonomy_status,
@@ -684,6 +685,57 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                         "targetWeightsProduced": False,
                     },
                     "coverage": {"trackedRows": 146, "validDecisionRows": 0, "pendingDecisionRows": 146},
+                }
+            )
+
+        self.assertFalse(ok)
+
+    def test_tracker_role_policy_packet_status_accepts_complete_blank_non_importable_worksheet(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_role_policy_packet_status(
+                {
+                    "generatedAt": "2026-07-21T00:00:00-06:00",
+                    "verdict": "blank-operator-entry-packet-ready",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "authorityBoundary": {
+                        "operatorPolicyChanged": False,
+                        "operatorDecisionsProduced": False,
+                        "operatorDecisionsImported": False,
+                        "targetWeightsAccepted": False,
+                        "targetWeightsProduced": False,
+                    },
+                    "operatorHandoff": {"packetCanBeImported": False, "weightFieldsIncluded": False},
+                    "coverage": {"trackedRows": 146, "blankOperatorEntryRows": 146, "operatorDecisionRows": 0},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("blank=146", detail)
+
+    def test_tracker_role_policy_packet_status_rejects_import_or_populated_decision(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, _ = tracker_role_policy_packet_status(
+                {
+                    "generatedAt": "2026-07-21T00:00:00-06:00",
+                    "verdict": "blank-operator-entry-packet-ready",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "authorityBoundary": {
+                        "operatorPolicyChanged": False,
+                        "operatorDecisionsProduced": True,
+                        "operatorDecisionsImported": False,
+                        "targetWeightsAccepted": False,
+                        "targetWeightsProduced": False,
+                    },
+                    "operatorHandoff": {"packetCanBeImported": True, "weightFieldsIncluded": False},
+                    "coverage": {"trackedRows": 146, "blankOperatorEntryRows": 145, "operatorDecisionRows": 1},
                 }
             )
 

@@ -186,5 +186,20 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-4542f41a",
+    "createdAt": "2026-07-21T02:44:13.389456-06:00",
+    "updatedAt": "2026-07-21T02:50:27.689092-06:00",
+    "title": "Add blank full-tracker role-policy packet",
+    "body": "Existing derived review queue and empty policy template do not provide a full-row data-entry surface. Build a blank 146-name research-only worksheet packet with source context; do not create or modify any operator policy decision, target weight, eligibility, ticket, broker state, or authority.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "normal",
+    "tags": [
+      "full-tracker",
+      "role-policy",
+      "research-only"
+    ]
   }
 ]

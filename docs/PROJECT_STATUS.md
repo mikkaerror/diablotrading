@@ -141,13 +141,13 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: broker cash is currently zero. Planned deposits remain forecasts until broker-confirmed cash exists; no automated submission, and every real order still requires explicit final confirmation.
-- Full-tracker DCA construction: source-labelled reference coverage is 146/146. `GLDD` is classified from bounded verified company, SEC, and provider-profile evidence after its live endpoint stopped returning sector/industry data following its 2026 acquisition/delisting. `./inferno tracker-role-review` queues all 146 operator role and DCA-inclusion decisions, while `./inferno tracker-role-policy` validates any future human-owned policy read-only. All 146 decisions remain explicitly pending; the contract rejects target weights and makes no DCA proposal.
+- Full-tracker DCA construction: source-labelled reference coverage is 146/146. `GLDD` is classified from bounded verified company, SEC, and provider-profile evidence after its live endpoint stopped returning sector/industry data following its 2026 acquisition/delisting. `./inferno tracker-role-review` queues all 146 operator role and DCA-inclusion decisions, and `./inferno tracker-role-policy-packet` now supplies the blank full-row JSON/CSV handoff with source context. It has no import path, weight field, or policy mutation. `./inferno tracker-role-policy` validates any future human-owned policy read-only. All 146 decisions remain explicitly pending; the contract rejects target weights and makes no DCA proposal.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Review `./inferno tracker-taxonomy`, `./inferno tracker-registry`, `./inferno tracker-role-review`, and `./inferno tracker-role-policy`; record operator-owned role/diversification decisions before any separately approved DCA-weight research.
+1. Review `./inferno tracker-taxonomy`, `./inferno tracker-registry`, `./inferno tracker-role-review`, and the blank `./inferno tracker-role-policy-packet`; manually record operator-owned role/diversification decisions in the separate policy file and validate them with `./inferno tracker-role-policy` before any separately approved DCA-weight research.
 2. Treat deployable cash as manual-review-only: broker cash is currently zero; keep live submit OFF and require explicit final confirmation before any real order.
 3. Run the command center, capital readiness, Schwab daily ops tape, and risk
    gate audit before sizing any ticket.

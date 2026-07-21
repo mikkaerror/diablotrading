@@ -133,10 +133,20 @@ every retained tracker name. Its empty starting point is documented in
 that input. The contract rejects target weights so a future human allocation
 policy remains a separate authority source.
 
-**Gate:** resolve the explicit reference-source gap without guessing, then have
-the operator record a portfolio-role and DCA-research decision for every row
-considered in DCA construction research. This is a metadata and governance
-gate, not an eligibility change, target-weight policy, or purchase instruction.
+`./inferno tracker-role-policy-packet` adds a complementary blank 146-row
+worksheet in JSON and CSV. It carries the queue's source-labelled reference,
+hold, and research context while leaving the role, DCA-research inclusion,
+date, source, and rationale cells empty for every name. It is not policy input
+and has no import path: completing it cannot change an operator decision,
+tracker membership, eligibility, tickets, broker state, or authority. A human
+must manually prepare the separately owned policy file before the contract
+will read it. The packet contains no target-weight field.
+
+**Gate:** with source-labelled references covered, have the operator record a
+portfolio-role and DCA-research decision for every retained row using the blank
+packet and then validate the manually created policy file. This is a metadata
+and governance gate, not an eligibility change, target-weight policy, or
+purchase instruction.
 
 ### 3. Build deposit-sized DCA decision support — after taxonomy
 

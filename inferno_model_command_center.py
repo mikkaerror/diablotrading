@@ -86,6 +86,7 @@ CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
 TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = DATA_DIR / "inferno_tracker_role_review.json"
+TRACKER_ROLE_POLICY_PACKET_FILE = DATA_DIR / "inferno_tracker_role_policy_packet.json"
 TRACKER_ROLE_POLICY_FILE = DATA_DIR / "inferno_tracker_role_policy.json"
 SCHWAB_EDGE_SIGNALS_FILE = DATA_DIR / "inferno_schwab_edge_signals.json"
 OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
@@ -122,6 +123,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno tracker-taxonomy", "description": "show full-tracker reference sector, industry, and exposure coverage"},
     {"command": "./inferno tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "./inferno tracker-role-review", "description": "show the operator-owned full-tracker role and diversification review queue"},
+    {"command": "./inferno tracker-role-policy-packet", "description": "build a blank full-tracker role-policy worksheet; no decisions or imports"},
     {"command": "./inferno tracker-role-policy", "description": "validate optional operator-owned role policy read-only; no weights or purchases"},
     {"command": "./inferno cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "./inferno ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
@@ -396,6 +398,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "tracker-role-review",
         "question": "Which operator role and DCA-inclusion decisions remain unresolved, without inferring them from research ranks?",
         "artifact": "reports/tracker_role_review_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tracker-role-policy-packet",
+        "question": "Is there a complete blank, non-importable full-tracker worksheet with the source context an operator needs to record decisions manually?",
+        "artifact": "reports/tracker_role_policy_packet_latest.txt",
         "owner": "codex",
     },
     {
@@ -948,6 +956,7 @@ def build_command_center() -> dict[str, Any]:
     conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
     tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
     tracker_role_review = load_json_file(TRACKER_ROLE_REVIEW_FILE) or {}
+    tracker_role_policy_packet = load_json_file(TRACKER_ROLE_POLICY_PACKET_FILE) or {}
     tracker_role_policy = load_json_file(TRACKER_ROLE_POLICY_FILE) or {}
     math_verify = load_json_file(MATH_VERIFY_FILE) or {}
     tos_formula_audit = load_json_file(TOS_FORMULA_AUDIT_FILE) or {}
@@ -1294,6 +1303,9 @@ def build_command_center() -> dict[str, Any]:
         "trackerReferenceStale": (tracker_taxonomy.get("coverage") or {}).get("staleReferenceRows"),
         "trackerRoleDefinitions": (tracker_role_review.get("coverage") or {}).get("portfolioRoleDefinedRows"),
         "trackerRoleReviewRequired": (tracker_role_review.get("coverage") or {}).get("rowsRequiringOperatorRoleDecision"),
+        "trackerRolePolicyPacketVerdict": tracker_role_policy_packet.get("verdict"),
+        "trackerRolePolicyPacketRows": (tracker_role_policy_packet.get("coverage") or {}).get("trackedRows"),
+        "trackerRolePolicyPacketBlankRows": (tracker_role_policy_packet.get("coverage") or {}).get("blankOperatorEntryRows"),
         "trackerRolePolicyVerdict": tracker_role_policy.get("verdict"),
         "trackerRolePolicyValidDecisions": (tracker_role_policy.get("coverage") or {}).get("validDecisionRows"),
         "trackerRolePolicyPending": (tracker_role_policy.get("coverage") or {}).get("pendingDecisionRows"),
@@ -1359,6 +1371,7 @@ def build_command_center() -> dict[str, Any]:
             "./inferno deposit-plan",
             "./inferno tracker-taxonomy",
             "./inferno tracker-role-review",
+            "./inferno tracker-role-policy-packet",
             "./inferno tracker-role-policy",
             "./inferno cash-ledger",
             "./inferno ticket-cap",
