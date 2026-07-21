@@ -82,6 +82,7 @@ from inferno_conviction_research import (
 )
 from inferno_heartbeat import (
     build_heartbeat_report,
+    default_expected_sources,
     record_heartbeat,
     save_heartbeat_report,
 )
@@ -445,7 +446,9 @@ def build_daily_loop() -> dict[str, Any]:
             status="ok",
             summary="daily loop chained diagnostics",
         )
-        heartbeat_payload = build_heartbeat_report()
+        heartbeat_payload = build_heartbeat_report(
+            expected_sources=default_expected_sources()
+        )
         save_heartbeat_report(heartbeat_payload)
         return heartbeat_payload
 

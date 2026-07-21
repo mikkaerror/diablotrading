@@ -46,6 +46,26 @@ class DailyModelRefreshTests(unittest.TestCase):
         self.assertLess(blocker, reducer)
         self.assertLess(reducer, command_center)
 
+    def test_individual_schwab_read_failures_remain_advisory(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'run_advisory "Schwab account truth" python3 inferno_schwab_account_sync.py build --skip-refresh --quiet',
+            text,
+        )
+        self.assertIn(
+            'run_advisory "Schwab option-chain tape" python3 inferno_schwab_daily_ops.py --skip-refresh --quiet',
+            text,
+        )
+        self.assertIn(
+            'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
+            text,
+        )
+        self.assertIn(
+            'run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
+            text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -243,6 +243,26 @@ class InfernoCentralCommandTests(unittest.TestCase):
         self.assertEqual(strategy["promptAudit"]["status"], "prompt-sync-ok")
         self.assertIn("prompt-sync-ok", rendered)
 
+    def test_schedule_renderer_surfaces_nightly_deployment_drift(self) -> None:
+        rendered = central_command.render_schedule_status(
+            {
+                "generatedAt": "2026-05-10T12:00:00-06:00",
+                "entrypoint": "./inferno",
+                "launchAgents": [
+                    {
+                        "id": "io.diablotrading.inferno-nightly-optimize",
+                        "purpose": "nightly research",
+                        "status": "configured",
+                        "schedule": "Mon at 18:30",
+                        "scriptSync": {"status": "drift"},
+                    }
+                ],
+                "codexAutomations": [],
+            }
+        )
+
+        self.assertIn("script-sync drift", rendered)
+
     def test_parser_accepts_central_tactical_options(self) -> None:
         parser = central_command.build_parser()
 

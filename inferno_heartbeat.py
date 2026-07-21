@@ -240,11 +240,38 @@ def build_heartbeat_report(
             silent.append(row)
 
     expected_list = sorted(set((source or "").strip() for source in (expected_sources or []) if source))
+    expected_sources_configured = bool(expected_list)
     missing_expected = [source for source in expected_list if source not in latest]
 
-    if silent or missing_expected:
+    # A caller that names scheduled sources wants an operational verdict: only
+    # those sources can degrade it.  A caller that supplies no schedule is
+    # asking for the legacy whole-ledger diagnostic, where every observed
+    # source remains meaningful.
+    if expected_sources_configured:
+        expected_latest = {
+            source: latest[source]
+            for source in expected_list
+            if source in latest
+        }
+        expected_silent = [
+            source
+            for source, record in expected_latest.items()
+            if record.get("status") != "inactive"
+            and _classify_age(record, now)[0] == "silent"
+        ]
+        expected_stale = [
+            source
+            for source, record in expected_latest.items()
+            if record.get("status") != "inactive"
+            and _classify_age(record, now)[0] == "stale"
+        ]
+    else:
+        expected_silent = [str(row.get("source") or "unknown") for row in silent]
+        expected_stale = [str(row.get("source") or "unknown") for row in stale]
+
+    if expected_silent or missing_expected:
         verdict = "silent"
-    elif stale:
+    elif expected_stale:
         verdict = "stale"
     else:
         verdict = "alive"
@@ -261,6 +288,8 @@ def build_heartbeat_report(
         "inactiveCount": len(inactive),
         "missingExpected": missing_expected,
         "expectedSources": expected_list,
+        "expectedSilentSources": sorted(expected_silent),
+        "expectedStaleSources": sorted(expected_stale),
         "fresh": fresh,
         "stale": stale,
         "silent": silent,
@@ -289,6 +318,15 @@ def heartbeat_text(payload: dict[str, Any]) -> str:
         f"Thresholds: stale > {payload.get('staleAfterHours')}h | "
         f"silent > {payload.get('silentAfterHours')}h",
     ]
+    expected_sources = payload.get("expectedSources") or []
+    if expected_sources:
+        lines.extend([
+            f"Scheduled verdict scope: {', '.join(expected_sources)}",
+            "Scheduled issues: "
+            f"stale {len(payload.get('expectedStaleSources') or [])} | "
+            f"silent {len(payload.get('expectedSilentSources') or [])} | "
+            f"missing {len(payload.get('missingExpected') or [])}",
+        ])
     missing = payload.get("missingExpected") or []
     if missing:
         lines.append(f"Missing expected sources: {', '.join(missing)}")
@@ -325,13 +363,13 @@ def save_heartbeat_report(payload: dict[str, Any]) -> None:
     atomic_write_text(HEARTBEAT_TEXT_FILE, heartbeat_text(payload))
 
 
-def _default_expected_sources() -> list[str]:
+def default_expected_sources() -> list[str]:
     """The operator-curated list of subsystems we expect to be beating."""
     return [
+        "dawn_cycle",
         "ops_maintenance",
         "daily_loop",
         "watchdog",
-        "tos_session_probe",
     ]
 
 
@@ -374,7 +412,7 @@ def main() -> int:
     if command == "status" and HEARTBEAT_TEXT_FILE.exists():
         print(HEARTBEAT_TEXT_FILE.read_text(encoding="utf-8"))
         return 0
-    expected = getattr(args, "expected", None) or _default_expected_sources()
+    expected = getattr(args, "expected", None) or default_expected_sources()
     payload = build_heartbeat_report(expected_sources=expected)
     save_heartbeat_report(payload)
     print(heartbeat_text(payload))

@@ -34,6 +34,10 @@ from inferno_model_command_center import (
     update_mission,
 )
 from inferno_ops_maintenance import run_maintenance
+from install_inferno_nightly_optimize_service import (
+    SERVICE_LABEL as NIGHTLY_OPTIMIZE_SERVICE_LABEL,
+    script_sync_status as nightly_script_sync_status,
+)
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -251,7 +255,12 @@ def _codex_automation_ids() -> list[str]:
 
 def build_schedule_status() -> dict[str, Any]:
     """Return the desk's local automation schedule in one shape."""
-    launch_agents = [_read_launch_agent(label, purpose) for label, purpose in LAUNCH_AGENT_SCHEDULES]
+    launch_agents = []
+    for label, purpose in LAUNCH_AGENT_SCHEDULES:
+        agent = _read_launch_agent(label, purpose)
+        if label == NIGHTLY_OPTIMIZE_SERVICE_LABEL:
+            agent["scriptSync"] = nightly_script_sync_status()
+        launch_agents.append(agent)
     codex_automations = [_read_codex_automation(automation_id) for automation_id in _codex_automation_ids()]
     configured = sum(1 for item in launch_agents + codex_automations if item.get("status") in {"configured", "ACTIVE"})
     return {
@@ -274,8 +283,13 @@ def render_schedule_status(payload: dict[str, Any]) -> str:
         "LaunchAgents:",
     ]
     for item in payload.get("launchAgents") or []:
+        script_sync = item.get("scriptSync") or {}
+        sync_suffix = (
+            f" | script-sync {script_sync.get('status')}"
+            if script_sync else ""
+        )
         lines.append(
-            f"- {item.get('purpose')}: {item.get('status')} | {item.get('schedule')} | {item.get('id')}"
+            f"- {item.get('purpose')}: {item.get('status')} | {item.get('schedule')} | {item.get('id')}{sync_suffix}"
         )
     lines.extend(["", "Codex automations:"])
     for item in payload.get("codexAutomations") or []:
@@ -409,7 +423,13 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
         "",
         "Automation schedule:",
         *[
-            f"- {item.get('purpose')}: {item.get('status')} | {item.get('schedule')}"
+            (
+                f"- {item.get('purpose')}: {item.get('status')} | {item.get('schedule')}"
+                + (
+                    f" | script-sync {(item.get('scriptSync') or {}).get('status')}"
+                    if item.get("scriptSync") else ""
+                )
+            )
             for item in schedules.get("launchAgents", [])
         ],
         *[

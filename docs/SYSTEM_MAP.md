@@ -34,6 +34,16 @@ liveTradingAllowed: false
 6. Broker/TOS lanes remain read-only unless the operator gives explicit final
    confirmation for a specific action.
 
+Scheduled refreshes fail soft for individual read-only provider calls and
+continue to their command-center/doctor pass. The heartbeat verdict is driven
+only by scheduled sources; manual or intentionally inactive broker probes stay
+visible without masquerading as a missed scheduled run.
+LaunchAgent wrappers are bound to repository-owned orchestration scripts. When
+macOS privacy blocks background access to the workspace, they execute a
+deployed copy instead. That copy is refreshed by the installer and checksum
+audited in `./inferno schedule`; a drift verdict means the job is not yet using
+the reviewed source.
+
 ## Canonical Truth
 
 Generated artifacts beat durable docs when they disagree.

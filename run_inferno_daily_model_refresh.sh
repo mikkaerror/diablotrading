@@ -58,14 +58,17 @@ fi
 
 echo "3/18 Schwab account truth"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  python3 inferno_schwab_account_sync.py build --skip-refresh --quiet
+  # OAuth can be valid while an individual read-only endpoint is temporarily
+  # unavailable. Record that as an advisory and continue to the final doctor
+  # pass rather than abandoning the whole refresh with stale diagnostics.
+  run_advisory "Schwab account truth" python3 inferno_schwab_account_sync.py build --skip-refresh --quiet
 else
   skip_schwab_step "Schwab account truth"
 fi
 
 echo "4/18 Schwab option-chain tape"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  python3 inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_advisory "Schwab option-chain tape" python3 inferno_schwab_daily_ops.py --skip-refresh --quiet
   run_advisory "snapshot price overlay" python3 inferno_snapshot_price_overlay.py --quiet
 else
   skip_schwab_step "Schwab option-chain tape"
@@ -73,14 +76,14 @@ fi
 
 echo "5/18 Schwab price history"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
+  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
 else
   skip_schwab_step "Schwab price history"
 fi
 
 echo "6/18 Schwab-derived TOS metrics"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
+  run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
 else
   skip_schwab_step "Schwab-derived TOS metrics"
 fi

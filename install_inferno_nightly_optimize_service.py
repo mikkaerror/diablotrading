@@ -3,6 +3,7 @@ from __future__ import annotations
 """Install the research-only nightly optimization loop as a LaunchAgent."""
 
 import argparse
+import hashlib
 import os
 import plistlib
 import subprocess
@@ -59,6 +60,35 @@ def plist_payload(hour: int, minute: int) -> dict:
     }
 
 
+def script_sync_status() -> dict[str, str | None]:
+    """Compare the reviewed source script with launchd's protected copy.
+
+    macOS may deny a LaunchAgent access to the user's Documents folder, so the
+    job intentionally executes a deployed copy in ``~/.local/bin``.  The
+    checksum makes that boundary observable: a source edit is not silently
+    mistaken for scheduled deployment until ``install`` refreshes the copy.
+    """
+    if not ENTRYPOINT.exists():
+        return {"status": "source-missing", "sourceSha256": None, "deployedSha256": None}
+    if not SERVICE_ENTRYPOINT.exists():
+        return {"status": "deployed-copy-missing", "sourceSha256": None, "deployedSha256": None}
+    try:
+        source_hash = hashlib.sha256(ENTRYPOINT.read_bytes()).hexdigest()
+        deployed_hash = hashlib.sha256(SERVICE_ENTRYPOINT.read_bytes()).hexdigest()
+    except OSError as exc:
+        return {
+            "status": "sync-unreadable",
+            "sourceSha256": None,
+            "deployedSha256": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "status": "synced" if source_hash == deployed_hash else "drift",
+        "sourceSha256": source_hash,
+        "deployedSha256": deployed_hash,
+    }
+
+
 def ensure_wrapper() -> None:
     """Deploy the job outside Documents and write its launchd wrapper."""
     runner_python = backtest_python()
@@ -112,6 +142,12 @@ def uninstall() -> int:
 
 def status() -> int:
     """Print launchd status and the expected plist path."""
+    sync = script_sync_status()
+    print(f"Script sync: {sync['status']}")
+    if sync.get("error"):
+        print(sync["error"])
+    if sync["status"] != "synced":
+        print("Run `python3 install_inferno_nightly_optimize_service.py install` to refresh the deployed copy.")
     result = run_launchctl("print", f"{user_domain()}/{SERVICE_LABEL}", check=False)
     if result.returncode == 0:
         print(result.stdout)

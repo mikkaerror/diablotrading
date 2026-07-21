@@ -143,6 +143,91 @@ class HeartbeatBuildReportTests(unittest.TestCase):
         self.assertEqual(report["inactiveCount"], 1)
         self.assertEqual(report["silentCount"], 0)
 
+    def test_optional_stale_source_does_not_override_scheduled_liveness(self) -> None:
+        now = datetime(2026, 5, 10, 12, 0, 0)
+        self._seed([
+            {
+                "source": "daily_loop",
+                "status": "ok",
+                "summary": "fresh",
+                "at": (now - timedelta(hours=1)).isoformat(),
+            },
+            {
+                "source": "tos_session_probe",
+                "status": "warn",
+                "summary": "manual attach-only probe",
+                "at": (now - timedelta(hours=100)).isoformat(),
+            },
+        ])
+
+        report = inferno_heartbeat.build_heartbeat_report(
+            expected_sources=["daily_loop"], now=now
+        )
+
+        self.assertEqual(report["verdict"], "alive")
+        self.assertEqual(report["silentCount"], 1)
+        self.assertEqual(report["expectedSilentSources"], [])
+
+    def test_expected_stale_source_sets_stale_verdict(self) -> None:
+        now = datetime(2026, 5, 10, 12, 0, 0)
+        self._seed([
+            {
+                "source": "daily_loop",
+                "status": "ok",
+                "summary": "stale",
+                "at": (now - timedelta(hours=48)).isoformat(),
+            },
+        ])
+
+        report = inferno_heartbeat.build_heartbeat_report(
+            expected_sources=["daily_loop"], now=now
+        )
+
+        self.assertEqual(report["verdict"], "stale")
+        self.assertEqual(report["expectedStaleSources"], ["daily_loop"])
+
+    def test_default_schedule_excludes_manual_tos_probe(self) -> None:
+        self.assertNotIn("tos_session_probe", inferno_heartbeat.default_expected_sources())
+
+    def test_empty_schedule_keeps_whole_ledger_diagnostic_behavior(self) -> None:
+        now = datetime(2026, 5, 10, 12, 0, 0)
+        self._seed([
+            {
+                "source": "manual_probe",
+                "status": "warn",
+                "summary": "stale",
+                "at": (now - timedelta(hours=100)).isoformat(),
+            },
+        ])
+
+        report = inferno_heartbeat.build_heartbeat_report(
+            expected_sources=[], now=now
+        )
+
+        self.assertEqual(report["verdict"], "silent")
+
+    def test_text_explains_scheduled_verdict_scope(self) -> None:
+        payload = {
+            "generatedAt": "2026-05-10T12:00:00",
+            "verdict": "alive",
+            "totalSources": 2,
+            "freshCount": 1,
+            "staleCount": 0,
+            "silentCount": 1,
+            "inactiveCount": 0,
+            "staleAfterHours": 36,
+            "silentAfterHours": 96,
+            "expectedSources": ["daily_loop"],
+            "expectedStaleSources": [],
+            "expectedSilentSources": [],
+            "missingExpected": [],
+        }
+
+        rendered = inferno_heartbeat.heartbeat_text(payload)
+
+        self.assertIn("Scheduled verdict scope: daily_loop", rendered)
+        self.assertIn("Scheduled issues: stale 0 | silent 0 | missing 0", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

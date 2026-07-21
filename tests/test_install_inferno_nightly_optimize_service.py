@@ -45,6 +45,7 @@ class NightlyOptimizeServiceTests(unittest.TestCase):
                 patch.object(service, "backtest_python", return_value="/tmp/python"),
             ):
                 service.ensure_wrapper()
+                sync_status = service.script_sync_status()
 
             text = wrapper.read_text(encoding="utf-8")
             self.assertIn('export INFERNO_PYTHON="/tmp/python"', text)
@@ -57,6 +58,21 @@ class NightlyOptimizeServiceTests(unittest.TestCase):
                 entrypoint.read_text(encoding="utf-8"),
             )
             self.assertEqual(service_entrypoint.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(sync_status["status"], "synced")
+
+    def test_script_sync_status_detects_deployed_copy_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entrypoint = root / "nightly_optimize.sh"
+            deployed = root / "bin" / "nightly_optimize.sh"
+            entrypoint.write_text("current\n", encoding="utf-8")
+            deployed.parent.mkdir()
+            deployed.write_text("stale\n", encoding="utf-8")
+            with (
+                patch.object(service, "ENTRYPOINT", entrypoint),
+                patch.object(service, "SERVICE_ENTRYPOINT", deployed),
+            ):
+                self.assertEqual(service.script_sync_status()["status"], "drift")
 
     def test_plist_payload_is_serializable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
