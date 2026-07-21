@@ -30,6 +30,7 @@ import inferno_ai_basket_momentum as momentum
 import inferno_ai_basket_composite as composite
 import inferno_ai_basket_vs_benchmark as benchmark
 import inferno_ai_basket_sizing as sizing
+import inferno_basket_holdings_join as holdings
 from inferno_ai_basket_config import load_data_contract
 
 ROOT = Path(__file__).resolve().parent
@@ -40,9 +41,25 @@ def _load(path: str) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _read_nlv() -> Optional[float]:
+    """Best-effort NLV from the broker-sourced heat artifact (read-only)."""
+    for path in (ROOT / "data" / "inferno_portfolio_heat.json",
+                 ROOT / "data" / "inferno_live_account_sync.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        nlv = payload.get("netLiquidatingValue") or payload.get("nlv")
+        if isinstance(nlv, (int, float)) and nlv > 0:
+            return float(nlv)
+    return None
+
+
 def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
         send: bool = False,
-        current_weights: Optional[dict[str, float]] = None) -> dict[str, Any]:
+        current_weights: Optional[dict[str, float]] = None,
+        positions_path: Optional[str] = None,
+        held_quotes_path: Optional[str] = None) -> dict[str, Any]:
     contract = load_data_contract()
     # 1) crossings (also updates saved state, optional email)
     al = alerts.run(quotes_path, send=send, data_contract=contract)
@@ -76,8 +93,24 @@ def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
     if sp.get("signalsTrusted"):
         sizing.save(sp)
 
+    # 6) the live book, joined against the watchlist. Optional: only runs when
+    # broker position data is supplied, so the review still works standalone.
+    hp = None
+    if positions_path and held_quotes_path:
+        try:
+            pos_payload = _load(positions_path)
+            positions = (pos_payload.get("positions", [])
+                         if isinstance(pos_payload, dict) else pos_payload)
+            hq = _load(held_quotes_path)
+            if isinstance(hq, dict):
+                hq = hq.get("data") or hq.get("quotes") or []
+            hp = holdings.build(positions, hq, nlv=_read_nlv(), composite=cp)
+            holdings.save(hp)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            hp = {"error": f"holdings join unavailable: {type(exc).__name__}: {exc}"}
+
     return {"alerts": al, "momentum": mp, "composite": cp,
-            "benchmark": bp, "sizing": sp}
+            "benchmark": bp, "sizing": sp, "holdings": hp}
 
 
 def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
@@ -97,6 +130,35 @@ def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
 def digest(r: dict[str, Any]) -> str:
     al, cp, bp = r["alerts"], r["composite"], r["benchmark"]
     L = ["===== AI / data-center basket — weekly review =====", ""]
+
+    # THE BOOK FIRST — what is actually owned outranks what is merely watched.
+    hp = r.get("holdings")
+    if hp:
+        if hp.get("error"):
+            L.append(f"PORTFOLIO: {hp['error']}")
+        else:
+            nlv = hp.get("nlv")
+            L.append("PORTFOLIO (live book):"
+                     + (f"  NLV ${nlv:,.2f}" if nlv else ""))
+            for h in hp["holdings"]:
+                flag = " [core]" if h["longTermHold"] else ""
+                L.append(f"  {h['symbol']:<5}{(h['weightPct'] or 0):>6.1f}%  "
+                         f"P/L {(h['plPercent'] or 0):>+6.1f}%  {h['trendState']:<12}"
+                         f"{h['action']}{flag}")
+            if hp.get("longTermHoldsBelowTrend"):
+                L.append(f"  ⓘ core holds below their 200-day: "
+                         f"{', '.join(hp['longTermHoldsBelowTrend'])} "
+                         f"(awareness only — excluded from exit logic)")
+            g = hp.get("gaps") or {}
+            L.append(f"  book vs watchlist: {g.get('overlapCount', 0)} of "
+                     f"{hp['heldCount']} holdings are tracked"
+                     + (f"; not tracked: {', '.join(g['heldNotOnWatchlist'])}"
+                        if g.get("heldNotOnWatchlist") else ""))
+            s = hp.get("accountScale")
+            if s:
+                L.append(f"  at this NLV a 1.5% position = ${s['minPositionDollars']:,.2f}, "
+                         f"an 8% cap = ${s['maxPositionDollars']:,.2f}")
+        L.append("")
 
     # crossings
     ev = al.get("events", [])
@@ -196,12 +258,15 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--current", help="optional JSON of current weights, "
                                       "e.g. {\"NVDA\": 0.10, \"DELL\": 0.05} "
                                       "(percent-style values like 10 are accepted too)")
+    ap.add_argument("--positions", help="broker position review JSON (live book)")
+    ap.add_argument("--held-quotes", help="batch-quote JSON covering the held names")
     args = ap.parse_args(argv)
     current = None
     if args.current:
         current = json.loads(Path(args.current).read_text(encoding="utf-8"))
     r = run(args.quotes, args.changes, args.bench_quotes, send=args.send,
-            current_weights=current)
+            current_weights=current, positions_path=args.positions,
+            held_quotes_path=args.held_quotes)
     out = digest(r)
     print(out)
     OUT_TXT.parent.mkdir(parents=True, exist_ok=True)

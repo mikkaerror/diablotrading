@@ -100,5 +100,64 @@ class DigestSizingBlockTests(unittest.TestCase):
         self.assertIn("MYSTERY", out)
 
 
+class DigestPortfolioBlockTests(unittest.TestCase):
+    def _base(self, holdings):
+        return {
+            "alerts": {"events": [], "emailed": {}},
+            "composite": {"ranking": [{"symbol": "NVDA", "tag": "LEADER"}]},
+            "benchmark": {"error": "no benchmark"},
+            "holdings": holdings,
+        }
+
+    def _hp(self, **over):
+        hp = {
+            "nlv": 706.41, "heldCount": 2,
+            "holdings": [
+                {"symbol": "TE", "weightPct": 34.1, "plPercent": -27.3,
+                 "trendState": "below-200d", "action": "HOLD-CORE",
+                 "longTermHold": True},
+                {"symbol": "XYZ", "weightPct": 10.0, "plPercent": -2.0,
+                 "trendState": "below-200d", "action": "EXIT",
+                 "longTermHold": False},
+            ],
+            "longTermHoldsBelowTrend": ["TE"],
+            "gaps": {"overlapCount": 0, "heldNotOnWatchlist": ["TE", "XYZ"]},
+            "accountScale": {"minPositionDollars": 10.60, "maxPositionDollars": 56.51},
+        }
+        hp.update(over)
+        return hp
+
+    def test_portfolio_block_leads_the_digest(self):
+        out = rv.digest(self._base(self._hp()))
+        self.assertIn("PORTFOLIO (live book)", out)
+        # the book must appear before the watchlist tags
+        self.assertLess(out.index("PORTFOLIO"), out.index("COMPOSITE TAGS"))
+
+    def test_core_holds_marked_and_never_shown_as_exit(self):
+        out = rv.digest(self._base(self._hp()))
+        self.assertIn("HOLD-CORE [core]", out)
+        self.assertIn("awareness only", out)
+
+    def test_non_core_exit_is_shown(self):
+        out = rv.digest(self._base(self._hp()))
+        self.assertIn("XYZ", out)
+        self.assertIn("EXIT", out)
+
+    def test_account_scale_line_present(self):
+        out = rv.digest(self._base(self._hp()))
+        self.assertIn("1.5% position = $10.60", out)
+
+    def test_holdings_error_is_surfaced(self):
+        out = rv.digest(self._base({"error": "holdings join unavailable: boom"}))
+        self.assertIn("PORTFOLIO: holdings join unavailable", out)
+
+    def test_digest_without_holdings_still_works(self):
+        r = self._base(None)
+        r.pop("holdings")
+        out = rv.digest(r)
+        self.assertNotIn("PORTFOLIO", out)
+        self.assertIn("COMPOSITE TAGS", out)
+
+
 if __name__ == "__main__":
     unittest.main()
