@@ -55,8 +55,8 @@ def _read_nlv() -> Optional[float]:
     return None
 
 
-def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
-        send: bool = False,
+def run(quotes_path: str, changes_path: Optional[str], bench_quotes_path: str,
+        send: bool = False, momentum_path: Optional[str] = None,
         current_weights: Optional[dict[str, float]] = None,
         positions_path: Optional[str] = None,
         held_quotes_path: Optional[str] = None) -> dict[str, Any]:
@@ -64,12 +64,19 @@ def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
     # 1) crossings (also updates saved state, optional email)
     al = alerts.run(quotes_path, send=send, data_contract=contract)
 
-    # 2) momentum
-    recs = _load(changes_path)
-    if isinstance(recs, dict):
-        recs = recs.get("data") or recs.get("records") or []
-    mp = momentum.build(recs)
-    momentum.save(mp)
+    # 2) momentum.
+    # Preferred source is the Schwab-derived artifact from
+    # inferno_ai_basket_refresh.py. The FMP `quote-change` endpoint is
+    # plan-limited to a handful of large caps, so building momentum from it
+    # silently covers only a few names — use it only as a fallback.
+    if momentum_path:
+        mp = _load(momentum_path)
+    else:
+        recs = _load(changes_path) if changes_path else []
+        if isinstance(recs, dict):
+            recs = recs.get("data") or recs.get("records") or []
+        mp = momentum.build(recs)
+        momentum.save(mp)
 
     # 3) composite
     quotes = _load(quotes_path)
@@ -252,7 +259,10 @@ def digest(r: dict[str, Any]) -> str:
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--quotes", required=True)
-    ap.add_argument("--changes", required=True)
+    ap.add_argument("--changes", help="FMP quote-change records (fallback only; "
+                                      "the endpoint is plan-limited)")
+    ap.add_argument("--momentum", help="prebuilt momentum artifact from "
+                                       "inferno_ai_basket_refresh.py (preferred, Schwab-derived)")
     ap.add_argument("--bench-quotes", required=True)
     ap.add_argument("--send", action="store_true")
     ap.add_argument("--current", help="optional JSON of current weights, "
@@ -264,7 +274,10 @@ def main(argv: Optional[list] = None) -> int:
     current = None
     if args.current:
         current = json.loads(Path(args.current).read_text(encoding="utf-8"))
+    if not args.changes and not args.momentum:
+        ap.error("supply --momentum (preferred) or --changes")
     r = run(args.quotes, args.changes, args.bench_quotes, send=args.send,
+            momentum_path=args.momentum,
             current_weights=current, positions_path=args.positions,
             held_quotes_path=args.held_quotes)
     out = digest(r)

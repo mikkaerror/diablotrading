@@ -159,5 +159,22 @@ class DigestPortfolioBlockTests(unittest.TestCase):
         self.assertIn("COMPOSITE TAGS", out)
 
 
+class MomentumSourceTests(unittest.TestCase):
+    """Momentum must prefer the Schwab-derived artifact over plan-limited FMP data."""
+
+    def test_momentum_path_is_used_verbatim_when_supplied(self):
+        import json, tempfile, os
+        art = {"ranking": [{"symbol": "NVDA", "blended": 12.3}], "signalsTrusted": True}
+        with tempfile.TemporaryDirectory() as d:
+            mpath = os.path.join(d, "mom.json")
+            qpath = os.path.join(d, "q.json")
+            bpath = os.path.join(d, "b.json")
+            for p, payload in ((mpath, art), (qpath, []), (bpath, [])):
+                with open(p, "w") as fh:
+                    json.dump(payload, fh)
+            r = rv.run(qpath, None, bpath, send=False, momentum_path=mpath)
+        self.assertEqual(r["momentum"], art)
+
+
 if __name__ == "__main__":
     unittest.main()
