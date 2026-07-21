@@ -112,17 +112,27 @@ def render(payload: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def save_contract(
+    payload: dict[str, Any],
+    *,
+    output_file: Path | None = None,
+    report_file: Path | None = None,
+) -> None:
+    """Persist a derived trust verdict without changing basket membership or signals."""
+    ensure_dirs()
+    atomic_write_json(output_file or OUTPUT_FILE, payload)
+    atomic_write_text(report_file or REPORT_FILE, render(payload))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", choices=("run", "status"), default="run")
     args = parser.parse_args()
-    ensure_dirs()
     if args.command == "status":
         print(REPORT_FILE.read_text() if REPORT_FILE.exists() else "No basket data-contract report yet.")
         return 0
     payload = build_contract(load_json_file(SNAPSHOT_FILE) if SNAPSHOT_FILE.exists() else [], load_json_file(MOMENTUM_FILE) if MOMENTUM_FILE.exists() else {})
-    atomic_write_json(OUTPUT_FILE, payload)
-    atomic_write_text(REPORT_FILE, render(payload))
+    save_contract(payload)
     print(render(payload), end="")
     return 0
 

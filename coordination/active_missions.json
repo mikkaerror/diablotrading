@@ -216,5 +216,20 @@
       "test-hygiene",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-32f127f2",
+    "createdAt": "2026-07-21T16:13:04.729274-06:00",
+    "updatedAt": "2026-07-21T16:15:49.959380-06:00",
+    "title": "Synchronize basket refresh and trust contract",
+    "body": "Ensure a complete, research-only AI-basket market refresh revalidates and saves the data-contract artifact from the same 30-name snapshot/momentum pair. A partial refresh must leave previously published signals and contract untouched. No market policy, basket membership, sizing rule, ticket, broker, risk, or authority change.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "normal",
+    "tags": [
+      "ai-basket",
+      "data-contract",
+      "research-only"
+    ]
   }
 ]

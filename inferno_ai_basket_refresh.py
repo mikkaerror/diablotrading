@@ -12,6 +12,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import inferno_ai_basket_data_contract as basket_data_contract
 from inferno_ai_basket_momentum import build as build_momentum
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
@@ -236,20 +237,40 @@ def render(payload: dict[str, Any]) -> str:
         f"Source: {payload.get('source', {}).get('provider')} | {payload.get('source', {}).get('status')}",
         f"Coverage: {counts.get('publishedCount', 0)}/{counts.get('expectedCount', 0)} | blocked {counts.get('missingCount', 0)}",
     ]
+    contract = payload.get("dataContract") or {}
+    if contract:
+        lines.append(
+            f"Input contract: {contract.get('verdict')} | trusted={contract.get('signalsTrusted')} | "
+            f"generated={contract.get('generatedAt')}"
+        )
     for symbol, reasons in (counts.get("blockedSymbols") or {}).items():
         lines.append(f"- {symbol}: {', '.join(reasons)}")
     lines += ["", "Publication contract:"] + [f"- {rule}" for rule in payload.get("rules") or []]
     return "\n".join(lines).rstrip() + "\n"
 
 
-def save(payload: dict[str, Any], snapshot: dict[str, Any], momentum: dict[str, Any]) -> None:
-    """Persist the run and atomically publish signals only on full coverage."""
+def save(payload: dict[str, Any], snapshot: dict[str, Any], momentum: dict[str, Any]) -> dict[str, Any]:
+    """Publish complete signals and their matching trust contract together.
+
+    A direct market refresh used to update snapshot/momentum while leaving the
+    canonical contract at its previous timestamp.  A complete refresh now
+    immediately revalidates the exact pair it publishes.  Partial refreshes
+    still preserve both previously published signals and their prior contract.
+    """
     ensure_dirs()
-    atomic_write_json(OUTPUT_FILE, payload)
-    atomic_write_text(REPORT_FILE, render(payload))
     if payload.get("published"):
         atomic_write_json(SNAPSHOT_FILE, snapshot)
         atomic_write_json(MOMENTUM_FILE, momentum)
+        contract = basket_data_contract.build_contract(snapshot, momentum)
+        basket_data_contract.save_contract(contract)
+        payload["dataContract"] = {
+            "generatedAt": contract.get("generatedAt"),
+            "verdict": contract.get("verdict"),
+            "signalsTrusted": contract.get("signalsTrusted"),
+        }
+    atomic_write_json(OUTPUT_FILE, payload)
+    atomic_write_text(REPORT_FILE, render(payload))
+    return payload
 
 
 def main() -> int:
