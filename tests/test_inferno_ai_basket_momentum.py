@@ -37,3 +37,36 @@ class MomentumTests(unittest.TestCase):
         self.assertEqual(p["missingSymbols"], ["NVDA"])
 
 if __name__=="__main__": unittest.main()
+
+
+class DirectionTests(unittest.TestCase):
+    """accelerating and fading must be mutually exclusive in the reported direction."""
+
+    def _rank(self, m1, m3, m6):
+        # must use a symbol in the declared universe — rank() filters to it
+        import inferno_ai_basket_momentum as mom
+        return mom.rank([{"symbol": "NVDA", "1M": m1, "3M": m3, "6M": m6}])[0]
+
+    def test_fading_wins_when_both_conditions_hold(self):
+        # 3M pace beats 6M pace (accelerating) AND last month negative (fading)
+        r = self._rank(-5.0, 60.0, 90.0)
+        self.assertTrue(r["accelerating"])
+        self.assertTrue(r["fading"])
+        self.assertEqual(r["direction"], "fading")
+
+    def test_accelerating_when_not_fading(self):
+        r = self._rank(5.0, 60.0, 90.0)
+        self.assertEqual(r["direction"], "accelerating")
+
+    def test_steady_when_neither(self):
+        r = self._rank(1.0, 10.0, 90.0)
+        self.assertEqual(r["direction"], "steady")
+
+    def test_payload_lists_are_disjoint(self):
+        import inferno_ai_basket_momentum as mom
+        recs = [{"symbol": "NVDA", "1M": -5.0, "3M": 60.0, "6M": 90.0},
+                {"symbol": "AMD", "1M": 5.0, "3M": 60.0, "6M": 90.0},
+                {"symbol": "ASML", "1M": 1.0, "3M": 10.0, "6M": 90.0}]
+        p = mom.build(recs)
+        acc, fad = set(p.get("accelerating") or []), set(p.get("fading") or [])
+        self.assertFalse(acc & fad, "a name must not be both accelerating and fading")

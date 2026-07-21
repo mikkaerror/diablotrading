@@ -102,6 +102,8 @@ def build(
             "above50": above50, "trendScore": tscore, "offHigh": round(offHigh, 1),
             "blended": blended, "accelerating": bool(m.get("accelerating")),
             "fading": bool(m.get("fading")),
+            # single mutually-exclusive read from the momentum engine
+            "direction": m.get("direction", "steady"),
         }
         trend[sym] = tscore
         dist[sym] = offHigh            # higher (closer to 0) is better

@@ -63,11 +63,22 @@ def rank(records: list[dict], *, expected_universe: list[str] | None = None) -> 
         pace6 = m6 / 6.0                     # avg monthly pace over 6 months
         accelerating = pace3 > pace6
         fading = (m6 > 0 and m1 is not None and m1 < 0)
+        # One mutually-exclusive read. Both conditions can technically hold
+        # (3-month pace beating 6-month while the last month is negative), but
+        # reporting a name as simultaneously accelerating AND fading is useless.
+        # Recent weakness is the more actionable fact, so fading wins.
+        if fading:
+            direction = "fading"
+        elif accelerating:
+            direction = "accelerating"
+        else:
+            direction = "steady"
         rows.append({
             "symbol": sym, "cat": CATS.get(sym, ""),
             "m1": m1, "m3": m3, "m6": m6,
             "blended": round(blended, 2),
             "accelerating": accelerating, "fading": fading,
+            "direction": direction,
         })
     rows.sort(key=lambda d: -d["blended"])
     for i, d in enumerate(rows, 1):
@@ -115,8 +126,10 @@ def build(records: list[dict], *, expected_universe: list[str] | None = None) ->
         "ranking": rows,
         "leaders": [d["symbol"] for d in rows[:5]] if signals_trusted else [],
         "laggards": [d["symbol"] for d in rows[-5:]] if signals_trusted else [],
-        "accelerating": [d["symbol"] for d in rows if d["accelerating"]] if signals_trusted else [],
-        "fading": [d["symbol"] for d in rows if d["fading"]] if signals_trusted else [],
+        # mutually exclusive — a name appears in exactly one of these three
+        "accelerating": [d["symbol"] for d in rows if d["direction"] == "accelerating"] if signals_trusted else [],
+        "fading": [d["symbol"] for d in rows if d["direction"] == "fading"] if signals_trusted else [],
+        "steady": [d["symbol"] for d in rows if d["direction"] == "steady"] if signals_trusted else [],
     }
 
 
@@ -128,9 +141,9 @@ def text(p: dict[str, Any]) -> str:
     L.append(f"{'#':>2} {'sym':<5}{'cat':<15}{'1M':>7}{'3M':>7}{'6M':>7}{'blend':>7}  flags")
     for d in p["ranking"]:
         fl = []
-        if d["accelerating"]:
+        if d["direction"] == "accelerating":
             fl.append("ACCEL")
-        if d["fading"]:
+        elif d["direction"] == "fading":
             fl.append("fading")
         m1 = f"{d['m1']:+.0f}%" if d["m1"] is not None else "  NA"
         L.append(f"{d['rank']:>2} {d['symbol']:<5}{d['cat']:<15}{m1:>7}"

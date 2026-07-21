@@ -112,9 +112,10 @@ class SizingTests(unittest.TestCase):
         self.assertIn("MYSTERY", p["unclassifiedSymbols"])
         self.assertNotIn("NVDA", p["unclassifiedSymbols"])
 
-    # caps are deliberately non-binding here so the DUST rule is what's under test
+    # caps are deliberately non-binding here so the DUST rule is what's under test.
+    # HOLD (not REDUCE) — REDUCE is unfundable by design, so it can't make dust.
     DUST_ROWS = ([row("BIG", "Compute", "LEADER", 100)]
-                 + [row(f"T{i}", "Optical", "REDUCE", 1) for i in range(40)])
+                 + [row(f"T{i}", "Optical", "HOLD", 1) for i in range(40)])
 
     def test_dust_positions_are_dropped_not_held(self):
         """A long tail of weak names must not produce sub-minimum 'dust' positions."""
@@ -142,6 +143,56 @@ class SizingTests(unittest.TestCase):
         self.assertNotIn("ORCL", p["droppedAsDust"])
         self.assertIn("TINY", p["droppedAsDust"])
         self.assertNotIn("TINY", p["belowTrend"])
+
+    def test_reduce_names_are_not_funded(self):
+        """REDUCE is trim-toward-zero, not a small allocation."""
+        p = sz.build(comp([
+            row("FTNT", "Security", "LEADER", 100),
+            row("NVDA", "Compute", "REDUCE", 95),
+            row("AVGO", "Compute", "REDUCE", 90),
+        ]))
+        w = {t["symbol"]: t["targetWeight"] for t in p["targets"]}
+        self.assertGreater(w["FTNT"], 0)
+        self.assertEqual(w["NVDA"], 0.0)
+        self.assertEqual(w["AVGO"], 0.0)
+
+    def test_rolling_over_market_goes_mostly_to_cash(self):
+        """If nearly everything is REDUCE, the book should be cash, not 79% invested."""
+        rows = [row("FTNT", "Security", "LEADER", 100)]
+        rows += [row(f"R{i}", "Compute", "REDUCE", 80 - i) for i in range(23)]
+        rows += [row(f"A{i}", "Cloud Rails", "AVOID", 5) for i in range(5)]
+        p = sz.build(comp(rows), nlv=706.41)
+        self.assertGreater(p["cashWeight"], 0.5,
+                           "a rolling-over tape must produce a mostly-cash book")
+
+
+class AccountShapeTests(unittest.TestCase):
+    def test_small_account_gets_fewer_larger_positions(self):
+        shaped = sz.account_shape(706.41, 0.08, 0.015)
+        max_name, min_w, max_pos = shaped
+        self.assertEqual(max_pos, 7)                 # 706 // 100
+        self.assertGreater(max_name, 0.08)           # cap relaxed for concentration
+        self.assertGreater(min_w, 0.015)             # dust threshold raised
+
+    def test_large_account_keeps_the_original_caps(self):
+        max_name, min_w, max_pos = sz.account_shape(500_000.0, 0.08, 0.015)
+        self.assertEqual(max_pos, sz.MAX_POSITIONS)
+        self.assertAlmostEqual(max_name, 0.08, places=6)  # 1.25/20 = 0.0625 < 0.08
+        self.assertAlmostEqual(min_w, 0.025, places=6)    # 0.5/20
+
+    def test_no_nlv_leaves_caps_untouched(self):
+        max_name, min_w, max_pos = sz.account_shape(None, 0.08, 0.015)
+        self.assertEqual((max_name, min_w, max_pos), (0.08, 0.015, None))
+
+    def test_position_count_is_enforced(self):
+        rows = [row(f"L{i}", "Compute", "LEADER", 100 - i) for i in range(20)]
+        p = sz.build(comp(rows), nlv=706.41, max_bucket=1.0)
+        funded = [t for t in p["targets"] if t["targetWeight"] > 0]
+        self.assertLessEqual(len(funded), 7)
+
+    def test_tiny_account_floors_at_min_positions(self):
+        _, _, max_pos = sz.account_shape(50.0, 0.08, 0.015)
+        self.assertEqual(max_pos, sz.MIN_POSITIONS)
 
     def test_fail_closed_when_composite_untrusted(self):
         p = sz.build(comp([row("NVDA", "Compute", "LEADER", 90)], trusted=False))

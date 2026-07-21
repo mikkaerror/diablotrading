@@ -57,7 +57,21 @@ MAX_BUCKET_WEIGHT = 0.60    # no factor bucket above 60% (vs ~73% today)
 MIN_NAME_WEIGHT = 0.015     # below 1.5% is dust: not worth the ticket or the attention
 ACTION_TOLERANCE = 0.01     # 1 percentage point = noise, call it HOLD
 
-TAG_MULTIPLIER = {"LEADER": 1.00, "HOLD": 0.70, "REDUCE": 0.35, "AVOID": 0.00}
+# Account-shape defaults. A position has to be big enough in DOLLARS to matter;
+# percentage caps written for a large book produce nonsense on a small one.
+DOLLARS_PER_POSITION = 100.0   # a position worth opening
+MIN_POSITIONS = 3
+MAX_POSITIONS = 20
+
+# Only conviction gets capital.
+#   LEADER — strength + uptrend: full size
+#   HOLD   — above the 200-day, mid-pack: reduced size
+#   REDUCE — rolling over (below the 50-day or fading): NOT fundable. This is a
+#            trim-toward-zero label, not a small allocation. Funding a name the
+#            model is telling you to reduce is the contradiction that made the
+#            book 79% invested while 23 of 30 names were rolling over.
+#   AVOID  — below the 200-day: zero, always.
+TAG_MULTIPLIER = {"LEADER": 1.00, "HOLD": 0.70, "REDUCE": 0.00, "AVOID": 0.00}
 
 
 def _normalize(w: dict[str, float]) -> dict[str, float]:
@@ -146,9 +160,37 @@ def solve_weights(scores: dict[str, float], *, caps: dict[str, float],
     return w
 
 
+def account_shape(nlv: Optional[float], max_name: float, min_weight: float,
+                  dollars_per_position: float = DOLLARS_PER_POSITION
+                  ) -> tuple[float, float, Optional[int]]:
+    """Reshape percentage caps to fit a real account size.
+
+    Percentage caps written for a large book break on a small one: an 8% cap at
+    a $706 NLV means no position may exceed $56, which forces at least 13
+    holdings of ~$28 each — a portfolio nobody can actually run.
+
+    So we work out how many positions the account can genuinely support, then
+    RELAX the single-name cap if it would otherwise mandate more positions than
+    that. Concentration is the correct answer for a small account, not a bug.
+
+    Returns (max_name, min_weight, max_positions).
+    """
+    if not nlv or nlv <= 0:
+        return max_name, min_weight, None
+    max_positions = int(nlv // dollars_per_position)
+    max_positions = max(MIN_POSITIONS, min(MAX_POSITIONS, max_positions))
+    equal_weight = 1.0 / max_positions
+    # allow modest concentration above equal weight, but never tighten the cap
+    max_name = max(max_name, equal_weight * 1.25)
+    # a position must be at least half of equal weight to be worth holding
+    min_weight = max(min_weight, equal_weight * 0.5)
+    return max_name, min_weight, max_positions
+
+
 def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]] = None,
           *, max_name: float = MAX_NAME_WEIGHT, max_bucket: float = MAX_BUCKET_WEIGHT,
-          min_weight: float = MIN_NAME_WEIGHT,
+          min_weight: float = MIN_NAME_WEIGHT, nlv: Optional[float] = None,
+          dollars_per_position: float = DOLLARS_PER_POSITION,
           tolerance: float = ACTION_TOLERANCE) -> dict[str, Any]:
     trusted = composite.get("signalsTrusted") is not False
     ranking = composite.get("ranking") or []
@@ -162,6 +204,10 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
             "reason": "composite inputs not trusted or empty — no weights produced",
             "targets": [], "bucketTotals": {}, "cashWeight": 1.0,
         }
+
+    # reshape the caps to the real account before solving anything
+    max_name, min_weight, max_positions = account_shape(
+        nlv, max_name, min_weight, dollars_per_position)
 
     cur = {normalize_symbol(k): float(v) for k, v in (current_weights or {}).items()}
     # if the operator passed percentages (e.g. 8 for 8%), normalize to fractions
@@ -192,6 +238,16 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
 
     weights = solve_weights(scores, caps=caps, max_bucket=max_bucket,
                             bucket_of=_bucket_of)
+
+    # Cap the number of holdings the account can actually run: keep the highest
+    # conviction names, re-solve among them.
+    if max_positions and len([k for k, v in weights.items() if v > 0]) > max_positions:
+        keep = sorted((k for k, v in weights.items() if v > 0),
+                      key=lambda k: -weights[k])[:max_positions]
+        survivors = {k: scores[k] for k in keep}
+        weights = solve_weights(survivors, caps={k: caps[k] for k in keep},
+                                max_bucket=max_bucket, bucket_of=_bucket_of)
+        weights = {k: weights.get(k, 0.0) for k in scores}
 
     # Drop dust and re-solve. A 0.7% position costs a ticket and attention but
     # cannot move the book; better to concentrate that weight into names that
@@ -246,9 +302,12 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
         "generatedAt": datetime.now(timezone.utc).astimezone().isoformat(),
         "verdict": "trusted",
         "signalsTrusted": True,
-        "params": {"maxNameWeight": max_name, "maxBucketWeight": max_bucket,
-                   "minNameWeight": min_weight, "tolerance": tolerance,
-                   "tagMultiplier": TAG_MULTIPLIER},
+        "params": {"maxNameWeight": round(max_name, 4),
+                   "maxBucketWeight": max_bucket,
+                   "minNameWeight": round(min_weight, 4),
+                   "maxPositions": max_positions,
+                   "nlv": nlv, "dollarsPerPosition": dollars_per_position,
+                   "tolerance": tolerance, "tagMultiplier": TAG_MULTIPLIER},
         "count": len(targets),
         "investedWeight": invested,
         "cashWeight": round(max(0.0, 1.0 - invested), 4),
@@ -276,19 +335,29 @@ def text(p: dict[str, Any]) -> str:
         L.append(f"Verdict: {p.get('verdict')} — {p.get('reason','')}")
         return "\n".join(L)
     q = p["params"]
-    L.append(f"Caps: max {q['maxNameWeight']*100:.0f}% per name · "
+    L.append(f"Caps: max {q['maxNameWeight']*100:.1f}% per name · "
              f"max {q['maxBucketWeight']*100:.0f}% per factor bucket · "
-             f"min {q.get('minNameWeight', 0)*100:.1f}% to hold a position")
-    L.append(f"Invested {p['investedWeight']*100:.0f}% · cash {p['cashWeight']*100:.0f}%")
+             f"min {q.get('minNameWeight', 0)*100:.1f}% to hold a position"
+             + (f" · max {q['maxPositions']} positions" if q.get("maxPositions") else ""))
+    nlv = q.get("nlv")
+    if nlv:
+        L.append(f"Account: ${nlv:,.2f} NLV — sized for {q['maxPositions']} positions "
+                 f"at roughly ${q['dollarsPerPosition']:,.0f}+ each")
+    L.append(f"Invested {p['investedWeight']*100:.0f}% · cash {p['cashWeight']*100:.0f}%"
+             + (f" (${p['cashWeight']*nlv:,.2f} cash)" if nlv else ""))
     L.append("")
     has_cur = any(t["currentWeight"] is not None for t in p["targets"])
     hdr = f"{'sym':<6}{'cat':<15}{'tag':<8}{'RS':>4}{'target':>8}"
+    if nlv:
+        hdr += f"{'$':>9}"
     if has_cur:
         hdr += f"{'current':>9}{'delta':>7}  action"
     L.append(hdr)
     for t in p["targets"]:
         row = (f"{t['symbol']:<6}{t['cat']:<15}{t['tag']:<8}{t['rs']:>4.0f}"
                f"{t['targetWeight']*100:>7.1f}%")
+        if nlv:
+            row += f"{t['targetWeight']*nlv:>9.2f}"
         if has_cur:
             cw = t["currentWeight"] or 0.0
             row += f"{cw*100:>8.1f}%{(t['delta'] or 0)*100:>+7.1f}  {t['action']}"
@@ -326,13 +395,17 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--max-bucket", type=float, default=MAX_BUCKET_WEIGHT)
     ap.add_argument("--min-weight", type=float, default=MIN_NAME_WEIGHT,
                     help="drop positions below this weight as dust (0 to disable)")
+    ap.add_argument("--nlv", type=float,
+                    help="net liquidating value; shapes position count and caps")
+    ap.add_argument("--dollars-per-position", type=float, default=DOLLARS_PER_POSITION)
     args = ap.parse_args(argv)
     composite = json.loads(Path(args.composite).read_text(encoding="utf-8"))
     current = None
     if args.current:
         current = json.loads(Path(args.current).read_text(encoding="utf-8"))
     p = build(composite, current, max_name=args.max_name, max_bucket=args.max_bucket,
-              min_weight=args.min_weight)
+              min_weight=args.min_weight, nlv=args.nlv,
+              dollars_per_position=args.dollars_per_position)
     print(text(p))
     if p.get("signalsTrusted"):
         save(p)

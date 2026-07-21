@@ -96,7 +96,7 @@ def run(quotes_path: str, changes_path: Optional[str], bench_quotes_path: str,
     # 5) position sizing off the composite. Inherits the composite's trust
     # verdict, so a failed-closed contract produces no weights rather than
     # confident-looking nonsense.
-    sp = sizing.build(cp, current_weights)
+    sp = sizing.build(cp, current_weights, nlv=_read_nlv())
     if sp.get("signalsTrusted"):
         sizing.save(sp)
 
@@ -183,8 +183,9 @@ def digest(r: dict[str, Any]) -> str:
     lead = [x["symbol"] for x in cp["ranking"] if x["tag"] == "LEADER"]
     red = [x["symbol"] for x in cp["ranking"] if x["tag"] == "REDUCE"]
     avoid = [x["symbol"] for x in cp["ranking"] if x["tag"] == "AVOID"]
-    accel = [x["symbol"] for x in cp["ranking"] if x.get("accelerating")]
-    fade = [x["symbol"] for x in cp["ranking"] if x.get("fading")]
+    # single mutually-exclusive direction — a name can't be both
+    accel = [x["symbol"] for x in cp["ranking"] if x.get("direction") == "accelerating"]
+    fade = [x["symbol"] for x in cp["ranking"] if x.get("direction") == "fading"]
     L.append("COMPOSITE TAGS:")
     L.append(f"  LEADERS: {', '.join(lead) or '—'}")
     L.append(f"  REDUCE:  {', '.join(red) or '—'}")
