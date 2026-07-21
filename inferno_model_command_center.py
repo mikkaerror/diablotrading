@@ -86,6 +86,7 @@ CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
 TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = DATA_DIR / "inferno_tracker_role_review.json"
+TRACKER_ROLE_POLICY_FILE = DATA_DIR / "inferno_tracker_role_policy.json"
 SCHWAB_EDGE_SIGNALS_FILE = DATA_DIR / "inferno_schwab_edge_signals.json"
 OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = DATA_DIR / "inferno_rule_edge_decay.json"
@@ -121,6 +122,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno tracker-taxonomy", "description": "show full-tracker reference sector, industry, and exposure coverage"},
     {"command": "./inferno tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "./inferno tracker-role-review", "description": "show the operator-owned full-tracker role and diversification review queue"},
+    {"command": "./inferno tracker-role-policy", "description": "validate optional operator-owned role policy read-only; no weights or purchases"},
     {"command": "./inferno cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "./inferno ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
     {"command": "./inferno capital-check", "description": "run the capital launch check with explicit cash"},
@@ -394,6 +396,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "tracker-role-review",
         "question": "Which operator role and DCA-inclusion decisions remain unresolved, without inferring them from research ranks?",
         "artifact": "reports/tracker_role_review_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tracker-role-policy",
+        "question": "Is an optional human-owned role-policy file structurally valid and complete, without applying it or accepting target weights?",
+        "artifact": "reports/tracker_role_policy_latest.txt",
         "owner": "codex",
     },
     {
@@ -940,6 +948,7 @@ def build_command_center() -> dict[str, Any]:
     conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
     tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
     tracker_role_review = load_json_file(TRACKER_ROLE_REVIEW_FILE) or {}
+    tracker_role_policy = load_json_file(TRACKER_ROLE_POLICY_FILE) or {}
     math_verify = load_json_file(MATH_VERIFY_FILE) or {}
     tos_formula_audit = load_json_file(TOS_FORMULA_AUDIT_FILE) or {}
     tos_custom_metrics = load_json_file(TOS_CUSTOM_METRICS_FILE) or {}
@@ -1037,6 +1046,7 @@ def build_command_center() -> dict[str, Any]:
         "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRoleReview": artifact_summary(TRACKER_ROLE_REVIEW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "trackerRolePolicy": artifact_summary(TRACKER_ROLE_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "schwabEdgeSignals": artifact_summary(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
         "outcomeAttribution": artifact_summary(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "ruleEdgeDecay": artifact_summary(RULE_EDGE_DECAY_FILE, keys=("stage", "verdict", "generatedAt", "promotable")),
@@ -1284,6 +1294,9 @@ def build_command_center() -> dict[str, Any]:
         "trackerReferenceStale": (tracker_taxonomy.get("coverage") or {}).get("staleReferenceRows"),
         "trackerRoleDefinitions": (tracker_role_review.get("coverage") or {}).get("portfolioRoleDefinedRows"),
         "trackerRoleReviewRequired": (tracker_role_review.get("coverage") or {}).get("rowsRequiringOperatorRoleDecision"),
+        "trackerRolePolicyVerdict": tracker_role_policy.get("verdict"),
+        "trackerRolePolicyValidDecisions": (tracker_role_policy.get("coverage") or {}).get("validDecisionRows"),
+        "trackerRolePolicyPending": (tracker_role_policy.get("coverage") or {}).get("pendingDecisionRows"),
         "mathVerifyVerdict": math_verify.get("verdict"),
         "mathViolations": math_verify.get("totalViolations"),
         "mathMissingArtifacts": math_verify.get("missingArtifacts"),
@@ -1346,6 +1359,7 @@ def build_command_center() -> dict[str, Any]:
             "./inferno deposit-plan",
             "./inferno tracker-taxonomy",
             "./inferno tracker-role-review",
+            "./inferno tracker-role-policy",
             "./inferno cash-ledger",
             "./inferno ticket-cap",
             "./inferno approvals",

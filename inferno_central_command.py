@@ -62,6 +62,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "tracker-taxonomy", "description": "show full-tracker reference sector, industry, and economic-exposure coverage"},
     {"command": "tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "tracker-role-review", "description": "show the operator-owned full-tracker role and diversification review queue"},
+    {"command": "tracker-role-policy", "description": "validate an optional human-owned role policy read-only; no weights or purchases"},
     {"command": "cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
     {"command": "capital-check", "description": "run the capital launch check; defaults to deployable cash 0"},
@@ -555,6 +556,7 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} tracker-taxonomy",
             f"{CONTROL_ENTRYPOINT} tracker-registry",
             f"{CONTROL_ENTRYPOINT} tracker-role-review",
+            f"{CONTROL_ENTRYPOINT} tracker-role-policy",
             f"{CONTROL_ENTRYPOINT} cash-ledger",
             f"{CONTROL_ENTRYPOINT} ticket-cap",
             f"{CONTROL_ENTRYPOINT} capital-check",
@@ -620,6 +622,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     tracker_role_review_parser = subparsers.add_parser("tracker-role-review")
     tracker_role_review_parser.add_argument("tracker_role_review_action", nargs="?", choices=("run", "status"), default="run")
+
+    tracker_role_policy_parser = subparsers.add_parser("tracker-role-policy")
+    tracker_role_policy_parser.add_argument("tracker_role_policy_action", nargs="?", choices=("run", "status"), default="run")
 
     cash_ledger_parser = subparsers.add_parser("cash-ledger")
     cash_ledger_parser.add_argument("cash_ledger_action", nargs="?", choices=("run", "status"), default="run")
@@ -800,6 +805,13 @@ def main() -> int:
     if command == "tracker-role-review":
         result = run_passthrough_command(
             ["python3", "inferno_tracker_role_review.py", args.tracker_role_review_action],
+            timeout_seconds=600,
+        )
+        return int(result["returncode"])
+
+    if command == "tracker-role-policy":
+        result = run_passthrough_command(
+            ["python3", "inferno_tracker_role_policy.py", args.tracker_role_policy_action],
             timeout_seconds=600,
         )
         return int(result["returncode"])

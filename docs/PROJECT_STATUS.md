@@ -141,13 +141,13 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
 - Capital deployment: broker cash is currently zero. Planned deposits remain forecasts until broker-confirmed cash exists; no automated submission, and every real order still requires explicit final confirmation.
-- Full-tracker DCA construction: source-labelled reference coverage is 145/146 fresh; `GLDD` remains explicitly unknown after a failed reference lookup. `./inferno tracker-role-review` now queues all 146 operator role and DCA-inclusion decisions, while keeping the four existing long-term-hold declarations as context only. No DCA weights or proposal exist.
+- Full-tracker DCA construction: source-labelled reference coverage is 145/146 fresh; `GLDD` remains explicitly unknown after a failed reference lookup. `./inferno tracker-role-review` queues all 146 operator role and DCA-inclusion decisions, while the new `./inferno tracker-role-policy` validates any future human-owned policy read-only. All 146 decisions remain explicitly pending; the contract rejects target weights and makes no DCA proposal.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Review `./inferno tracker-taxonomy`, `./inferno tracker-registry`, and `./inferno tracker-role-review`; resolve the explicit `GLDD` source gap and define operator-owned role/diversification policy before any DCA-weight research.
+1. Review `./inferno tracker-taxonomy`, `./inferno tracker-registry`, `./inferno tracker-role-review`, and `./inferno tracker-role-policy`; resolve the explicit `GLDD` source gap and record operator-owned role/diversification decisions before any separately approved DCA-weight research.
 2. Treat deployable cash as manual-review-only: broker cash is currently zero; keep live submit OFF and require explicit final confirmation before any real order.
 3. Run the command center, capital readiness, Schwab daily ops tape, and risk
    gate audit before sizing any ticket.

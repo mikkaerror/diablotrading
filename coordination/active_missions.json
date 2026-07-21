@@ -152,5 +152,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-a619426c",
+    "createdAt": "2026-07-21T00:44:05.225176-06:00",
+    "updatedAt": "2026-07-21T00:52:26.269221-06:00",
+    "title": "Add full-tracker operator role-policy contract",
+    "body": "Build a read-only, research-only contract validator and empty documentation template after the 146-name role review queue. It must record no role, DCA-inclusion, target-weight, eligibility, or broker decision; its sole purpose is to make eventual human policy input explicit and safely auditable.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "full-tracker",
+      "role-policy",
+      "dca",
+      "research-only",
+      "safety"
+    ]
   }
 ]

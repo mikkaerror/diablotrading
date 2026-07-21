@@ -150,6 +150,7 @@ Safety            — authority, risk, secrets
 | `inferno_tracker_taxonomy.py` | Research-only source-labelled sector, industry, and conservative economic-exposure coverage for every tracker symbol; no roles, weights, or orders | `reports/tracker_taxonomy_latest.txt` |
 | `inferno_tracker_registry.py` | Research-only full-tracker join of existing membership, conviction, taxonomy coverage, and read-only holdings; emits no weights or orders | `reports/tracker_registry_latest.txt` |
 | `inferno_tracker_role_review.py` | Research-only operator role and DCA-inclusion review queue; existing long-term-hold declarations are context, not addition approvals or weights | `reports/tracker_role_review_latest.txt` |
+| `inferno_tracker_role_policy.py` | Read-only validation of an optional human-owned full-tracker role/DCA-research policy; rejects all target weights and never applies decisions | `reports/tracker_role_policy_latest.txt` |
 | `inferno_outcome_attribution.py` | Research-only Brinson-style decomposition of closed paper/shadow outcomes | `reports/outcome_attribution_latest.txt` |
 | `inferno_rule_edge_decay.py` | Research-only Wilson + half-life monitor for conviction-audit rule bullets | `reports/rule_edge_decay_latest.txt` |
 | `inferno_slippage_estimator.py` | Research-only quoted/effective spread and family slippage anchor table | `reports/slippage_estimator_latest.txt` |

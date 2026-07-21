@@ -13,6 +13,7 @@ from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
+    tracker_role_policy_status,
     tracker_role_review_status,
     tracker_taxonomy_status,
     tracker_registry_status,
@@ -640,6 +641,53 @@ class InfernoDoctorCycleTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertIn("review-required=146", detail)
+
+    def test_tracker_role_policy_status_accepts_missing_optional_human_input(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_role_policy_status(
+                {
+                    "generatedAt": "2026-07-21T00:00:00-06:00",
+                    "verdict": "operator-policy-not-provided",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "authorityBoundary": {
+                        "policyInputReadOnly": True,
+                        "operatorPolicyChanged": False,
+                        "targetWeightsAccepted": False,
+                        "targetWeightsProduced": False,
+                    },
+                    "coverage": {"trackedRows": 146, "validDecisionRows": 0, "pendingDecisionRows": 146},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("valid=0", detail)
+
+    def test_tracker_role_policy_status_rejects_weight_acceptance(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, _ = tracker_role_policy_status(
+                {
+                    "generatedAt": "2026-07-21T00:00:00-06:00",
+                    "verdict": "operator-policy-not-provided",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "authorityBoundary": {
+                        "policyInputReadOnly": True,
+                        "operatorPolicyChanged": False,
+                        "targetWeightsAccepted": True,
+                        "targetWeightsProduced": False,
+                    },
+                    "coverage": {"trackedRows": 146, "validDecisionRows": 0, "pendingDecisionRows": 146},
+                }
+            )
+
+        self.assertFalse(ok)
 
 
 class InfernoDoctorInformationalSignalsTests(unittest.TestCase):

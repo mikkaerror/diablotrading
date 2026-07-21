@@ -69,6 +69,10 @@ READ_IF_NEEDED: tuple[dict[str, str], ...] = (
         "why": "operator-owned role and diversification decision queue; it does not create any DCA weights",
     },
     {
+        "path": "reports/tracker_role_policy_latest.txt",
+        "why": "read-only validation of an optional human role-policy input; it rejects target weights and creates no decisions",
+    },
+    {
         "path": "docs/MODEL_COLLABORATION_BRIEF.md",
         "why": "mission, safety rails, division of labor",
     },
@@ -144,6 +148,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
     {
         "command": "./inferno tracker-role-review",
         "purpose": "show unresolved operator role and DCA-inclusion decisions without producing a buy list",
+    },
+    {
+        "command": "./inferno tracker-role-policy",
+        "purpose": "validate optional operator role-policy input read-only; no weights, purchases, or eligibility changes",
     },
     {
         "command": "./inferno cash-ledger",

@@ -110,7 +110,7 @@ operator-reviewed metadata is:
 
 - economic exposure and sector/industry taxonomy;
 - role in a portfolio (core compounder, cyclical, thematic satellite,
-  speculative/research-only, or other operator-defined role);
+  speculative/research-only, or exclude-from-DCA-research);
 - material factor and theme overlap;
 - data-quality and evidence provenance.
 
@@ -122,10 +122,18 @@ It surfaces the four existing operator-declared long-term holdings as context
 only; those declarations do not approve new additions, portfolio roles,
 DCA-inclusion, or target weights.
 
+`./inferno tracker-role-policy` is the next read-only governance layer. It
+looks only for the optional human-owned
+`data/operator_tracker_role_policy.json` and validates its coverage against
+every retained tracker name. Its empty starting point is documented in
+`docs/OPERATOR_TRACKER_ROLE_POLICY_TEMPLATE.md`; Inferno never creates or edits
+that input. The contract rejects target weights so a future human allocation
+policy remains a separate authority source.
+
 **Gate:** resolve the explicit reference-source gap without guessing, then have
-the operator approve a portfolio-role and diversification policy for every row
+the operator record a portfolio-role and DCA-research decision for every row
 considered in DCA construction research. This is a metadata and governance
-gate, not an eligibility change.
+gate, not an eligibility change, target-weight policy, or purchase instruction.
 
 ### 3. Build deposit-sized DCA decision support — after taxonomy
 
