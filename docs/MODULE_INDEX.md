@@ -4,7 +4,7 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-05-25.
+Last updated: 2026-07-18.
 
 For the one-page purpose and strategy brief, start with
 [`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
@@ -50,6 +50,9 @@ Safety            — authority, risk, secrets
 | `inferno_schwab_oauth.py` | Local read-only Schwab OAuth helper: auth URL, token exchange, refresh, ignored vault status | operator-triggered + daily ops refresh |
 | `inferno_schwab_options.py` | **NEW** Read-only Schwab option-chain adapter for bid/ask, Greeks, liquidity, and expected-move enrichment | on-demand + future strike cycle |
 | `inferno_schwab_account_sync.py` | **NEW** Read-only Schwab account/balance/position sync for the approved suffix; TOS-independent broker truth, no order endpoints | `reports/schwab_account_sync_latest.txt` |
+| `inferno_ai_basket_config.py` | Read the fixed 30-name basket from the tracked universe contract; missing or malformed input yields an empty universe | importable helper |
+| `inferno_ai_basket_refresh.py` | Read-only Schwab candle refresh for the declared AI basket; publishes only complete snapshot/momentum inputs | nightly research refresh |
+| `inferno_ai_basket_momentum.py` | Fail-closed 3M/6M momentum ranking over the declared basket only | `reports/ai_basket_momentum_latest.txt` |
 
 ## Monitoring (what is happening)
 
@@ -63,6 +66,11 @@ Safety            — authority, risk, secrets
 | `inferno_live_book_review_packet.py` | Compact "what exactly blocks new capital" packet over the live book | `reports/live_book_review_packet_latest.txt` |
 | `inferno_reporting_preflight.py` | Read-only freshness/SMTP/Schwab/TOS attach-state check before any brief is sent or trusted | `data/inferno_reporting_preflight.json`, `reports/reporting_preflight_latest.txt` |
 | `inferno_reporting_summary.py` | Shared read-only reporting language used by morning brief, action pulses, live sync, and command center | importable helpers (no artifact) |
+| `inferno_ai_basket_alerts.py` | Fail-closed 50/200-day crossing monitor for the declared basket; requires the canonical input-trust contract and sends mail only with explicit `--send` | local state + optional operator-triggered email |
+| `inferno_ai_basket_composite.py` | Fail-closed trend/momentum composite and mechanical research tags for complete inputs with a trusted canonical contract | `reports/ai_basket_composite_latest.txt` |
+| `inferno_ai_basket_vs_benchmark.py` | Compare the complete declared basket with SMH only when the canonical input contract is trusted | `reports/ai_basket_vs_benchmark_latest.txt` |
+| `inferno_ai_basket_review.py` | Read-only runner that combines alerts, momentum, composite labels, and benchmark context | `reports/ai_basket_review_latest.txt` |
+| `inferno_ai_basket_sizing.py` | Fail-closed research-only target-weight recommender with trend, name, and factor-bucket caps | `reports/ai_basket_sizing_latest.txt` |
 
 ## Decision (what to do today)
 

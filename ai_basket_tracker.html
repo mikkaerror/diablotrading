@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AI / Data-Center Basket Tracker</title>
+<style>
+  :root{ color-scheme: light; }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:#f6f8fc;color:#1a2233;padding:18px;}
+  h1{font-size:19px;margin:0 0 2px}
+  .sub{color:#6b7890;font-size:12px;margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;background:#fff;
+        border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid #eef2f7;white-space:nowrap}
+  th{background:#eef2f8;color:#55627a;font-size:11px;text-transform:uppercase;letter-spacing:.04em;text-align:right}
+  th:nth-child(2),td:nth-child(2),th:nth-child(3),td:nth-child(3){text-align:left}
+  tr:last-child td{border-bottom:none}
+  .sym{font-weight:700}
+  .cat{color:#6b7890;font-size:12px}
+  .z-leader{color:#0b8a4b;font-weight:700}
+  .z-strong{color:#2f9e6b}
+  .z-weak{color:#c07a12}
+  .z-broken{color:#c23b3b;font-weight:700}
+  .pos{color:#0b8a4b}.neg{color:#c23b3b}
+  .zonecell{text-align:left}
+  .legend{margin-top:14px;color:#55627a;font-size:12px;line-height:1.7}
+  .legend b{color:#1a2233}
+  button{background:#2f6df6;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer}
+  #status{color:#6b7890;font-size:12px;margin-left:10px}
+  .err{color:#c23b3b}
+</style>
+</head>
+<body>
+  <h1>AI / Data-Center Basket Tracker</h1>
+  <p class="sub">Your tracked semiconductor &amp; data-center names, ranked by relative
+  strength (distance from 52-week high) and trend (price vs 50- &amp; 200-day averages).
+  Live quotes on each open. Educational — not financial advice.</p>
+  <div><button onclick="load()">Refresh</button><span id="status"></span></div>
+  <div id="out" style="margin-top:14px"></div>
+
+<script>
+const BASKET = [
+ ["NVDA","Compute"],["AVGO","Compute"],["AMD","Compute"],["TXN","Compute"],
+ ["ASML","Compute"],["QCOM","Compute"],["ARM","Compute"],["MRVL","Networking Si"],
+ ["DELL","Server OEM"],["HPE","Server OEM"],["SMCI","Server OEM"],["VRT","Power/Cooling"],
+ ["ETN","Power/Cooling"],["MOD","Power/Cooling"],["GLW","Optical"],["LITE","Optical"],
+ ["AAOI","Optical"],["ANET","Networking"],["VNET","DC Operator"],["STX","Storage"],
+ ["WDC","Storage"],["AEHR","Semi Test"],["MSFT","Hyperscaler"],["GOOG","Hyperscaler"],
+ ["ORCL","Cloud Rails"],["FTNT","Security"],["OTEX","Cloud Rails"],
+ ["RBC","Bearings"],["RRX","Bearings"],["TKR","Bearings"]
+];
+const CATS = Object.fromEntries(BASKET);
+
+function pct(x){ return (x>=0?'+':'') + x.toFixed(0) + '%'; }
+function cls(x){ return x>=0?'pos':'neg'; }
+
+function zoneOf(d){
+  if(d.trend===3 && d.offHigh>-10) return ["LEADER","z-leader"];
+  if(d.trend>=2 && d.v50>0)        return ["strong","z-strong"];
+  if(d.trend<=1 && d.v50<0)        return ["BROKEN","z-broken"];
+  return ["weakening","z-weak"];
+}
+
+async function load(){
+  const s = document.getElementById('status');
+  s.textContent = 'loading live quotes…'; s.className='';
+  try{
+    const r = await window.cowork.callMcpTool(
+      "mcp__00bdfbdf-a068-4d80-9c70-28bffd46a4dc__quote",
+      { endpoint:"batch-quote", symbols: BASKET.map(b=>b[0]).concat(["SMH"]) }
+    );
+    let rows = r.structuredContent;
+    if(!rows){ rows = JSON.parse(r.content[0].text); }
+    if(!Array.isArray(rows)) rows = rows.data || rows.quotes || [];
+    // pull SMH out as the sector benchmark
+    const bm = rows.find(q=>q.symbol==="SMH");
+    const bmV200 = bm ? (bm.price/bm.priceAvg200-1)*100 : null;
+    const bmOff  = bm ? (bm.price/bm.yearHigh-1)*100 : null;
+    const data = rows.filter(q=>q.symbol!=="SMH").map(q=>{
+      const p=q.price, a50=q.priceAvg50, a200=q.priceAvg200, hi=q.yearHigh, lo=q.yearLow;
+      const offHigh=(p/hi-1)*100, rangePos=(hi>lo)?(p-lo)/(hi-lo)*100:0;
+      const v50=(p/a50-1)*100, v200=(p/a200-1)*100, cross=a50>a200;
+      const trend=(p>a200?1:0)+(p>a50?1:0)+(cross?1:0);
+      const comp=rangePos*0.5+(offHigh+50)*0.3+trend*10*0.2;
+      const rel = (bmV200!=null) ? ((v200-bmV200)*0.5+(offHigh-bmOff)*0.5) : null;
+      return {sym:q.symbol,cat:CATS[q.symbol]||'',price:p,offHigh,rangePos,v50,v200,trend,comp,rel};
+    }).sort((a,b)=>b.comp-a.comp);
+    const beatCount = data.filter(d=>d.rel!=null && d.rel>0).length;
+    const avg200 = data.reduce((s,d)=>s+d.v200,0)/data.length;
+    const avgoff = data.reduce((s,d)=>s+d.offHigh,0)/data.length;
+    const basketBeats = (bmV200!=null && avg200>bmV200 && avgoff>bmOff);
+
+    let html='<table><thead><tr><th>#</th><th>Ticker</th><th>Category</th>'
+      +'<th>% off 52w high</th><th>52w range</th><th>vs 50d</th><th>vs 200d</th><th>vs SMH</th><th class="zonecell">Zone</th></tr></thead><tbody>';
+    data.forEach((d,i)=>{
+      const [z,zc]=zoneOf(d);
+      html+=`<tr>
+        <td>${i+1}</td>
+        <td class="sym">${d.sym}</td>
+        <td class="cat" style="text-align:left">${d.cat}</td>
+        <td>${d.offHigh.toFixed(0)}%</td>
+        <td>${d.rangePos.toFixed(0)}%</td>
+        <td class="${cls(d.v50)}">${pct(d.v50)}</td>
+        <td class="${cls(d.v200)}">${pct(d.v200)}</td>
+        <td class="${d.rel==null?'':(d.rel>0?'pos':'neg')}">${d.rel==null?'—':(d.rel>0?'BEATS':'lags')}</td>
+        <td class="zonecell ${zc}">${z}</td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    const banner = (bm==null) ? '' :
+      `<div style="margin:0 0 10px;font-size:13px;color:#334">vs sector `+
+      `<b>SMH</b> (+${bmV200.toFixed(0)}% above 200d, ${bmOff.toFixed(0)}% off high): `+
+      `<b>${beatCount}/${data.length}</b> names beat the sector · equal-weight basket `+
+      `<b class="${basketBeats?'pos':'neg'}">${basketBeats?'BEATS':'LAGS'} SMH</b></div>`;
+    // factor / category exposure rollup
+    const COMPLEX = new Set(["Compute","Networking Si","Server OEM","Power/Cooling","Optical","Networking","DC Operator","Storage","Semi Test"]);
+    const SOFT = new Set(["Hyperscaler","Cloud Rails","Security"]);
+    const grp = {};
+    data.forEach(d=>{ (grp[d.cat]=grp[d.cat]||[]).push(d); });
+    const catRows = Object.entries(grp).map(([c,arr])=>{
+      const k=arr.length;
+      const av=arr.reduce((s,d)=>s+d.v200,0)/k;
+      const nup=arr.filter(d=>d.v200>0).length;
+      const arel=arr.reduce((s,d)=>s+(d.rel||0),0)/k;
+      return {cat:c,k,pctB:Math.round(100*k/data.length),av,nup,arel};
+    }).sort((a,b)=>b.arel-a.arel);
+    const nComplex = data.filter(d=>COMPLEX.has(d.cat)).length;
+    const nSoft = data.filter(d=>SOFT.has(d.cat)).length;
+    const nInd = data.length - nComplex - nSoft;
+    let panel = '<h2 style="font-size:14px;margin:22px 0 4px">Factor exposure — where the theme is working</h2>';
+    panel += `<div style="font-size:12px;color:#55627a;margin-bottom:8px">Concentration by name count: `+
+      `<b>${Math.round(100*nComplex/data.length)}%</b> AI-capex hardware complex · `+
+      `<b>${Math.round(100*nSoft/data.length)}%</b> software / hyperscaler · `+
+      `<b>${Math.round(100*nInd/data.length)}%</b> industrials / bearings. `+
+      `One factor drives most of the book — diversify with intent, not by accident.</div>`;
+    panel += '<table><thead><tr><th>Category</th><th>Names</th><th>% of basket</th>'
+      +'<th>avg vs 200d</th><th>in uptrend</th><th>vs SMH</th></tr></thead><tbody>';
+    catRows.forEach(r=>{
+      panel += `<tr><td class="cat" style="text-align:left">${r.cat}</td>`
+        +`<td>${r.k}</td><td>${r.pctB}%</td>`
+        +`<td class="${cls(r.av)}">${pct(r.av)}</td>`
+        +`<td>${r.nup}/${r.k}</td>`
+        +`<td class="${r.arel>0?'pos':'neg'}">${r.arel>0?'+':''}${r.arel.toFixed(0)}</td></tr>`;
+    });
+    panel += '</tbody></table>';
+    document.getElementById('out').innerHTML=banner+html+panel;
+    s.textContent='updated '+new Date().toLocaleString();
+  }catch(e){
+    s.textContent='could not load quotes: '+e.message; s.className='err';
+  }
+}
+
+document.getElementById('out').innerHTML =
+  '<div class="legend">'+
+  '<b>How to read it —</b> the list is sorted strongest to weakest. '+
+  '<b class="z-leader">LEADER</b> = uptrend (above 50 &amp; 200-day, golden cross) and within 10% of its 52-week high — where relative strength concentrates. '+
+  '<b class="z-strong">strong</b> = above trend and rising. '+
+  '<b class="z-weak">weakening</b> = rolling over below the 50-day. '+
+  '<b class="z-broken">BROKEN</b> = below both trend lines — momentum lost. '+
+  'The <b>vs SMH</b> column shows whether each name is stronger (BEATS) or weaker (lags) '+
+  'than the semiconductor sector ETF — the header line says how many beat it and whether '+
+  'the equal-weight basket as a whole beats or lags the sector.'+
+  '</div>';
+
+const L=document.querySelector('.legend'); load();
+</script>
+<div class="legend">
+  <b>Using it to track &amp; trade (a rule, not a tip):</b> relative-strength rotation
+  within the theme — favor the top of the list (leaders in uptrends), be cautious on
+  or avoid the <span class="z-broken">BROKEN</span> names, and use the 200-day average
+  as a trailing exit line. This concentrates exposure in what's working and cuts what
+  isn't. It won't call tops or bottoms, and past strength doesn't guarantee future
+  returns. Educational tool; not financial advice.
+</div>
+</body>
+</html>

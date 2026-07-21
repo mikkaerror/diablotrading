@@ -140,7 +140,7 @@ def derive_inputs(
         )
         changes.append({"symbol": symbol, **returns})
 
-    complete = bool(universe) and len(snapshot_rows) == len(universe) and not blocked
+    snapshot_complete = bool(universe) and len(snapshot_rows) == len(universe) and not blocked
     snapshot = {
         "generatedAt": generated_at,
         "stage": STAGE,
@@ -158,7 +158,7 @@ def derive_inputs(
         "expectedUniverse": universe,
         "records": snapshot_rows,
     }
-    momentum = build_momentum(changes)
+    momentum = build_momentum(changes, expected_universe=universe)
     momentum.update(
         {
             "generatedAt": generated_at,
@@ -174,8 +174,10 @@ def derive_inputs(
             },
         }
     )
+    complete = snapshot_complete and bool(momentum.get("signalsTrusted"))
     assessment = {
         "complete": complete,
+        "momentumTrusted": bool(momentum.get("signalsTrusted")),
         "expectedCount": len(universe),
         "publishedCount": len(snapshot_rows),
         "missingCount": len(blocked),

@@ -29,6 +29,7 @@ import inferno_ai_basket_alerts as alerts
 import inferno_ai_basket_momentum as momentum
 import inferno_ai_basket_composite as composite
 import inferno_ai_basket_vs_benchmark as benchmark
+import inferno_ai_basket_sizing as sizing
 from inferno_ai_basket_config import load_data_contract
 
 ROOT = Path(__file__).resolve().parent
@@ -40,7 +41,8 @@ def _load(path: str) -> Any:
 
 
 def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
-        send: bool = False) -> dict[str, Any]:
+        send: bool = False,
+        current_weights: Optional[dict[str, float]] = None) -> dict[str, Any]:
     contract = load_data_contract()
     # 1) crossings (also updates saved state, optional email)
     al = alerts.run(quotes_path, send=send, data_contract=contract)
@@ -67,7 +69,15 @@ def run(quotes_path: str, changes_path: str, bench_quotes_path: str,
     if not bp.get("error"):
         benchmark.save(bp)
 
-    return {"alerts": al, "momentum": mp, "composite": cp, "benchmark": bp}
+    # 5) position sizing off the composite. Inherits the composite's trust
+    # verdict, so a failed-closed contract produces no weights rather than
+    # confident-looking nonsense.
+    sp = sizing.build(cp, current_weights)
+    if sp.get("signalsTrusted"):
+        sizing.save(sp)
+
+    return {"alerts": al, "momentum": mp, "composite": cp,
+            "benchmark": bp, "sizing": sp}
 
 
 def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
@@ -145,7 +155,34 @@ def digest(r: dict[str, Any]) -> str:
              f"{', '.join(dw['reentryConfirmed']) or '—'}")
     L.append("  Rule: weakness is a stand-aside, not a discount. Re-enter only on a "
              "confirmed 200-day reclaim.")
-    L.append("")
+    # sizing (compact — full table lives in reports/ai_basket_sizing_latest.txt)
+    sp = r.get("sizing") or {}
+    if sp:
+        L.append("")
+        L.append("TARGET SIZING:")
+        if not sp.get("signalsTrusted"):
+            L.append(f"  fail-closed — {sp.get('reason', 'inputs not trusted')}")
+        else:
+            funded = [t for t in sp["targets"] if t["targetWeight"] > 0]
+            top = ", ".join(f"{t['symbol']} {t['targetWeight']*100:.1f}%"
+                            for t in funded[:6])
+            L.append(f"  invested {sp['investedWeight']*100:.0f}% · "
+                     f"cash {sp['cashWeight']*100:.0f}% · {len(funded)} funded names")
+            L.append(f"  largest: {top}")
+            for b, w in sorted(sp["bucketTotals"].items(), key=lambda kv: -kv[1]):
+                L.append(f"    {b:<28}{w*100:>6.1f}%")
+            acts = [t for t in sp["targets"] if t["action"] in ("ADD", "TRIM", "EXIT")]
+            if acts:
+                L.append("  actions vs current book:")
+                for t in acts[:12]:
+                    L.append(f"    [{t['action']:<4}] {t['symbol']:<5} "
+                             f"{(t['currentWeight'] or 0)*100:>5.1f}% -> "
+                             f"{t['targetWeight']*100:.1f}%")
+            if sp.get("unclassifiedSymbols"):
+                L.append(f"  ⚠ uncategorized (check universe): "
+                         f"{', '.join(sp['unclassifiedSymbols'])}")
+        L.append("")
+
     L.append("Decision-support only — hold the leaders, cut the AVOIDs. Not financial advice.")
     return "\n".join(L)
 
@@ -156,8 +193,15 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--changes", required=True)
     ap.add_argument("--bench-quotes", required=True)
     ap.add_argument("--send", action="store_true")
+    ap.add_argument("--current", help="optional JSON of current weights, "
+                                      "e.g. {\"NVDA\": 0.10, \"DELL\": 0.05} "
+                                      "(percent-style values like 10 are accepted too)")
     args = ap.parse_args(argv)
-    r = run(args.quotes, args.changes, args.bench_quotes, send=args.send)
+    current = None
+    if args.current:
+        current = json.loads(Path(args.current).read_text(encoding="utf-8"))
+    r = run(args.quotes, args.changes, args.bench_quotes, send=args.send,
+            current_weights=current)
     out = digest(r)
     print(out)
     OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
