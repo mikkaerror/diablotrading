@@ -57,6 +57,10 @@ READ_IF_NEEDED: tuple[dict[str, str], ...] = (
         "why": "stable PM summary; update only when verdict changes",
     },
     {
+        "path": "reports/tracker_registry_latest.txt",
+        "why": "full-tracker taxonomy and holdings coverage before DCA construction research",
+    },
+    {
         "path": "docs/MODEL_COLLABORATION_BRIEF.md",
         "why": "mission, safety rails, division of labor",
     },
@@ -120,6 +124,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
     {
         "command": "./inferno deposit-plan",
         "purpose": "show recurring deposit forecast separate from broker-confirmed cash",
+    },
+    {
+        "command": "./inferno tracker-registry",
+        "purpose": "show full-tracker taxonomy and holdings coverage before DCA construction research",
     },
     {
         "command": "./inferno cash-ledger",

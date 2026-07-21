@@ -55,6 +55,7 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
 CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
@@ -668,6 +669,36 @@ def conviction_research_status(report: dict) -> tuple[bool, str]:
                 "promotable": report.get("promotable"),
             }
         )
+    )
+    return ok, detail
+
+
+def tracker_registry_status(report: dict) -> tuple[bool, str]:
+    """Evaluate full-tracker coverage without treating incomplete taxonomy as authority failure."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    coverage = report.get("coverage") or {}
+    taxonomy = coverage.get("taxonomyCoverage") or {}
+    tracked_rows = coverage.get("trackedRows")
+    conviction_coverage = coverage.get("convictionCoverage")
+    complete_research_coverage = tracked_rows is not None and tracked_rows == conviction_coverage
+    verdict = str(report.get("verdict") or "unknown")
+    ok = fresh and safe and complete_research_coverage and verdict in {"tracker-mapped", "taxonomy-incomplete"}
+    detail = (
+        f"{verdict} | tracker={tracked_rows} | taxonomy-missing={taxonomy.get('needsOperatorTaxonomy', 0)} | "
+        f"research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     )
     return ok, detail
 
@@ -1781,6 +1812,12 @@ def main() -> int:
     conviction_ok, conviction_detail = conviction_research_status(conviction_research)
     lines.append(summarize_status("Conviction research", conviction_ok, conviction_detail))
     if not conviction_ok:
+        warnings += 1
+
+    tracker_registry = load_json_file(TRACKER_REGISTRY_FILE) or {}
+    tracker_registry_ok, tracker_registry_detail = tracker_registry_status(tracker_registry)
+    lines.append(summarize_status("Full-tracker registry", tracker_registry_ok, tracker_registry_detail))
+    if not tracker_registry_ok:
         warnings += 1
 
     schwab_edge = load_json_file(SCHWAB_EDGE_SIGNALS_FILE) or {}

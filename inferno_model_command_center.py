@@ -83,6 +83,7 @@ STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
+TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 SCHWAB_EDGE_SIGNALS_FILE = DATA_DIR / "inferno_schwab_edge_signals.json"
 OUTCOME_ATTRIBUTION_FILE = DATA_DIR / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = DATA_DIR / "inferno_rule_edge_decay.json"
@@ -115,6 +116,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno daily-ops", "description": "refresh the Schwab daily options operations tape"},
     {"command": "./inferno action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "./inferno deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "./inferno tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "./inferno cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "./inferno ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
     {"command": "./inferno capital-check", "description": "run the capital launch check with explicit cash"},
@@ -370,6 +372,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "conviction-research",
         "question": "Which giants, sleepers, and near-term winners deserve attention?",
         "artifact": "reports/conviction_research_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "tracker-registry",
+        "question": "Does the full tracker have complete research, taxonomy, and holdings coverage before DCA construction?",
+        "artifact": "reports/tracker_registry_latest.txt",
         "owner": "codex",
     },
     {
@@ -1008,6 +1016,7 @@ def build_command_center() -> dict[str, Any]:
         "shadowEvidence": artifact_summary(SHADOW_EVIDENCE_FILE, keys=("verdict", "generatedAt", "message")),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
+        "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "schwabEdgeSignals": artifact_summary(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
         "outcomeAttribution": artifact_summary(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "ruleEdgeDecay": artifact_summary(RULE_EDGE_DECAY_FILE, keys=("stage", "verdict", "generatedAt", "promotable")),

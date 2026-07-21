@@ -70,6 +70,7 @@ Generated artifacts beat durable docs when they disagree.
 | Schwab option chains | `reports/schwab_options_latest.txt` |
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
+| Full-tracker registry | `reports/tracker_registry_latest.txt` |
 | Runtime storage hygiene | Nightly logs-only trimming via `inferno_housekeeping.py`; evidence retention and Git maintenance remain manual |
 | AI-basket input trust | `reports/ai_basket_data_contract_latest.txt` |
 | Defined-risk short-premium evidence | `reports/short_premium_study_latest.txt` |
@@ -125,6 +126,7 @@ tested subsystems instead of replacing them:
 - `./inferno doctor` — health check
 - `./inferno preflight` — reporting readiness check
 - `./inferno usage` — low-context handoff packet
+- `./inferno tracker-registry` — full-tracker taxonomy and holdings coverage before DCA research
 - `./inferno oauth` — Schwab OAuth status/refresh/restart
 - `./inferno daily-ops` — Schwab daily options operations tape
 - `./inferno action-pulse` — tactical action pulse; no email unless `--send`

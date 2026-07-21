@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-17.
+Last updated: 2026-07-20.
 
 The desk's "where are we right now" memo. Read this first.
 
@@ -9,35 +9,34 @@ For the shortest durable command brief, start with
 
 ## Verdict
 
-**Healthy read-only desk; manual deployment can be reviewed with warnings.**
-Live account sync uses Schwab account API as broker truth for the configured
-approved suffix, Schwab option tape is fresh, and all automated live trading
-remains locked. The legacy live book is now explicitly marked as
-operator-declared long-term holds, so TE, IREN, HIVE, and CLSK no longer hard
-block fresh-capital review solely because short-term structure is fragile.
+**Healthy read-only desk; full-tracker DCA construction foundation is active.**
+Live account sync uses the Schwab account API as broker truth for the configured
+approved suffix, all automated live trading remains locked, and the system now
+retains all 146 tracker names in durable conviction research. The new
+full-tracker registry reconciles tracker, research, and current holdings before
+any future deposit-planning research.
 
-Latest readiness sweep: 2026-06-17 16:20 MT. Capital launch is
-`manual-ready-with-warnings`; risk gates are `manual-only`; math verification is
-`clean`; Schwab options data is fresh as the primary read-only option quote
-tape; paper evidence is still the bottleneck with 30 closed scored outcomes
-remaining before any automation promotion. Current live account read: NLV
-$1,576.33, cash $599.93, four supported declared long-term holds, zero live-book
-hard blockers.
+Latest command-center read: 2026-07-20 21:56 MT. Current broker account truth
+is NLV $710.59 with $0.00 cash and four supported declared long-term holds.
+Capital deployment is `not-ready`; risk gates are `blocked` with one hard fail;
+math verification is `clean`; paper evidence has a 29-outcome promotion gap.
+The tracker is complete (146/146 conviction-covered), but taxonomy is incomplete
+(29 mapped; 117 names await canonical classification). This is an explicit
+research work queue, not an eligibility or funding decision.
 
 `reports/model_command_center_latest.txt` is now the PM landing page. If this
 doc disagrees with that artifact, the command-center artifact wins.
 
 ## Priorities (in order)
 
-1. Strategy requirements: keep objectives, gates, data authority, and evidence standards aligned in `docs/STRATEGY_REQUIREMENTS.md`.
-2. Mission clarity: keep the one-page command brief in `docs/MISSION_CONTROL.md` sharper than the rest of the docs.
-3. Capital deployment readiness: review operator-entered cash manually, keep live submit OFF.
-4. Schwab option tape: keep OAuth refresh, chain quality, and strike/risk integration green.
-5. Live account lane: read-only, scoped to the configured approved suffix.
-6. Paper evidence: run the 12-scenario reducer, then score the top-five focus names.
-7. Tracker sync: clean, fail-closed on vendor gaps.
-8. Morning brief + ops maintenance: fresh, no silent failures.
-9. Docs + artifacts: easy for the next model to inherit.
+1. Full-tracker DCA foundation: complete canonical taxonomy and holdings coverage before building any deposit-sized allocation research.
+2. Strategy requirements: keep objectives, gates, data authority, and evidence standards aligned in `docs/STRATEGY_REQUIREMENTS.md`.
+3. Capital deployment readiness: review broker-confirmed cash manually, keep live submit OFF.
+4. Paper evidence: reduce the 29-outcome promotion gap with closed scored evidence, not simulation volume.
+5. Schwab option tape: keep OAuth refresh, chain quality, and strike/risk integration green.
+6. Tracker sync and registry: fail closed on vendor gaps and expose taxonomy gaps instead of guessing.
+7. Morning brief + ops maintenance: fresh, no silent failures or stale deployed automation copies.
+8. Docs + artifacts: easy for the next model to inherit.
 
 ## Current state
 
@@ -51,8 +50,8 @@ doc disagrees with that artifact, the command-center artifact wins.
 | Authority manifest | `paper-evidence-only` | hard-pinned, broker submit OFF |
 | Live account sync | healthy | matched configured approved suffix; source is Schwab account API |
 | Live book | healthy, read-only | 4 matched positions · TE/IREN/HIVE/CLSK declared long-term holds · supported=4, fragile=0, hard blockers=0 |
-| Capital deployment | `manual-ready-with-warnings` | deployable cash $599.93; max options risk $89.99; max starter ticket $89.99; long-term buy lane $299.96; reserve $209.98; live submit still OFF |
-| Risk gate audit | `manual-only` | 5/12 pass; hard fails 0; promotion fails 3; warnings 4 |
+| Capital deployment | `not-ready` | broker-confirmed cash $0.00; keep planned deposits and paper results separate from deployable cash; live submit still OFF |
+| Risk gate audit | `blocked` | hard fails 1; no authority expansion |
 | Tracker | synced | 146 sheet / 146 snapshot; HIVE, TE, CLSK appended; IREN already existed; 0 critical/advisory ticker issues |
 | Watchlist closed-loop | shipped | 5-min autorefresh, three-way reconciler |
 | Schwab account API | active, read-only | `inferno_schwab_account_sync.py` refreshes approved-account balances/positions, redacts raw account numbers, persists holdings only for the configured suffix, and feeds live account sync without requiring TOS; no order endpoints |
@@ -82,6 +81,7 @@ doc disagrees with that artifact, the command-center artifact wins.
 | System map + cleanup | shipped | docs/SYSTEM_MAP.md slotted as the read-this-first doc; MODULE_INDEX now covers 97/97 modules (was 89/97); obsolete root shims removed while root static dashboard files remain preserved for GitHub Pages; OPERATING_MODEL frontend refs updated to point at frontend/modules/ |
 | Blow-up guardrails | shipped | six named rules tied 1:1 to historical blow-ups (Niederhoffer, LTCM, Archegos, Amaranth, Karen-the-Supertrader, Cordier); diagnostic-only visibility layer over the operator briefing slate |
 | Conviction research map | shipped | research-only whole-universe ranking for giants, sleepers, near-term winners, long-term buy zones, and contradictions |
+| Full-tracker registry | active foundation | 146 tracker rows and 4 broker holdings reconciled; 29 names map to existing economic-exposure categories; 117 names require canonical taxonomy before diversified DCA research; no target weights or broker action |
 | Theory references | shipped | one place for primary literature tags used by the audit |
 | Scenario backtest | shipped | daily 10+ scenario slate now compares against closed paper/shadow evidence by ticker, strategy family, and DTE window |
 | Scenario evidence | shipped | daily 10+ slate now records research-only underlying observations so the backtest can learn before fills close |
@@ -140,23 +140,25 @@ If this doc disagrees with those artifacts, the artifacts win.
 - Paper evidence: more closed promotion-quality samples; reducer now provides 12 daily scenarios, scenario observations capture underlying moves, scenario backtest labels thin evidence explicitly, and approval-only names can become paper-only auto selections when all risk gates pass.
 - Schwab calibration: option-chain quality is live, but historical chain storage / IV calibration / chain diffing are still next-layer research.
 - Live execution authority: intentionally not enabled.
-- Capital deployment: manual-ready-with-warnings for review only; no automated submission, and every real order still requires explicit final confirmation.
+- Capital deployment: broker cash is currently zero. Planned deposits remain forecasts until broker-confirmed cash exists; no automated submission, and every real order still requires explicit final confirmation.
+- Full-tracker DCA construction: canonical taxonomy is incomplete. Finish the 117-name taxonomy work before a diversified deposit-sized research proposal is built.
 - Automation promotion: live/manual confirmation only until paper evidence clears promotion gates.
 - Paper candidate quality: auto-paper selected names can now advance evidence without waiting on live-style approval; hard-blocked names stay blocked.
 
 ## Next moves
 
-1. Treat deployable cash as manual-review-only: stay inside the capital guardrails, keep live submit OFF, and require explicit final confirmation before any real order.
-2. Run the command center, capital readiness, Schwab daily ops tape, and risk
+1. Complete canonical taxonomy and tracker/holding coverage through `./inferno tracker-registry`; do not build DCA weights from incomplete exposure data.
+2. Treat deployable cash as manual-review-only: broker cash is currently zero; keep live submit OFF and require explicit final confirmation before any real order.
+3. Run the command center, capital readiness, Schwab daily ops tape, and risk
    gate audit before sizing any ticket.
-3. Let the paper loop accumulate. Use the reducer's top-five focus list for
+4. Let the paper loop accumulate. Use the reducer's top-five focus list for
    review, use scenario evidence to capture underlying movement, then use
    scenario backtest to decide what the full 12-scenario slate can and cannot
    teach us after the fact.
-4. Use `reports/conviction_research_latest.txt` as the watchlist intelligence layer: giants for bell-cow confirmation, sleepers for investigation, contradictions for restraint.
-5. Keep the morning ops lane green so the desk stays trustworthy.
-6. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.
-7. Refresh this doc when the desk's verdict shifts. The four other anchor
+5. Use `reports/conviction_research_latest.txt` as the watchlist intelligence layer: giants for bell-cow confirmation, sleepers for investigation, contradictions for restraint.
+6. Keep the morning ops lane green so the desk stays trustworthy.
+7. Start fresh sessions from `reports/usage_optimizer_latest.txt` instead of old chat history.
+8. Refresh this doc when the desk's verdict shifts. The four other anchor
    docs change rarely; this one is the dashboard.
 
 ## Model lanes

@@ -13,6 +13,7 @@ from inferno_doctor import (
     block_reason_top_bucket_status,
     concentration_governor_status,
     conviction_research_status,
+    tracker_registry_status,
     cycle_days,
     cycle_reference_day,
     in_current_service_cycle,
@@ -554,6 +555,46 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         self.assertFalse(ok)
         self.assertIn("research-only=False", detail)
+
+    def test_tracker_registry_status_accepts_complete_research_with_open_taxonomy_work(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_registry_status(
+                {
+                    "generatedAt": "2026-07-20T11:00:00-06:00",
+                    "verdict": "taxonomy-incomplete",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "coverage": {
+                        "trackedRows": 146,
+                        "convictionCoverage": 146,
+                        "taxonomyCoverage": {"needsOperatorTaxonomy": 117},
+                    },
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("taxonomy-missing=117", detail)
+
+    def test_tracker_registry_status_rejects_incomplete_research_coverage(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = tracker_registry_status(
+                {
+                    "generatedAt": "2026-07-20T11:00:00-06:00",
+                    "verdict": "taxonomy-incomplete",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "coverage": {"trackedRows": 146, "convictionCoverage": 145},
+                }
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("tracker=146", detail)
 
 
 class InfernoDoctorInformationalSignalsTests(unittest.TestCase):

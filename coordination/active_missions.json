@@ -101,5 +101,22 @@
       "authorized-cross-lane",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-1787c1d8",
+    "createdAt": "2026-07-20T21:50:46.440781-06:00",
+    "updatedAt": "2026-07-20T22:00:22.154129-06:00",
+    "title": "Full-tracker DCA construction foundation",
+    "body": "Completed: shipped a research-only full-tracker registry plus operating plan. The registry joins 146 tracker rows, durable conviction research, and read-only holdings; exposes 117 taxonomy gaps; is wired to doctor, command center, the unified command surface, daily refresh, and nightly refresh. It produces no target weights, does not change eligibility or risk constants, and has no broker or authority path.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "full-tracker",
+      "dca",
+      "portfolio-construction",
+      "research-only",
+      "safety"
+    ]
   }
 ]
