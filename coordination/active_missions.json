@@ -84,5 +84,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-c173ab84",
+    "createdAt": "2026-07-16T11:09:08.734342-06:00",
+    "updatedAt": "2026-07-16T11:17:24.149968-06:00",
+    "title": "Paper-evidence reporting and simulation-boundary hygiene",
+    "body": "Authorized 2026-07-16 cross-lane session: quarantine expired non-opened records from actionable alerts, expose source freshness/lineage for evidence reporting, and enforce the isolated exploratory-simulation boundary. Reporting and safeguards only: no approval, staging, rejection, close, promotion, broker action, risk-constant change, or universe edit.",
+    "owner": "shared",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "report-hygiene",
+      "simulation-boundary",
+      "authorized-cross-lane",
+      "research-only"
+    ]
   }
 ]
