@@ -201,5 +201,20 @@
       "role-policy",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-a69b92a0",
+    "createdAt": "2026-07-21T10:03:17.117860-06:00",
+    "updatedAt": "2026-07-21T10:03:23.328521-06:00",
+    "title": "Prevent basket review test artifact mutation",
+    "body": "Isolate a temporary-input basket-review test so its deliberate fail-closed fixture cannot overwrite production alert, composite, benchmark, or sizing artifacts. Test-only hygiene; no market refresh, policy, ticket, broker, risk, universe, or authority change.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "normal",
+    "tags": [
+      "ai-basket",
+      "test-hygiene",
+      "research-only"
+    ]
   }
 ]

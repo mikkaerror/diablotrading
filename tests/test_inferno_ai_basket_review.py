@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+
 import inferno_ai_basket_review as rv
 
 
@@ -172,8 +174,21 @@ class MomentumSourceTests(unittest.TestCase):
             for p, payload in ((mpath, art), (qpath, []), (bpath, [])):
                 with open(p, "w") as fh:
                     json.dump(payload, fh)
-            r = rv.run(qpath, None, bpath, send=False, momentum_path=mpath)
+            # ``run`` deliberately persists production artifacts. This test
+            # supplies intentionally incomplete fixture quotes, so persistence
+            # must be mocked or the test would overwrite the real composite
+            # with a fail-closed empty artifact.
+            with (
+                patch.object(rv.alerts, "run", return_value={"events": []}),
+                patch.object(rv.composite, "save") as save_composite,
+                patch.object(rv.benchmark, "save") as save_benchmark,
+                patch.object(rv.sizing, "save") as save_sizing,
+            ):
+                r = rv.run(qpath, None, bpath, send=False, momentum_path=mpath)
         self.assertEqual(r["momentum"], art)
+        save_composite.assert_called_once()
+        save_benchmark.assert_not_called()
+        save_sizing.assert_not_called()
 
 
 if __name__ == "__main__":
