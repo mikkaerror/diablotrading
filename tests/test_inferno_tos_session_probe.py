@@ -2,10 +2,12 @@ from __future__ import annotations
 
 """Regression tests for thinkorswim session-account detection."""
 
+import json
 import unittest
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
+import inferno_tos_session_probe as probe_module
 from inferno_tos_session_probe import (
     extract_account_suffix_candidates,
     infer_account_mode,
@@ -168,6 +170,114 @@ class TOSSessionProbeTests(unittest.TestCase):
         self.assertEqual(payload["matchedProcessName"], "thinkorswim")
         self.assertEqual(payload["windowNames"], ["Logon to thinkorswim"])
         self.assertFalse(payload["mainWindowPresent"])
+
+
+class TOSSessionProbeCompletenessTests(unittest.TestCase):
+    """A failed observation must never be published as a negative finding."""
+
+    @staticmethod
+    def _timed_out_jxa(_script: str) -> CompletedProcess:
+        return CompletedProcess(args=[], returncode=124, stdout="", stderr="JXA probe timed out")
+
+    def test_timed_out_probe_is_marked_incomplete(self) -> None:
+        """The fallback sees unrelated apps only, so the window layer is unknown."""
+        fallback = {
+            "frontmostApp": "Finder",
+            "matchedProcessName": None,
+            # Every foreground app on the machine; none of them are TOS.
+            "visibleProcessNames": ["Finder", "Notes", "Google Chrome"],
+            "windowNames": [],
+            "mainWindowPresent": False,
+            "currentPanel": None,
+            "currentPanelSafety": "unknown",
+        }
+
+        with patch.object(probe_module, "run_jxa", side_effect=self._timed_out_jxa), \
+             patch.object(probe_module, "probe_tos_session_via_applescript", return_value=fallback), \
+             patch.object(probe_module, "save_session_probe"):
+            report = probe_module.probe_tos_session()
+
+        self.assertEqual(report["returncode"], 124)
+        self.assertFalse(report["probeComplete"])
+        # The reason the primary probe failed must survive the fallback.
+        self.assertIn("timed out", report["probeIncompleteReason"])
+        self.assertFalse(report["mainWindowPresent"])
+
+    def test_fallback_that_sees_tos_windows_is_complete(self) -> None:
+        """Real window evidence still counts as a completed observation."""
+        fallback = {
+            "frontmostApp": "thinkorswim",
+            "matchedProcessName": "thinkorswim",
+            "visibleProcessNames": ["Finder", "thinkorswim"],
+            "windowNames": ["Main@thinkorswim"],
+            "mainWindowPresent": True,
+            "currentPanel": "Monitor",
+            "currentPanelSafety": "safe",
+        }
+
+        with patch.object(probe_module, "run_jxa", side_effect=self._timed_out_jxa), \
+             patch.object(probe_module, "probe_tos_session_via_applescript", return_value=fallback), \
+             patch.object(probe_module, "save_session_probe"):
+            report = probe_module.probe_tos_session()
+
+        self.assertTrue(report["probeComplete"])
+        self.assertIsNone(report["probeIncompleteReason"])
+        self.assertTrue(report["mainWindowPresent"])
+
+    def test_jxa_timeout_is_env_overridable(self) -> None:
+        """Operator can raise the probe budget on the host without editing code."""
+        self.assertEqual(probe_module._probe_timeout("MISSING_VAR_XYZ", 5.0), 5.0)
+        with patch.dict(probe_module.os.environ, {"INFERNO_TOS_JXA_TIMEOUT": "12"}):
+            self.assertEqual(probe_module._probe_timeout("INFERNO_TOS_JXA_TIMEOUT", 5.0), 12.0)
+        # Garbage and non-positive values fall back to the default, never 0.
+        with patch.dict(probe_module.os.environ, {"INFERNO_TOS_JXA_TIMEOUT": "nonsense"}):
+            self.assertEqual(probe_module._probe_timeout("INFERNO_TOS_JXA_TIMEOUT", 5.0), 5.0)
+        with patch.dict(probe_module.os.environ, {"INFERNO_TOS_JXA_TIMEOUT": "0"}):
+            self.assertEqual(probe_module._probe_timeout("INFERNO_TOS_JXA_TIMEOUT", 5.0), 5.0)
+
+    def test_missing_osascript_fails_closed_without_raising(self) -> None:
+        """A stripped PATH / non-macOS host must not crash the daily loop."""
+        real_run = probe_module.subprocess.run
+
+        def fake_run(cmd, *args, **kwargs):
+            argv = cmd if isinstance(cmd, (list, tuple)) else [cmd]
+            if argv and argv[0] in {"osascript", "swift"}:
+                raise FileNotFoundError(f"{argv[0]}: No such file or directory")
+            return real_run(cmd, *args, **kwargs)
+
+        with patch.object(probe_module.subprocess, "run", side_effect=fake_run), \
+             patch.object(probe_module, "save_session_probe"):
+            report = probe_module.probe_tos_session()
+
+        # No exception, and the desk knows it could not observe the window.
+        self.assertFalse(report["probeComplete"])
+        self.assertFalse(report["mainWindowPresent"])
+        self.assertEqual(report["returncode"], 127)
+
+    def test_successful_primary_probe_is_complete(self) -> None:
+        """No fallback means the JXA traversal answered for itself."""
+        payload = json.dumps(
+            {
+                "frontmostApp": "thinkorswim",
+                "matchedProcessName": "thinkorswim",
+                "visibleProcessNames": ["thinkorswim"],
+                "windowNames": ["Main@thinkorswim"],
+                "mainWindowPresent": True,
+                "currentPanel": "Monitor",
+                "currentPanelSafety": "safe",
+            }
+        )
+
+        with patch.object(
+            probe_module,
+            "run_jxa",
+            side_effect=lambda _script: CompletedProcess(args=[], returncode=0, stdout=payload, stderr=""),
+        ), patch.object(probe_module, "save_session_probe"):
+            report = probe_module.probe_tos_session()
+
+        self.assertTrue(report["probeComplete"])
+        # fallbackProbe is only written when the fallback actually runs.
+        self.assertIsNone(report.get("fallbackProbe"))
 
 
 if __name__ == "__main__":

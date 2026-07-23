@@ -190,7 +190,11 @@ def verify_export_bridge(require_enabled: bool = False, *, allow_recovery: bool 
                 "detail": reprobe.get("summary") or reprobe.get("message") or "session reprobed",
             }
         )
-        if reprobe.get("ok"):
+        # Adopt the reprobe only when it is a valid observation: it either saw
+        # the main window, or it completed the window-layer scan. `ok` is a
+        # weak gate -- it stays True even on a timed-out probe -- so gating on
+        # it alone lets a reprobe that observed nothing overwrite a prior read.
+        if reprobe.get("mainWindowPresent") or reprobe.get("probeComplete", reprobe.get("ok")):
             session_probe = reprobe
 
     if allow_recovery and report["appRunning"] and not session_probe.get("mainWindowPresent"):
@@ -203,7 +207,11 @@ def verify_export_bridge(require_enabled: bool = False, *, allow_recovery: bool 
             }
         )
         reprobe = probe_tos_session()
-        if reprobe.get("ok"):
+        # Adopt the reprobe only when it is a valid observation: it either saw
+        # the main window, or it completed the window-layer scan. `ok` is a
+        # weak gate -- it stays True even on a timed-out probe -- so gating on
+        # it alone lets a reprobe that observed nothing overwrite a prior read.
+        if reprobe.get("mainWindowPresent") or reprobe.get("probeComplete", reprobe.get("ok")):
             session_probe = reprobe
 
     if allow_recovery and report["appRunning"] and not session_probe.get("mainWindowPresent"):
@@ -216,7 +224,11 @@ def verify_export_bridge(require_enabled: bool = False, *, allow_recovery: bool 
             }
         )
         reprobe = probe_tos_session()
-        if reprobe.get("ok"):
+        # Adopt the reprobe only when it is a valid observation: it either saw
+        # the main window, or it completed the window-layer scan. `ok` is a
+        # weak gate -- it stays True even on a timed-out probe -- so gating on
+        # it alone lets a reprobe that observed nothing overwrite a prior read.
+        if reprobe.get("mainWindowPresent") or reprobe.get("probeComplete", reprobe.get("ok")):
             session_probe = reprobe
 
     report["sessionProbe"] = {

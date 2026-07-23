@@ -73,6 +73,101 @@ class InfernoReportingSummaryTests(unittest.TestCase):
         self.assertIn("running, but no main window is visible", status["message"])
         self.assertNotIn("intentionally closed", status["message"])
 
+    def _visibility_for_probe(self, probe_payload: dict) -> dict:
+        """Build a visibility summary against a synthetic probe artifact."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            probe = root / "probe.json"
+            verifier = root / "verifier.json"
+            probe.write_text(json.dumps(probe_payload), encoding="utf-8")
+            verifier.write_text(json.dumps({"appRunning": False}), encoding="utf-8")
+
+            with patch.object(summary, "TOS_SESSION_PROBE_FILE", probe), \
+                 patch.object(summary, "TOS_EXPORT_VERIFIER_FILE", verifier), \
+                 patch.object(summary, "_process_running", return_value=(True, "thinkorswim")):
+                return summary.build_tos_visibility_summary()
+
+    def test_incomplete_probe_reports_unknown_instead_of_reveal_window(self) -> None:
+        """A timed-out probe is an unknown, never a negative window finding."""
+        status = self._visibility_for_probe(
+            {
+                "mainWindowPresent": False,
+                "probeComplete": False,
+                "probeIncompleteReason": "JXA probe timed out",
+                "summary": "no visible thinkorswim window detected",
+            }
+        )
+
+        self.assertEqual(status["level"], "unknown")
+        self.assertIn("did not complete", status["message"])
+        self.assertIn("JXA probe timed out", status["message"])
+        # Sending the operator after a window we never looked for is the bug.
+        self.assertNotIn("reveal the existing TOS window", status["message"])
+        self.assertFalse(status["probeComplete"])
+
+    def test_complete_probe_still_reports_running_not_visible(self) -> None:
+        """A probe that really did look keeps its negative finding."""
+        status = self._visibility_for_probe(
+            {
+                "mainWindowPresent": False,
+                "probeComplete": True,
+                "summary": "no visible thinkorswim window detected",
+            }
+        )
+
+        self.assertEqual(status["level"], "running-not-visible")
+        self.assertIn("reveal the existing TOS window", status["message"])
+
+    def test_probe_without_completeness_field_keeps_legacy_behaviour(self) -> None:
+        """Artifacts written before the field existed must not flip to unknown."""
+        status = self._visibility_for_probe(
+            {
+                "mainWindowPresent": False,
+                "summary": "no visible thinkorswim window detected",
+            }
+        )
+
+        self.assertEqual(status["level"], "running-not-visible")
+        self.assertTrue(status["probeComplete"])
+
+    def test_visible_window_wins_even_if_probe_marked_incomplete(self) -> None:
+        """If we actually saw the window, we saw it."""
+        status = self._visibility_for_probe(
+            {
+                "mainWindowPresent": True,
+                "probeComplete": False,
+                "summary": "main window live via thinkorswim",
+            }
+        )
+
+        self.assertEqual(status["level"], "visible")
+
+    def test_process_running_rejects_unrelated_javascript_process(self) -> None:
+        """`pgrep -if java` matches `osascript -l JavaScript`; TOS is not running."""
+        with patch.object(summary, "_pids_for_pattern", return_value=[4242]), \
+             patch.object(
+                 summary,
+                 "_command_line_for_pid",
+                 return_value="/usr/bin/osascript -l JavaScript",
+             ):
+            running, matched = summary._process_running(["thinkorswim", "java-arm", "java"])
+
+        self.assertFalse(running)
+        self.assertIsNone(matched)
+
+    def test_process_running_accepts_jvm_wrapper_hosting_tos(self) -> None:
+        """A Java wrapper still counts when its command line names thinkorswim."""
+        with patch.object(summary, "_pids_for_pattern", return_value=[4242]), \
+             patch.object(
+                 summary,
+                 "_command_line_for_pid",
+                 return_value="/Applications/thinkorswim/jre/bin/java-arm -jar thinkorswim.jar",
+             ):
+            running, matched = summary._process_running(["thinkorswim"])
+
+        self.assertTrue(running)
+        self.assertEqual(matched, "thinkorswim")
+
     def test_sanitize_tos_language_replaces_stale_closed_phrase(self) -> None:
         stale = (
             "Desk ok. TOS is intentionally closed for low-performance mode; open it only "

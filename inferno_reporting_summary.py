@@ -246,20 +246,75 @@ def render_freshness_lines(panel: dict[str, Any] | None = None) -> list[str]:
     return lines
 
 
-def _process_running(candidates: list[str]) -> tuple[bool | None, str | None]:
-    """Check whether a TOS process exists without launching or activating it."""
-    for candidate in candidates:
-        name = text(candidate)
-        if not name:
+TOS_COMMAND_SIGNATURE = "thinkorswim"
+
+
+def _pids_for_pattern(pattern: str) -> list[int]:
+    """Return pids whose full command line matches ``pattern``."""
+    result = subprocess.run(
+        ["pgrep", "-if", pattern],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0 or not text(result.stdout):
+        return []
+    pids: list[int] = []
+    for raw in result.stdout.split():
+        try:
+            pids.append(int(raw.strip()))
+        except ValueError:
             continue
+    return pids
+
+
+def _command_line_for_pid(pid: int) -> str:
+    """Return the full command line for ``pid``, or an empty string.
+
+    ``-ww`` disables the column truncation macOS ``ps`` applies when there is
+    no controlling terminal (80 columns by default). Without it, a
+    system-java TOS launch whose install path lands past column 80 would have
+    its ``thinkorswim`` signature clipped, and the confirmation below would
+    reject a genuine TOS process -- trading the old false positive for a false
+    negative. ``-ww`` means unlimited width on both macOS and Linux.
+    """
+    try:
         result = subprocess.run(
-            ["pgrep", "-if", name],
+            ["ps", "-ww", "-p", str(pid), "-o", "command="],
             text=True,
             capture_output=True,
             check=False,
         )
-        if result.returncode == 0 and text(result.stdout):
-            return True, name
+    except (FileNotFoundError, OSError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return text(result.stdout)
+
+
+def _process_running(candidates: list[str]) -> tuple[bool | None, str | None]:
+    """Check whether a TOS process exists without launching or activating it.
+
+    ``pgrep -if`` matches the whole command line, so a bare generic candidate
+    such as ``java`` also matches any unrelated process carrying that
+    substring -- including ``osascript -l JavaScript`` (the command this
+    desk's own JXA probe spawns) and the JavaScript-related argv that Chrome
+    and Electron apps routinely carry. That false positive made the desk
+    report "TOS is running" on a machine with no thinkorswim process at all,
+    and then instruct the operator to reveal a window that did not exist.
+
+    Every candidate hit is now confirmed against the owning process's actual
+    command line, which must reference thinkorswim. A JVM wrapper running the
+    TOS jar still matches, because its command line carries the install path.
+    """
+    for candidate in candidates:
+        name = text(candidate)
+        if not name:
+            continue
+        for pid in _pids_for_pattern(name):
+            command_line = _command_line_for_pid(pid).lower()
+            if TOS_COMMAND_SIGNATURE in command_line:
+                return True, name
     return False, None
 
 
@@ -273,10 +328,26 @@ def build_tos_visibility_summary() -> dict[str, Any]:
         process_running = True
     main_window_present = bool(probe.get("mainWindowPresent"))
     probe_message = text(probe.get("summary") or probe.get("message"))
+    # Only an explicit False counts as incomplete, so probe artifacts written
+    # before this field existed keep their previous meaning.
+    probe_incomplete = probe.get("probeComplete") is False
+    incomplete_reason = text(probe.get("probeIncompleteReason"))
 
     if main_window_present:
         level = "visible"
         message = "TOS existing window is visible to the attach-only probe."
+    elif probe_incomplete:
+        # The probe could not observe the window layer, so mainWindowPresent
+        # is an unknown rather than a negative. Telling the operator to reveal
+        # a window we never looked for sends them after a window that may not
+        # exist; naming the failure is the actionable instruction.
+        level = "unknown"
+        detail = f" ({incomplete_reason})" if incomplete_reason else ""
+        message = (
+            f"TOS visibility is unknown: the attach-only probe did not complete{detail}. "
+            "Attach-only automation remains fail-closed; rerun the probe before "
+            "treating the window as absent."
+        )
     elif process_running:
         level = "running-not-visible"
         message = (
@@ -296,6 +367,8 @@ def build_tos_visibility_summary() -> dict[str, Any]:
         "appRunning": bool(process_running),
         "matchedProcessName": probe.get("matchedProcessName") or matched_process,
         "mainWindowPresent": main_window_present,
+        "probeComplete": not probe_incomplete,
+        "probeIncompleteReason": incomplete_reason or None,
         "frontmostApp": probe.get("frontmostApp"),
         "probeSummary": probe_message,
         "generatedAt": local_now().isoformat(),

@@ -314,6 +314,76 @@ class TOSExportVerifierTests(unittest.TestCase):
         """The CLI exit code should stay healthy when the live read-only guard passes."""
         self.assertEqual(main(), 0)
 
+    @patch("inferno_tos_export_verifier.save_export_verifier_report")
+    @patch(
+        "inferno_tos_export_verifier.route_to_account_statement",
+        return_value={"ok": True, "status": "dry-run", "message": "route dry-run only"},
+    )
+    @patch(
+        "inferno_tos_export_verifier.probe_tos_session",
+        side_effect=[
+            # First probe: no main window, but it completed and gathered real
+            # evidence (the login window is up, process matched).
+            {
+                "ok": True,
+                "message": "thinkorswim login window is visible",
+                "summary": "thinkorswim login window is visible",
+                "matchedProcessName": "thinkorswim",
+                "mainWindowPresent": False,
+                "probeComplete": True,
+                "currentPanel": None,
+                "currentPanelSafety": "unknown",
+                "accountMode": "login-only",
+                "accountEvidence": ["Logon to thinkorswim"],
+                "accountSuffixCandidates": [],
+                "windowNames": ["Logon to thinkorswim"],
+                "currentTabGroups": [],
+            },
+            # Stabilize-reprobe: timed out. `ok` stays True but it observed
+            # nothing (probeComplete False, no window, no process).
+            {
+                "ok": True,
+                "message": "JXA probe timed out",
+                "summary": "no visible thinkorswim window detected",
+                "matchedProcessName": None,
+                "mainWindowPresent": False,
+                "probeComplete": False,
+                "probeIncompleteReason": "JXA probe timed out",
+                "currentPanel": None,
+                "currentPanelSafety": "unknown",
+                "accountMode": "unknown",
+                "accountEvidence": [],
+                "accountSuffixCandidates": [],
+                "windowNames": [],
+                "currentTabGroups": [],
+            },
+        ],
+    )
+    @patch("inferno_tos_export_verifier.frontmost_app_name", return_value=(True, "java-arm"))
+    @patch("inferno_tos_export_verifier.app_running", return_value=True)
+    @patch("inferno_tos_export_verifier.launch_agent_loaded", side_effect=[False, True])
+    @patch("inferno_tos_export_verifier.parse_shortcut")
+    @patch("inferno_tos_export_verifier.build_applescript", return_value="noop")
+    def test_timed_out_reprobe_does_not_erase_prior_evidence(
+        self,
+        _build_script_mock: object,
+        _parse_shortcut_mock: object,
+        _launch_agent_mock: object,
+        _app_running_mock: object,
+        _frontmost_app_mock: object,
+        _probe_mock: object,
+        _route_mock: object,
+        _save_mock: object,
+    ) -> None:
+        """A timed-out reprobe must not overwrite a prior completed observation."""
+        report = verify_export_bridge(require_enabled=False, allow_recovery=False)
+        probe = report["sessionProbe"]
+        # The first probe's evidence survives; the empty timed-out reprobe was
+        # not adopted just because its `ok` flag was True.
+        self.assertEqual(probe["matchedProcessName"], "thinkorswim")
+        self.assertEqual(probe["accountMode"], "login-only")
+        self.assertEqual(probe["windowNames"], ["Logon to thinkorswim"])
+
 
 if __name__ == "__main__":
     unittest.main()

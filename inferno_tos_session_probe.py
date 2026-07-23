@@ -10,6 +10,7 @@ automation can stay guarded and evidence-driven.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from typing import Any
@@ -27,6 +28,31 @@ from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 SESSION_PROBE_FILE = DATA_DIR / "inferno_tos_session_probe.json"
 SESSION_PROBE_TEXT_FILE = REPORTS_DIR / "tos_session_probe_latest.txt"
+
+
+def _probe_timeout(env_var: str, default: float) -> float:
+    """Read an accessibility-probe timeout from the environment.
+
+    The macOS accessibility tree can be slow to answer on a cold cache, so the
+    5-second default occasionally trips even with thinkorswim open. This lets
+    the operator raise the budget on the real host (e.g. INFERNO_TOS_JXA_TIMEOUT)
+    without editing probe logic. Invalid or non-positive values fall back to the
+    default rather than disabling the timeout entirely.
+    """
+    raw = os.environ.get(env_var)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# JXA accessibility traversal and the Swift CoreGraphics window list each get
+# their own budget; both default to the historic 5 seconds.
+JXA_PROBE_TIMEOUT_SECONDS = _probe_timeout("INFERNO_TOS_JXA_TIMEOUT", 5.0)
+SWIFT_WINDOW_TIMEOUT_SECONDS = _probe_timeout("INFERNO_TOS_SWIFT_TIMEOUT", 5.0)
 
 
 def text(value: Any) -> str:
@@ -149,7 +175,7 @@ def run_jxa(script: str) -> subprocess.CompletedProcess[str]:
             text=True,
             capture_output=True,
             check=False,
-            timeout=5,
+            timeout=JXA_PROBE_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as exc:
         return subprocess.CompletedProcess(
@@ -158,16 +184,34 @@ def run_jxa(script: str) -> subprocess.CompletedProcess[str]:
             exc.stdout or "",
             (exc.stderr or "") + "JXA probe timed out",
         )
+    except (FileNotFoundError, OSError) as exc:
+        # osascript is absent (non-macOS host, stripped PATH). Fail closed with
+        # a distinct non-timeout returncode so the caller records the probe as
+        # incomplete rather than crashing the whole daily loop.
+        return subprocess.CompletedProcess(
+            ["osascript", "-l", "JavaScript"],
+            127,
+            "",
+            f"osascript unavailable: {exc}",
+        )
 
 
 def run_osascript(script: str) -> subprocess.CompletedProcess[str]:
     """Run plain AppleScript and capture text output."""
-    return subprocess.run(
-        ["osascript", "-e", script],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            ["osascript", "-e", script],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        return subprocess.CompletedProcess(
+            ["osascript", "-e", script],
+            127,
+            "",
+            f"osascript unavailable: {exc}",
+        )
 
 
 def visible_tos_windows() -> list[dict[str, Any]]:
@@ -204,9 +248,14 @@ for window in windows {
             text=True,
             capture_output=True,
             check=False,
-            timeout=5,
+            timeout=SWIFT_WINDOW_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
+        return []
+    except (FileNotFoundError, OSError):
+        # No Swift toolchain (Xcode / command-line tools not installed). The
+        # CoreGraphics window list is simply unavailable; return empty so the
+        # AppleScript path continues instead of raising.
         return []
 
     if result.returncode != 0 or not result.stdout.strip():
@@ -722,6 +771,13 @@ def probe_tos_session() -> dict[str, Any]:
     report: dict[str, Any] = {
         "generatedAt": local_now().isoformat(),
         "ok": False,
+        # probeComplete answers a different question than mainWindowPresent:
+        # "was the window layer actually observable this run?" Callers must
+        # not read mainWindowPresent=False as a negative finding unless
+        # probeComplete is True, otherwise a timed-out probe is published as
+        # proof that no window exists.
+        "probeComplete": False,
+        "probeIncompleteReason": None,
         "processCandidates": list(TOS_PROCESS_CANDIDATES),
         "mainWindowToken": TOS_MAIN_WINDOW_TOKEN,
         "frontmostApp": None,
@@ -767,6 +823,13 @@ def probe_tos_session() -> dict[str, Any]:
         if fallback_payload.get("matchedProcessName") or fallback_payload.get("visibleProcessNames"):
             payload = fallback_payload
             report["fallbackProbe"] = "applescript"
+            # Record why the primary probe failed instead of erasing it. The
+            # fallback is accepted whenever *any* foreground app is visible,
+            # which says nothing about thinkorswim, so the failure reason is
+            # the only thing that lets a caller weigh what follows.
+            report["probeIncompleteReason"] = (
+                report["message"] or "primary JXA probe returned no payload"
+            )
             report["message"] = None
         else:
             save_session_probe(report)
@@ -786,6 +849,16 @@ def probe_tos_session() -> dict[str, Any]:
         ):
             report["mainWindowPresent"] = True
     report["ok"] = True
+    # On the AppleScript fallback path, window names can only come from
+    # visible_tos_windows(), a `swift -e` CoreGraphics call with its own
+    # timeout that yields [] on timeout, non-zero exit, or a missing Swift
+    # toolchain. When it yields nothing we have no window evidence at all, so
+    # mainWindowPresent=False below is an unknown rather than a finding.
+    if report.get("fallbackProbe") and not report.get("windowNames") and not report.get("matchedProcessName"):
+        report["probeComplete"] = False
+    else:
+        report["probeComplete"] = True
+        report["probeIncompleteReason"] = None
     report["accountMode"], report["accountEvidence"] = infer_account_mode(report)
     report["accountSuffixCandidates"] = extract_account_suffix_candidates(report)
     report["summary"] = summarize_session(report)
