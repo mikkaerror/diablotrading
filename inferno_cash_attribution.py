@@ -27,8 +27,10 @@ SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
 DEPOSIT_PLAN_FILE = DATA_DIR / "inferno_deposit_plan.json"
 NLV_HISTORY_FILE = DATA_DIR / "nlv_history.csv"
 SCHWAB_TRANSACTION_LEDGER_FILE = DATA_DIR / "schwab_transactions.csv"
+SCHWAB_TRANSACTION_LEDGER_STATUS_FILE = DATA_DIR / "inferno_schwab_transaction_ledger.json"
 OPERATOR_CASH_EVENTS_FILE = DATA_DIR / "operator_cash_events.csv"
 DEFAULT_DEPOSIT_MATCH_DAYS = 3
+TRANSACTION_RECONCILIATION_TOLERANCE_DOLLARS = 0.01
 
 
 def text(value: Any, default: str = "") -> str:
@@ -218,6 +220,122 @@ def cash_changes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return changes
 
 
+def load_transaction_ledger(path: Path | None = None) -> list[dict[str, Any]]:
+    """Load the redacted normalized Schwab transaction CSV conservatively."""
+    path = path or SCHWAB_TRANSACTION_LEDGER_FILE
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            for raw in csv.DictReader(handle):
+                net_amount = number(raw.get("net_amount"), None)
+                occurred_at = text(raw.get("occurred_at"))
+                trade_date = text(raw.get("trade_date"))
+                settlement_date = text(raw.get("settlement_date"))
+                if not any((occurred_at, trade_date, settlement_date)):
+                    continue
+                rows.append(
+                    {
+                        "accountSuffix": text(raw.get("account_suffix")) or None,
+                        "transactionId": text(raw.get("transaction_id")) or None,
+                        "occurredAt": occurred_at or None,
+                        "tradeDate": trade_date or None,
+                        "settlementDate": settlement_date or None,
+                        "transactionType": text(raw.get("transaction_type")).upper() or None,
+                        "status": text(raw.get("status")).upper() or None,
+                        "netAmount": round(net_amount, 2) if net_amount is not None else None,
+                        "symbol": text(raw.get("symbol")).upper() or None,
+                        "assetType": text(raw.get("asset_type")).upper() or None,
+                        "source": text(raw.get("source")) or "broker-transaction-ledger",
+                    }
+                )
+    except OSError:
+        return []
+    return sorted(rows, key=lambda row: (text(row.get("settlementDate")), text(row.get("occurredAt")), text(row.get("transactionId"))))
+
+
+def transaction_ledger_coverage() -> dict[str, Any]:
+    """Return whether the transaction CSV has a complete redacted API artifact behind it."""
+    status = load_json_file(SCHWAB_TRANSACTION_LEDGER_STATUS_FILE) or {}
+    rows = load_transaction_ledger()
+    source_status = text(status.get("sourceStatus"))
+    verified = bool(
+        status.get("ok")
+        and source_status in {"api", "fixture"}
+        and SCHWAB_TRANSACTION_LEDGER_FILE.exists()
+    )
+    return {
+        "present": SCHWAB_TRANSACTION_LEDGER_FILE.exists(),
+        "path": str(SCHWAB_TRANSACTION_LEDGER_FILE),
+        "statusArtifactPresent": SCHWAB_TRANSACTION_LEDGER_STATUS_FILE.exists(),
+        "statusArtifactPath": str(SCHWAB_TRANSACTION_LEDGER_STATUS_FILE),
+        "verified": verified,
+        "sourceStatus": source_status or None,
+        "generatedAt": status.get("generatedAt"),
+        "rowCount": len(rows),
+        "rows": rows,
+        "realizedOptionsProfitKnown": False,
+    }
+
+
+def transaction_day(row: dict[str, Any]) -> date | None:
+    """Prefer settlement date when aligning cash history to transaction facts."""
+    return parse_day(row.get("settlementDate")) or parse_day(row.get("occurredAt")) or parse_day(row.get("tradeDate"))
+
+
+def reconcile_cash_change_to_transactions(
+    change: dict[str, Any] | None,
+    ledger: dict[str, Any],
+) -> dict[str, Any]:
+    """Match one observed cash change to exact broker transaction net amounts.
+
+    This establishes only a cash-flow reconciliation.  In particular, an
+    option trade's net cash is never treated as realized P/L without a
+    lot-level, closed-position reconciliation.
+    """
+    if not change:
+        return {"available": False, "matched": False, "reason": "No non-zero cash change is available to reconcile."}
+    if not ledger.get("verified"):
+        return {
+            "available": False,
+            "matched": False,
+            "reason": "No verified Schwab transaction ledger is available for reconciliation.",
+        }
+    start_day = parse_day((change.get("from") or {}).get("date") or (change.get("from") or {}).get("timestamp"))
+    end_day = parse_day((change.get("to") or {}).get("date") or (change.get("to") or {}).get("timestamp"))
+    if start_day is None or end_day is None:
+        return {"available": False, "matched": False, "reason": "Cash history lacks dates needed for transaction matching."}
+    start_day, end_day = sorted((start_day, end_day))
+    rows = [
+        row
+        for row in ledger.get("rows") or []
+        if transaction_day(row) is not None
+        and start_day <= transaction_day(row) <= end_day
+        and number(row.get("netAmount"), None) is not None
+        and text(row.get("status")).upper() not in {"CANCELED", "REJECTED"}
+    ]
+    transaction_net = round(sum(float(number(row.get("netAmount"), 0.0) or 0.0) for row in rows), 2)
+    cash_delta = round(float(number(change.get("deltaCash"), 0.0) or 0.0), 2)
+    matched = bool(rows) and abs(cash_delta - transaction_net) <= TRANSACTION_RECONCILIATION_TOLERANCE_DOLLARS
+    return {
+        "available": True,
+        "matched": matched,
+        "reason": (
+            "Observed cash delta exactly matches the eligible broker transaction net amount in the same date window."
+            if matched
+            else "Observed cash delta does not exactly match the eligible broker transaction net amount in the same date window."
+        ),
+        "windowStart": start_day.isoformat(),
+        "windowEnd": end_day.isoformat(),
+        "transactionCount": len(rows),
+        "transactionNetAmount": transaction_net if rows else None,
+        "cashDelta": cash_delta,
+        "transactionTypes": sorted({text(row.get("transactionType"), "UNKNOWN") for row in rows}),
+        "realizedOptionsProfitKnown": False,
+    }
+
+
 def is_near_planned_deposit(change_date: date, plan: dict[str, Any]) -> dict[str, Any]:
     """Check whether a date is close to the configured recurring deposit schedule."""
     plan_body = plan.get("plan") or {}
@@ -235,7 +353,11 @@ def is_near_planned_deposit(change_date: date, plan: dict[str, Any]) -> dict[str
     }
 
 
-def classify_cash_change(change: dict[str, Any] | None, deposit_plan: dict[str, Any]) -> dict[str, Any]:
+def classify_cash_change(
+    change: dict[str, Any] | None,
+    deposit_plan: dict[str, Any],
+    transaction_reconciliation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Classify a cash movement without inferring trading profit."""
     if not change:
         return {
@@ -245,6 +367,27 @@ def classify_cash_change(change: dict[str, Any] | None, deposit_plan: dict[str, 
             "knownCashSource": False,
         }
     delta = float(change.get("deltaCash") or 0.0)
+    reconciliation = transaction_reconciliation or {}
+    if reconciliation.get("matched"):
+        return {
+            "classification": "cash-change-reconciled-to-broker-transactions",
+            "confidence": "high",
+            "reason": reconciliation.get("reason"),
+            "knownCashSource": True,
+            "transactionTypes": reconciliation.get("transactionTypes") or [],
+            "transactionNetAmount": reconciliation.get("transactionNetAmount"),
+            "realizedOptionsProfitKnown": False,
+        }
+    if reconciliation.get("available"):
+        return {
+            "classification": "cash-change-ledger-mismatch-review-required",
+            "confidence": "none",
+            "reason": reconciliation.get("reason"),
+            "knownCashSource": False,
+            "transactionTypes": reconciliation.get("transactionTypes") or [],
+            "transactionNetAmount": reconciliation.get("transactionNetAmount"),
+            "realizedOptionsProfitKnown": False,
+        }
     plan_body = deposit_plan.get("plan") or {}
     planned_amount = float(number(plan_body.get("amountDollars"), 0.0) or 0.0)
     change_day = parse_day((change.get("to") or {}).get("date") or (change.get("to") or {}).get("timestamp"))
@@ -277,9 +420,15 @@ def classify_cash_change(change: dict[str, Any] | None, deposit_plan: dict[str, 
 
 def source_coverage() -> dict[str, Any]:
     """Describe which cash attribution inputs are wired."""
+    transaction_ledger = transaction_ledger_coverage()
     return {
-        "brokerTransactionLedgerPresent": SCHWAB_TRANSACTION_LEDGER_FILE.exists(),
-        "brokerTransactionLedgerPath": str(SCHWAB_TRANSACTION_LEDGER_FILE),
+        "brokerTransactionLedgerPresent": transaction_ledger.get("present"),
+        "brokerTransactionLedgerPath": transaction_ledger.get("path"),
+        "brokerTransactionLedgerVerified": transaction_ledger.get("verified"),
+        "brokerTransactionLedgerSourceStatus": transaction_ledger.get("sourceStatus"),
+        "brokerTransactionLedgerRowCount": transaction_ledger.get("rowCount"),
+        "brokerTransactionLedgerStatusArtifactPresent": transaction_ledger.get("statusArtifactPresent"),
+        "brokerTransactionLedgerStatusArtifactPath": transaction_ledger.get("statusArtifactPath"),
         "operatorCashEventsPresent": OPERATOR_CASH_EVENTS_FILE.exists(),
         "operatorCashEventsPath": str(OPERATOR_CASH_EVENTS_FILE),
         "nlvHistoryPresent": NLV_HISTORY_FILE.exists(),
@@ -297,21 +446,39 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
     valid_cash_rows = [row for row in history if row.get("cash") is not None]
     changes = cash_changes(history)
     latest_change = changes[-1] if changes else None
-    latest_classification = classify_cash_change(latest_change, deposit_plan)
     coverage = source_coverage()
-    transaction_ledger_present = bool(coverage.get("brokerTransactionLedgerPresent"))
-    realized_status = "requires-broker-transaction-ledger"
+    transaction_ledger = transaction_ledger_coverage()
+    transaction_reconciliation = reconcile_cash_change_to_transactions(latest_change, transaction_ledger)
+    latest_classification = classify_cash_change(latest_change, deposit_plan, transaction_reconciliation)
+    transaction_ledger_verified = bool(coverage.get("brokerTransactionLedgerVerified"))
+    realized_status = (
+        "transaction-ledger-present-but-lot-level-realized-pnl-unproven"
+        if transaction_ledger_verified
+        else "requires-broker-transaction-ledger"
+    )
     warnings: list[str] = []
-    if not transaction_ledger_present:
+    if not transaction_ledger_verified:
         warnings.append("No broker transaction ledger is wired; realized options profit remains unknown.")
+    elif not transaction_reconciliation.get("matched"):
+        warnings.append("The verified transaction ledger does not exactly reconcile the latest cash movement; review broker statement timing.")
     if not valid_cash_rows:
         warnings.append("No valid cash rows were found in broker cash history.")
 
     payload = {
         "generatedAt": current.isoformat(),
         "stage": CASH_ATTRIBUTION_STAGE,
-        "verdict": "attribution-incomplete" if not transaction_ledger_present else "transaction-ledger-present-review-required",
-        "message": "Broker cash is reconciled, but cash source attribution requires transaction history.",
+        "verdict": (
+            "cash-movement-reconciled-realized-pnl-unknown"
+            if transaction_reconciliation.get("matched")
+            else "transaction-ledger-present-review-required"
+            if transaction_ledger_verified
+            else "attribution-incomplete"
+        ),
+        "message": (
+            "Latest broker cash movement is reconciled to transaction net amounts; realized options P/L remains unknown."
+            if transaction_reconciliation.get("matched")
+            else "Broker cash is reconciled, but cash source attribution requires transaction history."
+        ),
         "researchOnly": True,
         "promotable": False,
         "authorityChanged": False,
@@ -336,6 +503,7 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
         },
         "latestCashChange": latest_change,
         "latestCashClassification": latest_classification,
+        "transactionReconciliation": transaction_reconciliation,
         "realizedOptionsProfit": {
             "status": realized_status,
             "known": False,
@@ -353,7 +521,7 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
         "sourceCoverage": coverage,
         "warnings": warnings,
         "nextActions": [
-            "Wire Schwab transaction history or reviewed broker exports before labeling any cash movement as realized options profit.",
+            "Use the verified Schwab transaction ledger to reconcile cash movements, but retain realized options P/L as unknown until lot-level closed-position evidence exists.",
             "After a deposit lands, rerun account sync, cash-ledger, and capital-check from broker-confirmed cash.",
             "Keep planned deposits, broker cash, realized options P/L, and paper/shadow P/L in separate buckets.",
         ],
@@ -362,6 +530,8 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
             "data/inferno_schwab_account_sync.json",
             "data/inferno_deposit_plan.json",
             "data/nlv_history.csv",
+            "data/inferno_schwab_transaction_ledger.json",
+            "data/schwab_transactions.csv",
         ],
     }
     save_cash_attribution(payload)
@@ -375,6 +545,7 @@ def render_cash_attribution(payload: dict[str, Any]) -> str:
     history = payload.get("history") or {}
     latest_change = payload.get("latestCashChange") or {}
     latest_class = payload.get("latestCashClassification") or {}
+    transaction_reconciliation = payload.get("transactionReconciliation") or {}
     realized = payload.get("realizedOptionsProfit") or {}
     capital = payload.get("capitalTreatment") or {}
     coverage = payload.get("sourceCoverage") or {}
@@ -405,6 +576,9 @@ def render_cash_attribution(payload: dict[str, Any]) -> str:
         f"- Classification: {latest_class.get('classification')}",
         f"- Confidence: {latest_class.get('confidence')}",
         f"- Reason: {latest_class.get('reason')}",
+        f"- Transaction reconciliation: {'matched' if transaction_reconciliation.get('matched') else 'not matched'}",
+        f"- Transaction net amount: {money(transaction_reconciliation.get('transactionNetAmount'))}",
+        f"- Transaction types: {', '.join(transaction_reconciliation.get('transactionTypes') or []) or '-'}",
         "",
         "Realized options profit",
         f"- Status: {realized.get('status')}",
@@ -420,6 +594,8 @@ def render_cash_attribution(payload: dict[str, Any]) -> str:
         "",
         "Source coverage",
         f"- Broker transaction ledger present: {coverage.get('brokerTransactionLedgerPresent')}",
+        f"- Broker transaction ledger verified: {coverage.get('brokerTransactionLedgerVerified')}",
+        f"- Broker transaction ledger rows: {coverage.get('brokerTransactionLedgerRowCount')}",
         f"- Operator cash events present: {coverage.get('operatorCashEventsPresent')}",
         f"- NLV history present: {coverage.get('nlvHistoryPresent')}",
         "",

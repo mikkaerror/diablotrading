@@ -109,6 +109,37 @@ class InfernoCashAttributionTests(unittest.TestCase):
         self.assertEqual(payload["totalCash"], 0.0)
         self.assertEqual(payload["netLiquidatingValue"], 767.31)
 
+    def test_exact_transaction_match_reconciles_cash_without_claiming_realized_pnl(self) -> None:
+        change = {
+            "from": {"date": "2026-07-02", "cash": 0.0},
+            "to": {"date": "2026-07-03", "cash": 250.0},
+            "deltaCash": 250.0,
+            "direction": "increase",
+        }
+        ledger = {
+            "verified": True,
+            "rows": [
+                {
+                    "settlementDate": "2026-07-03",
+                    "transactionType": "CASH_RECEIPT",
+                    "status": "VALID",
+                    "netAmount": 250.0,
+                }
+            ],
+        }
+
+        reconciliation = cash_attribution.reconcile_cash_change_to_transactions(change, ledger)
+        classification = cash_attribution.classify_cash_change(change, {}, reconciliation)
+
+        self.assertTrue(reconciliation["matched"])
+        self.assertEqual(reconciliation["transactionNetAmount"], 250.0)
+        self.assertEqual(
+            classification["classification"],
+            "cash-change-reconciled-to-broker-transactions",
+        )
+        self.assertTrue(classification["knownCashSource"])
+        self.assertFalse(classification["realizedOptionsProfitKnown"])
+
     def test_cash_increase_near_schedule_is_likely_deposit_not_profit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
