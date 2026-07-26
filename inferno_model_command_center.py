@@ -54,7 +54,9 @@ SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
 DEPOSIT_PLAN_FILE = DATA_DIR / "inferno_deposit_plan.json"
+GROWTH_STACK_FILE = DATA_DIR / "inferno_growth_stack.json"
 CASH_ATTRIBUTION_FILE = DATA_DIR / "inferno_cash_attribution.json"
+SCHWAB_TRANSACTION_LEDGER_FILE = DATA_DIR / "inferno_schwab_transaction_ledger.json"
 TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
@@ -120,6 +122,8 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno daily-ops", "description": "refresh the Schwab daily options operations tape"},
     {"command": "./inferno action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "./inferno deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "./inferno growth-stack", "description": "layer broker NLV, observed account trend, scheduled deposits, and illustrative compounding; forecast-only"},
+    {"command": "./inferno schwab-transactions", "description": "refresh or show the read-only redacted Schwab transaction ledger"},
     {"command": "./inferno tracker-taxonomy", "description": "show full-tracker reference sector, industry, and exposure coverage"},
     {"command": "./inferno tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "./inferno tracker-role-review", "description": "show the operator-owned full-tracker role and diversification review queue"},
@@ -197,6 +201,18 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "owner": "codex",
     },
     {
+        "lane": "growth-stack",
+        "question": "How do current broker NLV, recurring deposits, and explicit return assumptions compound together?",
+        "artifact": "reports/growth_stack_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "schwab-transaction-ledger",
+        "question": "Which redacted broker transaction facts can reconcile cash movements?",
+        "artifact": "reports/schwab_transaction_ledger_latest.txt",
+        "owner": "codex",
+    },
+    {
         "lane": "cash-attribution",
         "question": "Which broker cash changes are known versus unattributed?",
         "artifact": "reports/cash_attribution_latest.txt",
@@ -254,6 +270,18 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "evidence-goal-loop",
         "question": "Did the bounded automated evidence cycle pass its verifier?",
         "artifact": "reports/evidence_goal_loop_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "promotion-evidence-lineage",
+        "question": "Which outcomes count toward promotion, and why are the rest excluded?",
+        "artifact": "reports/promotion_evidence_lineage_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "paper-outcome-completeness",
+        "question": "Which counted paper outcomes are fill-backed and audit-complete?",
+        "artifact": "reports/paper_outcome_completeness_latest.txt",
         "owner": "codex",
     },
     {
@@ -925,6 +953,8 @@ def build_command_center() -> dict[str, Any]:
     schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
     deposit_plan = load_json_file(DEPOSIT_PLAN_FILE) or {}
+    growth_stack = load_json_file(GROWTH_STACK_FILE) or {}
+    schwab_transaction_ledger = load_json_file(SCHWAB_TRANSACTION_LEDGER_FILE) or {}
     cash_attribution = load_json_file(CASH_ATTRIBUTION_FILE) or {}
     ticket_cap_policy = load_json_file(TICKET_CAP_POLICY_FILE) or {}
     account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
@@ -1014,6 +1044,8 @@ def build_command_center() -> dict[str, Any]:
         "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "autoLiveAllowed")),
         "capitalScenarioMatrix": artifact_summary(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
         "depositPlan": artifact_summary(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "growthStack": artifact_summary(GROWTH_STACK_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "schwabTransactionLedger": artifact_summary(SCHWAB_TRANSACTION_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "brokerReadOnly", "sourceStatus")),
         "cashAttribution": artifact_summary(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
@@ -1106,6 +1138,30 @@ def build_command_center() -> dict[str, Any]:
         "depositForecast30Days": ((deposit_plan.get("forecastWindows") or {}).get("30Days") or {}).get("grossDeposits"),
         "depositForecast90Days": ((deposit_plan.get("forecastWindows") or {}).get("90Days") or {}).get("grossDeposits"),
         "depositAnnualPlanned": (deposit_plan.get("plan") or {}).get("annualPlannedDollars"),
+        "growthStackVerdict": growth_stack.get("verdict"),
+        "growthStackForecastYearContributions": (growth_stack.get("depositPlan") or {}).get("forecastYearContributions"),
+        "growthStackContributionToBaseEightPctRatio": (
+            (growth_stack.get("layeredMath") or {}).get("contributionToBaseEightPctReturnRatio")
+        ),
+        "growthStackFlatEndingBalance": (growth_stack.get("layeredMath") or {}).get("flatProjectionEndingBalance"),
+        "growthStackIllustrativeEightPctEndingBalance": (
+            (growth_stack.get("layeredMath") or {}).get("illustrativeEightPctEndingBalance")
+        ),
+        "growthStackObservedProgressVerdict": (
+            (growth_stack.get("observedProgress") or {}).get("verdict")
+        ),
+        "growthStackObservedNlvDelta": (
+            (growth_stack.get("observedProgress") or {}).get("observedNlvDeltaDollars")
+        ),
+        "growthStackObservedNlvChangePct": (
+            (growth_stack.get("observedProgress") or {}).get("observedNlvChangePct")
+        ),
+        "growthStackReturnAttribution": (
+            (growth_stack.get("observedProgress") or {}).get("returnAttribution")
+        ),
+        "schwabTransactionLedgerVerdict": schwab_transaction_ledger.get("verdict"),
+        "schwabTransactionLedgerRows": (schwab_transaction_ledger.get("transactionSummary") or {}).get("transactionCount"),
+        "schwabTransactionLedgerSource": schwab_transaction_ledger.get("sourceStatus"),
         "cashAttributionVerdict": cash_attribution.get("verdict"),
         "cashAttributionBrokerCash": (cash_attribution.get("brokerCash") or {}).get("cash"),
         "cashAttributionLatestDelta": (cash_attribution.get("latestCashChange") or {}).get("deltaCash"),
@@ -1369,6 +1425,8 @@ def build_command_center() -> dict[str, Any]:
             "./inferno oauth",
             "./inferno daily-ops",
             "./inferno deposit-plan",
+            "./inferno growth-stack",
+            "./inferno schwab-transactions",
             "./inferno tracker-taxonomy",
             "./inferno tracker-role-review",
             "./inferno tracker-role-policy-packet",
@@ -1432,6 +1490,8 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/capital_launch_check_latest.txt"),
             str(ROOT / "reports/capital_deployment_readiness_latest.txt"),
             str(ROOT / "reports/deposit_plan_latest.txt"),
+            str(ROOT / "reports/growth_stack_latest.txt"),
+            str(ROOT / "reports/schwab_transaction_ledger_latest.txt"),
             str(ROOT / "reports/cash_attribution_latest.txt"),
             str(ROOT / "reports/ticket_cap_policy_latest.txt"),
             str(ROOT / "reports/account_optimization_latest.txt"),
@@ -1521,6 +1581,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- While away packet: {status_value(status.get('whileAwayPacket') or {})}",
             f"- Capital deployment readiness: {status_value(status.get('capitalDeploymentReadiness') or {})}",
             f"- Deposit plan: {status_value(status.get('depositPlan') or {})}",
+            f"- Growth stack: {status_value(status.get('growthStack') or {})}",
+            f"- Schwab transaction ledger: {status_value(status.get('schwabTransactionLedger') or {})}",
             f"- Cash attribution: {status_value(status.get('cashAttribution') or {})}",
             f"- Ticket cap policy: {status_value(status.get('ticketCapPolicy') or {})}",
             f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
@@ -1559,6 +1621,18 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Account cash: {display_value(metrics.get('accountTotalCash'))}",
             f"- Deposit plan: ${display_value(metrics.get('depositAmountDollars'))} every {metrics.get('depositIntervalDays') or '-'} day(s) | "
             f"next {metrics.get('depositNextDate') or '-'} | 30d ${display_value(metrics.get('depositForecast30Days'))}",
+            f"- Growth stack: {metrics.get('growthStackVerdict') or '-'} | "
+            f"one-year deposits ${display_value(metrics.get('growthStackForecastYearContributions'))} | "
+            f"vs 8% starting-base return {display_value(metrics.get('growthStackContributionToBaseEightPctRatio'))}x | "
+            f"flat ${display_value(metrics.get('growthStackFlatEndingBalance'))} | "
+            f"8% ${display_value(metrics.get('growthStackIllustrativeEightPctEndingBalance'))}",
+            f"- Observed NLV trend: ${display_value(metrics.get('growthStackObservedNlvDelta'))} | "
+            f"{display_value(metrics.get('growthStackObservedNlvChangePct'))}% | "
+            f"{metrics.get('growthStackObservedProgressVerdict') or '-'} | "
+            f"return attribution {metrics.get('growthStackReturnAttribution') or '-'}",
+            f"- Schwab transaction ledger: {metrics.get('schwabTransactionLedgerVerdict') or '-'} | "
+            f"rows {metrics.get('schwabTransactionLedgerRows') if metrics.get('schwabTransactionLedgerRows') is not None else '-'} | "
+            f"source {metrics.get('schwabTransactionLedgerSource') or '-'}",
             f"- Cash attribution: {metrics.get('cashAttributionVerdict') or '-'} | "
             f"broker cash ${display_value(metrics.get('cashAttributionBrokerCash'))} | "
             f"latest delta ${display_value(metrics.get('cashAttributionLatestDelta'))} | "
@@ -1753,6 +1827,17 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
         f"- Deposit plan: {status_value(status.get('depositPlan') or {})} | "
         f"next {metrics.get('depositNextDate') or '-'} | "
         f"30d ${display_value(metrics.get('depositForecast30Days'))}",
+        f"- Growth stack: {status_value(status.get('growthStack') or {})} | "
+        f"one-year deposits ${display_value(metrics.get('growthStackForecastYearContributions'))} | "
+        f"flat ${display_value(metrics.get('growthStackFlatEndingBalance'))} | "
+        f"8% ${display_value(metrics.get('growthStackIllustrativeEightPctEndingBalance'))}",
+        f"- Observed NLV trend: ${display_value(metrics.get('growthStackObservedNlvDelta'))} | "
+        f"{display_value(metrics.get('growthStackObservedNlvChangePct'))}% | "
+        f"{metrics.get('growthStackObservedProgressVerdict') or '-'} | "
+        f"return attribution {metrics.get('growthStackReturnAttribution') or '-'}",
+        f"- Schwab transaction ledger: {status_value(status.get('schwabTransactionLedger') or {})} | "
+        f"rows {metrics.get('schwabTransactionLedgerRows') if metrics.get('schwabTransactionLedgerRows') is not None else '-'} | "
+        f"source {metrics.get('schwabTransactionLedgerSource') or '-'}",
         f"- Cash attribution: {status_value(status.get('cashAttribution') or {})} | "
         f"latest delta ${display_value(metrics.get('cashAttributionLatestDelta'))} | "
         f"{metrics.get('cashAttributionClassification') or '-'}",

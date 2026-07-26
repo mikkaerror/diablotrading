@@ -39,7 +39,10 @@ from inferno_config import DEFAULT_SHEET_NAME, ROOT, default_backtest_root, loca
 from inferno_doctor import watchdog_run_status
 from inferno_heartbeat import record_heartbeat
 from inferno_data_readiness_audit import run_audit
+from inferno_deposit_plan import build_deposit_plan
 from inferno_downloads_watch import run_watch
+from inferno_cash_attribution import build_cash_attribution
+from inferno_growth_stack import build_growth_stack, save_growth_stack
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_live_account_sync import build_live_account_sync
 from inferno_live_position_review import build_live_position_review
@@ -480,6 +483,49 @@ def refresh_live_account_sync() -> dict[str, Any]:
     }
 
 
+def refresh_growth_stack() -> dict[str, Any]:
+    """Refresh cash-aware growth reporting after the latest account sync.
+
+    The maintenance sweep is a second account-truth path between the daily
+    model refreshes. Keep its dependent reports in dependency order so the
+    command center never pairs a new broker NLV with yesterday's projection.
+    All three builders are research-only and never make planned cash
+    deployable, attribute return, or grant broker authority.
+    """
+    try:
+        build_deposit_plan()
+        build_cash_attribution()
+        report = build_growth_stack()
+        save_growth_stack(report)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "refresh-failed",
+            "error": str(exc),
+        }
+    progress = report.get("observedProgress") or {}
+    plan = report.get("depositPlan") or {}
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+        and not bool((report.get("layeredMath") or {}).get("plannedDepositsAreDeployable"))
+        and not bool(progress.get("safeForPerformanceClaim"))
+    )
+    return {
+        "ok": safe and report.get("verdict") in {"forecast-ready", "assumption-review"},
+        "status": str(report.get("verdict") or "unknown"),
+        "generatedAt": report.get("generatedAt"),
+        "plannedYearContributions": plan.get("forecastYearContributions"),
+        "observedNlvDeltaDollars": progress.get("observedNlvDeltaDollars"),
+        "observedNlvChangePct": progress.get("observedNlvChangePct"),
+        "returnAttribution": progress.get("returnAttribution"),
+        "researchOnly": safe,
+    }
+
+
 def refresh_live_position_review() -> dict[str, Any]:
     """Refresh the live-position review artifact from the current live sync."""
     try:
@@ -741,6 +787,16 @@ def maintenance_report_text(report: dict[str, Any]) -> str:
             f"suffix {live_account_sync.get('matchedSuffix') or '-'} | "
             f"source {live_account_sync.get('accountDataSource') or '-'}"
         )
+    growth_stack = report.get("growthStack") or {}
+    if growth_stack:
+        lines.append(
+            f"Growth stack: {growth_stack.get('status')} | "
+            f"planned ${growth_stack.get('plannedYearContributions')} | "
+            f"observed NLV ${growth_stack.get('observedNlvDeltaDollars')} "
+            f"({growth_stack.get('observedNlvChangePct')}%) | "
+            f"return attribution {growth_stack.get('returnAttribution') or '-'} | "
+            f"research-only {growth_stack.get('researchOnly')}"
+        )
     live_position_review = report.get("livePositionReview") or {}
     if live_position_review:
         counts = live_position_review.get("counts") or {}
@@ -864,6 +920,7 @@ def run_maintenance(
     )
     schwab_account_sync = refresh_schwab_account_sync()
     live_account_sync = refresh_live_account_sync()
+    growth_stack = refresh_growth_stack()
     live_position_review = refresh_live_position_review()
     ticket_cap_policy = refresh_ticket_cap_policy()
     model_command_center = refresh_model_command_center()
@@ -921,6 +978,7 @@ def run_maintenance(
         "approvalDispatch": approval_dispatch,
         "schwabAccountSync": schwab_account_sync,
         "liveAccountSync": live_account_sync,
+        "growthStack": growth_stack,
         "livePositionReview": live_position_review,
         "ticketCapPolicy": ticket_cap_policy,
         "modelCommandCenter": model_command_center,
@@ -939,6 +997,7 @@ def run_maintenance(
             and bool(approval_inbox.get("ok"))
             and bool(approval_dispatch.get("ok"))
             and bool(live_account_sync.get("ok"))
+            and bool(growth_stack.get("ok"))
             and bool(live_position_review.get("ok"))
             and bool(ticket_cap_policy.get("ok"))
             and bool(model_command_center.get("ok"))

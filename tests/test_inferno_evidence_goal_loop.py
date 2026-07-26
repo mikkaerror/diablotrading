@@ -95,6 +95,15 @@ def safe_artifacts() -> dict:
 
 
 class EvidenceGoalLoopTests(unittest.TestCase):
+    def test_cycle_refreshes_promotion_evidence_lineage_after_strategy_lab(self) -> None:
+        names = [name for name, _argv in loop.CYCLE_COMMANDS]
+
+        self.assertIn("promotion evidence lineage", names)
+        self.assertIn("paper outcome completeness", names)
+        self.assertLess(names.index("strategy lab"), names.index("promotion evidence lineage"))
+        self.assertLess(names.index("promotion evidence lineage"), names.index("paper outcome completeness"))
+        self.assertLess(names.index("paper outcome completeness"), names.index("paper velocity"))
+
     def test_verifier_accepts_fresh_safe_research_cycle(self) -> None:
         commands = [{"name": "step", "ok": True}]
         result = loop.verify_cycle(safe_artifacts(), commands, now=NOW)

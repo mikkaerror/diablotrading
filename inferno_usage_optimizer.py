@@ -142,6 +142,14 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "purpose": "show recurring deposit forecast separate from broker-confirmed cash",
     },
     {
+        "command": "./inferno growth-stack",
+        "purpose": "layer broker NLV, observed account trend, scheduled deposits, and illustrative compounding without making cash deployable or claiming returns",
+    },
+    {
+        "command": "./inferno schwab-transactions",
+        "purpose": "refresh or show redacted read-only broker transaction facts before cash reconciliation; never treats net cash as realized P/L",
+    },
+    {
         "command": "./inferno tracker-taxonomy",
         "purpose": "show full-tracker reference coverage without creating weights, roles, or purchases",
     },

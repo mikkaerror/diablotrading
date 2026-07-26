@@ -26,11 +26,13 @@ from inferno_doctor import (
     model_command_center_status,
     paper_bottleneck_reducer_status,
     paper_blocker_swarm_status,
+    paper_fill_ingest_status,
     paper_mark_to_market_status,
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
     schwab_oauth_status,
+    schwab_transaction_ledger_status,
     short_premium_study_status,
     strategy_shadow_comparison_status,
     tos_export_bridge_status,
@@ -76,6 +78,28 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                 "2026-04-28T07:45:00-06:00",
                 now=now,
                 service_hour=6,
+            )
+        )
+
+    def test_in_current_service_cycle_honors_a_nonzero_service_minute(self) -> None:
+        previous_run = "2026-04-29T13:40:00-06:00"
+        before_goal_loop = datetime.fromisoformat("2026-04-30T13:39:00-06:00")
+        after_goal_loop = datetime.fromisoformat("2026-04-30T13:40:00-06:00")
+
+        self.assertTrue(
+            in_current_service_cycle(
+                previous_run,
+                now=before_goal_loop,
+                service_hour=13,
+                service_minute=40,
+            )
+        )
+        self.assertFalse(
+            in_current_service_cycle(
+                previous_run,
+                now=after_goal_loop,
+                service_hour=13,
+                service_minute=40,
             )
         )
 
@@ -129,6 +153,61 @@ class InfernoDoctorCycleTests(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertIn("stale", detail)
+
+    def test_schwab_transaction_ledger_accepts_fresh_safe_token_refresh_block(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = schwab_transaction_ledger_status(
+                {
+                    "generatedAt": "2026-07-22T22:00:00-06:00",
+                    "verdict": "access-token-refresh-needed",
+                    "researchOnly": True,
+                    "brokerReadOnly": True,
+                    "orderEndpointsAllowed": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "transactionSummary": {"transactionCount": 0},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("access-token-refresh-needed", detail)
+        self.assertIn("read-only=True", detail)
+
+    def test_schwab_transaction_ledger_rejects_order_authority_drift(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = schwab_transaction_ledger_status(
+                {
+                    "generatedAt": "2026-07-22T22:00:00-06:00",
+                    "ok": True,
+                    "verdict": "healthy",
+                    "researchOnly": True,
+                    "brokerReadOnly": True,
+                    "orderEndpointsAllowed": True,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "transactionSummary": {"transactionCount": 1},
+                }
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("read-only=False", detail)
+
+    def test_paper_fill_ingest_status_surfaces_rejected_and_unmatched_rows(self) -> None:
+        now = datetime.fromisoformat("2026-07-22T22:40:00-06:00")
+        ok, detail = paper_fill_ingest_status(
+            {
+                "generatedAt": "2026-07-22T22:30:00-06:00",
+                "processedRows": 4,
+                "importedRows": 1,
+                "closedRows": 1,
+                "rejectedRows": 2,
+                "unmatchedRows": ["missing ticket"],
+            },
+            now=now,
+        )
+
+        self.assertTrue(ok)
+        self.assertIn("1 imported | 1 closed | 2 rejected | 1 unmatched", detail)
 
     def test_enabled_tos_export_bridge_accepts_fresh_trigger(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

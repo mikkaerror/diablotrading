@@ -288,6 +288,25 @@ python3 inferno_schwab_oauth.py ensure
 desk. Account, option-chain, price-history, and TOS-metric jobs should not
 require separate operator refreshes.
 
+### Reconcile broker cash with redacted Schwab transaction facts
+
+```bash
+./inferno schwab-transactions
+./inferno cash-ledger
+```
+
+The transaction ledger uses only GET requests to the configured, approved
+account suffix. It writes a redacted normalized artifact and
+`data/schwab_transactions.csv`; account numbers, hashes, OAuth values, and raw
+transaction descriptions are not persisted. When OAuth requires refresh, the
+ledger records that it made no account request. The daily and nightly refreshes
+run the ledger after their shared OAuth preflight.
+
+An exact cash/net-transaction match establishes only a cash-flow
+reconciliation. It does not establish realized options P/L, available capital,
+or any authority to trade. Those remain separate until lot-level closed-position
+evidence and the existing capital gates are satisfied.
+
 If status says `reauthorizationRequired: True`, run:
 
 ```bash
@@ -1166,6 +1185,12 @@ python3 install_inferno_daily_loop_service.py status
 python3 install_inferno_daily_loop_service.py uninstall
 ```
 
+The installer deploys the scheduled entrypoint outside the workspace with an
+atomic replacement, so a concurrent scheduled start cannot read a partial
+script. Verify that deployment with `./inferno schedule`; a `script-sync drift`
+result means rerunning the installer is required before the next scheduled
+digest uses the reviewed source.
+
 The installer writes a LaunchAgent that fires the wrapper at the given local
 times on weekdays only. Default times are 06:30 (after dawn cycle) and 16:30
 (after market close). Logs land in:
@@ -1192,10 +1217,33 @@ python3 install_inferno_evidence_goal_loop_service.py status
 python3 install_inferno_evidence_goal_loop_service.py uninstall
 ```
 
+Its LaunchAgent runs a deployed entrypoint outside the workspace. Check
+`./inferno schedule` after source changes; `script-sync drift` requires an
+installer refresh before the next scheduled evidence cycle.
+
 The default schedule is 13:40 local on weekdays, after the 13:30 action pulse
 and before the U.S. equity close. It cannot approve tickets, submit orders,
 change the universe, or widen authority. Any authority drift or process breach
 stops the cycle before paper evidence is mutated.
+
+After strategy-lab scoring, the loop also rebuilds the read-only
+promotion-evidence lineage diagnostic. It separates counted staged-paper
+outcomes from fast simulations and shadow observations, which never earn
+promotion credit. Its companion paper-outcome completeness audit flags whether
+a counted staged-paper result has fill-backed paperMoney provenance and reports
+whether the canonical fill log is missing, schema-invalid, empty, ignored, or
+contains a close-ready row. A closed row missing or invalidating any immutable
+execution fact (ticket identity, instrument, paper environment, contracts,
+prices, or parseable chronological timestamps) is rejected by the importer before it can alter a paper
+ticket. A close-ready audit row must also map exactly and uniquely to a
+paper-staged ticket with the same ticker and strategy; format-complete but
+unmatched rows are reported as evidence debt, not as an operator ingest task.
+The audit only reads those artifacts; it never changes the existing
+scoring count, fill log, or ticket state.
+Doctor also reports fill-ingest rejected and unmatched row counts explicitly;
+they never count as imported or closed paper evidence.
+Doctor keeps the most recent verified weekday artifact healthy until that 13:40
+window begins; after it begins, the current-day run is required.
 
 Run verdicts are intentionally outcome-specific:
 

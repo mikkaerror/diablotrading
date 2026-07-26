@@ -231,5 +231,328 @@
       "data-contract",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-ac5af3a9",
+    "createdAt": "2026-07-21T18:09:33.110735-06:00",
+    "updatedAt": "2026-07-21T18:19:27.115619-06:00",
+    "title": "Automate growth-stack contribution forecasts",
+    "body": "Add a research-only recurring growth-stack forecast that layers account, deposit-plan, and conservative scenarios without changing capital authority, risk constants, or the eligible universe.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "automation",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-17e63238",
+    "createdAt": "2026-07-21T19:17:48.368203-06:00",
+    "updatedAt": "2026-07-21T19:21:59.405026-06:00",
+    "title": "Layer cash attribution into growth stack",
+    "body": "Extend the research-only growth stack with canonical cash-attribution context so planned deposits, broker cash, and unexplained cash movements cannot be conflated.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "cash-attribution",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-a56e85eb",
+    "createdAt": "2026-07-21T19:28:24.290345-06:00",
+    "updatedAt": "2026-07-21T19:28:24.290345-06:00",
+    "title": "Add an observed-NLV layer without return inference",
+    "body": "Expose historical-to-current NLV movement inside the growth stack while withholding performance claims until cash flows and transaction effects are attributable.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "nlv-history",
+      "cash-attribution",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-a1d7c777",
+    "createdAt": "2026-07-22T01:22:39.654782-06:00",
+    "updatedAt": "2026-07-22T01:25:41.133953-06:00",
+    "title": "Keep growth forecast fresh after maintenance account sync",
+    "body": "Close the hourly ops-maintenance dependency gap so refreshed read-only account truth is followed by deposit-plan, cash-attribution, and growth-stack recomputation before the command center renders.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "ops-maintenance",
+      "freshness",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-dfdb7e48",
+    "createdAt": "2026-07-22T01:29:29.104030-06:00",
+    "updatedAt": "2026-07-22T10:54:40.464602-06:00",
+    "title": "Layer short-horizon observed NLV windows without return inference",
+    "body": "Add one-day, seven-day, and thirty-day account-value deltas to the growth stack while preserving the transaction-attribution boundary and keeping those values unavailable to execution or performance claims.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "nlv-history",
+      "numeric-layering",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-c9e9f3a0",
+    "createdAt": "2026-07-22T11:54:46.423235-06:00",
+    "updatedAt": "2026-07-22T11:56:56.703090-06:00",
+    "title": "Align evidence-goal-loop health check with its scheduled cadence",
+    "body": "Diagnose and correct any false evidence-goal-loop doctor warning before the weekday scheduled run, while preserving stale/missing failure detection and all research-only authority boundaries.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "evidence-goal-loop",
+      "doctor",
+      "command-center",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-5b7649bb",
+    "createdAt": "2026-07-22T12:01:51.882109-06:00",
+    "updatedAt": "2026-07-22T12:03:41.104900-06:00",
+    "title": "Audit deployed daily-refresh script sync",
+    "body": "Add a checksum-based source-versus-deployed audit for the daily model-refresh LaunchAgent and surface it through the unified schedule, without changing the job schedule, data scope, authority, or broker behavior.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "automation",
+      "daily-refresh",
+      "script-sync",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-06c325a7",
+    "createdAt": "2026-07-22T13:46:01.182236-06:00",
+    "updatedAt": "2026-07-22T13:49:05.049299-06:00",
+    "title": "Harden daily digest deployment and sync auditing",
+    "body": "Deploy the daily-loop LaunchAgent entrypoint outside the workspace, add source-versus-deployed checksum reporting, and surface it in the unified schedule without changing times, diagnostics, approval behavior, broker interaction, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "automation",
+      "daily-loop",
+      "script-sync",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-72ff1d84",
+    "createdAt": "2026-07-22T16:39:17.136239-06:00",
+    "updatedAt": "2026-07-22T16:41:54.016267-06:00",
+    "title": "Audit and deploy the scheduled evidence-goal loop",
+    "body": "Bring the weekday evidence-goal-loop LaunchAgent under the same deployed-entrypoint and checksum-audit contract as the other scheduled jobs, expose it in ./inferno schedule, and preserve its 13:40 schedule plus research-only authority boundary.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "automation",
+      "evidence-goal-loop",
+      "script-sync",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-3acfe087",
+    "createdAt": "2026-07-22T17:33:14.589121-06:00",
+    "updatedAt": "2026-07-22T17:35:45.727130-06:00",
+    "title": "Make deployed service entrypoint refreshes atomic",
+    "body": "Use the shared local filesystem write contract to atomically replace the four scheduler entrypoint copies during installer refresh, preventing a concurrent LaunchAgent fire from observing a partially written script. Preserve schedules and research-only authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "automation",
+      "deployment",
+      "atomic-write",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-e0e9f7a0",
+    "createdAt": "2026-07-22T21:28:27.910945-06:00",
+    "updatedAt": "2026-07-22T21:30:24.750620-06:00",
+    "title": "Complete unified LaunchAgent schedule visibility",
+    "body": "Expose all nine installed Inferno LaunchAgents in ./inferno schedule and render StartInterval-based cadence alongside calendar times. This is read-only schedule reporting; do not invoke services, alter schedules, or change any broker/ticket/risk/authority setting.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "automation",
+      "observability",
+      "schedule",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-4c1d136c",
+    "createdAt": "2026-07-22T21:32:33.763898-06:00",
+    "updatedAt": "2026-07-22T21:39:15.613457-06:00",
+    "title": "Build promotion-evidence lineage ledger",
+    "body": "Create a read-only lineage diagnostic that reconciles proposal and outcome sources into promotion-qualified paper evidence, explicitly separates paper-ledger blockers from quarantined fast simulations and shadows, and reports each exclusion reason. Do not mutate tickets, approvals, broker state, thresholds, risk constants, universe, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "evidence",
+      "lineage",
+      "promotion",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-f9dd353d",
+    "createdAt": "2026-07-22T21:47:54.032462-06:00",
+    "updatedAt": "2026-07-22T21:51:38.260000-06:00",
+    "title": "Build paper outcome completeness contract",
+    "body": "Create a read-only diagnostic over closed staged paper rows that distinguishes existing strategy-lab scoring eligibility from audit-complete fill-backed outcome evidence, reports missing fields and provenance, and never mutates a ticket, outcome, approval, risk constant, universe, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "evidence",
+      "provenance",
+      "paper-outcomes",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-b84dd9ab",
+    "createdAt": "2026-07-22T22:01:57.128316-06:00",
+    "updatedAt": "2026-07-22T22:15:06.852129-06:00",
+    "title": "Add read-only Schwab transaction-ledger boundary",
+    "body": "Completed: built the strict GET-only, approved-suffix Schwab transaction ledger and wired it into daily/nightly refresh, cash reconciliation, Doctor, command surfaces, docs, and the knowledge layer. Live read returned 16 redacted rows; the prior -$599.93 cash delta exactly matches CASH_DISBURSEMENT net cash. Realized options P/L remains unknown; no ticket, broker-submit, live authority, risk constant, or eligible-universe change.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "cash-attribution",
+      "schwab",
+      "read-only",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-40ea9719",
+    "createdAt": "2026-07-22T22:18:28.756542-06:00",
+    "updatedAt": "2026-07-22T22:22:11.128820-06:00",
+    "title": "Expose paper-fill intake evidence readiness",
+    "body": "Completed: paper-outcome completeness now reads the canonical fill log and latest ingest report without invoking ingestion. It exposes schema status, nonblank/open/closed/close-ready/ignored counts, incomplete close fields, and last-ingest telemetry. Current truth: schema-valid log with two rows, both ignored, and zero close-ready fills. No ticket, fill-log, approval, close, promotion, broker, risk, universe, or authority mutation.",
+    "owner": "shared",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "fill-intake",
+      "observability",
+      "read-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-5c8d4a94",
+    "createdAt": "2026-07-22T22:22:14.417627-06:00",
+    "updatedAt": "2026-07-22T22:30:29.689057-06:00",
+    "title": "Fail closed on incomplete closed paper-fill evidence",
+    "body": "Implemented and hardened a fail-closed closed-fill guard. Closed rows now require exact paper-staged ticketId matching, matching ticker/strategy, and valid immutable paper execution facts (paper environment, integer contracts, finite non-negative prices, timestamps); otherwise they are rejected before any ticket/outcome mutation. Ingest reports rejectedRows, and the read-only completeness audit surfaces it. Verified with 100 focused tests, full suite, math verification, secret hygiene, diff check, and schedule sync; no real fill ingest or ticket action was run.",
+    "owner": "shared",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "fill-intake",
+      "provenance",
+      "safety",
+      "read-only"
+    ]
+  },
+  {
+    "id": "mission-3d396a68",
+    "createdAt": "2026-07-22T22:28:19.333080-06:00",
+    "updatedAt": "2026-07-22T22:30:30.173024-06:00",
+    "title": "Align fill-intake readiness with exact ticket identity",
+    "body": "Aligned read-only intake readiness with the importer. The audit now distinguishes format-complete rows from exact uniquely matchable staged-ticket rows, flags absent/ambiguous ticket targets and ticker/strategy identity mismatch, and exposes an operator ingest task only for rows that pass all gates. Current log has two ignored rows and zero ingest-ready fills. Verified with 100 focused tests, full suite, math verification, secret hygiene, diff check, and schedule sync; no importer, ticket, broker, approval, promotion, risk, or authority action was run.",
+    "owner": "shared",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "fill-intake",
+      "provenance",
+      "read-only"
+    ]
+  },
+  {
+    "id": "mission-d3640d6c",
+    "createdAt": "2026-07-22T22:36:31.841497-06:00",
+    "updatedAt": "2026-07-22T22:38:12.173226-06:00",
+    "title": "Surface rejected paper-fill evidence in overnight health checks",
+    "body": "Doctor now reports the exact paper-fill ingest outcomes: imported, closed, rejected, and unmatched. Rejected/unmatched rows remain observable intake debt and never count as outcomes. Verified against the current artifact (0 / 0 / 0 / 0), 77 focused tests, full suite, math verification, secret hygiene, diff check, and schedule sync; no importer, ticket, broker, approval, promotion, risk, universe, or authority action was run.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "paper-evidence",
+      "doctor",
+      "observability",
+      "read-only"
+    ]
+  },
+  {
+    "id": "mission-2b34f4e7",
+    "createdAt": "2026-07-22T22:38:40.782028-06:00",
+    "updatedAt": "2026-07-22T22:40:18.558698-06:00",
+    "title": "Validate closed paper-fill time and P/L evidence",
+    "body": "Closed paper-fill evidence now requires parseable timezone-aware timestamps with close time no earlier than open time, finite non-negative execution prices, positive integral contracts, exact staged-ticket identity, and paper environment. A non-finite supplied P/L is not persisted; the validated execution prices derive it instead. Verified with 103 focused tests, full suite, Doctor, math verification, secret hygiene, diff check, and schedule sync. Current log remains two ignored rows with zero ready evidence; no importer, ticket, broker, approval, promotion, risk, universe, or authority action was run.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "paper-evidence",
+      "fill-intake",
+      "provenance",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-05baa895",
+    "createdAt": "2026-07-25T22:55:07.628828-06:00",
+    "updatedAt": "2026-07-25T22:55:14.302085-06:00",
+    "title": "Stabilize growth-stack safety test clock",
+    "body": "Keep growth-stack doctor safety tests deterministic by evaluating fixed historical fixtures against a fixed doctor clock. Test-only validation repair; do not change cash authority, tickets, broker behavior, risk constants, eligible universe, or live-trading authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "growth-stack",
+      "tests",
+      "research-only",
+      "safety"
+    ]
   }
 ]

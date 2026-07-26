@@ -34,6 +34,18 @@ from inferno_model_command_center import (
     update_mission,
 )
 from inferno_ops_maintenance import run_maintenance
+from install_inferno_daily_model_refresh_service import (
+    SERVICE_LABEL as DAILY_MODEL_REFRESH_SERVICE_LABEL,
+    script_sync_status as daily_model_refresh_script_sync_status,
+)
+from install_inferno_daily_loop_service import (
+    SERVICE_LABEL as DAILY_LOOP_SERVICE_LABEL,
+    script_sync_status as daily_loop_script_sync_status,
+)
+from install_inferno_evidence_goal_loop_service import (
+    SERVICE_LABEL as EVIDENCE_GOAL_LOOP_SERVICE_LABEL,
+    script_sync_status as evidence_goal_loop_script_sync_status,
+)
 from install_inferno_nightly_optimize_service import (
     SERVICE_LABEL as NIGHTLY_OPTIMIZE_SERVICE_LABEL,
     script_sync_status as nightly_script_sync_status,
@@ -59,11 +71,13 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "daily-ops", "description": "refresh the Schwab daily options operations tape"},
     {"command": "action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
+    {"command": "growth-stack", "description": "layer NLV, observed account trend, scheduled deposits, and illustrative compounding; forecast-only"},
     {"command": "tracker-taxonomy", "description": "show full-tracker reference sector, industry, and economic-exposure coverage"},
     {"command": "tracker-registry", "description": "show full-tracker taxonomy and holdings coverage before DCA research"},
     {"command": "tracker-role-review", "description": "show the operator-owned full-tracker role and diversification review queue"},
     {"command": "tracker-role-policy-packet", "description": "build a blank 146-name role-policy worksheet; no decisions, imports, weights, or purchases"},
     {"command": "tracker-role-policy", "description": "validate an optional human-owned role policy read-only; no weights or purchases"},
+    {"command": "schwab-transactions", "description": "refresh or show the read-only redacted Schwab transaction ledger"},
     {"command": "cash-ledger", "description": "reconcile broker cash changes without inferring trading profit"},
     {"command": "ticket-cap", "description": "show construction cap, simulated paper budget, and call-options posture"},
     {"command": "capital-check", "description": "run the capital launch check; defaults to deployable cash 0"},
@@ -73,9 +87,15 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "onboard", "description": "print the compact handoff packet"},
 )
 LAUNCH_AGENT_SCHEDULES: tuple[tuple[str, str], ...] = (
+    ("io.diablotrading.inferno-dawn-brief", "dawn brief"),
+    ("io.diablotrading.inferno-watchdog", "watchdog"),
     ("io.diablotrading.inferno-daily-model-refresh", "full sync"),
+    ("io.diablotrading.inferno-action-pulse", "action pulse"),
     ("io.diablotrading.inferno-daily-loop", "digest"),
+    ("io.diablotrading.inferno-evidence-goal-loop", "paper evidence"),
     ("io.diablotrading.inferno-nightly-optimize", "nightly research"),
+    ("io.diablotrading.inferno-ops-maintenance", "ops maintenance"),
+    ("io.diablotrading.inferno-desktop-automation", "desktop coordinator"),
 )
 CODEX_AUTOMATIONS: tuple[str, ...] = (
     "schwab-oauth-early-warning",
@@ -159,6 +179,23 @@ def _format_calendar_intervals(intervals: Any) -> str:
     return f"{weekday_label} at {', '.join(times)}"
 
 
+def _format_start_interval(interval_seconds: Any) -> str | None:
+    """Render a launchd repeat interval without pretending it is a clock time."""
+    try:
+        seconds = int(interval_seconds)
+    except (TypeError, ValueError):
+        return None
+    if seconds <= 0:
+        return None
+    if seconds % 3600 == 0:
+        count = seconds // 3600
+        return f"every {count} hour{'s' if count != 1 else ''}"
+    if seconds % 60 == 0:
+        count = seconds // 60
+        return f"every {count} minute{'s' if count != 1 else ''}"
+    return f"every {seconds} seconds"
+
+
 def _read_launch_agent(label: str, purpose: str) -> dict[str, Any]:
     path = LAUNCH_AGENTS_DIR / f"{label}.plist"
     if not path.exists():
@@ -175,6 +212,13 @@ def _read_launch_agent(label: str, purpose: str) -> dict[str, Any]:
             "path": str(path),
             "error": str(exc),
         }
+    calendar_schedule = _format_calendar_intervals(payload.get("StartCalendarInterval"))
+    repeat_interval = _format_start_interval(payload.get("StartInterval"))
+    schedule = (
+        f"{calendar_schedule}; {repeat_interval}"
+        if repeat_interval and calendar_schedule != "not scheduled"
+        else repeat_interval or calendar_schedule
+    )
     return {
         "id": label,
         "kind": "launchagent",
@@ -182,7 +226,7 @@ def _read_launch_agent(label: str, purpose: str) -> dict[str, Any]:
         "status": "configured",
         "path": str(path),
         "program": " ".join(str(item) for item in payload.get("ProgramArguments", [])),
-        "schedule": _format_calendar_intervals(payload.get("StartCalendarInterval")),
+        "schedule": schedule,
     }
 
 
@@ -263,7 +307,13 @@ def build_schedule_status() -> dict[str, Any]:
     launch_agents = []
     for label, purpose in LAUNCH_AGENT_SCHEDULES:
         agent = _read_launch_agent(label, purpose)
-        if label == NIGHTLY_OPTIMIZE_SERVICE_LABEL:
+        if label == DAILY_MODEL_REFRESH_SERVICE_LABEL:
+            agent["scriptSync"] = daily_model_refresh_script_sync_status()
+        elif label == DAILY_LOOP_SERVICE_LABEL:
+            agent["scriptSync"] = daily_loop_script_sync_status()
+        elif label == EVIDENCE_GOAL_LOOP_SERVICE_LABEL:
+            agent["scriptSync"] = evidence_goal_loop_script_sync_status()
+        elif label == NIGHTLY_OPTIMIZE_SERVICE_LABEL:
             agent["scriptSync"] = nightly_script_sync_status()
         launch_agents.append(agent)
     codex_automations = [_read_codex_automation(automation_id) for automation_id in _codex_automation_ids()]
@@ -454,6 +504,18 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
             f"broker cash {money_metric(metrics.get('accountTotalCash'))}"
         ),
         (
+            f"- Growth stack: {display_metric(metrics.get('growthStackVerdict'))} | "
+            f"one-year deposits {money_metric(metrics.get('growthStackForecastYearContributions'))} | "
+            f"flat {money_metric(metrics.get('growthStackFlatEndingBalance'))} | "
+            f"8% {money_metric(metrics.get('growthStackIllustrativeEightPctEndingBalance'))}"
+        ),
+        (
+            f"- Observed NLV trend: {money_metric(metrics.get('growthStackObservedNlvDelta'))} | "
+            f"{display_metric(metrics.get('growthStackObservedNlvChangePct'))}% | "
+            f"{display_metric(metrics.get('growthStackObservedProgressVerdict'))} | "
+            f"return attribution {display_metric(metrics.get('growthStackReturnAttribution'))}"
+        ),
+        (
             f"- Cash attribution: {display_metric(metrics.get('cashAttributionVerdict'))} | "
             f"latest delta {money_metric(metrics.get('cashAttributionLatestDelta'))} | "
             f"{display_metric(metrics.get('cashAttributionClassification'))}"
@@ -554,6 +616,8 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} daily-ops",
             f"{CONTROL_ENTRYPOINT} action-pulse",
             f"{CONTROL_ENTRYPOINT} deposit-plan",
+            f"{CONTROL_ENTRYPOINT} growth-stack",
+            f"{CONTROL_ENTRYPOINT} schwab-transactions",
             f"{CONTROL_ENTRYPOINT} tracker-taxonomy",
             f"{CONTROL_ENTRYPOINT} tracker-registry",
             f"{CONTROL_ENTRYPOINT} tracker-role-review",
@@ -616,6 +680,9 @@ def build_parser() -> argparse.ArgumentParser:
     deposit_plan_parser.add_argument("--interval-days", type=int, default=14)
     deposit_plan_parser.add_argument("--first-date")
 
+    growth_stack_parser = subparsers.add_parser("growth-stack")
+    growth_stack_parser.add_argument("growth_stack_action", nargs="?", choices=("run", "status"), default="run")
+
     tracker_taxonomy_parser = subparsers.add_parser("tracker-taxonomy")
     tracker_taxonomy_parser.add_argument("tracker_taxonomy_action", nargs="?", choices=("run", "status"), default="run")
 
@@ -630,6 +697,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     tracker_role_policy_parser = subparsers.add_parser("tracker-role-policy")
     tracker_role_policy_parser.add_argument("tracker_role_policy_action", nargs="?", choices=("run", "status"), default="run")
+
+    schwab_transactions_parser = subparsers.add_parser("schwab-transactions")
+    schwab_transactions_parser.add_argument("schwab_transactions_action", nargs="?", choices=("build", "status"), default="build")
 
     cash_ledger_parser = subparsers.add_parser("cash-ledger")
     cash_ledger_parser.add_argument("cash_ledger_action", nargs="?", choices=("run", "status"), default="run")
@@ -793,6 +863,13 @@ def main() -> int:
         result = run_passthrough_command(command_args, timeout_seconds=600)
         return int(result["returncode"])
 
+    if command == "growth-stack":
+        result = run_passthrough_command(
+            ["python3", "inferno_growth_stack.py", args.growth_stack_action],
+            timeout_seconds=600,
+        )
+        return int(result["returncode"])
+
     if command == "tracker-taxonomy":
         result = run_passthrough_command(
             ["python3", "inferno_tracker_taxonomy.py", args.tracker_taxonomy_action],
@@ -824,6 +901,13 @@ def main() -> int:
     if command == "tracker-role-policy":
         result = run_passthrough_command(
             ["python3", "inferno_tracker_role_policy.py", args.tracker_role_policy_action],
+            timeout_seconds=600,
+        )
+        return int(result["returncode"])
+
+    if command == "schwab-transactions":
+        result = run_passthrough_command(
+            ["python3", "inferno_schwab_transaction_ledger.py", args.schwab_transactions_action],
             timeout_seconds=600,
         )
         return int(result["returncode"])

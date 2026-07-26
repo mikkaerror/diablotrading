@@ -16,6 +16,48 @@ import inferno_ops_maintenance as ops_maintenance
 class InfernoOpsMaintenanceTests(unittest.TestCase):
     """Verify maintenance can recover a missed brief without lying about state."""
 
+    def test_refresh_growth_stack_rebuilds_account_dependent_layers_in_order(self) -> None:
+        calls: list[str] = []
+        growth_payload = {
+            "generatedAt": "2026-07-22T01:30:00-06:00",
+            "verdict": "forecast-ready",
+            "researchOnly": True,
+            "promotable": False,
+            "authorityChanged": False,
+            "brokerSubmitAllowed": False,
+            "liveTradingAllowed": False,
+            "depositPlan": {"forecastYearContributions": 6500.0},
+            "layeredMath": {"plannedDepositsAreDeployable": False},
+            "observedProgress": {
+                "observedNlvDeltaDollars": -10.0,
+                "observedNlvChangePct": -1.0,
+                "returnAttribution": "withheld",
+                "safeForPerformanceClaim": False,
+            },
+        }
+        with (
+            patch.object(ops_maintenance, "build_deposit_plan", side_effect=lambda: calls.append("deposit")),
+            patch.object(ops_maintenance, "build_cash_attribution", side_effect=lambda: calls.append("cash")),
+            patch.object(
+                ops_maintenance,
+                "build_growth_stack",
+                side_effect=lambda: calls.append("growth") or growth_payload,
+            ),
+            patch.object(
+                ops_maintenance,
+                "save_growth_stack",
+                side_effect=lambda payload: calls.append("save"),
+            ),
+        ):
+            result = ops_maintenance.refresh_growth_stack()
+
+        self.assertEqual(calls, ["deposit", "cash", "growth", "save"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "forecast-ready")
+        self.assertEqual(result["plannedYearContributions"], 6500.0)
+        self.assertEqual(result["returnAttribution"], "withheld")
+        self.assertTrue(result["researchOnly"])
+
     def test_repair_morning_email_updates_ops_status_when_send_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
@@ -296,6 +338,13 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(
                         ops_maintenance,
+                        "refresh_growth_stack",
+                        return_value={"ok": True, "status": "forecast-ready", "plannedYearContributions": 6500.0, "observedNlvDeltaDollars": -10.0, "observedNlvChangePct": -1.0, "returnAttribution": "withheld", "researchOnly": True},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        ops_maintenance,
                         "refresh_live_position_review",
                         return_value={"ok": True, "status": "review", "counts": {"supported": 1, "review": 1, "fragile": 0}},
                     )
@@ -388,6 +437,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertEqual(saved["approvalDispatch"]["status"], "skipped")
             self.assertEqual(saved["schwabAccountSync"]["status"], "healthy")
             self.assertEqual(saved["liveAccountSync"]["status"], "healthy")
+            self.assertEqual(saved["growthStack"]["status"], "forecast-ready")
             self.assertEqual(saved["livePositionReview"]["status"], "review")
             self.assertEqual(saved["ticketCapPolicy"]["status"], "active")
             self.assertEqual(saved["modelCommandCenter"]["status"], "ready")
@@ -406,6 +456,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
             self.assertIn("Stale approval governor: no-action", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Approval inbox: idle", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Schwab account sync: healthy", report_text_file.read_text(encoding="utf-8"))
+            self.assertIn("Growth stack: forecast-ready", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Live position review: review", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("Ticket cap policy: active", report_text_file.read_text(encoding="utf-8"))
             self.assertIn("construction $250.0-$500.0 | paper cap $500.0 | live cap $0.0", report_text_file.read_text(encoding="utf-8"))
@@ -477,6 +528,7 @@ class InfernoOpsMaintenanceTests(unittest.TestCase):
                 stack.enter_context(patch.object(ops_maintenance, "refresh_approval_inbox", return_value={"ok": True, "status": "idle", "checkedCount": 0, "appliedCount": 0, "skippedCount": 0}))
                 stack.enter_context(patch.object(ops_maintenance, "refresh_schwab_account_sync", return_value={"ok": True, "status": "healthy", "matchedSuffix": "8499", "counts": {"accounts": 1, "approvedAccounts": 1, "positions": 4}}))
                 stack.enter_context(patch.object(ops_maintenance, "refresh_live_account_sync", return_value={"ok": True, "status": "healthy", "matchedSuffix": "8499", "accountDataSource": "schwab-account-api", "counts": {}}))
+                stack.enter_context(patch.object(ops_maintenance, "refresh_growth_stack", return_value={"ok": True, "status": "forecast-ready", "plannedYearContributions": 6500.0, "observedNlvDeltaDollars": -10.0, "observedNlvChangePct": -1.0, "returnAttribution": "withheld", "researchOnly": True}))
                 stack.enter_context(patch.object(ops_maintenance, "refresh_live_position_review", return_value={"ok": True, "status": "healthy", "counts": {}}))
                 stack.enter_context(patch.object(ops_maintenance, "refresh_ticket_cap_policy", return_value={"ok": True, "status": "active", "hardCapDollars": 500.0, "minTargetDollars": 250.0, "paperStageHardCapDollars": 500.0, "liveCapitalHardCapDollars": 0.0, "callPosture": "aggressive-defined-risk"}))
                 stack.enter_context(patch.object(ops_maintenance, "refresh_model_command_center", return_value={"ok": True, "status": "ready", "missionCount": 0, "noteCount": 0, "headlineMetrics": {}}))

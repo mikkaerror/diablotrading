@@ -51,7 +51,10 @@ fi
 
 if [[ "$REFRESH_TRACKER" == "1" ]]; then
   echo "2/18 Tracker and morning model refresh"
-  ./run_inferno_dawn_cycle.sh --skip-email --refresh-prices
+  # A transient vendor failure in the read-only dawn lane must not prevent the
+  # downstream research-only reports (including the deposit growth stack) from
+  # refreshing. The warning remains visible in the final run summary.
+  run_advisory "tracker and morning model refresh" ./run_inferno_dawn_cycle.sh --skip-email --refresh-prices
 else
   echo "2/18 Tracker refresh skipped by operator"
 fi
@@ -62,8 +65,10 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
   # unavailable. Record that as an advisory and continue to the final doctor
   # pass rather than abandoning the whole refresh with stale diagnostics.
   run_advisory "Schwab account truth" python3 inferno_schwab_account_sync.py build --skip-refresh --quiet
+  run_advisory "Schwab transaction ledger" python3 inferno_schwab_transaction_ledger.py build --skip-refresh --quiet
 else
   skip_schwab_step "Schwab account truth"
+  skip_schwab_step "Schwab transaction ledger"
 fi
 
 echo "4/18 Schwab option-chain tape"
@@ -132,6 +137,7 @@ run_advisory "full-tracker blank role-policy packet" python3 inferno_tracker_rol
 run_advisory "full-tracker role-policy contract" python3 inferno_tracker_role_policy.py run
 run_advisory "deposit plan" python3 inferno_deposit_plan.py
 run_advisory "cash attribution" python3 inferno_cash_attribution.py
+run_advisory "growth stack" python3 inferno_growth_stack.py run
 run_advisory "account optimization" ./run_inferno_account_optimization.sh
 run_advisory "market mastery plan" ./run_inferno_market_mastery_plan.sh
 

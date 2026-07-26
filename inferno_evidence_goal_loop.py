@@ -70,6 +70,8 @@ CYCLE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("paper evidence harvest", ("./run_inferno_paper_evidence_harvest.sh",)),
     ("performance analytics", ("python3", "inferno_performance_analytics.py", "build")),
     ("strategy lab", ("python3", "inferno_strategy_lab.py", "build")),
+    ("promotion evidence lineage", ("python3", "inferno_promotion_evidence_lineage.py", "build")),
+    ("paper outcome completeness", ("python3", "inferno_paper_outcome_completeness.py", "build")),
     ("paper velocity", ("python3", "inferno_paper_velocity.py", "run")),
     ("universe cap-fit audit", ("python3", "inferno_universe_cap_fit.py", "run")),
     ("paper test director", ("python3", "inferno_paper_test_director.py", "build")),

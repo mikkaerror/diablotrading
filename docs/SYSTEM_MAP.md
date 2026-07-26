@@ -38,11 +38,15 @@ Scheduled refreshes fail soft for individual read-only provider calls and
 continue to their command-center/doctor pass. The heartbeat verdict is driven
 only by scheduled sources; manual or intentionally inactive broker probes stay
 visible without masquerading as a missed scheduled run.
+The hourly maintenance sweep also rebuilds the deposit plan, cash attribution,
+and growth stack after its broker-account refresh, before regenerating the
+command center; it never turns planned or unattributed cash into authority.
 LaunchAgent wrappers are bound to repository-owned orchestration scripts. When
 macOS privacy blocks background access to the workspace, they execute a
-deployed copy instead. That copy is refreshed by the installer and checksum
-audited in `./inferno schedule`; a drift verdict means the job is not yet using
-the reviewed source.
+deployed copy instead. The installer atomically replaces that copy, so an
+overlapping scheduled start sees either the previous complete executable or the
+new complete executable. Its checksum is audited in `./inferno schedule`; a
+drift verdict means the job is not yet using the reviewed source.
 
 ## Canonical Truth
 
@@ -65,6 +69,8 @@ Generated artifacts beat durable docs when they disagree.
 | Live book posture | `reports/live_position_review_latest.txt` |
 | Capital readiness | `reports/capital_deployment_readiness_latest.txt` |
 | Recurring deposit forecast | `reports/deposit_plan_latest.txt` |
+| Contribution and compounding forecast | `reports/growth_stack_latest.txt` |
+| Schwab transaction facts | `reports/schwab_transaction_ledger_latest.txt` |
 | Broker cash attribution | `reports/cash_attribution_latest.txt` |
 | Ticket cap and call posture | `reports/ticket_cap_policy_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
@@ -139,12 +145,15 @@ tested subsystems instead of replacing them:
 - `./inferno daily-ops` — Schwab daily options operations tape
 - `./inferno action-pulse` — tactical action pulse; no email unless `--send`
 - `./inferno deposit-plan` — recurring deposit forecast, separate from broker cash
+- `./inferno growth-stack` — research-only layer of broker NLV, historical observed NLV trend, scheduled deposits, and explicit compounding assumptions; it never makes planned cash deployable or labels unattributed movement as return
+- `./inferno schwab-transactions` — read-only, redacted broker transaction facts for cash reconciliation; it makes no trading request and never declares realized options P/L
 - `./inferno cash-ledger` — broker cash-change reconciliation without profit inference
 - `./inferno ticket-cap` — construction ticket band, simulated paper budget, and call-options posture
 - `./inferno capital-check` — capital launch check; defaults to deployable cash 0
 - `./inferno strike-cycle` — strike cycle; defaults to deployable cash 0
 - `./inferno approvals` — approval queue status only
-- `./inferno schedule` — LaunchAgent and Codex automation schedule
+- `./inferno schedule` — all installed Inferno LaunchAgents and Codex automation schedules, including repeat intervals
+- `python3 inferno_promotion_evidence_lineage.py` — read-only reconciliation of counted paper evidence versus quarantined fast and shadow research
 - `./inferno onboard` — compact handoff packet for another model
 
 ## Verify Before Commit

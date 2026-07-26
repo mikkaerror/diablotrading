@@ -17,7 +17,10 @@ class DailyModelRefreshTests(unittest.TestCase):
         self.assertIn("SCHWAB_READY=0", text)
         self.assertIn("LOCK_DIR=", text)
         self.assertIn("Advisory warning: Schwab OAuth preflight failed", text)
-        self.assertIn("./run_inferno_dawn_cycle.sh --skip-email --refresh-prices", text)
+        self.assertIn(
+            'run_advisory "tracker and morning model refresh" ./run_inferno_dawn_cycle.sh --skip-email --refresh-prices',
+            text,
+        )
         self.assertIn('skip_schwab_step "Schwab option-chain tape"', text)
         self.assertIn('run_advisory "snapshot price overlay"', text)
         self.assertIn('run_advisory "research cycle"', text)
@@ -54,6 +57,10 @@ class DailyModelRefreshTests(unittest.TestCase):
             text,
         )
         self.assertIn(
+            'run_advisory "Schwab transaction ledger" python3 inferno_schwab_transaction_ledger.py build --skip-refresh --quiet',
+            text,
+        )
+        self.assertIn(
             'run_advisory "Schwab option-chain tape" python3 inferno_schwab_daily_ops.py --skip-refresh --quiet',
             text,
         )
@@ -61,6 +68,16 @@ class DailyModelRefreshTests(unittest.TestCase):
             'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
             text,
         )
+
+    def test_growth_stack_follows_fresh_cash_attribution(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        deposit_plan = text.index('run_advisory "deposit plan"')
+        cash_attribution = text.index('run_advisory "cash attribution"')
+        growth_stack = text.index('run_advisory "growth stack"')
+
+        self.assertLess(deposit_plan, cash_attribution)
+        self.assertLess(cash_attribution, growth_stack)
         self.assertIn(
             'run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
             text,

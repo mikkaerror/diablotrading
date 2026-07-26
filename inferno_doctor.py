@@ -62,7 +62,9 @@ TRACKER_ROLE_POLICY_PACKET_FILE = ROOT / "data" / "inferno_tracker_role_policy_p
 TRACKER_ROLE_POLICY_FILE = ROOT / "data" / "inferno_tracker_role_policy.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
+SCHWAB_TRANSACTION_LEDGER_FILE = ROOT / "data" / "inferno_schwab_transaction_ledger.json"
 CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
+GROWTH_STACK_FILE = ROOT / "data" / "inferno_growth_stack.json"
 TICKET_CAP_POLICY_FILE = ROOT / "data" / "inferno_ticket_cap_policy.json"
 OUTCOME_ATTRIBUTION_FILE = ROOT / "data" / "inferno_outcome_attribution.json"
 RULE_EDGE_DECAY_FILE = ROOT / "data" / "inferno_rule_edge_decay.json"
@@ -121,6 +123,8 @@ RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
 EVIDENCE_GOAL_LOOP_LABEL = "io.diablotrading.inferno-evidence-goal-loop"
+EVIDENCE_GOAL_LOOP_SERVICE_HOUR = 13
+EVIDENCE_GOAL_LOOP_SERVICE_MINUTE = 40
 DOCTOR_ARTIFACT_FILE = DATA_DIR / "inferno_doctor.json"
 DOCTOR_TEXT_FILE = REPORTS_DIR / "doctor_latest.txt"
 SCHWAB_REFRESH_RESTART_ADVISORY_DAYS = 5.0
@@ -227,29 +231,39 @@ def latest_emailed_run_for_day(day: str) -> dict | None:
     return latest
 
 
-def cycle_reference_day(now: datetime | None = None, *, service_hour: int = SERVICE_HOUR) -> str:
+def cycle_reference_day(
+    now: datetime | None = None,
+    *,
+    service_hour: int = SERVICE_HOUR,
+    service_minute: int = 0,
+) -> str:
     """Return the trading-cycle day used for morning artifact freshness.
 
-    Before the morning service window completes, yesterday's artifacts are still
-    the active operating baseline. On weekends and market holidays, the most
-    recent market session remains the baseline. This prevents the doctor from
-    panicking just because the calendar advanced when no desk run was due.
+    Before the scheduled service window completes, yesterday's artifacts are
+    still the active operating baseline. On weekends and market holidays, the
+    most recent market session remains the baseline. This prevents the doctor
+    from panicking just because the calendar advanced when no desk run was due.
     """
     current = now or local_now()
     if not is_market_session(current.date()):
         return previous_market_session(current.date()).isoformat()
-    if current.hour < service_hour:
+    if (current.hour, current.minute) < (service_hour, service_minute):
         return previous_market_session(current.date()).isoformat()
     return current.date().isoformat()
 
 
-def cycle_days(now: datetime | None = None, *, service_hour: int = SERVICE_HOUR) -> tuple[str, ...]:
+def cycle_days(
+    now: datetime | None = None,
+    *,
+    service_hour: int = SERVICE_HOUR,
+    service_minute: int = 0,
+) -> tuple[str, ...]:
     """Return ISO day labels that belong to the current operating cycle."""
     current = now or local_now()
     today = current.date().isoformat()
     if not is_market_session(current.date()):
         return (previous_market_session(current.date()).isoformat(), today)
-    if current.hour < service_hour:
+    if (current.hour, current.minute) < (service_hour, service_minute):
         return (previous_market_session(current.date()).isoformat(), today)
     return (today,)
 
@@ -259,6 +273,7 @@ def in_current_service_cycle(
     *,
     now: datetime | None = None,
     service_hour: int = SERVICE_HOUR,
+    service_minute: int = 0,
     max_age_hours: int = 36,
     future_grace_seconds: int = 300,
 ) -> bool:
@@ -270,7 +285,14 @@ def in_current_service_cycle(
     try:
         generated = datetime.fromisoformat(stamp)
     except ValueError:
-        return any(stamp.startswith(day) for day in cycle_days(current, service_hour=service_hour))
+        return any(
+            stamp.startswith(day)
+            for day in cycle_days(
+                current,
+                service_hour=service_hour,
+                service_minute=service_minute,
+            )
+        )
     if generated.tzinfo is not None and current.tzinfo is not None:
         generated_for_age = generated
         generated_for_cycle = generated.astimezone(current.tzinfo)
@@ -282,7 +304,11 @@ def in_current_service_cycle(
         )
         generated_for_cycle = generated
     generated_day = generated_for_cycle.date().isoformat()
-    if generated_day not in cycle_days(current, service_hour=service_hour):
+    if generated_day not in cycle_days(
+        current,
+        service_hour=service_hour,
+        service_minute=service_minute,
+    ):
         return False
     age_seconds = (current - generated_for_age).total_seconds()
     if generated_day != current.date().isoformat():
@@ -489,6 +515,54 @@ def model_command_center_status(payload: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def growth_stack_status(payload: dict) -> tuple[bool, str]:
+    """Verify the recurring contribution forecast remains fresh and inert."""
+    if not payload:
+        return False, "missing"
+    generated = str(payload.get("generatedAt") or "")
+    verdict = str(payload.get("verdict") or "unknown")
+    plan = payload.get("depositPlan") or {}
+    progress = payload.get("observedProgress") or {}
+    short_horizon_windows = progress.get("shortHorizonWindows")
+    expected_window_days = {1, 7, 30}
+    short_horizon_safe = (
+        isinstance(short_horizon_windows, list)
+        and len(short_horizon_windows) == len(expected_window_days)
+        and {
+            window.get("windowDays")
+            for window in short_horizon_windows
+            if isinstance(window, dict)
+        }
+        == expected_window_days
+        and all(
+            isinstance(window, dict)
+            and window.get("returnAttribution") == "withheld"
+            and window.get("safeForPerformanceClaim") is False
+            and window.get("availableToExecution") is False
+            for window in short_horizon_windows
+        )
+    )
+    safe = (
+        bool(payload.get("researchOnly"))
+        and not bool(payload.get("promotable"))
+        and not bool(payload.get("authorityChanged"))
+        and not bool(payload.get("brokerSubmitAllowed"))
+        and not bool(payload.get("liveTradingAllowed"))
+        and not bool((payload.get("layeredMath") or {}).get("plannedDepositsAreDeployable"))
+        and not bool(progress.get("safeForPerformanceClaim"))
+        and short_horizon_safe
+    )
+    fresh = recent_or_today(generated, max_age_hours=36)
+    ok = fresh and safe and verdict in {"forecast-ready", "assumption-review"}
+    detail = (
+        f"{verdict} | planned=${plan.get('forecastYearContributions', 0)} | "
+        f"deposits={plan.get('forecastYearDepositCount', 0)} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
 def ai_basket_refresh_status(payload: dict) -> tuple[bool, str]:
     """Require a fresh, complete, research-only basket market-data refresh."""
     if not payload:
@@ -581,6 +655,24 @@ def research_cycle_status(report: dict) -> tuple[bool, str]:
         else json.dumps({"generatedAt": generated, "verdict": verdict})
     )
     return ok, detail
+
+
+def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple[bool, str]:
+    """Report fill-ingest safeguards without treating rejected evidence as a fill."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt") or "")
+    fresh = in_current_service_cycle(generated, now=now)
+    processed = report.get("processedRows")
+    ok = fresh and processed is not None
+    if not fresh:
+        return False, json.dumps({"generatedAt": generated, "processedRows": processed})
+    unmatched = len(report.get("unmatchedRows") or [])
+    return (
+        ok,
+        f"{report.get('importedRows', 0)} imported | {report.get('closedRows', 0)} closed | "
+        f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched",
+    )
 
 
 def action_pulse_status(report: dict) -> tuple[bool, str]:
@@ -915,6 +1007,7 @@ def cash_attribution_status(report: dict) -> tuple[bool, str]:
     ok = fresh and authority_safe and verdict in {
         "attribution-incomplete",
         "transaction-ledger-present-review-required",
+        "cash-movement-reconciled-realized-pnl-unknown",
     }
     broker_cash = _float_value((report.get("brokerCash") or {}).get("cash"))
     latest_delta = _float_value((report.get("latestCashChange") or {}).get("deltaCash"))
@@ -1477,6 +1570,49 @@ def schwab_account_sync_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_transaction_ledger_status(report: dict) -> tuple[bool, str]:
+    """Evaluate the transaction ledger without treating missing evidence as a pass."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    verdict = str(report.get("verdict") or "unknown")
+    safe = (
+        bool(report.get("researchOnly"))
+        and bool(report.get("brokerReadOnly"))
+        and not bool(report.get("orderEndpointsAllowed"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    summary = report.get("transactionSummary") or {}
+    safe_unavailable_verdicts = {
+        "disabled",
+        "not-configured",
+        "access-token-refresh-needed",
+        "reauthorization-required",
+    }
+    safe_unavailable = verdict in safe_unavailable_verdicts
+    ok = fresh and safe and (bool(report.get("ok")) or safe_unavailable) and verdict in {
+        "healthy",
+        "healthy-no-transactions",
+        *safe_unavailable_verdicts,
+    }
+    detail = (
+        f"{verdict} | rows={summary.get('transactionCount', 0)} | "
+        f"source={report.get('sourceStatus') or '-'} | read-only={safe}"
+        if fresh
+        else json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "readOnly": report.get("brokerReadOnly"),
+                "ordersAllowed": report.get("orderEndpointsAllowed"),
+            }
+        )
+    )
+    return ok, detail
+
+
 def schwab_oauth_status(status: dict) -> tuple[bool, str]:
     """Evaluate local OAuth continuity without printing secret material."""
     configured = bool(status.get("clientIdConfigured")) and bool(
@@ -2024,6 +2160,12 @@ def main() -> int:
     if schwab_account and not schwab_account_ok:
         warnings += 1
 
+    schwab_transactions = load_json_file(SCHWAB_TRANSACTION_LEDGER_FILE) or {}
+    schwab_transactions_ok, schwab_transactions_detail = schwab_transaction_ledger_status(schwab_transactions)
+    lines.append(summarize_status("Schwab transaction ledger", schwab_transactions_ok, schwab_transactions_detail))
+    if schwab_transactions and not schwab_transactions_ok:
+        warnings += 1
+
     cash_attribution = load_json_file(CASH_ATTRIBUTION_FILE) or {}
     cash_attribution_ok, cash_attribution_detail = cash_attribution_status(cash_attribution)
     lines.append(summarize_status("Cash attribution", cash_attribution_ok, cash_attribution_detail))
@@ -2127,6 +2269,8 @@ def main() -> int:
     evidence_goal_loop_today = in_current_service_cycle(
         str(evidence_goal_loop.get("generatedAt", "")),
         now=now,
+        service_hour=EVIDENCE_GOAL_LOOP_SERVICE_HOUR,
+        service_minute=EVIDENCE_GOAL_LOOP_SERVICE_MINUTE,
     )
     evidence_goal_loop_verdict = str(evidence_goal_loop.get("verdict") or "")
     evidence_goal_loop_verification = evidence_goal_loop.get("verification") or {}
@@ -2528,6 +2672,12 @@ def main() -> int:
     if not command_center_ok:
         warnings += 1
 
+    growth_stack = load_json_file(GROWTH_STACK_FILE) or {}
+    growth_stack_ok, growth_stack_detail = growth_stack_status(growth_stack)
+    lines.append(summarize_status("Growth stack", growth_stack_ok, growth_stack_detail))
+    if not growth_stack_ok:
+        warnings += 1
+
     ai_basket_refresh = load_json_file(AI_BASKET_REFRESH_FILE) or {}
     basket_refresh_ok, basket_refresh_detail = ai_basket_refresh_status(ai_basket_refresh)
     lines.append(summarize_status("AI basket refresh", basket_refresh_ok, basket_refresh_detail))
@@ -2559,18 +2709,7 @@ def main() -> int:
         warnings += 1
 
     fill_ingest = load_json_file(TOS_FILL_INGEST_FILE) or {}
-    fill_ingest_today = in_current_service_cycle(str(fill_ingest.get("generatedAt", "")), now=now)
-    fill_ingest_ok = fill_ingest_today and fill_ingest.get("processedRows") is not None
-    fill_ingest_detail = (
-        f"{fill_ingest.get('importedRows', 0)} imported | {fill_ingest.get('closedRows', 0)} closed"
-        if fill_ingest_ok
-        else json.dumps(
-            {
-                "generatedAt": fill_ingest.get("generatedAt"),
-                "processedRows": fill_ingest.get("processedRows"),
-            }
-        )
-    )
+    fill_ingest_ok, fill_ingest_detail = paper_fill_ingest_status(fill_ingest, now=now)
     lines.append(summarize_status("paper fill ingest", fill_ingest_ok, fill_ingest_detail))
     if not fill_ingest_ok:
         warnings += 1

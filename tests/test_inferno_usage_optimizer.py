@@ -100,6 +100,8 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertIn("./inferno oauth", one_commands)
             self.assertIn("./inferno action-pulse", one_commands)
             self.assertIn("./inferno deposit-plan", one_commands)
+            self.assertIn("./inferno growth-stack", one_commands)
+            self.assertIn("./inferno schwab-transactions", one_commands)
             self.assertIn("./inferno cash-ledger", one_commands)
             self.assertIn("./inferno daily-ops", one_commands)
             self.assertIn("./inferno capital-check", one_commands)

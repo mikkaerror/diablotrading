@@ -96,6 +96,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("tracker-role-review", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("tracker-role-policy-packet", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("tracker-role-policy", {item["command"] for item in saved["controlPlane"]["commands"]})
+            self.assertIn("schwab-transactions", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("cash-ledger", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("ticket-cap", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("daily-ops", {item["command"] for item in saved["controlPlane"]["commands"]})
@@ -114,6 +115,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("./inferno tracker-role-review", saved["shortcutCommands"])
             self.assertIn("./inferno tracker-role-policy-packet", saved["shortcutCommands"])
             self.assertIn("./inferno tracker-role-policy", saved["shortcutCommands"])
+            self.assertIn("./inferno schwab-transactions", saved["shortcutCommands"])
             self.assertIn("./inferno cash-ledger", saved["shortcutCommands"])
             self.assertIn("./inferno ticket-cap", saved["shortcutCommands"])
             self.assertIn("./inferno approvals", saved["shortcutCommands"])
@@ -270,6 +272,141 @@ class InfernoCentralCommandTests(unittest.TestCase):
         )
 
         self.assertIn("script-sync drift", rendered)
+
+    def test_build_schedule_status_audits_daily_refresh_deployment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            launch_agents = root / "LaunchAgents"
+            launch_agents.mkdir()
+            plist_path = launch_agents / "io.diablotrading.inferno-daily-model-refresh.plist"
+            with plist_path.open("wb") as handle:
+                plistlib.dump(
+                    {"StartCalendarInterval": [{"Weekday": 1, "Hour": 6, "Minute": 45}]},
+                    handle,
+                )
+            with (
+                patch.object(central_command, "LAUNCH_AGENTS_DIR", launch_agents),
+                patch.object(central_command, "CODEX_AUTOMATIONS_DIR", root / "automations"),
+                patch.object(
+                    central_command,
+                    "LAUNCH_AGENT_SCHEDULES",
+                    (("io.diablotrading.inferno-daily-model-refresh", "full sync"),),
+                ),
+                patch.object(central_command, "CODEX_AUTOMATIONS", ()),
+                patch.object(
+                    central_command,
+                    "daily_model_refresh_script_sync_status",
+                    return_value={"status": "drift"},
+                ),
+            ):
+                payload = central_command.build_schedule_status()
+
+        self.assertEqual(payload["launchAgents"][0]["scriptSync"]["status"], "drift")
+
+    def test_build_schedule_status_audits_daily_loop_deployment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            launch_agents = root / "LaunchAgents"
+            launch_agents.mkdir()
+            plist_path = launch_agents / "io.diablotrading.inferno-daily-loop.plist"
+            with plist_path.open("wb") as handle:
+                plistlib.dump(
+                    {"StartCalendarInterval": [{"Weekday": 1, "Hour": 6, "Minute": 30}]},
+                    handle,
+                )
+            with (
+                patch.object(central_command, "LAUNCH_AGENTS_DIR", launch_agents),
+                patch.object(central_command, "CODEX_AUTOMATIONS_DIR", root / "automations"),
+                patch.object(
+                    central_command,
+                    "LAUNCH_AGENT_SCHEDULES",
+                    (("io.diablotrading.inferno-daily-loop", "digest"),),
+                ),
+                patch.object(central_command, "CODEX_AUTOMATIONS", ()),
+                patch.object(
+                    central_command,
+                    "daily_loop_script_sync_status",
+                    return_value={"status": "drift"},
+                ),
+            ):
+                payload = central_command.build_schedule_status()
+
+        self.assertEqual(payload["launchAgents"][0]["scriptSync"]["status"], "drift")
+
+    def test_build_schedule_status_audits_evidence_goal_loop_deployment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            launch_agents = root / "LaunchAgents"
+            launch_agents.mkdir()
+            plist_path = launch_agents / "io.diablotrading.inferno-evidence-goal-loop.plist"
+            with plist_path.open("wb") as handle:
+                plistlib.dump(
+                    {"StartCalendarInterval": [{"Weekday": 1, "Hour": 13, "Minute": 40}]},
+                    handle,
+                )
+            with (
+                patch.object(central_command, "LAUNCH_AGENTS_DIR", launch_agents),
+                patch.object(central_command, "CODEX_AUTOMATIONS_DIR", root / "automations"),
+                patch.object(
+                    central_command,
+                    "LAUNCH_AGENT_SCHEDULES",
+                    (("io.diablotrading.inferno-evidence-goal-loop", "paper evidence"),),
+                ),
+                patch.object(central_command, "CODEX_AUTOMATIONS", ()),
+                patch.object(
+                    central_command,
+                    "evidence_goal_loop_script_sync_status",
+                    return_value={"status": "drift"},
+                ),
+            ):
+                payload = central_command.build_schedule_status()
+
+        self.assertEqual(payload["launchAgents"][0]["scriptSync"]["status"], "drift")
+
+    def test_schedule_includes_all_installed_inferno_launch_agents(self) -> None:
+        labels = {label for label, _purpose in central_command.LAUNCH_AGENT_SCHEDULES}
+
+        self.assertEqual(
+            labels,
+            {
+                "io.diablotrading.inferno-dawn-brief",
+                "io.diablotrading.inferno-watchdog",
+                "io.diablotrading.inferno-daily-model-refresh",
+                "io.diablotrading.inferno-action-pulse",
+                "io.diablotrading.inferno-daily-loop",
+                "io.diablotrading.inferno-evidence-goal-loop",
+                "io.diablotrading.inferno-nightly-optimize",
+                "io.diablotrading.inferno-ops-maintenance",
+                "io.diablotrading.inferno-desktop-automation",
+            },
+        )
+
+    def test_launch_agent_schedule_renders_interval_only_and_mixed_cadence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            launch_agents = Path(temp_dir)
+            interval_only = launch_agents / "io.diablotrading.inferno-ops-maintenance.plist"
+            mixed = launch_agents / "io.diablotrading.inferno-dawn-brief.plist"
+            with interval_only.open("wb") as handle:
+                plistlib.dump({"StartInterval": 1800}, handle)
+            with mixed.open("wb") as handle:
+                plistlib.dump(
+                    {
+                        "StartCalendarInterval": [{"Weekday": 1, "Hour": 6, "Minute": 0}],
+                        "StartInterval": 600,
+                    },
+                    handle,
+                )
+
+            with patch.object(central_command, "LAUNCH_AGENTS_DIR", launch_agents):
+                interval_payload = central_command._read_launch_agent(
+                    "io.diablotrading.inferno-ops-maintenance", "ops maintenance"
+                )
+                mixed_payload = central_command._read_launch_agent(
+                    "io.diablotrading.inferno-dawn-brief", "dawn brief"
+                )
+
+        self.assertEqual(interval_payload["schedule"], "every 30 minutes")
+        self.assertEqual(mixed_payload["schedule"], "Mon at 06:00; every 10 minutes")
 
     def test_parser_accepts_central_tactical_options(self) -> None:
         parser = central_command.build_parser()

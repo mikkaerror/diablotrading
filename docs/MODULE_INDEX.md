@@ -59,7 +59,7 @@ Safety            — authority, risk, secrets
 | Module | Purpose | Artifact |
 |---|---|---|
 | `inferno_doctor.py` | End-to-end desk health check; every subsystem PASS/FAIL | `data/inferno_doctor.json`, `reports/doctor_latest.txt` |
-| `inferno_ops_maintenance.py` | Hourly sweep: tracker / staleness governor / broker preview refresh | `reports/ops_maintenance_latest.txt` |
+| `inferno_ops_maintenance.py` | Hourly sweep: tracker / staleness governor / broker preview refresh plus account-truth, cash-attribution, and growth-stack dependency refresh | `reports/ops_maintenance_latest.txt` |
 | `inferno_daily_success.py` | Green/yellow/red scorecard over five safety + operational criteria | `reports/daily_success_latest.txt` |
 | `inferno_watchdog.py` | Continuous failure detector + alert dispatcher | `reports/watchdog_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials are leaking into artifacts | `data/inferno_secret_hygiene.json` |
@@ -80,6 +80,8 @@ Safety            — authority, risk, secrets
 | `inferno_decision_brief.py` | Per-ticker context memo for each pending name | `reports/decision_briefs_latest.txt` |
 | `inferno_trade_conviction_audit.py` | **NEW** Per-ticket bull / bear / disagreement / falsification math case with peer-reviewed citations | `reports/trade_conviction_audit_latest.txt` |
 | `inferno_promotion_gap.py` | Gate-by-gate distance from broker promotion | `reports/promotion_gap_latest.txt` |
+| `inferno_promotion_evidence_lineage.py` | Read-only reconciliation of promotion-qualified staged paper outcomes versus quarantined fast and shadow research | `reports/promotion_evidence_lineage_latest.txt` |
+| `inferno_paper_outcome_completeness.py` | Read-only audit of whether closed staged paper rows have immutable paperMoney fill provenance; does not change strategy-lab scoring | `reports/paper_outcome_completeness_latest.txt` |
 | `inferno_threshold_sensitivity.py` | Sweep four threshold profiles and report what each would promote | `reports/threshold_sensitivity_latest.txt` |
 | `inferno_approval_queue.py` | Operator approve/reject/expire commands | `data/inferno_approval_queue.json` |
 | `inferno_approval_inbox.py` | Narrow IMAP approval-reply ingestor with bounded UID dedupe state | `reports/approval_inbox_latest.txt` |
@@ -182,6 +184,8 @@ Safety            — authority, risk, secrets
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
 | `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer | ~09:00 + ~15:30 weekdays |
 | `inferno_deposit_plan.py` | Recurring deposit forecast that keeps planned deposits separate from broker-confirmed cash and trading profit | `reports/deposit_plan_latest.txt` |
+| `inferno_growth_stack.py` | Research-only forecast layering broker NLV, observed NLV trend, scheduled deposits, and explicit compounding scenarios; never makes planned deposits deployable or calls unattributed movement return | `reports/growth_stack_latest.txt` |
+| `inferno_schwab_transaction_ledger.py` | Strict GET-only, suffix-scoped normalization of redacted Schwab transaction facts for cash reconciliation; never stores account hashes, infers realized options P/L, or changes authority | `reports/schwab_transaction_ledger_latest.txt` |
 | `inferno_cash_attribution.py` | Broker cash-change reconciliation that refuses to treat deposits, balance moves, or NLV changes as realized options profit without transaction history | `reports/cash_attribution_latest.txt` |
 | `inferno_ticket_cap_policy.py` | Research-only operator construction band, simulated paper budget visibility, and call-options posture; never changes risk constants or live authority | `reports/ticket_cap_policy_latest.txt` |
 | `inferno_usage_optimizer.py` | Compact read-first / do-not-paste handoff packet for new model sessions | `reports/usage_optimizer_latest.txt` |

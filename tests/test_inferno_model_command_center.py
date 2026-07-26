@@ -30,6 +30,25 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/ai_basket_refresh_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_promotion_evidence_lineage(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "promotion-evidence-lineage")
+        self.assertEqual(row["artifact"], "reports/promotion_evidence_lineage_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
+    def test_reporting_map_includes_paper_outcome_completeness(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "paper-outcome-completeness")
+        self.assertEqual(row["artifact"], "reports/paper_outcome_completeness_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
+    def test_reporting_map_includes_schwab_transaction_ledger(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "schwab-transaction-ledger")
+        self.assertEqual(row["artifact"], "reports/schwab_transaction_ledger_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
+    def test_control_surface_includes_schwab_transaction_ledger(self) -> None:
+        commands = {item["command"] for item in command_center.CONTROL_SURFACE_COMMANDS}
+        self.assertIn("./inferno schwab-transactions", commands)
+
     def test_reporting_map_includes_full_tracker_registry(self) -> None:
         row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tracker-registry")
         self.assertEqual(row["artifact"], "reports/tracker_registry_latest.txt")

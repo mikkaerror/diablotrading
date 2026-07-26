@@ -80,6 +80,7 @@ fi
 
 if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
+  run_step "schwab transaction ledger" "$PYTHON" inferno_schwab_transaction_ledger.py build --skip-refresh --quiet
   run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
   run_step "schwab edge signals"   "$PYTHON" inferno_schwab_edge_signals.py run
   run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
@@ -114,6 +115,9 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "consensus monitor"    "$PYTHON" inferno_consensus_monitor.py run
 fi
 run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
+run_step "deposit plan"          "$PYTHON" inferno_deposit_plan.py run
+run_step "cash attribution"      "$PYTHON" inferno_cash_attribution.py run
+run_step "growth stack"          "$PYTHON" inferno_growth_stack.py run
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
 run_step "trade management"      "$PYTHON" inferno_trade_management.py
 run_step "process compliance"    "$PYTHON" inferno_process_compliance.py build
