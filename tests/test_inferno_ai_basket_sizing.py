@@ -194,6 +194,36 @@ class AccountShapeTests(unittest.TestCase):
         _, _, max_pos = sz.account_shape(50.0, 0.08, 0.015)
         self.assertEqual(max_pos, sz.MIN_POSITIONS)
 
+    def test_regime_throttle_caps_a_narrow_rally(self):
+        """Many leaders but a weak regime -> deployment capped, rest to cash."""
+        rows = [row(f"L{i}", "Compute", "LEADER", 100 - i) for i in range(6)]
+        # max_name 0.20 so 6 leaders can fully deploy without the name cap binding
+        full = sz.build(comp(rows), nlv=500_000, max_name=0.20, max_bucket=1.0)
+        # RISK-OFF regime (score 15) must cap deployment at 30%
+        throttled = sz.build(comp(rows), nlv=500_000, max_name=0.20, max_bucket=1.0,
+                             regime_score=15)
+        self.assertGreater(full["investedWeight"], 0.9)
+        self.assertAlmostEqual(throttled["investedWeight"], 0.30, places=2)
+        self.assertTrue(throttled["params"]["regimeThrottled"])
+        self.assertGreater(throttled["cashWeight"], 0.65)
+
+    def test_strong_regime_does_not_throttle(self):
+        rows = [row(f"L{i}", "Compute", "LEADER", 100 - i) for i in range(6)]
+        p = sz.build(comp(rows), nlv=500_000, max_bucket=1.0, regime_score=85)
+        self.assertFalse(p["params"]["regimeThrottled"])
+
+    def test_throttle_only_reduces_never_forces_investment(self):
+        # a cash-heavy book (all REDUCE -> 0) must not be pushed UP by a strong regime
+        rows = [row("FTNT", "Security", "LEADER", 100)]
+        rows += [row(f"R{i}", "Compute", "REDUCE", 50) for i in range(10)]
+        p = sz.build(comp(rows), nlv=706.41, regime_score=95)
+        self.assertLess(p["investedWeight"], 0.5)   # still mostly cash
+
+    def test_no_regime_score_means_no_throttle(self):
+        rows = [row(f"L{i}", "Compute", "LEADER", 100 - i) for i in range(6)]
+        p = sz.build(comp(rows), nlv=500_000, max_bucket=1.0)
+        self.assertFalse(p["params"]["regimeThrottled"])
+
     def test_fail_closed_when_composite_untrusted(self):
         p = sz.build(comp([row("NVDA", "Compute", "LEADER", 90)], trusted=False))
         self.assertEqual(p["verdict"], "fail-closed")

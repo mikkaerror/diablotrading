@@ -70,3 +70,56 @@ class DirectionTests(unittest.TestCase):
         p = mom.build(recs)
         acc, fad = set(p.get("accelerating") or []), set(p.get("fading") or [])
         self.assertFalse(acc & fad, "a name must not be both accelerating and fading")
+
+
+class CoverageGuardTests(unittest.TestCase):
+    """A partial run must never destroy a complete signal set (2026-07-20 incident)."""
+
+    def setUp(self):
+        import inferno_ai_basket_momentum as mom
+        import tempfile, pathlib
+        self.mom = mom
+        self._tmp = tempfile.TemporaryDirectory()
+        self._orig_json, self._orig_txt = mom.OUT_JSON, mom.OUT_TXT
+        mom.OUT_JSON = pathlib.Path(self._tmp.name) / "mom.json"
+        mom.OUT_TXT = pathlib.Path(self._tmp.name) / "mom.txt"
+
+    def tearDown(self):
+        self.mom.OUT_JSON, self.mom.OUT_TXT = self._orig_json, self._orig_txt
+        self._tmp.cleanup()
+
+    def _payload(self, n):
+        return {"generatedAt": "x", "count": n,
+                "ranking": [{"symbol": f"S{i}", "blended": 1.0, "cat": "",
+                             "m1": 0, "m3": 0, "m6": 0, "rank": i + 1,
+                             "accelerating": False, "fading": False,
+                             "direction": "steady"} for i in range(n)]}
+
+    def test_first_publish_is_allowed(self):
+        r = self.mom.save(self._payload(27))
+        self.assertTrue(r["written"])
+        self.assertEqual(self.mom.existing_coverage(), 27)
+
+    def test_shrinking_coverage_is_refused(self):
+        self.mom.save(self._payload(27))
+        r = self.mom.save(self._payload(3))
+        self.assertFalse(r["written"])
+        self.assertIn("would shrink coverage 27 -> 3", r["reason"])
+        # the good artifact must survive untouched
+        self.assertEqual(self.mom.existing_coverage(), 27)
+
+    def test_growing_coverage_is_allowed(self):
+        self.mom.save(self._payload(27))
+        r = self.mom.save(self._payload(30))
+        self.assertTrue(r["written"])
+        self.assertEqual(self.mom.existing_coverage(), 30)
+
+    def test_equal_coverage_is_allowed(self):
+        self.mom.save(self._payload(30))
+        self.assertTrue(self.mom.save(self._payload(30))["written"])
+
+    def test_shrink_can_be_forced_deliberately(self):
+        self.mom.save(self._payload(30))
+        r = self.mom.save(self._payload(5), allow_shrink=True)
+        self.assertTrue(r["written"])
+        self.assertEqual(self.mom.existing_coverage(), 5)

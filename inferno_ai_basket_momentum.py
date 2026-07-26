@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -156,11 +157,53 @@ def text(p: dict[str, Any]) -> str:
     return "\n".join(L)
 
 
-def save(p: dict[str, Any]) -> None:
+def existing_coverage(path: Optional[Path] = None) -> int:
+    """How many names the currently-published momentum artifact covers.
+
+    Resolves OUT_JSON at CALL time, not definition time — a default argument
+    would freeze the path and make the guard consult the wrong file if the
+    output location is ever reconfigured.
+    """
+    path = path or OUT_JSON
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    if not isinstance(payload, dict):
+        return 0
+    return len(payload.get("ranking") or [])
+
+
+def save(p: dict[str, Any], *, allow_shrink: bool = False) -> dict[str, Any]:
+    """Publish momentum — but never let a partial run replace a complete one.
+
+    This mirrors the publication contract in inferno_ai_basket_refresh.py:
+    "a partial refresh cannot replace the last complete signal set".
+
+    It exists because of a real incident (2026-07-20): the FMP `quote-change`
+    endpoint is plan-limited, so a loop over it produced a 3-name record set,
+    and saving that silently destroyed a good 27-name artifact. Everything
+    downstream — composite tags, sizing, the weekly email — then quietly ran on
+    the wreckage. Coverage may grow or hold; it may not shrink by accident.
+
+    Returns {"written": bool, "reason": str, "coverage": int, "previous": int}.
+    """
+    new_n = len(p.get("ranking") or [])
+    prev_n = existing_coverage()
+    if not allow_shrink and prev_n > new_n:
+        reason = (f"refused: would shrink coverage {prev_n} -> {new_n}. "
+                  f"Partial data cannot replace a complete signal set. "
+                  f"Rebuild from Schwab via inferno_ai_basket_refresh.py, or pass "
+                  f"allow_shrink=True if the universe genuinely got smaller.")
+        print(f"[momentum.save] {reason}", file=sys.stderr)
+        return {"written": False, "reason": reason,
+                "coverage": new_n, "previous": prev_n}
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(OUT_JSON, p)
     atomic_write_text(OUT_TXT, text(p) + "\n")
+    return {"written": True, "reason": "published", "coverage": new_n,
+            "previous": prev_n}
 
 
 def main(argv: Optional[list] = None) -> int:

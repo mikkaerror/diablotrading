@@ -30,6 +30,7 @@
   button{background:#2f6df6;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer}
   #status{color:#6b7890;font-size:12px;margin-left:10px}
   .err{color:#c23b3b}
+  .warn{color:#8a5a12}
 </style>
 </head>
 <body>
@@ -53,6 +54,32 @@ const BASKET = [
 ];
 const CATS = Object.fromEntries(BASKET);
 
+// Last-known-good snapshot, embedded so the tracker never shows a dead screen
+// when the live market-data feed is unavailable (e.g. plan throttled). Each
+// entry is [price, avg50, avg200, yearHigh, yearLow].
+const SNAPSHOT = { date: "2026-07-20", q: {
+"NVDA":[203.28,209.91,192.4,236.54,164.07],"AVGO":[378.16,402.94,363.63,495,273],"AMD":[503.57,499.08,296.69,584.73,149.22],"TXN":[284.07,301.33,221.43,334.03,152.73],"ASML":[1739.02,1718.48,1357.07,1999.96,683.48],"QCOM":[170.32,207.12,169.05,259.92,121.99],"ARM":[269.61,316.22,184.74,452.7,100.02],"MRVL":[194.94,235.55,129.86,329.88,61.44],"DELL":[381.71,365.37,201.34,469.47,110.22],"HPE":[44.58,42.95,28.36,64.25,19.64],"SMCI":[23.83,33.31,34.06,62.36,19.48],"VRT":[291.67,321.99,240.81,379.94,118.7],"ETN":[401.41,404.06,373.13,436.74,311.92],"MOD":[227.88,266.41,201.59,323.25,90.41],"GLW":[153.24,192.05,132.27,271.78,53.29],"LITE":[765.55,869.37,572.23,1085.68,97.55],"AAOI":[103.02,159.8,86.55,233.67,18.5],"ANET":[169.35,160.66,144.73,189.82,106.99],"VNET":[7.67,9.02,9.54,14.48,7.1],"STX":[802.45,879.69,488.04,1145,138.3],"WDC":[487.42,554.08,312.15,799.87,66.04],"AEHR":[77.36,94.21,50.49,126.62,15.04],"MSFT":[402.29,401.51,439.35,555.45,349.2],"GOOG":[351.37,367.97,320.95,404.47,187.05],"ORCL":[121.37,178.67,191.54,345.72,120.03],"FTNT":[160.36,141.84,97.06,170.35,70.12],"OTEX":[23.33,22.81,27.92,39.9,19.78],"RBC":[568.9,599.81,519.6,667.69,364.5],"RRX":[205.58,211.83,180.52,247.8,127.96],"TKR":[134.38,131.54,101.76,146.37,70.57],"SMH":[558.83,597.33,439.72,671.83,279.19]
+}};
+function snapshotRows(){
+  return Object.entries(SNAPSHOT.q).map(([sym,a])=>({
+    symbol:sym, price:a[0], priceAvg50:a[1], priceAvg200:a[2], yearHigh:a[3], yearLow:a[4]
+  }));
+}
+async function fetchLive(){
+  const r = await window.cowork.callMcpTool(
+    "mcp__00bdfbdf-a068-4d80-9c70-28bffd46a4dc__quote",
+    { endpoint:"batch-quote", symbols: BASKET.map(b=>b[0]).concat(["SMH"]) }
+  );
+  if(r && r.isError){
+    throw new Error((r.content&&r.content[0]&&r.content[0].text) || 'market-data unavailable');
+  }
+  let rows = r.structuredContent;
+  if(!rows){ rows = JSON.parse(r.content[0].text); }
+  if(!Array.isArray(rows)) rows = rows.data || rows.quotes || [];
+  if(!rows.length) throw new Error('empty response');
+  return rows;
+}
+
 function pct(x){ return (x>=0?'+':'') + x.toFixed(0) + '%'; }
 function cls(x){ return x>=0?'pos':'neg'; }
 
@@ -66,14 +93,13 @@ function zoneOf(d){
 async function load(){
   const s = document.getElementById('status');
   s.textContent = 'loading live quotes…'; s.className='';
+  let rows, stale=false, staleReason='';
   try{
-    const r = await window.cowork.callMcpTool(
-      "mcp__00bdfbdf-a068-4d80-9c70-28bffd46a4dc__quote",
-      { endpoint:"batch-quote", symbols: BASKET.map(b=>b[0]).concat(["SMH"]) }
-    );
-    let rows = r.structuredContent;
-    if(!rows){ rows = JSON.parse(r.content[0].text); }
-    if(!Array.isArray(rows)) rows = rows.data || rows.quotes || [];
+    rows = await fetchLive();
+  }catch(e){
+    rows = snapshotRows(); stale = true; staleReason = e.message;
+  }
+  try{
     // pull SMH out as the sector benchmark
     const bm = rows.find(q=>q.symbol==="SMH");
     const bmV200 = bm ? (bm.price/bm.priceAvg200-1)*100 : null;
@@ -145,10 +171,23 @@ async function load(){
         +`<td class="${r.arel>0?'pos':'neg'}">${r.arel>0?'+':''}${r.arel.toFixed(0)}</td></tr>`;
     });
     panel += '</tbody></table>';
-    document.getElementById('out').innerHTML=banner+html+panel;
-    s.textContent='updated '+new Date().toLocaleString();
+    const staleBanner = stale
+      ? `<div style="margin:0 0 12px;padding:8px 10px;border-radius:8px;`
+        +`background:#fff4e5;border:1px solid #f0c88a;color:#8a5a12;font-size:12px">`
+        +`⚠ Live feed unavailable — showing the last saved snapshot from `
+        +`<b>${SNAPSHOT.date}</b>. Prices are not current. `
+        +`Press Refresh to retry the live feed.</div>`
+      : '';
+    document.getElementById('out').innerHTML=staleBanner+banner+html+panel;
+    s.textContent = stale
+      ? 'snapshot '+SNAPSHOT.date+' (live feed down)'
+      : 'live · updated '+new Date().toLocaleString();
+    s.className = stale ? 'warn' : '';
   }catch(e){
-    s.textContent='could not load quotes: '+e.message; s.className='err';
+    document.getElementById('out').innerHTML =
+      '<div class="err" style="padding:10px">Could not render the tracker: '
+      + (e && e.message ? e.message : e) + '</div>';
+    s.textContent='render error'; s.className='err';
   }
 }
 

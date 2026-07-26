@@ -63,6 +63,25 @@ DOLLARS_PER_POSITION = 100.0   # a position worth opening
 MIN_POSITIONS = 3
 MAX_POSITIONS = 20
 
+# Regime throttle — a weak regime caps how much of the book gets deployed. This
+# guards against the failure the tag logic alone can't catch: a NARROW rally,
+# where a handful of names still qualify as leaders but breadth underneath has
+# collapsed. Sizing would happily commit fully to those few; the regime score
+# (which sees the breadth) trims the deployment and raises cash. It can only ever
+# REDUCE deployment, never force more in.
+def regime_deploy_cap(regime_score: Optional[float]) -> Optional[float]:
+    if regime_score is None:
+        return None
+    if regime_score >= 70:
+        return 1.00   # RISK-ON
+    if regime_score >= 55:
+        return 0.85   # CONSTRUCTIVE
+    if regime_score >= 40:
+        return 0.70   # NEUTRAL
+    if regime_score >= 25:
+        return 0.50   # CAUTION
+    return 0.30       # RISK-OFF
+
 # Only conviction gets capital.
 #   LEADER — strength + uptrend: full size
 #   HOLD   — above the 200-day, mid-pack: reduced size
@@ -191,6 +210,7 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
           *, max_name: float = MAX_NAME_WEIGHT, max_bucket: float = MAX_BUCKET_WEIGHT,
           min_weight: float = MIN_NAME_WEIGHT, nlv: Optional[float] = None,
           dollars_per_position: float = DOLLARS_PER_POSITION,
+          regime_score: Optional[float] = None,
           tolerance: float = ACTION_TOLERANCE) -> dict[str, Any]:
     trusted = composite.get("signalsTrusted") is not False
     ranking = composite.get("ranking") or []
@@ -263,6 +283,16 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
                                     bucket_of=_bucket_of)
             weights = {k: weights.get(k, 0.0) for k in scores}
 
+    # regime throttle — final proportional scale-down if the regime says so.
+    # Applied last so it caps whatever the conviction logic produced.
+    deploy_cap = regime_deploy_cap(regime_score)
+    throttled = False
+    invested_pre = sum(weights.values())
+    if deploy_cap is not None and invested_pre > deploy_cap + 1e-9 and invested_pre > 0:
+        scale = deploy_cap / invested_pre
+        weights = {k: v * scale for k, v in weights.items()}
+        throttled = True
+
     targets = []
     for sym, m in meta.items():
         tw = round(weights.get(sym, 0.0), 4)
@@ -307,6 +337,8 @@ def build(composite: dict[str, Any], current_weights: Optional[dict[str, float]]
                    "minNameWeight": round(min_weight, 4),
                    "maxPositions": max_positions,
                    "nlv": nlv, "dollarsPerPosition": dollars_per_position,
+                   "regimeScore": regime_score, "regimeDeployCap": deploy_cap,
+                   "regimeThrottled": throttled,
                    "tolerance": tolerance, "tagMultiplier": TAG_MULTIPLIER},
         "count": len(targets),
         "investedWeight": invested,
@@ -343,6 +375,9 @@ def text(p: dict[str, Any]) -> str:
     if nlv:
         L.append(f"Account: ${nlv:,.2f} NLV — sized for {q['maxPositions']} positions "
                  f"at roughly ${q['dollarsPerPosition']:,.0f}+ each")
+    if q.get("regimeThrottled"):
+        L.append(f"Regime throttle ACTIVE: score {q['regimeScore']:.0f} caps deployment "
+                 f"at {q['regimeDeployCap']*100:.0f}% — the rest is held as cash by design.")
     L.append(f"Invested {p['investedWeight']*100:.0f}% · cash {p['cashWeight']*100:.0f}%"
              + (f" (${p['cashWeight']*nlv:,.2f} cash)" if nlv else ""))
     L.append("")
@@ -363,9 +398,11 @@ def text(p: dict[str, Any]) -> str:
             row += f"{cw*100:>8.1f}%{(t['delta'] or 0)*100:>+7.1f}  {t['action']}"
         L.append(row)
     L.append("")
-    L.append("Factor buckets:")
-    for b, w in sorted(p["bucketTotals"].items(), key=lambda kv: -kv[1]):
-        L.append(f"  {b:<28}{w*100:>6.1f}%")
+    funded_buckets = [(b, w) for b, w in p["bucketTotals"].items() if w > 1e-9]
+    if funded_buckets:
+        L.append("Factor buckets:")
+        for b, w in sorted(funded_buckets, key=lambda kv: -kv[1]):
+            L.append(f"  {b:<28}{w*100:>6.1f}%")
     below = p.get("belowTrend") or []
     dust = p.get("droppedAsDust") or []
     if below:
@@ -398,6 +435,8 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--nlv", type=float,
                     help="net liquidating value; shapes position count and caps")
     ap.add_argument("--dollars-per-position", type=float, default=DOLLARS_PER_POSITION)
+    ap.add_argument("--regime-score", type=float,
+                    help="0-100 regime score; a weak regime throttles deployment")
     args = ap.parse_args(argv)
     composite = json.loads(Path(args.composite).read_text(encoding="utf-8"))
     current = None
@@ -405,7 +444,8 @@ def main(argv: Optional[list] = None) -> int:
         current = json.loads(Path(args.current).read_text(encoding="utf-8"))
     p = build(composite, current, max_name=args.max_name, max_bucket=args.max_bucket,
               min_weight=args.min_weight, nlv=args.nlv,
-              dollars_per_position=args.dollars_per_position)
+              dollars_per_position=args.dollars_per_position,
+              regime_score=args.regime_score)
     print(text(p))
     if p.get("signalsTrusted"):
         save(p)

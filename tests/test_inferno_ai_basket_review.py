@@ -191,5 +191,46 @@ class MomentumSourceTests(unittest.TestCase):
         save_sizing.assert_not_called()
 
 
+class EmailDigestTests(unittest.TestCase):
+    """The weekly digest must reach the inbox even when nothing crossed."""
+
+    def setUp(self):
+        import inferno_ai_basket_alerts as alerts
+        self.alerts = alerts
+        self._orig = alerts.send_email
+        self.sent = {}
+
+        def fake(subject, text, html):
+            self.sent = {"subject": subject, "text": text, "html": html}
+            return {"ok": True, "recipient": "you@example.com"}
+
+        alerts.send_email = fake
+
+    def tearDown(self):
+        self.alerts.send_email = self._orig
+
+    def test_subject_carries_the_regime_read(self):
+        r = {"regime": {"label": "CAUTION", "score": 38.8}}
+        res = rv.email_digest("BODY TEXT", r)
+        self.assertTrue(res["ok"])
+        self.assertIn("CAUTION", self.sent["subject"])
+        self.assertIn("39/100", self.sent["subject"])
+
+    def test_subject_degrades_without_regime(self):
+        res = rv.email_digest("BODY", {})
+        self.assertEqual(self.sent["subject"], "[Basket] Weekly review")
+        self.assertTrue(res["ok"])
+
+    def test_body_contains_the_digest_and_is_escaped(self):
+        rv.email_digest("leaders <2> & rising", {"regime": {"label": "NEUTRAL", "score": 45}})
+        self.assertIn("leaders <2> & rising", self.sent["text"])
+        self.assertIn("&lt;2&gt;", self.sent["html"])   # html-escaped
+        self.assertIn("&amp;", self.sent["html"])
+
+    def test_html_carries_the_research_only_boundary(self):
+        rv.email_digest("BODY", {})
+        self.assertIn("Places no trades", self.sent["html"])
+
+
 if __name__ == "__main__":
     unittest.main()

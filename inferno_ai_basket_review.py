@@ -31,6 +31,8 @@ import inferno_ai_basket_composite as composite
 import inferno_ai_basket_vs_benchmark as benchmark
 import inferno_ai_basket_sizing as sizing
 import inferno_basket_holdings_join as holdings
+import inferno_ai_basket_signal_history as signal_history
+import inferno_ai_basket_regime as regime
 from inferno_ai_basket_config import load_data_contract
 
 ROOT = Path(__file__).resolve().parent
@@ -93,10 +95,17 @@ def run(quotes_path: str, changes_path: Optional[str], bench_quotes_path: str,
     if not bp.get("error"):
         benchmark.save(bp)
 
-    # 5) position sizing off the composite. Inherits the composite's trust
-    # verdict, so a failed-closed contract produces no weights rather than
-    # confident-looking nonsense.
-    sp = sizing.build(cp, current_weights, nlv=_read_nlv())
+    # 5) regime read (needs composite + benchmark). Computed before sizing so it
+    # can throttle deployment.
+    rg = regime.score({"composite": cp, "benchmark": bp})
+    if rg.get("score") is not None:
+        regime.save(rg)
+
+    # 6) position sizing off the composite, throttled by the regime. Inherits the
+    # composite's trust verdict, so a failed-closed contract produces no weights
+    # rather than confident-looking nonsense.
+    sp = sizing.build(cp, current_weights, nlv=_read_nlv(),
+                      regime_score=rg.get("score"))
     if sp.get("signalsTrusted"):
         sizing.save(sp)
 
@@ -116,8 +125,19 @@ def run(quotes_path: str, changes_path: Optional[str], bench_quotes_path: str,
         except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
             hp = {"error": f"holdings join unavailable: {type(exc).__name__}: {exc}"}
 
-    return {"alerts": al, "momentum": mp, "composite": cp,
-            "benchmark": bp, "sizing": sp, "holdings": hp}
+    result = {"alerts": al, "momentum": mp, "composite": cp,
+              "benchmark": bp, "sizing": sp, "holdings": hp, "regime": rg}
+
+    # 8) record this run and derive week-over-week trend (the memory layer).
+    # Only log when the composite is trusted, so throttled/failed runs do not
+    # poison the history with empty snapshots.
+    if cp.get("signalsTrusted") is not False and (cp.get("ranking") or []):
+        try:
+            result["signalTrend"] = signal_history.record_and_trend(result)
+        except OSError as exc:
+            result["signalTrend"] = {"error": f"history unavailable: {exc}"}
+
+    return result
 
 
 def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
@@ -137,6 +157,15 @@ def discipline_watch(al: dict[str, Any], cp: dict[str, Any]) -> dict[str, list]:
 def digest(r: dict[str, Any]) -> str:
     al, cp, bp = r["alerts"], r["composite"], r["benchmark"]
     L = ["===== AI / data-center basket — weekly review =====", ""]
+
+    # regime headline — the one-glance weather read, up top
+    rg = r.get("regime")
+    if rg and rg.get("score") is not None:
+        c = rg["components"]
+        L.append(f"REGIME: {rg['label']} ({rg['score']:.0f}/100) — "
+                 f"breadth {c['breadth200']:.0f}% >200d / {c['breadth50']:.0f}% >50d, "
+                 f"leaders {c['leaderFraction']:.0f}%, beating-SMH {c['beatingSector']:.0f}%")
+        L.append("")
 
     # THE BOOK FIRST — what is actually owned outranks what is merely watched.
     hp = r.get("holdings")
@@ -186,7 +215,13 @@ def digest(r: dict[str, Any]) -> str:
     # single mutually-exclusive direction — a name can't be both
     accel = [x["symbol"] for x in cp["ranking"] if x.get("direction") == "accelerating"]
     fade = [x["symbol"] for x in cp["ranking"] if x.get("direction") == "fading"]
+    ranking = cp.get("ranking") or []
+    b200 = sum(1 for x in ranking if x.get("above200"))
+    b50 = sum(1 for x in ranking if x.get("above50"))
     L.append("COMPOSITE TAGS:")
+    if ranking:
+        L.append(f"  breadth: {b200}/{len(ranking)} above 200-day · "
+                 f"{b50}/{len(ranking)} above 50-day")
     L.append(f"  LEADERS: {', '.join(lead) or '—'}")
     L.append(f"  REDUCE:  {', '.join(red) or '—'}")
     L.append(f"  AVOID:   {', '.join(avoid) or '—'}")
@@ -240,7 +275,8 @@ def digest(r: dict[str, Any]) -> str:
                      f"cash {sp['cashWeight']*100:.0f}% · {len(funded)} funded names")
             L.append(f"  largest: {top}")
             for b, w in sorted(sp["bucketTotals"].items(), key=lambda kv: -kv[1]):
-                L.append(f"    {b:<28}{w*100:>6.1f}%")
+                if w > 1e-9:
+                    L.append(f"    {b:<28}{w*100:>6.1f}%")
             acts = [t for t in sp["targets"] if t["action"] in ("ADD", "TRIM", "EXIT")]
             if acts:
                 L.append("  actions vs current book:")
@@ -253,8 +289,50 @@ def digest(r: dict[str, Any]) -> str:
                          f"{', '.join(sp['unclassifiedSymbols'])}")
         L.append("")
 
+    # signal trend — week-over-week movement in the aggregate signals
+    st = r.get("signalTrend")
+    if st and not st.get("error"):
+        d = st.get("deltas")
+        if d and d.get("changes"):
+            labels = {"regimeScore": "regime", "breadth200": "above 200-day",
+                      "leaders": "leaders", "reduce": "reduce", "avoid": "avoid",
+                      "avgRS": "avg RS", "cashPct": "cash%",
+                      "namesBeatingSector": "beating SMH", "topBucketPct": "top-bucket%"}
+            moves = []
+            for f, lab in labels.items():
+                v = (d["changes"] or {}).get(f)
+                if v is not None and abs(v) >= 1e-9:
+                    moves.append(f"{lab} {'+' if v > 0 else ''}{v:g}")
+            if moves:
+                L.append(f"SIGNAL TREND (since {d['from']}): " + " · ".join(moves))
+                L.append("")
+        elif st.get("historyLen", 0) < 2:
+            L.append("SIGNAL TREND: first run recorded — trend appears next run.")
+            L.append("")
+
     L.append("Decision-support only — hold the leaders, cut the AVOIDs. Not financial advice.")
     return "\n".join(L)
+
+
+def email_digest(out: str, r: dict[str, Any]) -> dict[str, Any]:
+    """Email the whole weekly digest.
+
+    The crossing alerts only fire when something crosses a moving average, so a
+    quiet week sent nothing at all and the regime / sizing / portfolio layers
+    never reached the inbox. This sends the full picture every run, with the
+    regime read in the subject so it is readable without opening the mail.
+    """
+    from html import escape
+    rg = r.get("regime") or {}
+    label, sc = rg.get("label"), rg.get("score")
+    subject = "[Basket] Weekly review"
+    if label and sc is not None:
+        subject += f" — {label} ({sc:.0f}/100)"
+    body_html = ("<pre style=\"font:13px ui-monospace,SFMono-Regular,Menlo,monospace;"
+                 "line-height:1.45\">" + escape(out) + "</pre>"
+                 "<p style='color:#667;font-size:12px'>Decision-support only. "
+                 "Places no trades, changes no authority. Not financial advice.</p>")
+    return alerts.send_email(subject, out, body_html)
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -265,7 +343,10 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--momentum", help="prebuilt momentum artifact from "
                                        "inferno_ai_basket_refresh.py (preferred, Schwab-derived)")
     ap.add_argument("--bench-quotes", required=True)
-    ap.add_argument("--send", action="store_true")
+    ap.add_argument("--send", action="store_true",
+                    help="email the crossing alerts (only fires if something crossed)")
+    ap.add_argument("--email", action="store_true",
+                    help="email the FULL weekly digest every run, crossings or not")
     ap.add_argument("--current", help="optional JSON of current weights, "
                                       "e.g. {\"NVDA\": 0.10, \"DELL\": 0.05} "
                                       "(percent-style values like 10 are accepted too)")
@@ -285,6 +366,11 @@ def main(argv: Optional[list] = None) -> int:
     print(out)
     OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
     OUT_TXT.write_text(out + "\n", encoding="utf-8")
+    if args.email:
+        res = email_digest(out, r)
+        print("\nDigest email: "
+              + (f"sent to {res.get('recipient')}" if res.get("ok")
+                 else f"NOT sent — {res.get('reason')}"))
     return 0
 
 
