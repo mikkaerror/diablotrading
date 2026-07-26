@@ -13,6 +13,7 @@ import argparse
 import json
 from typing import Any
 
+from inferno_cash_attribution import broker_cash_payload
 from inferno_config import ROOT, local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -242,6 +243,8 @@ def build_while_away_packet() -> dict[str, Any]:
     ensure_dirs()
     schwab_account = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
+    account_source, trusted_account = broker_cash_payload(live_sync, schwab_account)
+    account_trusted = account_source != "untrusted-account-source"
     live_review = load_json_file(LIVE_POSITION_REVIEW_FILE) or {}
     live_book = load_json_file(LIVE_BOOK_REVIEW_PACKET_FILE) or {}
     capital = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
@@ -273,12 +276,18 @@ def build_while_away_packet() -> dict[str, Any]:
         },
         "verdict": verdict,
         "account": {
-            "source": live_sync.get("accountDataSource") or "schwab-account-api",
+            "source": (
+                trusted_account.get("accountDataSource")
+                or ("schwab-account-api" if account_source == "schwab-account-sync" else account_source)
+                if account_trusted
+                else account_source
+            ),
+            "trusted": account_trusted,
             "schwabVerdict": schwab_account.get("verdict"),
             "liveSyncVerdict": live_sync.get("verdict"),
-            "matchedSuffix": live_sync.get("matchedSuffix") or schwab_account.get("matchedSuffix"),
-            "netLiquidatingValue": safe_round(live_sync.get("netLiquidatingValue") or schwab_account.get("netLiquidatingValue")),
-            "totalCash": safe_round(live_sync.get("totalCash") or schwab_account.get("totalCash")),
+            "matchedSuffix": trusted_account.get("matchedSuffix") if account_trusted else None,
+            "netLiquidatingValue": safe_round(trusted_account.get("netLiquidatingValue")) if account_trusted else None,
+            "totalCash": safe_round(trusted_account.get("totalCash")) if account_trusted else None,
             "positions": (schwab_account.get("counts") or {}).get("positions"),
             "generatedAt": live_sync.get("generatedAt") or schwab_account.get("generatedAt"),
         },
@@ -375,7 +384,7 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
         f"Authority: research-only; broker submit OFF; live automation OFF",
         "",
         "Account truth:",
-        f"- Source: {account.get('source')} | Schwab {account.get('schwabVerdict')} | live sync {account.get('liveSyncVerdict')}",
+        f"- Source: {account.get('source')} | trusted {account.get('trusted')} | Schwab {account.get('schwabVerdict')} | live sync {account.get('liveSyncVerdict')}",
         f"- NLV: {money(account.get('netLiquidatingValue'))} | cash: {money(account.get('totalCash'))} | positions: {account.get('positions')}",
         "",
         "Capital guardrails:",

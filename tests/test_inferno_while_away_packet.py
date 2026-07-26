@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import inferno_while_away_packet as wap
+from inferno_config import local_now
 
 
 class InfernoWhileAwayPacketTests(unittest.TestCase):
@@ -61,7 +62,12 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
         self.write_json(
             "inferno_schwab_account_sync.json",
             {
+                "generatedAt": local_now().isoformat(),
+                "ok": True,
                 "verdict": "healthy",
+                "brokerReadOnly": True,
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
                 "matchedSuffix": "8499",
                 "netLiquidatingValue": 1224.66,
                 "totalCash": 167.88,
@@ -71,8 +77,12 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
         self.write_json(
             "inferno_live_account_sync.json",
             {
+                "generatedAt": local_now().isoformat(),
+                "ok": True,
                 "verdict": "attention" if hard_blockers else "healthy",
                 "accountDataSource": "schwab-account-api",
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
                 "matchedSuffix": "8499",
                 "netLiquidatingValue": 1224.66,
                 "totalCash": 167.88,

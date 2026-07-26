@@ -15,9 +15,18 @@ the NLV history exactly matched the eligible `CASH_DISBURSEMENT` transaction
 net amount over the same date window. The ledger contained no option rows, so
 there is no lot-level option realization evidence.
 
+On 2026-07-26, the cash-attribution source contract was tightened after a
+blocked paper/TOS account packet with a numeric balance could otherwise have
+been presented as broker-confirmed cash. A cash value is now accepted only
+from a fresh, healthy, read-only Schwab artifact in live mode with a configured
+approved suffix. Rejected sources retain no cash or NLV value and use the
+explicit `untrusted-account-source` state.
+
 ## Falsifier
 
-If the transaction artifact is unavailable, unverified, stale, its net amounts
+If the account source is blocked, paper, unscoped, stale, TOS-only, or lacks an
+approved suffix, cash attribution must expose no broker-confirmed cash. If the
+transaction artifact is unavailable, unverified, stale, its net amounts
 do not exactly match the observed cash interval, or an account change cannot be
 aligned to a transaction date, cash attribution must return to an explicit
 unattributed/review-required verdict. A matched net amount must never be

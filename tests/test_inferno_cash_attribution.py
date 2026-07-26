@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import inferno_cash_attribution as cash_attribution
+from inferno_config import local_now
 
 
 class InfernoCashAttributionTests(unittest.TestCase):
@@ -25,8 +26,10 @@ class InfernoCashAttributionTests(unittest.TestCase):
                     {
                         "generatedAt": "2026-07-02T20:00:00-06:00",
                         "ok": True,
-                        "verdict": "attention",
+                        "verdict": "healthy",
                         "accountDataSource": "schwab-account-api",
+                        "accountMode": "live",
+                        "allowedLiveReadonly": True,
                         "matchedSuffix": "8499",
                         "totalCash": 0.0,
                         "netLiquidatingValue": 788.02,
@@ -88,18 +91,23 @@ class InfernoCashAttributionTests(unittest.TestCase):
     def test_cash_snapshot_prefers_healthy_schwab_over_tos_statement(self) -> None:
         source, payload = cash_attribution.broker_cash_payload(
             {
-                "generatedAt": "2026-07-09T07:00:00-06:00",
+                "generatedAt": local_now().isoformat(),
                 "ok": True,
                 "verdict": "healthy",
                 "accountDataSource": "tos-account-statement",
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
                 "totalCash": "$167.88",
                 "netLiquidatingValue": "$1,108.08",
             },
             {
-                "generatedAt": "2026-07-09T09:50:00-06:00",
+                "generatedAt": local_now().isoformat(),
                 "ok": True,
                 "verdict": "healthy",
                 "brokerReadOnly": True,
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
+                "matchedSuffix": "8499",
                 "totalCash": 0.0,
                 "netLiquidatingValue": 767.31,
             },
@@ -140,6 +148,65 @@ class InfernoCashAttributionTests(unittest.TestCase):
         self.assertTrue(classification["knownCashSource"])
         self.assertFalse(classification["realizedOptionsProfitKnown"])
 
+    def test_cash_snapshot_rejects_blocked_paper_or_unscoped_account_data(self) -> None:
+        source, payload = cash_attribution.broker_cash_payload(
+            {
+                "generatedAt": local_now().isoformat(),
+                "ok": False,
+                "verdict": "blocked",
+                "accountDataSource": "tos-account-statement",
+                "accountMode": "paper",
+                "allowedLiveReadonly": False,
+                "totalCash": 760023.33,
+                "netLiquidatingValue": 269046.67,
+            },
+            {
+                "generatedAt": local_now().isoformat(),
+                "ok": False,
+                "verdict": "blocked",
+                "brokerReadOnly": True,
+                "accountMode": "live",
+                "allowedLiveReadonly": True,
+                "totalCash": 760023.33,
+            },
+        )
+
+        self.assertEqual(source, "untrusted-account-source")
+        self.assertEqual(payload, {})
+
+    def test_broker_cash_snapshot_uses_none_not_zero_for_untrusted_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            (data_dir / "inferno_live_account_sync.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-07-01T08:00:00-06:00",
+                        "ok": True,
+                        "verdict": "healthy",
+                        "accountDataSource": "schwab-account-api",
+                        "accountMode": "live",
+                        "allowedLiveReadonly": True,
+                        "matchedSuffix": "8499",
+                        "totalCash": 760023.33,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (data_dir / "inferno_schwab_account_sync.json").write_text("{}", encoding="utf-8")
+
+            with (
+                patch.object(cash_attribution, "LIVE_ACCOUNT_SYNC_FILE", data_dir / "inferno_live_account_sync.json"),
+                patch.object(cash_attribution, "SCHWAB_ACCOUNT_SYNC_FILE", data_dir / "inferno_schwab_account_sync.json"),
+            ):
+                snapshot = cash_attribution.broker_cash_snapshot()
+
+        self.assertEqual(snapshot["source"], "untrusted-account-source")
+        self.assertFalse(snapshot["trusted"])
+        self.assertIsNone(snapshot["cash"])
+        self.assertIsNone(snapshot["netLiquidatingValue"])
+
     def test_cash_increase_near_schedule_is_likely_deposit_not_profit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -154,6 +221,8 @@ class InfernoCashAttributionTests(unittest.TestCase):
                         "ok": True,
                         "verdict": "healthy",
                         "accountDataSource": "schwab-account-api",
+                        "accountMode": "live",
+                        "allowedLiveReadonly": True,
                         "matchedSuffix": "8499",
                         "totalCash": 250.0,
                         "netLiquidatingValue": 1038.02,

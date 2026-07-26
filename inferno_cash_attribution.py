@@ -14,8 +14,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from inferno_config import local_now
+from inferno_config import account_suffix_allowed, local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_reporting_summary import freshness_status
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -31,6 +32,7 @@ SCHWAB_TRANSACTION_LEDGER_STATUS_FILE = DATA_DIR / "inferno_schwab_transaction_l
 OPERATOR_CASH_EVENTS_FILE = DATA_DIR / "operator_cash_events.csv"
 DEFAULT_DEPOSIT_MATCH_DAYS = 3
 TRANSACTION_RECONCILIATION_TOLERANCE_DOLLARS = 0.01
+ACCOUNT_CASH_MAX_AGE_HOURS = 8
 
 
 def text(value: Any, default: str = "") -> str:
@@ -90,51 +92,85 @@ def parse_day(value: Any) -> date | None:
         return None
 
 
-def schwab_account_cash_available(payload: dict[str, Any]) -> bool:
-    """Return whether Schwab has usable read-only cash/account truth."""
+def valid_live_account_cash(payload: dict[str, Any], *, now: datetime | None = None) -> bool:
+    """Return whether a live-sync artifact is safe to call broker-confirmed cash.
+
+    A numeric balance alone is never sufficient.  This deliberately rejects a
+    failed, paper, stale, or unscoped TOS capture so it cannot leak into cash
+    attribution as broker truth.
+    """
     return (
-        text(payload.get("verdict")).lower() == "healthy"
+        bool(payload.get("ok"))
+        and text(payload.get("verdict")).lower() == "healthy"
+        and text(payload.get("accountDataSource")) == "schwab-account-api"
+        and text(payload.get("accountMode")).lower() == "live"
+        and bool(payload.get("allowedLiveReadonly"))
+        and account_suffix_allowed(text(payload.get("matchedSuffix")) or None)
+        and freshness_status(
+            payload.get("generatedAt"), max_age_hours=ACCOUNT_CASH_MAX_AGE_HOURS, now=now
+        ) == "fresh"
+        and payload.get("totalCash") not in (None, "")
+    )
+
+
+def schwab_account_cash_available(payload: dict[str, Any], *, now: datetime | None = None) -> bool:
+    """Return whether Schwab has current, approved read-only cash truth."""
+    return (
+        bool(payload.get("ok"))
+        and text(payload.get("verdict")).lower() == "healthy"
         and bool(payload.get("brokerReadOnly"))
-        and (
-            payload.get("totalCash") not in (None, "")
-            or payload.get("netLiquidatingValue") not in (None, "")
-        )
+        and text(payload.get("accountMode")).lower() == "live"
+        and bool(payload.get("allowedLiveReadonly"))
+        and account_suffix_allowed(text(payload.get("matchedSuffix")) or None)
+        and freshness_status(
+            payload.get("generatedAt"), max_age_hours=ACCOUNT_CASH_MAX_AGE_HOURS, now=now
+        ) == "fresh"
+        and payload.get("totalCash") not in (None, "")
     )
 
 
 def broker_cash_payload(
     live_sync: dict[str, Any],
     schwab_sync: dict[str, Any],
+    *,
+    now: datetime | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Choose the current broker-cash source using Schwab before stale TOS statements."""
-    if text(live_sync.get("accountDataSource")) == "schwab-account-api":
+    """Choose a validated broker-cash source or explicitly return untrusted."""
+    if valid_live_account_cash(live_sync, now=now):
         return "live-account-sync", live_sync
-    if schwab_account_cash_available(schwab_sync):
+    if schwab_account_cash_available(schwab_sync, now=now):
         return "schwab-account-sync", schwab_sync
-    if live_sync.get("totalCash") not in (None, ""):
-        return "live-account-sync", live_sync
-    if schwab_sync:
-        return "schwab-account-sync", schwab_sync
-    return "live-account-sync", live_sync
+    return "untrusted-account-source", {}
 
 
-def broker_cash_snapshot() -> dict[str, Any]:
+def broker_cash_snapshot(*, now: datetime | None = None) -> dict[str, Any]:
     """Return the latest approved broker cash snapshot."""
     live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
     schwab_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
-    source, payload = broker_cash_payload(live_sync, schwab_sync)
+    source, payload = broker_cash_payload(live_sync, schwab_sync, now=now)
+    trusted = source != "untrusted-account-source"
     account_data_source = payload.get("accountDataSource")
     if not account_data_source and source == "schwab-account-sync":
         account_data_source = "schwab-account-api"
     return {
         "source": source,
+        "trusted": trusted,
+        "trustReason": (
+            "fresh healthy read-only Schwab account data for an approved live suffix"
+            if trusted
+            else "No fresh, healthy, read-only Schwab account source with an approved live suffix is available."
+        ),
         "generatedAt": payload.get("generatedAt"),
         "ok": bool(payload.get("ok")),
         "verdict": payload.get("verdict"),
         "accountDataSource": account_data_source or source,
         "matchedSuffix": payload.get("matchedSuffix"),
-        "cash": round(float(number(payload.get("totalCash"), 0.0) or 0.0), 2),
-        "netLiquidatingValue": round(float(number(payload.get("netLiquidatingValue"), 0.0) or 0.0), 2),
+        "cash": round(float(number(payload.get("totalCash"), 0.0) or 0.0), 2) if trusted else None,
+        "netLiquidatingValue": (
+            round(float(number(payload.get("netLiquidatingValue"), 0.0) or 0.0), 2)
+            if trusted and payload.get("netLiquidatingValue") not in (None, "")
+            else None
+        ),
     }
 
 
@@ -441,7 +477,7 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
     ensure_dirs()
     current = now or local_now()
     deposit_plan = load_json_file(DEPOSIT_PLAN_FILE) or {}
-    broker = broker_cash_snapshot()
+    broker = broker_cash_snapshot(now=current)
     history = append_current_snapshot(load_cash_history(), broker)
     valid_cash_rows = [row for row in history if row.get("cash") is not None]
     changes = cash_changes(history)
@@ -457,6 +493,8 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
         else "requires-broker-transaction-ledger"
     )
     warnings: list[str] = []
+    if not broker.get("trusted"):
+        warnings.append("Broker cash is unavailable because no approved, fresh Schwab account source passed validation.")
     if not transaction_ledger_verified:
         warnings.append("No broker transaction ledger is wired; realized options profit remains unknown.")
     elif not transaction_reconciliation.get("matched"):
@@ -468,14 +506,18 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
         "generatedAt": current.isoformat(),
         "stage": CASH_ATTRIBUTION_STAGE,
         "verdict": (
-            "cash-movement-reconciled-realized-pnl-unknown"
+            "broker-cash-untrusted"
+            if not broker.get("trusted")
+            else "cash-movement-reconciled-realized-pnl-unknown"
             if transaction_reconciliation.get("matched")
             else "transaction-ledger-present-review-required"
             if transaction_ledger_verified
             else "attribution-incomplete"
         ),
         "message": (
-            "Latest broker cash movement is reconciled to transaction net amounts; realized options P/L remains unknown."
+            "Broker cash is unavailable until a fresh, approved read-only Schwab account source is restored."
+            if not broker.get("trusted")
+            else "Latest broker cash movement is reconciled to transaction net amounts; realized options P/L remains unknown."
             if transaction_reconciliation.get("matched")
             else "Broker cash is reconciled, but cash source attribution requires transaction history."
         ),
@@ -512,7 +554,7 @@ def build_cash_attribution(now: datetime | None = None) -> dict[str, Any]:
             "neverInferFromCashChange": True,
         },
         "capitalTreatment": {
-            "brokerConfirmedCashDollars": broker.get("cash"),
+            "brokerConfirmedCashDollars": broker.get("cash") if broker.get("trusted") else None,
             "plannedDepositsAreDeployableBeforeBrokerConfirmation": False,
             "realizedOptionsProfitIsKnown": False,
             "cashChangesCreateLiveAuthority": False,
@@ -558,6 +600,8 @@ def render_cash_attribution(payload: dict[str, Any]) -> str:
         "",
         "Broker cash",
         f"- Source: {broker.get('source')}",
+        f"- Trusted: {broker.get('trusted')}",
+        f"- Trust reason: {broker.get('trustReason') or '-'}",
         f"- Generated: {broker.get('generatedAt')}",
         f"- Cash: {money(broker.get('cash'))}",
         f"- NLV: {money(broker.get('netLiquidatingValue'))}",
@@ -587,7 +631,11 @@ def render_cash_attribution(payload: dict[str, Any]) -> str:
         "- Never infer realized options profit from cash changes, deposits, paper P/L, or NLV movement.",
         "",
         "Capital treatment",
-        f"- Broker-confirmed cash: {money(capital.get('brokerConfirmedCashDollars'))}",
+        (
+            f"- Broker-confirmed cash: {money(capital.get('brokerConfirmedCashDollars'))}"
+            if broker.get("trusted")
+            else "- Broker-confirmed cash: unavailable (account source untrusted)"
+        ),
         f"- Realized options profit known: {capital.get('realizedOptionsProfitIsKnown')}",
         f"- Cash changes create live authority: {capital.get('cashChangesCreateLiveAuthority')}",
         f"- Deployable cash still requires capital-check: {capital.get('deployableCashStillRequiresCapitalCheck')}",

@@ -307,6 +307,12 @@ reconciliation. It does not establish realized options P/L, available capital,
 or any authority to trade. Those remain separate until lot-level closed-position
 evidence and the existing capital gates are satisfied.
 
+`cash-ledger` calls a value broker-confirmed only when it comes from a fresh,
+healthy, read-only Schwab account artifact for the configured approved live
+suffix. A blocked, paper, unscoped, stale, or TOS-only capture is rendered as
+an untrusted source with no cash or NLV value; it must never be converted to
+`$0.00` or used by capital planning.
+
 If status says `reauthorizationRequired: True`, run:
 
 ```bash

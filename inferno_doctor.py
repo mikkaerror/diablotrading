@@ -1004,14 +1004,16 @@ def cash_attribution_status(report: dict) -> tuple[bool, str]:
         and not bool(report.get("brokerSubmitAllowed"))
         and not bool(report.get("liveTradingAllowed"))
     )
-    ok = fresh and authority_safe and verdict in {
+    broker = report.get("brokerCash") or {}
+    broker_trusted = bool(broker.get("trusted"))
+    ok = fresh and authority_safe and broker_trusted and verdict in {
         "attribution-incomplete",
         "transaction-ledger-present-review-required",
         "cash-movement-reconciled-realized-pnl-unknown",
     }
-    broker_cash = _float_value((report.get("brokerCash") or {}).get("cash"))
+    broker_cash = _float_value(broker.get("cash")) if broker_trusted else None
     latest_delta = _float_value((report.get("latestCashChange") or {}).get("deltaCash"))
-    broker_cash_text = f"${broker_cash:,.2f}"
+    broker_cash_text = f"${broker_cash:,.2f}" if broker_cash is not None else "unavailable (untrusted source)"
     latest_delta_text = f"{'-$' if latest_delta < 0 else '$'}{abs(latest_delta):,.2f}"
     classification = (report.get("latestCashClassification") or {}).get("classification") or "-"
     realized_known = (report.get("realizedOptionsProfit") or {}).get("known")
