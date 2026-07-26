@@ -31,4 +31,19 @@ score, threshold, and sizing assumptions; keep scores as rank surfaces until
 option-outcome calibration exists; and direct progress toward more closed,
 scored paper outcomes rather than looser authority.
 
+The paper-outcome completeness audit is the intake falsifier for this bottleneck.
+It separately reports whether the canonical paperMoney fill log is absent,
+schema-invalid, empty, status-ignored, closed but incomplete, or close-ready for
+an operator-run ingest. A populated CSV is not evidence by itself: only an
+immutable, matched fill record with the required execution facts can remove
+provenance debt, and the audit never imports or alters a ticket.
+The importer applies the same fail-closed checks, rejecting incomplete or
+invalid closed rows before they can mutate a paper ticket.
+The readiness audit calls a row close-ready only after that exact staged-ticket
+identity check passes; column completeness alone is not operator work.
+Doctor surfaces rejected and unmatched rows as intake debt, never as outcomes.
+Closed evidence also requires timezone-aware, chronological execution times;
+non-finite supplied P/L is ignored in favor of the validated execution-price
+derivation.
+
 Related: [[Loop Optimization Principles]] · [[Authority Boundary]]

@@ -12,6 +12,8 @@ import argparse
 import csv
 import hashlib
 import json
+import math
+from datetime import datetime
 from typing import Any
 
 from inferno_config import local_now
@@ -26,6 +28,18 @@ OPEN_STATUSES = {"open", "opened", "filled", "paper-open"}
 CLOSED_STATUSES = {"closed", "closed-win", "closed-loss", "exited"}
 IGNORED_STATUSES = {"", "pending", "watch", "planned"}
 CONTRACT_MULTIPLIER = 100
+PAPER_MONEY_ENVIRONMENT = "thinkorswim-papermoney"
+CLOSED_FILL_IMMUTABLE_FIELDS = (
+    "ticketId",
+    "ticker",
+    "strategy",
+    "environment",
+    "contracts",
+    "entryPrice",
+    "exitPrice",
+    "openedAt",
+    "closedAt",
+)
 
 
 def number(value: Any, default: float | None = None) -> float | None:
@@ -82,6 +96,55 @@ def contracts_for_row(row: dict[str, Any]) -> int:
     return max(1, int(value or 1))
 
 
+def parse_execution_timestamp(value: Any) -> datetime | None:
+    """Parse a timezone-aware paper execution timestamp without guessing."""
+    raw = text(value)
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None and parsed.utcoffset() is not None else None
+
+
+def closed_fill_evidence_gaps(row: dict[str, Any]) -> list[str]:
+    """Return immutable execution facts that a closed fill must supply.
+
+    Closed rows cannot inherit prices, contracts, timestamps, or environment
+    from the planned ticket.  This keeps a CSV row as evidence of an actual
+    paper execution rather than a way to turn a plan into a completed outcome.
+    """
+    gaps = [field for field in ("ticketId", "ticker", "strategy") if not text(row.get(field))]
+    environment = text(row.get("environment")).lower()
+    if environment != PAPER_MONEY_ENVIRONMENT:
+        gaps.append("environment")
+    contracts = number(row.get("contracts"))
+    if contracts is None or not math.isfinite(contracts) or contracts <= 0 or not contracts.is_integer():
+        gaps.append("contracts")
+    for field in ("entryPrice", "exitPrice"):
+        price = number(row.get(field))
+        if price is None or not math.isfinite(price) or price < 0:
+            gaps.append(field)
+    opened_at = parse_execution_timestamp(row.get("openedAt"))
+    closed_at = parse_execution_timestamp(row.get("closedAt"))
+    if opened_at is None:
+        gaps.append("openedAt")
+    if closed_at is None or (opened_at is not None and closed_at is not None and closed_at < opened_at):
+        gaps.append("closedAt")
+    return [field for field in CLOSED_FILL_IMMUTABLE_FIELDS if field in gaps]
+
+
+def closed_fill_ticket_identity_gaps(ticket: dict[str, Any], row: dict[str, Any]) -> list[str]:
+    """Return closed-fill identity facts that disagree with the matched ticket."""
+    comparisons = (
+        ("ticketId", text(row.get("ticketId")), text(ticket.get("ticketId"))),
+        ("ticker", text(row.get("ticker")).upper(), text(ticket.get("ticker")).upper()),
+        ("strategy", text(row.get("strategy")).upper(), text(ticket.get("strategy")).upper()),
+    )
+    return [field for field, supplied, expected in comparisons if supplied != expected]
+
+
 def load_fill_rows() -> list[dict[str, Any]]:
     """Load the paperMoney fill log after ensuring the latest schema exists."""
     write_fill_log_template()
@@ -93,9 +156,9 @@ def load_fill_rows() -> list[dict[str, Any]]:
 def candidate_tickets(ledger: dict[str, Any], row: dict[str, Any]) -> list[dict[str, Any]]:
     """Return safe candidate paper tickets for one fill row.
 
-    Matching prefers exact `ticketId`. Fallback matching is intentionally strict:
-    ticker plus optional strategy, restricted to the paper-staged lane so we do
-    not accidentally mutate blocked or rejected tickets.
+    Closed rows require an exact ``ticketId`` match. Fallback matching is only
+    available to non-final rows, using ticker plus optional strategy and the
+    paper-staged lane so a closed fill cannot be attached to the wrong plan.
     """
     items = ledger.get("items") or []
     ticket_id = text(row.get("ticketId"))
@@ -107,6 +170,9 @@ def candidate_tickets(ledger: dict[str, Any], row: dict[str, Any]) -> list[dict[
         ]
         if exact:
             return exact
+
+    if normalized_status(row.get("status")) == "closed":
+        return []
 
     ticker = text(row.get("ticker")).upper()
     strategy = text(row.get("strategy")).upper()
@@ -125,7 +191,7 @@ def candidate_tickets(ledger: dict[str, Any], row: dict[str, Any]) -> list[dict[
 def derived_realized_pnl(ticket: dict[str, Any], row: dict[str, Any]) -> float | None:
     """Estimate realized P/L from entry and exit prices when CSV omits dollars."""
     explicit = number(row.get("realizedPnl"))
-    if explicit is not None:
+    if explicit is not None and math.isfinite(explicit):
         return round(explicit, 2)
     exit_price = number(row.get("exitPrice"))
     if exit_price is None:
@@ -153,6 +219,15 @@ def apply_fill_row(ticket: dict[str, Any], row: dict[str, Any]) -> tuple[dict[st
     status = normalized_status(row.get("status"))
     if status in {"ignored", "unknown"}:
         return ticket, False, f"status {text(row.get('status')) or 'blank'} ignored"
+    if status == "closed":
+        if text(ticket.get("status")) != "paper-staged":
+            return ticket, False, "closed fill rejected: matched ticket is not paper-staged"
+        gaps = closed_fill_evidence_gaps(row)
+        if gaps:
+            return ticket, False, "closed fill rejected: immutable evidence missing or invalid: " + ", ".join(gaps)
+        identity_gaps = closed_fill_ticket_identity_gaps(ticket, row)
+        if identity_gaps:
+            return ticket, False, "closed fill rejected: immutable identity does not match ticket: " + ", ".join(identity_gaps)
 
     paper_execution = {
         **(ticket.get("paperExecution") or {}),
@@ -216,6 +291,7 @@ def ingest_fill_log() -> dict[str, Any]:
     opened = 0
     closed = 0
     ignored = 0
+    rejected = 0
     unmatched: list[str] = []
     notes: list[str] = []
 
@@ -227,9 +303,25 @@ def ingest_fill_log() -> dict[str, Any]:
             ignored += 1
             notes.append(f"{text(row.get('ticker')).upper() or 'UNKNOWN'}: status ignored")
             continue
+        if status == "closed":
+            gaps = closed_fill_evidence_gaps(row)
+            if gaps:
+                rejected += 1
+                notes.append(
+                    f"{text(row.get('ticker')).upper() or 'UNKNOWN'}: closed fill rejected: "
+                    f"immutable evidence missing or invalid: {', '.join(gaps)}"
+                )
+                continue
 
         candidates = candidate_tickets({"items": updated_items}, row)
         if len(candidates) != 1:
+            if status == "closed":
+                rejected += 1
+                notes.append(
+                    f"{text(row.get('ticker')).upper() or 'UNKNOWN'}: closed fill rejected: "
+                    "exact paper-staged ticketId match required"
+                )
+                continue
             reason = "no matching paper-staged ticket" if not candidates else "ambiguous ticket match"
             unmatched.append(
                 f"{text(row.get('ticker')).upper() or 'UNKNOWN'} | {text(row.get('ticketId')) or 'no-ticket-id'} | {reason}"
@@ -244,7 +336,10 @@ def ingest_fill_log() -> dict[str, Any]:
 
         updated_ticket, changed, result = apply_fill_row(updated_items[index], row)
         if not changed:
-            ignored += 1
+            if result.startswith("closed fill rejected:"):
+                rejected += 1
+            else:
+                ignored += 1
             notes.append(f"{text(updated_items[index].get('ticker')).upper()}: {result}")
             continue
 
@@ -273,6 +368,7 @@ def ingest_fill_log() -> dict[str, Any]:
         "openedRows": opened,
         "closedRows": closed,
         "ignoredRows": ignored,
+        "rejectedRows": rejected,
         "unmatchedRows": unmatched,
         "notes": notes,
         "ledgerUpdatedAt": updated_ledger.get("updatedAt"),
@@ -293,6 +389,7 @@ def ingest_report_text(report: dict[str, Any]) -> str:
         f"Opened rows: {report.get('openedRows', 0)}",
         f"Closed rows: {report.get('closedRows', 0)}",
         f"Ignored rows: {report.get('ignoredRows', 0)}",
+        f"Rejected rows: {report.get('rejectedRows', 0)}",
         "",
         "Notes:",
     ]
