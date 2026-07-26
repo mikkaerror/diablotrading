@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from inferno_config import ROOT, backtest_python
+from inferno_io import atomic_copy_file
 
 
 SERVICE_LABEL = "io.diablotrading.inferno-nightly-optimize"
@@ -93,8 +94,7 @@ def ensure_wrapper() -> None:
     """Deploy the job outside Documents and write its launchd wrapper."""
     runner_python = backtest_python()
     SERVICE_BIN_DIR.mkdir(parents=True, exist_ok=True)
-    SERVICE_ENTRYPOINT.write_text(ENTRYPOINT.read_text(encoding="utf-8"), encoding="utf-8")
-    SERVICE_ENTRYPOINT.chmod(0o755)
+    atomic_copy_file(ENTRYPOINT, SERVICE_ENTRYPOINT)
     SERVICE_WRAPPER.write_text(
         "\n".join(
             [

@@ -75,6 +75,7 @@ class NightlyOptimizeTests(unittest.TestCase):
     def test_nightly_refreshes_diagnostics_in_dependency_order(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
         options = text.index('run_step "schwab options chain"')
+        transactions = text.index('run_step "schwab transaction ledger"')
         edge = text.index('run_step "schwab edge signals"')
         performance = text.index('run_step "performance analytics"')
         outcome = text.index('run_step "outcome attribution"')
@@ -87,6 +88,7 @@ class NightlyOptimizeTests(unittest.TestCase):
         thresholds = text.index('run_step "score threshold audit"')
         command = text.index('run_step "central command"')
 
+        self.assertLess(transactions, options)
         self.assertLess(options, edge)
         self.assertLess(performance, outcome)
         self.assertLess(outcome, decay)
@@ -96,6 +98,22 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(drawdown, consensus)
         self.assertLess(dte, thresholds)
         self.assertLess(thresholds, command)
+
+    def test_nightly_layers_deposit_and_cash_truth_before_growth_stack(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        live_sync = text.index('run_step "live account sync"')
+        transactions = text.index('run_step "schwab transaction ledger"')
+        deposit_plan = text.index('run_step "deposit plan"')
+        cash_attribution = text.index('run_step "cash attribution"')
+        growth_stack = text.index('run_step "growth stack"')
+        command = text.index('run_step "central command"')
+
+        self.assertLess(transactions, live_sync)
+        self.assertLess(live_sync, deposit_plan)
+        self.assertLess(deposit_plan, cash_attribution)
+        self.assertLess(cash_attribution, growth_stack)
+        self.assertLess(growth_stack, command)
 
     def test_deployed_copy_can_use_repo_root(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")

@@ -3,12 +3,14 @@ from __future__ import annotations
 """Install the bounded paper-evidence goal loop as a weekday LaunchAgent."""
 
 import argparse
+import hashlib
 import os
 import plistlib
 import subprocess
 from pathlib import Path
 
 from inferno_config import ROOT, backtest_python
+from inferno_io import atomic_copy_file
 
 
 SERVICE_LABEL = "io.diablotrading.inferno-evidence-goal-loop"
@@ -16,6 +18,7 @@ PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
 LOG_DIR = Path.home() / "Library" / "Logs" / "Inferno"
 SERVICE_BIN_DIR = Path.home() / ".local" / "bin"
 SERVICE_WRAPPER = SERVICE_BIN_DIR / "inferno_evidence_goal_loop_service.sh"
+SERVICE_ENTRYPOINT = SERVICE_BIN_DIR / "inferno_evidence_goal_loop.py"
 ENTRYPOINT = ROOT / "inferno_evidence_goal_loop.py"
 DEFAULT_HOUR = 13
 DEFAULT_MINUTE = 40
@@ -55,9 +58,33 @@ def plist_payload(hour: int, minute: int) -> dict:
     }
 
 
+def script_sync_status() -> dict[str, str | None]:
+    """Compare the reviewed evidence loop with launchd's deployed entrypoint."""
+    if not ENTRYPOINT.exists():
+        return {"status": "source-missing", "sourceSha256": None, "deployedSha256": None}
+    if not SERVICE_ENTRYPOINT.exists():
+        return {"status": "deployed-copy-missing", "sourceSha256": None, "deployedSha256": None}
+    try:
+        source_hash = hashlib.sha256(ENTRYPOINT.read_bytes()).hexdigest()
+        deployed_hash = hashlib.sha256(SERVICE_ENTRYPOINT.read_bytes()).hexdigest()
+    except OSError as exc:
+        return {
+            "status": "sync-unreadable",
+            "sourceSha256": None,
+            "deployedSha256": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "status": "synced" if source_hash == deployed_hash else "drift",
+        "sourceSha256": source_hash,
+        "deployedSha256": deployed_hash,
+    }
+
+
 def ensure_wrapper() -> None:
     runner_python = backtest_python()
     SERVICE_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    atomic_copy_file(ENTRYPOINT, SERVICE_ENTRYPOINT)
     SERVICE_WRAPPER.write_text(
         "\n".join(
             [
@@ -65,7 +92,8 @@ def ensure_wrapper() -> None:
                 "set -euo pipefail",
                 f'cd "{ROOT}"',
                 f'export BACKTEST_PYTHON="{runner_python}"',
-                f'exec "{runner_python}" "{ENTRYPOINT}" run --max-iterations 2 "$@"',
+                f'export PYTHONPATH="{ROOT}${{PYTHONPATH:+:${{PYTHONPATH}}}}"',
+                f'exec "{runner_python}" "{SERVICE_ENTRYPOINT}" run --max-iterations 2 "$@"',
                 "",
             ]
         ),
@@ -99,6 +127,12 @@ def uninstall() -> int:
 
 
 def status() -> int:
+    sync = script_sync_status()
+    print(f"Script sync: {sync['status']}")
+    if sync.get("error"):
+        print(sync["error"])
+    if sync["status"] != "synced":
+        print("Run `python3 install_inferno_evidence_goal_loop_service.py install` to refresh the deployed copy.")
     result = run_launchctl(
         "print",
         f"{user_domain()}/{SERVICE_LABEL}",

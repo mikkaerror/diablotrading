@@ -38,6 +38,36 @@ class InfernoIoTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["count"], 2)
 
+    def test_atomic_copy_file_replaces_content_with_requested_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.sh"
+            deployed = root / "bin" / "deployed.sh"
+            source.write_text("#!/bin/sh\necho new\n", encoding="utf-8")
+            deployed.parent.mkdir()
+            deployed.write_text("old\n", encoding="utf-8")
+
+            inferno_io.atomic_copy_file(source, deployed)
+
+            self.assertEqual(deployed.read_text(encoding="utf-8"), source.read_text(encoding="utf-8"))
+            self.assertEqual(deployed.stat().st_mode & 0o777, 0o755)
+
+    def test_atomic_copy_file_keeps_existing_deployment_when_copy_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.sh"
+            deployed = root / "bin" / "deployed.sh"
+            source.write_text("new\n", encoding="utf-8")
+            deployed.parent.mkdir()
+            deployed.write_text("old\n", encoding="utf-8")
+
+            with patch.object(inferno_io.shutil, "copyfileobj", side_effect=OSError("copy failed")):
+                with self.assertRaisesRegex(OSError, "copy failed"):
+                    inferno_io.atomic_copy_file(source, deployed, retries=0)
+
+            self.assertEqual(deployed.read_text(encoding="utf-8"), "old\n")
+            self.assertEqual(list(deployed.parent.glob(f"{deployed.name}.*")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,7 @@ Safety contract:
 import errno
 import json
 import os
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -54,6 +55,29 @@ def _atomic_write_once(path: Path, content: str, *, encoding: str) -> None:
         with os.fdopen(fd, "w", encoding=encoding) as handle:
             handle.write(content)
         os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _atomic_copy_once(source: Path, destination: Path, *, mode: int) -> None:
+    """Copy ``source`` into a same-directory temp file, then replace ``destination``.
+
+    Applying the mode before ``os.replace`` means a concurrently launched
+    service observes either its previous complete executable or the new one;
+    it never observes a partially copied file or a briefly non-executable
+    replacement.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f"{destination.name}.", dir=str(destination.parent))
+    try:
+        with source.open("rb") as input_handle, os.fdopen(fd, "wb") as output_handle:
+            shutil.copyfileobj(input_handle, output_handle)
+        os.chmod(tmp_name, mode)
+        os.replace(tmp_name, destination)
     except Exception:
         try:
             os.unlink(tmp_name)
@@ -112,6 +136,34 @@ def atomic_write_text(
         retries=retries,
         delay_seconds=delay_seconds,
     )
+
+
+def atomic_copy_file(
+    source: Path,
+    destination: Path,
+    *,
+    mode: int = 0o755,
+    retries: int = 5,
+    delay_seconds: float = 0.05,
+) -> None:
+    """Atomically deploy a local file with bounded retry on transient errors.
+
+    This is intentionally local-filesystem-only. It is suitable for the
+    LaunchAgent entrypoint copies that must be safe to refresh while a
+    scheduler may concurrently start the previous version.
+    """
+    last_error: BaseException | None = None
+    for attempt in range(retries + 1):
+        try:
+            _atomic_copy_once(source, destination, mode=mode)
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if not is_retryable_write_error(exc) or attempt >= retries:
+                raise
+            time.sleep(delay_seconds * (attempt + 1))
+    if last_error is not None:
+        raise last_error
 
 
 def atomic_write_json(

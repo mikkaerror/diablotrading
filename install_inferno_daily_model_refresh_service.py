@@ -3,12 +3,14 @@ from __future__ import annotations
 """Install the full research-only daily model refresh as a LaunchAgent."""
 
 import argparse
+import hashlib
 import os
 import plistlib
 import subprocess
 from pathlib import Path
 
 from inferno_config import ROOT, backtest_python
+from inferno_io import atomic_copy_file
 
 
 SERVICE_LABEL = "io.diablotrading.inferno-daily-model-refresh"
@@ -51,11 +53,38 @@ def plist_payload(times: tuple[tuple[int, int], ...]) -> dict:
     }
 
 
+def script_sync_status() -> dict[str, str | None]:
+    """Compare the reviewed refresh script with launchd's deployed copy.
+
+    The LaunchAgent intentionally executes a copy outside the workspace when
+    macOS privacy prevents background jobs from reading Documents. A source
+    change is therefore not scheduled until the installer refreshes that copy.
+    """
+    if not ENTRYPOINT.exists():
+        return {"status": "source-missing", "sourceSha256": None, "deployedSha256": None}
+    if not SERVICE_ENTRYPOINT.exists():
+        return {"status": "deployed-copy-missing", "sourceSha256": None, "deployedSha256": None}
+    try:
+        source_hash = hashlib.sha256(ENTRYPOINT.read_bytes()).hexdigest()
+        deployed_hash = hashlib.sha256(SERVICE_ENTRYPOINT.read_bytes()).hexdigest()
+    except OSError as exc:
+        return {
+            "status": "sync-unreadable",
+            "sourceSha256": None,
+            "deployedSha256": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "status": "synced" if source_hash == deployed_hash else "drift",
+        "sourceSha256": source_hash,
+        "deployedSha256": deployed_hash,
+    }
+
+
 def ensure_wrapper() -> None:
     runner_python = backtest_python()
     SERVICE_BIN_DIR.mkdir(parents=True, exist_ok=True)
-    SERVICE_ENTRYPOINT.write_text(ENTRYPOINT.read_text(encoding="utf-8"), encoding="utf-8")
-    SERVICE_ENTRYPOINT.chmod(0o755)
+    atomic_copy_file(ENTRYPOINT, SERVICE_ENTRYPOINT)
     SERVICE_WRAPPER.write_text(
         "\n".join(
             [
@@ -102,6 +131,12 @@ def uninstall() -> int:
 
 
 def status() -> int:
+    sync = script_sync_status()
+    print(f"Script sync: {sync['status']}")
+    if sync.get("error"):
+        print(sync["error"])
+    if sync["status"] != "synced":
+        print("Run `python3 install_inferno_daily_model_refresh_service.py install` to refresh the deployed copy.")
     result = run_launchctl("print", f"{user_domain()}/{SERVICE_LABEL}", check=False)
     if result.returncode == 0:
         print(result.stdout)
