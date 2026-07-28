@@ -94,6 +94,16 @@ class ShadowEvidenceTests(unittest.TestCase):
         self.assertEqual(second["count"], 1)
         self.assertEqual(second["lastRun"]["inserted"], 0)
 
+    def test_shadow_ledger_records_source_and_success_lifecycle(self) -> None:
+        plan = {"generatedAt": "2026-07-26T09:00:00-06:00", "items": []}
+
+        ledger = build_shadow_evidence(plan, {"items": []})
+
+        self.assertEqual(ledger["sourceDataAsOf"], "2026-07-26T09:00:00-06:00")
+        self.assertEqual(ledger["lifecycleStatus"], "success")
+        self.assertEqual(ledger["producer"], "inferno-shadow-evidence")
+        self.assertEqual(ledger["freshnessPolicy"]["ttlHours"], 36)
+
     @patch("inferno_shadow_evidence.save_strike_plan")
     @patch("inferno_shadow_evidence.build_strike_plan")
     @patch("inferno_shadow_evidence.load_json_file")

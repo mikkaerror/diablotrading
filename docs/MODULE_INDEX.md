@@ -173,6 +173,7 @@ Safety            — authority, risk, secrets
 | `inferno_trade_management.py` | Research-only per-position playbook auditor for open paper tickets; recommends holds, trims, stops, and pre-event exits without mutating the ledger | `reports/trade_management_latest.txt` |
 | `inferno_outcome_reviewer.py` | Re-score closed paper outcomes against expectations | `data/inferno_outcome_reviewer.json` |
 | `inferno_shadow_evidence.py` | Shadow ledger of paper tickets and their outcomes | `data/inferno_shadow_evidence.json` |
+| `inferno_artifact_lifecycle.py` | Shared lifecycle contract for mutable evidence: creation, successful/failed attempts, source-as-of timestamps, and freshness policy without repurposing legacy `generatedAt` | pure library, no artifact |
 
 ## Integration (chained outputs)
 

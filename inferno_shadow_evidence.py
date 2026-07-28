@@ -14,11 +14,12 @@ authority or submit trades; it is a microscope, not a trigger.
 """
 
 import argparse
-import json
+import sys
 from collections import Counter, defaultdict
 from datetime import date
 from typing import Any
 
+from inferno_artifact_lifecycle import failed_lifecycle, successful_lifecycle
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_doctor import in_current_service_cycle
@@ -452,7 +453,13 @@ def build_shadow_evidence(
         },
     }
     updated.update(summarize_shadow_evidence(updated))
-    return updated
+    return successful_lifecycle(
+        updated,
+        producer="inferno-shadow-evidence",
+        source_data_as_of=strike_plan.get("generatedAt"),
+        freshness_ttl_hours=36,
+        schedule="post-open strike cycle",
+    )
 
 
 def review_shadow_evidence(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -472,7 +479,13 @@ def review_shadow_evidence(ledger: dict[str, Any] | None = None) -> dict[str, An
         },
     }
     updated.update(summarize_shadow_evidence(updated))
-    return updated
+    return successful_lifecycle(
+        updated,
+        producer="inferno-shadow-evidence",
+        source_data_as_of=ledger.get("sourceDataAsOf") or ledger.get("sourceStrikePlanGeneratedAt"),
+        freshness_ttl_hours=36,
+        schedule="post-open strike cycle",
+    )
 
 
 def shadow_evidence_text(ledger: dict[str, Any], limit: int = DEFAULT_LIMIT) -> str:
@@ -484,7 +497,11 @@ def shadow_evidence_text(ledger: dict[str, Any], limit: int = DEFAULT_LIMIT) -> 
         "Inferno Shadow Evidence Lab",
         "",
         "Research lane: shadow-only / paper-only / never broker-submit",
+        f"Created: {ledger.get('createdAt') or ledger.get('generatedAt')}",
         f"Updated: {ledger.get('updatedAt')}",
+        f"Last successful: {ledger.get('lastSuccessfulAt') or ledger.get('updatedAt')}",
+        f"Last attempt: {ledger.get('lastAttemptAt') or ledger.get('updatedAt')}",
+        f"Lifecycle: {ledger.get('lifecycleStatus') or 'legacy'}",
         f"Source strike plan: {ledger.get('sourceStrikePlanGeneratedAt')}",
         f"Strike plan refreshed this run: {'yes' if ledger.get('sourceStrikePlanRefreshed') else 'no'}",
         f"Source universe: {ledger.get('sourceUniverse')}",
@@ -566,7 +583,17 @@ def main() -> int:
         print(SHADOW_EVIDENCE_TEXT_FILE.read_text(encoding="utf-8"))
         return 0
 
-    ledger = review_shadow_evidence() if args.command == "review" else build_shadow_evidence()
+    try:
+        ledger = review_shadow_evidence() if args.command == "review" else build_shadow_evidence()
+    except Exception as exc:  # noqa: BLE001 - retain prior evidence freshness on failed refresh.
+        failed = failed_lifecycle(
+            load_shadow_evidence(),
+            producer="inferno-shadow-evidence",
+            error=f"{type(exc).__name__}: {exc}"[:500],
+        )
+        save_shadow_evidence(failed)
+        print("Shadow evidence refresh failed; prior evidence was preserved.", file=sys.stderr)
+        return 1
     save_shadow_evidence(ledger)
     print(shadow_evidence_text(ledger, limit=args.limit))
     return 0

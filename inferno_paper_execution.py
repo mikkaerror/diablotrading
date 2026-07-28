@@ -10,11 +10,13 @@ build evidence before any live automation earns authority.
 
 import argparse
 import hashlib
-import json
+import sys
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from inferno_artifact_lifecycle import failed_lifecycle, successful_lifecycle
 from inferno_config import AUTO_PAPER_SELECTION_ENABLED, local_now
+from inferno_io import atomic_write_json, atomic_write_text
 from inferno_risk_policy import evaluate_strike_item
 from inferno_trade_evidence import decision_card
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -712,6 +714,13 @@ def record_from_strike_plan(strike_plan: dict[str, Any] | None = None) -> dict[s
             guarded_variant = {**variant_item, "processEntryAllowed": process_entry_allowed}
             entries.append(build_ledger_entry(guarded_variant, strike_plan.get("generatedAt"), ledger))
     updated, inserted = merge_entries(ledger, entries)
+    updated = successful_lifecycle(
+        updated,
+        producer="inferno-paper-execution",
+        source_data_as_of=strike_plan.get("generatedAt"),
+        freshness_ttl_hours=36,
+        schedule="post-open strike cycle",
+    )
     save_ledger(updated)
     return {
         "inserted": inserted,
@@ -729,7 +738,12 @@ def ledger_summary(ledger: dict[str, Any], limit: int = DEFAULT_LIMIT) -> str:
     lines = [
         "Inferno Paper Execution Ledger",
         "",
+        f"Created: {ledger.get('createdAt') or ledger.get('generatedAt')}",
         f"Updated: {ledger.get('updatedAt')}",
+        f"Last successful: {ledger.get('lastSuccessfulAt') or ledger.get('updatedAt')}",
+        f"Last attempt: {ledger.get('lastAttemptAt') or ledger.get('updatedAt')}",
+        f"Source strike plan: {ledger.get('sourceDataAsOf') or '-'}",
+        f"Lifecycle: {ledger.get('lifecycleStatus') or 'legacy'}",
         f"Tickets: {ledger.get('count', len(items))}",
         f"Staged: {sum(1 for item in items if item.get('status') == 'paper-staged')}",
         f"Blocked: {sum(1 for item in items if item.get('status') == 'paper-blocked')}",
@@ -778,8 +792,8 @@ def ledger_summary(ledger: dict[str, Any], limit: int = DEFAULT_LIMIT) -> str:
 def save_ledger(ledger: dict[str, Any]) -> None:
     """Persist JSON and text versions of the paper execution ledger."""
     ensure_dirs()
-    PAPER_EXECUTION_LEDGER_FILE.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
-    PAPER_EXECUTION_TEXT_FILE.write_text(ledger_summary(ledger), encoding="utf-8")
+    atomic_write_json(PAPER_EXECUTION_LEDGER_FILE, ledger)
+    atomic_write_text(PAPER_EXECUTION_TEXT_FILE, ledger_summary(ledger))
 
 
 def parse_args() -> argparse.Namespace:
@@ -792,7 +806,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     if args.command == "record":
-        result = record_from_strike_plan()
+        try:
+            result = record_from_strike_plan()
+        except Exception as exc:  # noqa: BLE001 - preserve evidence freshness after a failed run.
+            failed = failed_lifecycle(
+                load_ledger(),
+                producer="inferno-paper-execution",
+                error=f"{type(exc).__name__}: {exc}"[:500],
+            )
+            save_ledger(failed)
+            print("Paper execution ledger refresh failed; prior evidence was preserved.", file=sys.stderr)
+            return 1
         print(
             f"Paper execution ledger updated: {result['inserted']} inserted, "
             f"{result['total']} total."

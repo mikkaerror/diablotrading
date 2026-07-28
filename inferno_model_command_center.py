@@ -774,6 +774,20 @@ def artifact_summary(path: Path, *, keys: tuple[str, ...] = ("verdict", "message
     summary = {"present": True, "path": str(path)}
     for key in keys:
         summary[key] = payload.get(key)
+    for key in (
+        "createdAt",
+        "updatedAt",
+        "lastSuccessfulAt",
+        "lastAttemptAt",
+        "sourceDataAsOf",
+        "lifecycleStatus",
+        "producer",
+    ):
+        if key in payload:
+            summary[key] = payload.get(key)
+    summary["freshnessTimestamp"] = (
+        payload.get("lastSuccessfulAt") or payload.get("updatedAt") or payload.get("generatedAt")
+    )
     return summary
 
 
@@ -1081,7 +1095,19 @@ def build_command_center() -> dict[str, Any]:
         "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
         "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),
-        "shadowEvidence": artifact_summary(SHADOW_EVIDENCE_FILE, keys=("verdict", "generatedAt", "message")),
+        "shadowEvidence": artifact_summary(
+            SHADOW_EVIDENCE_FILE,
+            keys=(
+                "verdict",
+                "generatedAt",
+                "updatedAt",
+                "lastSuccessfulAt",
+                "lastAttemptAt",
+                "sourceDataAsOf",
+                "lifecycleStatus",
+                "message",
+            ),
+        ),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
         "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),

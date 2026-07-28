@@ -48,6 +48,14 @@ overlapping scheduled start sees either the previous complete executable or the
 new complete executable. Its checksum is audited in `./inferno schedule`; a
 drift verdict means the job is not yet using the reviewed source.
 
+Mutable evidence ledgers retain a compatibility `generatedAt` creation stamp,
+but lifecycle freshness is explicit: `createdAt`, `updatedAt`,
+`lastSuccessfulAt`, `lastAttemptAt`, `sourceDataAsOf`, and
+`lifecycleStatus`. A failed refresh may update only the attempt/failure record;
+it cannot advance the last successful evidence timestamp or make an old source
+look current. The first producers on this contract are the paper-execution and
+shadow-evidence ledgers; command-center summaries expose their lifecycle data.
+
 ## Canonical Truth
 
 Generated artifacts beat durable docs when they disagree.

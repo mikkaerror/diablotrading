@@ -1983,15 +1983,19 @@ def main() -> int:
     paper_ledger = load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {}
     if strike_window_started:
         strike_plan_today = in_current_service_cycle(str(strike_plan.get("generatedAt", "")), now=now)
-        paper_ledger_today = in_current_service_cycle(str(paper_ledger.get("updatedAt", "")), now=now)
-        strike_ok = (strike_plan_today and paper_ledger_today) or strike_cloud_proof
+        paper_ledger_success_at = paper_ledger.get("lastSuccessfulAt") or paper_ledger.get("updatedAt", "")
+        paper_ledger_failed = paper_ledger.get("lifecycleStatus") == "failed"
+        paper_ledger_today = in_current_service_cycle(str(paper_ledger_success_at), now=now)
+        strike_ok = (strike_plan_today and paper_ledger_today and not paper_ledger_failed) or strike_cloud_proof
         strike_detail = (
             f"{paper_ledger.get('count', 0)} paper tickets recorded"
             if strike_ok
             else json.dumps(
                 {
                     "strikePlanGeneratedAt": strike_plan.get("generatedAt"),
-                    "paperLedgerUpdatedAt": paper_ledger.get("updatedAt"),
+                    "paperLedgerLastSuccessfulAt": paper_ledger_success_at,
+                    "paperLedgerLastAttemptAt": paper_ledger.get("lastAttemptAt"),
+                    "paperLedgerLifecycle": paper_ledger.get("lifecycleStatus") or "legacy",
                 }
             )
         )
@@ -2047,8 +2051,10 @@ def main() -> int:
 
     shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
     if strike_window_started:
-        shadow_today = in_current_service_cycle(str(shadow.get("updatedAt", "")), now=now)
-        shadow_ok = shadow_today and shadow.get("count") is not None
+        shadow_success_at = shadow.get("lastSuccessfulAt") or shadow.get("updatedAt", "")
+        shadow_failed = shadow.get("lifecycleStatus") == "failed"
+        shadow_today = in_current_service_cycle(str(shadow_success_at), now=now)
+        shadow_ok = shadow_today and not shadow_failed and shadow.get("count") is not None
         overall = shadow.get("overall") or {}
         shadow_detail = (
             f"{overall.get('trackedCount', shadow.get('count', 0))} tracked | "
@@ -2056,7 +2062,9 @@ def main() -> int:
             if shadow_ok
             else json.dumps(
                 {
-                    "updatedAt": shadow.get("updatedAt"),
+                    "lastSuccessfulAt": shadow_success_at,
+                    "lastAttemptAt": shadow.get("lastAttemptAt"),
+                    "lifecycleStatus": shadow.get("lifecycleStatus") or "legacy",
                     "count": shadow.get("count"),
                 }
             )
