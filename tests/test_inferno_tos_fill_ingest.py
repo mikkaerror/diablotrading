@@ -206,6 +206,32 @@ class InfernoTosFillIngestTests(unittest.TestCase):
         updated_ticket = saved_ledgers[0]["items"][0]
         self.assertEqual(updated_ticket["outcome"]["status"], "closed")
         self.assertAlmostEqual(updated_ticket["outcome"]["estimatedPnl"], 70.0)
+        self.assertEqual(saved_ledgers[0]["lifecycleStatus"], "success")
+        self.assertEqual(saved_ledgers[0]["producer"], "inferno-tos-fill-ingest")
+        self.assertEqual(report["ledgerLifecycleStatus"], "success")
+        self.assertEqual(report["outcome"], "accepted-progress")
+        self.assertEqual(report["acceptedProgressUnits"], 1)
+
+    def test_planned_rows_are_reported_as_no_progress_not_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fill_log = Path(tmpdir) / "fills.csv"
+            with fill_log.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=FILL_COLUMNS)
+                writer.writeheader()
+                writer.writerow(_row(status="planned", entryPrice="", exitPrice="", openedAt="", closedAt=""))
+
+            with (
+                patch.object(ingest, "TOS_FILL_LOG_WORK_FILE", fill_log),
+                patch.object(ingest, "write_fill_log_template", return_value=None),
+                patch.object(ingest, "load_ledger", return_value={"items": [_ticket()]}),
+                patch.object(ingest, "save_ledger", return_value=None),
+                patch.object(ingest, "save_ingest_report", return_value=None),
+            ):
+                report = ingest.ingest_fill_log()
+
+        self.assertEqual(report["importedRows"], 0)
+        self.assertEqual(report["outcome"], "no-progress-planned-or-ignored")
+        self.assertEqual(report["acceptedProgressUnits"], 0)
 
     def test_ingest_rejects_incomplete_closed_row_without_changing_ticket(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

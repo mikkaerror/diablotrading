@@ -81,7 +81,7 @@ Safety            — authority, risk, secrets
 | `inferno_trade_conviction_audit.py` | **NEW** Per-ticket bull / bear / disagreement / falsification math case with peer-reviewed citations | `reports/trade_conviction_audit_latest.txt` |
 | `inferno_promotion_gap.py` | Gate-by-gate distance from broker promotion | `reports/promotion_gap_latest.txt` |
 | `inferno_promotion_evidence_lineage.py` | Read-only reconciliation of promotion-qualified staged paper outcomes versus quarantined fast and shadow research | `reports/promotion_evidence_lineage_latest.txt` |
-| `inferno_paper_outcome_completeness.py` | Read-only audit of whether closed staged paper rows have immutable paperMoney fill provenance; does not change strategy-lab scoring | `reports/paper_outcome_completeness_latest.txt` |
+| `inferno_paper_outcome_completeness.py` | Read-only audit of whether closed staged paper rows have immutable paperMoney fill provenance; names planned CSV stubs separately from accepted evidence and emits an operator-only provenance work queue | `reports/paper_outcome_completeness_latest.txt` |
 | `inferno_threshold_sensitivity.py` | Sweep four threshold profiles and report what each would promote | `reports/threshold_sensitivity_latest.txt` |
 | `inferno_approval_queue.py` | Operator approve/reject/expire commands | `data/inferno_approval_queue.json` |
 | `inferno_approval_inbox.py` | Narrow IMAP approval-reply ingestor with bounded UID dedupe state | `reports/approval_inbox_latest.txt` |
@@ -212,7 +212,7 @@ Safety            — authority, risk, secrets
 | `inferno_tos_account_statement_scraper.py` | Pull Account Statement from accessibility tree as a fallback | read-only |
 | `inferno_tos_session_probe.py` | Live thinkorswim window inspection | read-only |
 | `inferno_tos_sandbox.py` | paperMoney-mode helpers | read-only |
-| `inferno_tos_fill_ingest.py` | Ingest fills from the TOS export into the paper ledger | side-effects on paper |
+| `inferno_tos_fill_ingest.py` | Explicitly ingest matched paperMoney fills into the paper ledger; records accepted-progress versus planned/invalid/unmatched no-progress outcomes | side-effects on paper |
 | `inferno_desktop_automation.py` | macOS automation primitives shared across TOS modules | low-level |
 
 ## Operations — Paper

@@ -668,10 +668,13 @@ def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple
     if not fresh:
         return False, json.dumps({"generatedAt": generated, "processedRows": processed})
     unmatched = len(report.get("unmatchedRows") or [])
+    outcome = str(report.get("outcome") or "legacy-unknown")
+    accepted_progress = report.get("acceptedProgressUnits")
     return (
         ok,
         f"{report.get('importedRows', 0)} imported | {report.get('closedRows', 0)} closed | "
-        f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched",
+        f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched | "
+        f"{outcome} | accepted progress {accepted_progress if accepted_progress is not None else '-'}",
     )
 
 

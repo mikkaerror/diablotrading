@@ -860,6 +860,13 @@ This importer reads [data/inferno_tos_fill_log.csv](data/inferno_tos_fill_log.cs
 matches rows back to paper tickets, and updates realized paper outcomes before
 performance analytics run.
 
+Planned or pending CSV rows are templates, not execution evidence. The importer
+reports those as `no-progress-planned-or-ignored` with zero accepted progress;
+only a matched actual paperMoney fill can update a paper outcome. Review
+`reports/paper_outcome_completeness_latest.txt` before importing a closed row:
+its work queue lists missing immutable facts and never asks the operator to
+infer them.
+
 Use the `ticketId` from the sandbox packet whenever possible. That keeps the
 match exact and avoids ambiguity if you ever stage more than one structure on
 the same name.

@@ -594,6 +594,25 @@ class InfernoDoctorCycleTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(detail, "missing")
 
+    def test_paper_fill_ingest_status_surfaces_no_progress_outcome(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, detail = paper_fill_ingest_status(
+                {
+                    "generatedAt": "2026-07-27T22:42:19-06:00",
+                    "processedRows": 2,
+                    "importedRows": 0,
+                    "closedRows": 0,
+                    "rejectedRows": 0,
+                    "unmatchedRows": [],
+                    "outcome": "no-progress-planned-or-ignored",
+                    "acceptedProgressUnits": 0,
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("no-progress-planned-or-ignored", detail)
+        self.assertIn("accepted progress 0", detail)
+
     def test_strategy_shadow_comparison_warns_when_older_than_pricing(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):
             ok, detail = strategy_shadow_comparison_status(

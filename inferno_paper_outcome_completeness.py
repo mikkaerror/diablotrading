@@ -72,6 +72,8 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
         "rowCount": 0,
         "nonblankRows": 0,
         "statusCounts": {},
+        "rawStatusCounts": {},
+        "plannedStubRows": 0,
         "openRows": 0,
         "closedRows": 0,
         "closedRowsFormatComplete": 0,
@@ -92,6 +94,8 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
             "closedRows": None,
             "rejectedRows": None,
             "unmatchedRows": None,
+            "outcome": None,
+            "acceptedProgressUnits": None,
         },
     }
     ingest = load_json_file(TOS_FILL_INGEST_FILE) or {}
@@ -103,6 +107,8 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
         "closedRows": ingest.get("closedRows"),
         "rejectedRows": ingest.get("rejectedRows"),
         "unmatchedRows": len(ingest.get("unmatchedRows") or []),
+        "outcome": ingest.get("outcome"),
+        "acceptedProgressUnits": ingest.get("acceptedProgressUnits"),
     }
     if not TOS_FILL_LOG_WORK_FILE.exists():
         return report
@@ -123,6 +129,7 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
 
     report["rowCount"] = len(rows)
     status_counts: Counter[str] = Counter()
+    raw_status_counts: Counter[str] = Counter()
     missing_counts: Counter[str] = Counter()
     identity_counts: Counter[str] = Counter()
     for row in rows:
@@ -130,7 +137,11 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
             continue
         report["nonblankRows"] += 1
         status = normalized_status(row.get("status"))
+        raw_status = _text(row.get("status")).lower() or "blank"
         status_counts[status] += 1
+        raw_status_counts[raw_status] += 1
+        if raw_status in {"planned", "pending", "watch"}:
+            report["plannedStubRows"] += 1
         if status == "open":
             report["openRows"] += 1
         elif status == "closed":
@@ -159,6 +170,7 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
         elif status == "unknown":
             report["unknownStatusRows"] += 1
     report["statusCounts"] = dict(sorted(status_counts.items()))
+    report["rawStatusCounts"] = dict(sorted(raw_status_counts.items()))
     report["closedMissingFieldCounts"] = dict(sorted(missing_counts.items()))
     report["closedIdentityMismatchCounts"] = dict(sorted(identity_counts.items()))
     return report
@@ -183,9 +195,45 @@ def fill_intake_verdict(intake: dict[str, Any]) -> str:
         return "closed-fill-provenance-incomplete"
     if intake.get("openRows", 0):
         return "open-fill-awaiting-close"
+    if intake.get("plannedStubRows", 0):
+        return "fill-log-stubbed-awaiting-operator-execution"
     if intake.get("ignoredRows", 0):
         return "fill-log-populated-but-no-accepted-status"
     return "fill-log-empty"
+
+
+def operator_work_items(audits: list[dict[str, Any]], intake: dict[str, Any]) -> list[dict[str, Any]]:
+    """Name the minimum evidence work without generating or importing a fill."""
+    items: list[dict[str, Any]] = []
+    for audit in audits:
+        if audit.get("state") != "lab-scorable-provenance-debt":
+            continue
+        items.append(
+            {
+                "kind": "recover-closed-paper-fill-provenance",
+                "ticketId": audit.get("ticketId"),
+                "ticker": audit.get("ticker"),
+                "missingFields": audit.get("missingFields") or [],
+                "instruction": "Use actual paperMoney order/fill history only; do not infer or backfill missing execution facts.",
+            }
+        )
+    if intake.get("plannedStubRows", 0):
+        items.append(
+            {
+                "kind": "complete-paper-fill-stubs-after-actual-execution",
+                "rowCount": intake.get("plannedStubRows"),
+                "instruction": "Planned rows are templates, not evidence. Update one only after its actual paperMoney fill and keep the exact ticketId.",
+            }
+        )
+    if intake.get("closeReadyRows", 0):
+        items.append(
+            {
+                "kind": "operator-review-before-fill-ingest",
+                "rowCount": intake.get("closeReadyRows"),
+                "instruction": "Review the matched closed fill evidence, then run the explicit fill-ingest command; this audit never imports it automatically.",
+            }
+        )
+    return items
 
 
 def audit_closed_staged_ticket(ticket: dict[str, Any]) -> dict[str, Any]:
@@ -298,6 +346,7 @@ def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None) -> di
             "operatorIngestNeeded": bool(intake.get("closeReadyRows")),
             "ingestRunsAutomaticallyFromThisAudit": False,
         },
+        "operatorWorkItems": operator_work_items(audits, intake),
         "reminders": [
             "strategy-lab scoring eligibility is unchanged by this diagnostic",
             "audit-complete is a stricter provenance quality label, not an authority or promotion action",
@@ -341,10 +390,14 @@ def paper_outcome_completeness_text(payload: dict[str, Any]) -> str:
             f"- open / closed / format-complete / close-ready: {intake.get('openRows', 0)} / {intake.get('closedRows', 0)} / {intake.get('closedRowsFormatComplete', 0)} / {intake.get('closeReadyRows', 0)}",
             f"- exact ticket unmatched / ambiguous / identity mismatch: {intake.get('closedRowsUnmatchedTicket', 0)} / {intake.get('closedRowsAmbiguousTicket', 0)} / {intake.get('closedRowsIdentityMismatch', 0)}",
             f"- ignored / unknown status: {intake.get('ignoredRows', 0)} / {intake.get('unknownStatusRows', 0)}",
+            f"- planned template rows: {intake.get('plannedStubRows', 0)}",
+            f"- raw statuses: {', '.join(f'{status}={count}' for status, count in (intake.get('rawStatusCounts') or {}).items()) or '-'}",
             f"- latest ingest: {((intake.get('lastIngest') or {}).get('generatedAt')) or '-'} | "
             f"processed {((intake.get('lastIngest') or {}).get('processedRows')) if ((intake.get('lastIngest') or {}).get('processedRows')) is not None else '-'} | "
             f"imported {((intake.get('lastIngest') or {}).get('importedRows')) if ((intake.get('lastIngest') or {}).get('importedRows')) is not None else '-'} | "
             f"rejected {((intake.get('lastIngest') or {}).get('rejectedRows')) if ((intake.get('lastIngest') or {}).get('rejectedRows')) is not None else '-'}",
+            f"- latest ingest outcome: {((intake.get('lastIngest') or {}).get('outcome')) or '-'} | "
+            f"accepted progress {((intake.get('lastIngest') or {}).get('acceptedProgressUnits')) if ((intake.get('lastIngest') or {}).get('acceptedProgressUnits')) is not None else '-'}",
         ]
     )
     if intake.get("schemaMissingColumns"):
@@ -371,6 +424,21 @@ def paper_outcome_completeness_text(payload: dict[str, Any]) -> str:
             f"- {outcome.get('ticker') or 'UNKNOWN'} | {outcome.get('ticketId') or 'missing-id'} | "
             f"{outcome.get('state')} | missing: {debt}"
         )
+    lines.extend(["", "Operator work queue:"])
+    work_items = payload.get("operatorWorkItems") or []
+    if not work_items:
+        lines.append("- none")
+    for item in work_items:
+        target = " | ".join(
+            value
+            for value in (item.get("ticker"), item.get("ticketId"))
+            if value
+        )
+        fields = ", ".join(item.get("missingFields") or [])
+        count = item.get("rowCount")
+        suffix = f" | missing: {fields}" if fields else (f" | rows: {count}" if count else "")
+        lines.append(f"- {item.get('kind')}{f' | {target}' if target else ''}{suffix}")
+        lines.append(f"  {item.get('instruction')}")
     lines.extend(["", "Reminders:"])
     lines.extend(f"- {reminder}" for reminder in (payload.get("reminders") or []))
     return "\n".join(lines).rstrip() + "\n"

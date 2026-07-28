@@ -46,4 +46,13 @@ Closed evidence also requires timezone-aware, chronological execution times;
 non-finite supplied P/L is ignored in favor of the validated execution-price
 derivation.
 
+On 2026-07-27, the canonical fill log contained two `planned` rows. These are
+useful prefilled operator templates but count as zero accepted progress and
+must never be described as paper fills. The completeness report now preserves
+the raw status count, labels this state
+`fill-log-stubbed-awaiting-operator-execution`, and emits a read-only work item
+for each closed, lab-scorable result with missing provenance. Recovery requires
+actual paperMoney order/fill history; it must never be inferred from a strike
+plan, outcome estimate, shadow record, or cash movement.
+
 Related: [[Loop Optimization Principles]] · [[Authority Boundary]]

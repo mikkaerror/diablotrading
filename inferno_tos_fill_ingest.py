@@ -11,12 +11,13 @@ instead of static strike plans alone.
 import argparse
 import csv
 import hashlib
-import json
 import math
 from datetime import datetime
 from typing import Any
 
+from inferno_artifact_lifecycle import successful_lifecycle
 from inferno_config import local_now
+from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_execution import PAPER_EXECUTION_TEXT_FILE, load_ledger, save_ledger
 from inferno_tos_sandbox import TOS_FILL_LOG_WORK_FILE, write_fill_log_template
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
@@ -351,13 +352,34 @@ def ingest_fill_log() -> dict[str, Any]:
             closed += 1
         notes.append(f"{text(updated_ticket.get('ticker')).upper()}: imported {result} fill")
 
-    updated_ledger = {
-        **ledger,
-        "updatedAt": local_now().isoformat(),
-        "count": len(updated_items),
-        "items": updated_items,
-    }
+    updated_ledger = successful_lifecycle(
+        {
+            **ledger,
+            "count": len(updated_items),
+            "items": updated_items,
+        },
+        producer="inferno-tos-fill-ingest",
+        source_data_as_of=ledger.get("sourceDataAsOf"),
+        freshness_ttl_hours=36,
+        schedule="operator paper-fill ingest",
+    )
     save_ledger(updated_ledger)
+
+    if imported:
+        outcome = "accepted-progress"
+        outcome_reason = "at least one paper fill was matched and applied to a staged ticket"
+    elif rejected:
+        outcome = "no-progress-invalid-evidence"
+        outcome_reason = "closed fill rows were rejected; immutable evidence remains incomplete or mismatched"
+    elif unmatched:
+        outcome = "no-progress-unmatched-ticket"
+        outcome_reason = "fill rows did not map to exactly one paper-staged ticket"
+    elif ignored:
+        outcome = "no-progress-planned-or-ignored"
+        outcome_reason = "the fill log contains planning/stub rows, not accepted execution evidence"
+    else:
+        outcome = "no-progress-empty-log"
+        outcome_reason = "the fill log contains no nonblank rows"
 
     report = {
         "generatedAt": local_now().isoformat(),
@@ -371,7 +393,12 @@ def ingest_fill_log() -> dict[str, Any]:
         "rejectedRows": rejected,
         "unmatchedRows": unmatched,
         "notes": notes,
+        "acceptedProgressUnits": imported,
+        "outcome": outcome,
+        "outcomeReason": outcome_reason,
         "ledgerUpdatedAt": updated_ledger.get("updatedAt"),
+        "ledgerLastSuccessfulAt": updated_ledger.get("lastSuccessfulAt"),
+        "ledgerLifecycleStatus": updated_ledger.get("lifecycleStatus"),
     }
     save_ingest_report(report)
     return report
@@ -390,6 +417,8 @@ def ingest_report_text(report: dict[str, Any]) -> str:
         f"Closed rows: {report.get('closedRows', 0)}",
         f"Ignored rows: {report.get('ignoredRows', 0)}",
         f"Rejected rows: {report.get('rejectedRows', 0)}",
+        f"Outcome: {report.get('outcome') or '-'} | accepted progress: {report.get('acceptedProgressUnits', 0)}",
+        f"Reason: {report.get('outcomeReason') or '-'}",
         "",
         "Notes:",
     ]
@@ -410,8 +439,8 @@ def ingest_report_text(report: dict[str, Any]) -> str:
 def save_ingest_report(report: dict[str, Any]) -> None:
     """Persist JSON and text artifacts for the latest fill-import pass."""
     ensure_dirs()
-    TOS_FILL_INGEST_FILE.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    TOS_FILL_INGEST_TEXT_FILE.write_text(ingest_report_text(report), encoding="utf-8")
+    atomic_write_json(TOS_FILL_INGEST_FILE, report)
+    atomic_write_text(TOS_FILL_INGEST_TEXT_FILE, ingest_report_text(report))
 
 
 def parse_args() -> argparse.Namespace:

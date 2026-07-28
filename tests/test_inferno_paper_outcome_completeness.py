@@ -151,12 +151,16 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
         self.assertEqual(intake["closeReadyRows"], 1)
         self.assertEqual(intake["closedRowsMissingEvidence"], 1)
         self.assertEqual(intake["ignoredRows"], 1)
+        self.assertEqual(intake["plannedStubRows"], 1)
+        self.assertEqual(intake["rawStatusCounts"]["planned"], 1)
         self.assertEqual(intake["verdict"], "closed-fill-ready-for-operator-ingest")
         self.assertTrue(intake["operatorIngestNeeded"])
         self.assertFalse(intake["ingestRunsAutomaticallyFromThisAudit"])
         self.assertEqual(intake["lastIngest"]["processedRows"], 3)
         self.assertEqual(intake["lastIngest"]["rejectedRows"], 1)
         self.assertEqual(intake["closedMissingFieldCounts"]["exitPrice"], 1)
+        work_items = payload["operatorWorkItems"]
+        self.assertEqual(work_items[0]["kind"], "complete-paper-fill-stubs-after-actual-execution")
 
     def test_format_complete_closed_row_is_not_ready_without_exact_staged_ticket(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -189,6 +193,33 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
         self.assertEqual(intake["closedRowsUnmatchedTicket"], 1)
         self.assertEqual(intake["verdict"], "closed-fill-ticket-unmatched")
         self.assertFalse(intake["operatorIngestNeeded"])
+
+    def test_planned_only_rows_are_explicit_templates_not_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fill_log = root / "inferno_tos_fill_log.csv"
+            with fill_log.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=completeness.FILL_LOG_COLUMNS)
+                writer.writeheader()
+                writer.writerow({"ticketId": "ticket-template", "ticker": "WAIT", "status": "planned"})
+
+            with patch.object(completeness, "TOS_FILL_LOG_WORK_FILE", fill_log):
+                payload = completeness.build_paper_outcome_completeness({"items": []})
+
+        intake = payload["fillIntake"]
+        self.assertEqual(intake["plannedStubRows"], 1)
+        self.assertEqual(intake["verdict"], "fill-log-stubbed-awaiting-operator-execution")
+        self.assertFalse(intake["operatorIngestNeeded"])
+        self.assertEqual(
+            payload["operatorWorkItems"],
+            [
+                {
+                    "kind": "complete-paper-fill-stubs-after-actual-execution",
+                    "rowCount": 1,
+                    "instruction": "Planned rows are templates, not evidence. Update one only after its actual paperMoney fill and keep the exact ticketId.",
+                }
+            ],
+        )
 
 
 if __name__ == "__main__":
