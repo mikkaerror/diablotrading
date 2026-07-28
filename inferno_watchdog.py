@@ -25,6 +25,9 @@ from server import LOG_FILE, OPS_STATUS_FILE, WATCHDOG_STATUS_FILE, load_json_fi
 STDOUT_LOG = ROOT / "logs" / "inferno_dawn.stdout.log"
 STDERR_LOG = ROOT / "logs" / "inferno_dawn.stderr.log"
 DESKTOP_AUTOMATION_FILE = ROOT / "data" / "inferno_desktop_automation.json"
+PROVIDER_BACKOFF_CLASSES = frozenset({"dns", "rate-limit", "transport"})
+PROVIDER_BACKOFF_BASE_SECONDS = 15 * 60
+PROVIDER_BACKOFF_MAX_SECONDS = 2 * 60 * 60
 
 
 def cycle_reference_day() -> str:
@@ -70,19 +73,122 @@ def build_failure_reasons(ops_status: dict | None) -> list[str]:
     return reasons
 
 
-def should_attempt_rescue(reasons: list[str]) -> bool:
+def parse_timestamp(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def positive_int(value: object, default: int) -> int:
+    """Read persisted counter state without letting a malformed artifact crash recovery."""
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def provider_rescue_circuit(
+    ops_status: dict | None,
+    prior_status: dict | None,
+    *,
+    now: datetime,
+) -> dict[str, object] | None:
+    """Build bounded recovery state for repeatable provider outages.
+
+    A failed dawn run is still visible as a watchdog failure.  This only stops
+    the watchdog from launching the same full run every fifteen minutes when
+    its provider failure has not changed.  A new failed recovery attempt grows
+    the wait (15m, 30m, 60m, capped at 2h); skipped watchdog checks preserve,
+    rather than extend, the next probe time.
+    """
+    failure = (ops_status or {}).get("providerFailure") or {}
+    provider = str(failure.get("provider") or "").strip()
+    failure_class = str(failure.get("failureClass") or "").strip()
+    if not provider or failure_class not in PROVIDER_BACKOFF_CLASSES:
+        return None
+    if not bool(failure.get("retryable")):
+        return None
+
+    fingerprint = f"{provider}:{failure_class}"
+    observed_at = str((ops_status or {}).get("generatedAt") or "")
+    prior_circuit = (prior_status or {}).get("providerCircuit") or {}
+    same_fingerprint = prior_circuit.get("fingerprint") == fingerprint
+    same_observation = same_fingerprint and prior_circuit.get("observedOpsGeneratedAt") == observed_at
+
+    if same_observation:
+        consecutive_failures = positive_int(prior_circuit.get("consecutiveFailures"), 1)
+        next_retry_at = str(prior_circuit.get("nextRetryAt") or "")
+    else:
+        prior_failures = positive_int(prior_circuit.get("consecutiveFailures"), 0) if same_fingerprint else 0
+        consecutive_failures = prior_failures + 1
+        observed_time = parse_timestamp(observed_at) or now
+        delay_seconds = min(
+            PROVIDER_BACKOFF_MAX_SECONDS,
+            PROVIDER_BACKOFF_BASE_SECONDS * (2 ** (consecutive_failures - 1)),
+        )
+        next_retry_at = (observed_time + timedelta(seconds=delay_seconds)).isoformat()
+
+    retry_time = parse_timestamp(next_retry_at)
+    return {
+        "provider": provider,
+        "failureClass": failure_class,
+        "fingerprint": fingerprint,
+        "observedOpsGeneratedAt": observed_at or None,
+        "consecutiveFailures": consecutive_failures,
+        "nextRetryAt": next_retry_at or None,
+        "backoffActive": bool(retry_time and now < retry_time),
+        "reason": (
+            f"provider backoff active for {fingerprint}; next bounded rescue probe at {next_retry_at}"
+            if retry_time and now < retry_time
+            else f"provider backoff elapsed for {fingerprint}; one bounded rescue probe is allowed"
+        ),
+    }
+
+
+def rescue_decision(
+    reasons: list[str],
+    ops_status: dict | None,
+    prior_status: dict | None,
+    *,
+    now: datetime,
+) -> tuple[bool, str | None, dict[str, object] | None]:
+    """Return whether a rescue is allowed and any provider-circuit context."""
     if not reasons:
-        return False
-    now = local_now()
+        return False, None, None
     if now.weekday() not in AUTOMATION_ALLOWED_WEEKDAYS:
-        return False
+        return False, "outside allowed automation weekdays", None
     if not in_time_window(now, AUTOMATION_WINDOW_START, WATCHDOG_WINDOW_END):
-        return False
-    return any(
+        return False, "outside watchdog rescue window", None
+    rescue_needed = any(
         reason.startswith("no dawn-cycle run is recorded")
         or reason == "morning brief email did not send"
         for reason in reasons
     )
+    if not rescue_needed:
+        return False, "failure does not require a dawn rescue", None
+
+    circuit = provider_rescue_circuit(ops_status, prior_status, now=now)
+    if circuit and circuit.get("backoffActive"):
+        return False, str(circuit["reason"]), circuit
+    return True, None, circuit
+
+
+def should_attempt_rescue(
+    reasons: list[str],
+    ops_status: dict | None = None,
+    prior_status: dict | None = None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Compatibility wrapper for callers that only need the boolean verdict."""
+    attempt, _, _ = rescue_decision(
+        reasons,
+        ops_status,
+        prior_status,
+        now=now or local_now(),
+    )
+    return attempt
 
 
 def attempt_rescue_run() -> dict[str, object]:
@@ -203,14 +309,22 @@ def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], 
     """Run one watchdog evaluation and persist the latest status artifact."""
     ops_status = load_json_file(OPS_STATUS_FILE)
     reasons = build_failure_reasons(ops_status)
+    prior_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
+    checked_at = local_now()
     rescue_result = None
+    rescue_attempted, rescue_suppression_reason, provider_circuit = rescue_decision(
+        reasons,
+        ops_status,
+        prior_status,
+        now=checked_at,
+    )
 
-    if should_attempt_rescue(reasons):
+    if rescue_attempted:
         rescue_result = attempt_rescue_run()
         ops_status = load_json_file(OPS_STATUS_FILE)
         reasons = build_failure_reasons(ops_status)
+        provider_circuit = provider_rescue_circuit(ops_status, prior_status, now=local_now())
 
-    prior_status = load_json_file(WATCHDOG_STATUS_FILE) or {}
     alert_date = prior_status.get("lastAlertDate")
     alert_sent = False
     alert_error = None
@@ -222,7 +336,7 @@ def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], 
             alert_date = local_today()
 
     status_payload = {
-        "checkedAt": datetime.now().astimezone().isoformat(),
+        "checkedAt": checked_at.isoformat(),
         "ok": ok,
         "reasons": reasons,
         "lastAlertDate": alert_date,
@@ -231,6 +345,9 @@ def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], 
         "opsGeneratedAt": ops_status.get("generatedAt") if ops_status else None,
         "rescueAttempted": bool(rescue_result),
         "rescueResult": rescue_result,
+        "rescueSuppressed": bool(rescue_suppression_reason),
+        "rescueSuppressionReason": rescue_suppression_reason,
+        "providerCircuit": provider_circuit,
     }
     atomic_write_json(WATCHDOG_STATUS_FILE, status_payload)
     record_heartbeat(
@@ -240,6 +357,8 @@ def run_watchdog_check(*, send_alerts: bool = True) -> tuple[dict[str, object], 
         detail={
             "reasonCount": len(reasons),
             "rescueAttempted": bool(rescue_result),
+            "rescueSuppressed": bool(rescue_suppression_reason),
+            "providerFailureClass": (provider_circuit or {}).get("failureClass"),
             "alertSentThisRun": alert_sent,
         },
     )

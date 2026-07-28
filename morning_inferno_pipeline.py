@@ -173,6 +173,67 @@ class PipelineLockActive(RuntimeError):
     pass
 
 
+class ProviderCallError(RuntimeError):
+    """A provider failure with machine-readable retry semantics.
+
+    The morning pipeline still reports a concise human error, but the watchdog
+    must be able to distinguish a transient DNS outage from an auth failure or
+    a normal sheet-level exception.  This class deliberately carries no
+    credential material and is only used for the Google Sheets boundary.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        error: Exception,
+        *,
+        failure_class: str,
+        retryable: bool,
+        attempts: int,
+    ) -> None:
+        self.provider = "google-sheets"
+        self.operation = operation
+        self.failure_class = failure_class
+        self.retryable = retryable
+        self.attempts = attempts
+        self.error_type = type(error).__name__
+        self.error_message = str(error)
+        super().__init__(
+            f"Google Sheets {operation} failed after {attempts} attempt(s); "
+            f"failureClass={failure_class}; retryable={str(retryable).lower()}: {error}"
+        )
+
+
+def google_sheets_failure_class(error: Exception) -> tuple[str, bool]:
+    """Classify a Google transport error without inspecting credentials."""
+    message = f"{type(error).__name__}: {error}".lower()
+    if any(token in message for token in ("nameresolutionerror", "failed to resolve", "getaddrinfo")):
+        # Retrying against the same unavailable resolver is pure duplicate work.
+        # The watchdog may make a later bounded probe after its provider cooldown.
+        return "dns", True
+    if any(token in message for token in ("invalid_grant", "unauthorized", "forbidden", " 401", " 403")):
+        return "auth", False
+    if any(token in message for token in ("rate limit", "ratelimit", " 429", "quota")):
+        return "rate-limit", True
+    if any(token in message for token in ("timeout", "connection reset", "temporarily unavailable", "connection aborted")):
+        return "transport", True
+    return "unknown", True
+
+
+def provider_failure_payload(error: Exception) -> dict[str, Any] | None:
+    """Return safe structured provider metadata for an ops-status artifact."""
+    if not isinstance(error, ProviderCallError):
+        return None
+    return {
+        "provider": error.provider,
+        "operation": error.operation,
+        "failureClass": error.failure_class,
+        "retryable": error.retryable,
+        "attempts": error.attempts,
+        "errorType": error.error_type,
+    }
+
+
 def load_env_file(path: Path) -> None:
     if not path.exists():
         return
@@ -806,10 +867,24 @@ def google_sheets_call(operation: str, func, attempts: int = GOOGLE_SHEETS_RETRI
             return func()
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            failure_class, retryable = google_sheets_failure_class(exc)
+            # A resolver outage is not recoverable by immediately repeating the
+            # same request.  Preserve it as retryable so the watchdog can make
+            # a later, bounded recovery probe rather than falsely treating it
+            # as an operator-auth issue.
+            if failure_class == "dns" or not retryable:
+                break
             if attempt == attempts:
                 break
             sleep_for_retry(attempt, base_seconds=GOOGLE_SHEETS_RETRY_BASE_SECONDS)
-    raise RuntimeError(f"Google Sheets {operation} failed after {attempts} attempts: {last_error}")
+    failure_class, retryable = google_sheets_failure_class(last_error)
+    raise ProviderCallError(
+        operation,
+        last_error,
+        failure_class=failure_class,
+        retryable=retryable,
+        attempts=attempt,
+    )
 
 
 def update_sheet_range(sheet, range_name: str, values: list[list[Any]], attempts: int = 4) -> None:
@@ -2982,6 +3057,7 @@ def main() -> int:
         return 1
     except Exception as exc:  # noqa: BLE001
         failure_email_sent = False
+        provider_failure = provider_failure_payload(exc)
         try:
             failure_email_sent = send_failure_email(str(exc), updater_results)
         except Exception:  # noqa: BLE001
@@ -2992,6 +3068,7 @@ def main() -> int:
                 "generatedAt": datetime.now().astimezone().isoformat(),
                 "ok": False,
                 "error": str(exc),
+                "providerFailure": provider_failure,
                 "failureEmailSent": failure_email_sent,
                 "updaterScripts": [{"script": result["script"], "ok": result["ok"]} for result in updater_results],
             }
@@ -3002,6 +3079,7 @@ def main() -> int:
                 "generatedAt": datetime.now().astimezone().isoformat(),
                 "ok": False,
                 "error": str(exc),
+                "providerFailure": provider_failure,
                 "failureEmailSent": failure_email_sent,
                 "updaterScripts": [
                     {
@@ -3018,7 +3096,10 @@ def main() -> int:
                 "dawn_cycle",
                 status="fail",
                 summary=f"morning pipeline failed: {exc}",
-                detail={"failureEmailSent": failure_email_sent},
+                detail={
+                    "failureEmailSent": failure_email_sent,
+                    "providerFailure": provider_failure,
+                },
             )
         except Exception:  # noqa: BLE001
             pass

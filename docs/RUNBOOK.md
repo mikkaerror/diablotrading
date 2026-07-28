@@ -191,6 +191,15 @@ This still rebuilds:
 python3 inferno_watchdog.py
 ```
 
+For repeatable Google Sheets DNS, rate-limit, or transport failures, the
+watchdog records `providerCircuit` in
+`data/inferno_watchdog_status.json`. It keeps the failure visible and permits a
+single later recovery probe after a bounded 15m/30m/60m (max 2h) cooldown;
+unchanged checks do not extend that deadline. DNS and non-retryable auth errors
+also stop the morning client from spending all five immediate retries on an
+unchanged failure. This is diagnostic and recovery pacing only—it cannot
+change desk authority, risk, or broker permissions.
+
 ### Check the approval queue
 
 ```bash

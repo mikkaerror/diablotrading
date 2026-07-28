@@ -338,6 +338,9 @@ def watchdog_run_status(status: dict, now: datetime) -> tuple[bool, str]:
             "checkedAt": status.get("checkedAt"),
             "ok": status.get("ok"),
             "reasons": status.get("reasons"),
+            "rescueSuppressed": status.get("rescueSuppressed"),
+            "rescueSuppressionReason": status.get("rescueSuppressionReason"),
+            "providerCircuit": status.get("providerCircuit"),
         }
     )
 

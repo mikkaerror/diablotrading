@@ -61,7 +61,7 @@ Safety            — authority, risk, secrets
 | `inferno_doctor.py` | End-to-end desk health check; every subsystem PASS/FAIL | `data/inferno_doctor.json`, `reports/doctor_latest.txt` |
 | `inferno_ops_maintenance.py` | Hourly sweep: tracker / staleness governor / broker preview refresh plus account-truth, cash-attribution, and growth-stack dependency refresh | `reports/ops_maintenance_latest.txt` |
 | `inferno_daily_success.py` | Green/yellow/red scorecard over five safety + operational criteria | `reports/daily_success_latest.txt` |
-| `inferno_watchdog.py` | Continuous failure detector + alert dispatcher | `reports/watchdog_latest.txt` |
+| `inferno_watchdog.py` | Continuous failure detector + alert dispatcher; applies bounded, provider-specific rescue cooldowns for repeatable DNS/rate-limit/transport failures | `reports/watchdog_latest.txt` |
 | `inferno_secret_hygiene.py` | Verify no credentials are leaking into artifacts | `data/inferno_secret_hygiene.json` |
 | `inferno_live_book_review_packet.py` | Compact "what exactly blocks new capital" packet over the live book | `reports/live_book_review_packet_latest.txt` |
 | `inferno_reporting_preflight.py` | Read-only freshness/SMTP/Schwab/TOS attach-state check before any brief is sent or trusted | `data/inferno_reporting_preflight.json`, `reports/reporting_preflight_latest.txt` |
