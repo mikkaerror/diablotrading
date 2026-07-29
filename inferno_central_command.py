@@ -64,6 +64,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "status", "description": "show the latest command-center state"},
     {"command": "sync", "description": "run the full daily model refresh now"},
     {"command": "today", "description": "open the one-letter operator decision screen"},
+    {"command": "paper-capture", "description": "make a read-only paperMoney fill worksheet"},
     {"command": "doctor", "description": "run the full health check"},
     {"command": "preflight", "description": "check reporting readiness without refreshing data"},
     {"command": "usage", "description": "build the low-context handoff packet"},
@@ -609,6 +610,7 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} status",
             f"{CONTROL_ENTRYPOINT} sync",
             f"{CONTROL_ENTRYPOINT} today",
+            f"{CONTROL_ENTRYPOINT} paper-capture",
             f"{CONTROL_ENTRYPOINT} doctor",
             f"{CONTROL_ENTRYPOINT} preflight",
             f"{CONTROL_ENTRYPOINT} usage",
@@ -729,6 +731,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     today_parser = subparsers.add_parser("today")
     today_parser.add_argument("--quiet", action="store_true")
+
+    paper_capture_parser = subparsers.add_parser("paper-capture")
+    paper_capture_parser.add_argument("paper_capture_action", nargs="?", choices=("run", "status"), default="run")
 
     note_parser = subparsers.add_parser("note")
     note_parser.add_argument("--author", required=True)
@@ -963,6 +968,13 @@ def main() -> int:
         if args.quiet:
             command_args.append("--quiet")
         result = run_passthrough_command(command_args, timeout_seconds=600)
+        return int(result["returncode"])
+
+    if command == "paper-capture":
+        result = run_passthrough_command(
+            ["python3", "inferno_paper_capture_template.py", args.paper_capture_action],
+            timeout_seconds=600,
+        )
         return int(result["returncode"])
 
     if command == "sync":

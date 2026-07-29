@@ -112,6 +112,7 @@ PAPER_TEST_DIRECTOR_FILE = ROOT / "data" / "inferno_paper_test_director.json"
 PAPER_BLOCKER_SWARM_FILE = ROOT / "data" / "inferno_paper_blocker_swarm.json"
 PAPER_BOTTLENECK_REDUCER_FILE = ROOT / "data" / "inferno_paper_bottleneck_reducer.json"
 PAPER_EVIDENCE_LOOP_FILE = ROOT / "data" / "inferno_paper_evidence_loop.json"
+PAPER_CAPTURE_TEMPLATE_FILE = ROOT / "data" / "inferno_paper_capture_template.json"
 PAPER_EXIT_AUDIT_FILE = ROOT / "data" / "inferno_paper_exit_audit.json"
 LIVE_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_live_account_sync.json"
 LIVE_POSITION_REVIEW_FILE = ROOT / "data" / "inferno_live_position_review.json"
@@ -1323,6 +1324,49 @@ def paper_blocker_swarm_status(report: dict) -> tuple[bool, str]:
         f"{detail} | dominant={report.get('dominantLane')} | "
         f"tooling-fixable={counts.get('fixableByTooling', 0)}",
     )
+
+
+def paper_capture_template_status(report: dict, now: datetime | None = None) -> tuple[bool, str]:
+    """Verify the fill worksheet is fresh, read-only, and never authority-bearing."""
+    if not report:
+        return False, "missing"
+    current = now or local_now()
+    generated = str(report.get("generatedAt") or "")
+    fresh = in_current_service_cycle(
+        generated,
+        now=current,
+        service_hour=13,
+        service_minute=40,
+    )
+    safe = (
+        report.get("stage") == "paper-capture-template-research-only"
+        and bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    verdict = str(report.get("verdict") or "unknown")
+    fillable = report.get("fillableTicketCount")
+    expired = report.get("expiredTicketCount")
+    valid_counts = (
+        isinstance(fillable, int)
+        and isinstance(expired, int)
+        and fillable >= 0
+        and expired >= 0
+    )
+    ok = fresh and safe and valid_counts and verdict in {
+        "templates-ready",
+        "no-fillable-staged-tickets",
+    }
+    if fresh:
+        detail = (
+            f"{verdict} | fillable={fillable} | expired-excluded={expired} | "
+            f"research-only={safe}"
+        )
+    else:
+        detail = json.dumps({"generatedAt": generated, "verdict": verdict})
+    return ok, detail
 
 
 def fast_paper_cohort_status(report: dict) -> tuple[bool, str]:
@@ -2627,6 +2671,12 @@ def main() -> int:
     )
     lines.append(summarize_status("Paper evidence loop", paper_loop_ok, paper_loop_detail))
     if paper_evidence_loop and not paper_loop_ok:
+        warnings += 1
+
+    paper_capture_template = load_json_file(PAPER_CAPTURE_TEMPLATE_FILE) or {}
+    paper_capture_ok, paper_capture_detail = paper_capture_template_status(paper_capture_template, now=now)
+    lines.append(summarize_status("Paper capture template", paper_capture_ok, paper_capture_detail))
+    if not paper_capture_ok:
         warnings += 1
 
     paper_exit_audit = load_json_file(PAPER_EXIT_AUDIT_FILE) or {}

@@ -4,7 +4,7 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-07-18.
+Last updated: 2026-07-29.
 
 For the one-page purpose and strategy brief, start with
 [`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
@@ -220,6 +220,7 @@ Safety            — authority, risk, secrets
 | Module | Purpose | Artifact |
 |---|---|---|
 | `inferno_paper_test_director.py` | Coordinator for paper-staged tickets plus construction-watch alternatives while paper risk is paused | `data/inferno_paper_test_director.json` |
+| `inferno_paper_capture_template.py` | Read-only, prefilled worksheet for actual paperMoney fills on unexpired staged tickets; never stages, scores, closes, or alters a ticket | `data/inferno_paper_capture_template.json`, `reports/paper_capture_template_latest.txt`, `reports/paper_capture_template_latest.csv` |
 | `inferno_paper_bottleneck_reducer.py` | Builds a 10+ scenario paper/shadow evidence slate without widening authority | `data/inferno_paper_bottleneck_reducer.json` |
 | `inferno_scenario_evidence.py` | Tracks reducer names as non-tradable underlying observations | `data/inferno_scenario_evidence.json` |
 | `inferno_paper_evidence_loop.py` | Track paper outcomes from staging through close | `data/inferno_paper_evidence_loop.json` |

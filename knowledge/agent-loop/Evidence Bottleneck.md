@@ -55,4 +55,12 @@ for each closed, lab-scorable result with missing provenance. Recovery requires
 actual paperMoney order/fill history; it must never be inferred from a strike
 plan, outcome estimate, shadow record, or cash movement.
 
+The `inferno_paper_capture_template.py` worksheet reduces the same
+transcription risk by pre-filling immutable staged-ticket identity facts while
+leaving execution facts blank. It excludes expired staged tickets and reports
+that exclusion explicitly; emitting it never stages, closes, scores, or
+promotes a ticket. Its falsifier is simple: without an unexpired staged ticket
+and operator-supplied paperMoney fill facts, it produces zero fillable rows and
+zero promotion evidence.
+
 Related: [[Loop Optimization Principles]] · [[Authority Boundary]]

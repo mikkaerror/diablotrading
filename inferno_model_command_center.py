@@ -61,6 +61,7 @@ TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
+PAPER_CAPTURE_TEMPLATE_FILE = DATA_DIR / "inferno_paper_capture_template.json"
 PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 FAST_PAPER_COHORT_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
@@ -115,6 +116,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno status", "description": "show the latest unified desk state"},
     {"command": "./inferno sync", "description": "run the full tracker, Schwab, research, command-center, and doctor refresh"},
     {"command": "./inferno today", "description": "open the one-letter operator decision screen"},
+    {"command": "./inferno paper-capture", "description": "make a read-only paperMoney fill worksheet"},
     {"command": "./inferno doctor", "description": "run the full health verdict"},
     {"command": "./inferno preflight", "description": "check reporting readiness without refreshing data"},
     {"command": "./inferno usage", "description": "build the low-context handoff packet"},
@@ -252,6 +254,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper",
         "question": "What paper evidence is next?",
         "artifact": "reports/paper_test_director_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "paper-capture-template",
+        "question": "Which unexpired staged paper tickets have a safe, prefilled worksheet for recording real paperMoney fills?",
+        "artifact": "reports/paper_capture_template_latest.txt",
         "owner": "shared",
     },
     {
@@ -853,6 +861,9 @@ def build_executive_summary(
         (
             "Evidence: "
             f"paper={status_value(status.get('paperTestDirector') or {})}; "
+            f"capture={metrics.get('paperCaptureTemplateVerdict')}; "
+            f"fillable={metrics.get('paperCaptureFillableTickets', 0)}; "
+            f"expired={metrics.get('paperCaptureExpiredTickets', 0)}; "
             f"blocker-swarm={metrics.get('paperBlockerSwarmVerdict')}; "
             f"goal-loop={metrics.get('evidenceGoalLoopVerdict')}; "
             f"fast-paper={metrics.get('fastPaperVerdict')}; "
@@ -974,6 +985,7 @@ def build_command_center() -> dict[str, Any]:
     account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
     risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_capture_template = load_json_file(PAPER_CAPTURE_TEMPLATE_FILE) or {}
     paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
@@ -1065,6 +1077,19 @@ def build_command_center() -> dict[str, Any]:
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
+        "paperCaptureTemplate": artifact_summary(
+            PAPER_CAPTURE_TEMPLATE_FILE,
+            keys=(
+                "stage",
+                "verdict",
+                "generatedAt",
+                "researchOnly",
+                "promotable",
+                "authorityChanged",
+                "fillableTicketCount",
+                "expiredTicketCount",
+            ),
+        ),
         "paperBlockerSwarm": artifact_summary(
             PAPER_BLOCKER_SWARM_FILE,
             keys=("stage", "verdict", "generatedAt", "dominantLane", "researchOnly", "promotable"),
@@ -1236,6 +1261,9 @@ def build_command_center() -> dict[str, Any]:
         "liveBookWarnings": live_packet_counts.get("warnings", 0),
         "whileAwayVerdict": while_away_packet.get("verdict"),
         "paperStageable": paper_counts.get("stageableNow", 0),
+        "paperCaptureTemplateVerdict": paper_capture_template.get("verdict"),
+        "paperCaptureFillableTickets": paper_capture_template.get("fillableTicketCount", 0),
+        "paperCaptureExpiredTickets": paper_capture_template.get("expiredTicketCount", 0),
         "paperAutoSelected": paper_counts.get("autoPaperSelected", 0),
         "paperResearchSelected": paper_counts.get("paperResearchSelected", 0),
         "paperResearchEvents": paper_counts.get("distinctPaperResearchEvents", 0),
@@ -1444,6 +1472,7 @@ def build_command_center() -> dict[str, Any]:
             "./inferno status",
             "./inferno sync",
             "./inferno today",
+            "./inferno paper-capture",
             "./inferno doctor",
             "./inferno preflight",
             "./inferno usage",
@@ -1614,6 +1643,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
             f"- Risk gate audit: {status_value(status.get('riskGateAudit') or {})}",
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
+            f"- Paper capture template: {status_value(status.get('paperCaptureTemplate') or {}, key='stage')}",
             f"- Paper blocker swarm: {status_value(status.get('paperBlockerSwarm') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Fast paper cohort: {status_value(status.get('fastPaperCohort') or {})}",
@@ -1679,6 +1709,9 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Live review warnings: {metrics.get('liveBookWarnings', 0)}",
             f"- While away verdict: {metrics.get('whileAwayVerdict') or '-'}",
             f"- Paper operator-routable: {metrics.get('paperStageable', 0)}",
+            f"- Paper capture template: {metrics.get('paperCaptureTemplateVerdict') or '-'} | "
+            f"fillable {metrics.get('paperCaptureFillableTickets', 0)} | "
+            f"expired excluded {metrics.get('paperCaptureExpiredTickets', 0)}",
             f"- Paper auto-selected: {metrics.get('paperAutoSelected', 0)}",
             f"- Paper research-selected: {metrics.get('paperResearchSelected', 0)} "
             f"({metrics.get('paperResearchEvents', 0)} distinct event(s))",

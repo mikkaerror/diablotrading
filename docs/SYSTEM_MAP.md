@@ -71,6 +71,7 @@ Generated artifacts beat durable docs when they disagree.
 | Secret hygiene | `reports/secret_hygiene_latest.txt` |
 | Paper bottleneck | `reports/paper_bottleneck_reducer_latest.txt` |
 | Paper blocker diagnosis | `reports/paper_blocker_swarm_latest.txt` |
+| Paper fill worksheet | `reports/paper_capture_template_latest.txt` |
 | Paper variant backfill | `reports/paper_variant_scanner_latest.txt` |
 | Score/threshold assumptions | `reports/score_threshold_audit_latest.txt` |
 | Scenario learning | `reports/scenario_backtest_latest.txt` |

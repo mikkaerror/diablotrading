@@ -20,6 +20,12 @@ from typing import Any
 
 from inferno_config import local_now
 from inferno_doctor import in_current_service_cycle
+from inferno_paper_capture_template import (
+    CAPTURE_TEMPLATE_CSV,
+    CAPTURE_TEMPLATE_TEXT_FILE,
+    build_capture_template,
+    save_capture_template,
+)
 from inferno_paper_test_director import build_director as build_paper_test_director, save_director
 from inferno_tos_fill_ingest import TOS_FILL_LOG_WORK_FILE, normalized_status, text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -123,6 +129,17 @@ def build_actions(payload: dict[str, Any]) -> list[str]:
         actions.append("Review the approval-only slate only for live-style discretion; do not let it block paper evidence throughput.")
     if counts.get("plannedFillRows", 0) > 0:
         actions.append("After the operator stages a paper test, replace planned fill-log placeholders with real paperMoney execution facts.")
+    capture_template = payload.get("captureTemplate") or {}
+    if capture_template.get("fillableTicketCount", 0) > 0:
+        actions.append(
+            "Use the current paper-capture worksheet for actual paperMoney execution facts only; "
+            "it neither stages nor scores a ticket."
+        )
+    elif capture_template.get("expiredTicketCount", 0) > 0:
+        actions.append(
+            "No fillable staged tickets remain: expired staged tickets stay excluded from the capture worksheet; "
+            "do not fabricate a fill or close them unattended."
+        )
     if counts.get("openFillRows", 0) > 0 or counts.get("paperOpenTickets", 0) > 0:
         actions.append("Operator-owned paper positions need fill or close updates before scoring; unattended agents must not close tickets.")
     if counts.get("shadowReadyForReview", 0) > 0:
@@ -143,6 +160,7 @@ def build_audit() -> dict[str, Any]:
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {"closedMetrics": {}}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {"deskVerdict": {}}
     paper_director = load_paper_director(refresh_if_stale=True)
+    capture_template = build_capture_template(ledger=ledger)
 
     fill_rows = load_fill_rows()
     open_tickets = paper_open_tickets(ledger)
@@ -185,11 +203,8 @@ def build_audit() -> dict[str, Any]:
             "openedRows": fill_ingest.get("openedRows", 0),
             "closedRows": fill_ingest.get("closedRows", 0),
         },
-        "actions": build_actions(
-            {
-                "counts": counts,
-            }
-        ),
+        "captureTemplate": capture_template,
+        "actions": build_actions({"counts": counts, "captureTemplate": capture_template}),
         "stageableTickers": [ticket.get("ticker") for ticket in (sandbox.get("stageableTickets") or [])],
         "approvalTickers": [ticket.get("ticker") for ticket in (paper_director.get("approvalSlate") or [])],
         "openPaperTickers": [ticket.get("ticker") for ticket in open_tickets],
@@ -200,6 +215,7 @@ def build_audit() -> dict[str, Any]:
 def audit_text(payload: dict[str, Any]) -> str:
     """Render the evidence-loop audit as an operator memo."""
     counts = payload.get("counts") or {}
+    capture_template = payload.get("captureTemplate") or {}
     lines = [
         "Inferno Paper Evidence Loop",
         "",
@@ -219,6 +235,8 @@ def audit_text(payload: dict[str, Any]) -> str:
         f"- shadow ready for review: {counts.get('shadowReadyForReview', 0)}",
         f"- scored tickets: {counts.get('scoredTickets', 0)}",
         f"- remaining for promotion: {counts.get('remainingForPromotion', 0)}",
+        f"- fillable capture-template rows: {capture_template.get('fillableTicketCount', 0)}",
+        f"- expired staged tickets excluded from template: {capture_template.get('expiredTicketCount', 0)}",
         "",
         "Actions:",
     ]
@@ -231,6 +249,8 @@ def audit_text(payload: dict[str, Any]) -> str:
             f"Approval tickers: {', '.join(payload.get('approvalTickers') or []) or 'none'}",
             f"Open paper tickers: {', '.join(payload.get('openPaperTickers') or []) or 'none'}",
             f"Shadow review tickers: {', '.join(payload.get('shadowReviewTickers') or []) or 'none'}",
+            f"Capture template: {CAPTURE_TEMPLATE_TEXT_FILE}",
+            f"Capture CSV: {CAPTURE_TEMPLATE_CSV}",
             f"Fill log: {payload.get('fillLogPath')}",
         ]
     )
@@ -238,8 +258,11 @@ def audit_text(payload: dict[str, Any]) -> str:
 
 
 def save_audit(payload: dict[str, Any]) -> None:
-    """Persist JSON and text artifacts for the evidence-loop audit."""
+    """Persist the audit plus its read-only capture-template artifacts."""
     ensure_dirs()
+    capture_template = payload.get("captureTemplate") or {}
+    if capture_template:
+        save_capture_template(capture_template)
     PAPER_EVIDENCE_LOOP_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     PAPER_EVIDENCE_LOOP_TEXT_FILE.write_text(audit_text(payload), encoding="utf-8")
 

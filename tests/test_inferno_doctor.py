@@ -26,6 +26,7 @@ from inferno_doctor import (
     model_command_center_status,
     paper_bottleneck_reducer_status,
     paper_blocker_swarm_status,
+    paper_capture_template_status,
     paper_fill_ingest_status,
     paper_mark_to_market_status,
     paper_test_director_status,
@@ -102,6 +103,26 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                 service_minute=40,
             )
         )
+
+    def test_paper_capture_template_status_accepts_prior_cycle_before_1340(self) -> None:
+        now = datetime.fromisoformat("2026-04-30T13:39:00-06:00")
+        ok, detail = paper_capture_template_status(
+            {
+                "generatedAt": "2026-04-29T13:40:00-06:00",
+                "stage": "paper-capture-template-research-only",
+                "verdict": "no-fillable-staged-tickets",
+                "researchOnly": True,
+                "promotable": False,
+                "authorityChanged": False,
+                "brokerSubmitAllowed": False,
+                "liveTradingAllowed": False,
+                "fillableTicketCount": 0,
+                "expiredTicketCount": 1,
+            },
+            now=now,
+        )
+        self.assertTrue(ok)
+        self.assertIn("expired-excluded=1", detail)
 
     def test_in_current_service_cycle_normalizes_utc_date_boundary(self) -> None:
         now = datetime.fromisoformat("2026-06-26T18:44:00-06:00")

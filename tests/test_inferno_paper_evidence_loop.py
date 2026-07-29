@@ -121,6 +121,44 @@ class InfernoPaperEvidenceLoopTests(unittest.TestCase):
         self.assertIn("unattended agents must not close tickets", " ".join(payload["actions"]))
         self.assertNotIn("Close or update", " ".join(payload["actions"]))
 
+    @patch("inferno_paper_evidence_loop.load_paper_director")
+    @patch("inferno_paper_evidence_loop.load_fill_rows")
+    @patch("inferno_paper_evidence_loop.load_json_file")
+    def test_build_audit_excludes_expired_staged_ticket_from_capture_template(
+        self,
+        mock_load_json_file,
+        mock_load_fill_rows,
+        mock_load_paper_director,
+    ) -> None:
+        """A worksheet must never invite an operator to invent a fill on an expired contract."""
+        mock_load_fill_rows.return_value = []
+        mock_load_paper_director.return_value = {"counts": {"approvalOnly": 0}, "approvalSlate": []}
+        mock_load_json_file.side_effect = [
+            {"stageableCount": 0, "stageableTickets": []},
+            {"unmatchedRows": [], "openedRows": 0, "closedRows": 0},
+            {
+                "items": [
+                    {
+                        "ticketId": "EXPIRED1",
+                        "ticker": "MOD",
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "status": "paper-staged",
+                        "expiration": "2020-06-18",
+                    }
+                ]
+            },
+            {"items": []},
+            {"closedMetrics": {"scoredCount": 1}},
+            {"deskVerdict": {"level": "evidence-building"}},
+        ]
+
+        payload = build_audit()
+
+        capture = payload["captureTemplate"]
+        self.assertEqual(capture["fillableTicketCount"], 0)
+        self.assertEqual(capture["expiredTicketCount"], 1)
+        self.assertIn("do not fabricate", " ".join(payload["actions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

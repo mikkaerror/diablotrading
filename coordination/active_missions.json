@@ -554,5 +554,21 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-c6fc4ca8",
+    "createdAt": "2026-07-29T12:39:47.278855-06:00",
+    "updatedAt": "2026-07-29T12:47:53.007699-06:00",
+    "title": "Integrate paper capture template safely",
+    "body": "Complete the existing research-only paper-capture template integration: make its read-only artifact lifecycle and operator visibility auditable without staging, approving, closing, promoting, submitting, or changing risk, authority, or the eligible universe.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "capture-template",
+      "research-only",
+      "safety"
+    ]
   }
 ]

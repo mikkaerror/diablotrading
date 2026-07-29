@@ -40,6 +40,15 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/paper_outcome_completeness_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_paper_capture_template(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "paper-capture-template")
+        self.assertEqual(row["artifact"], "reports/paper_capture_template_latest.txt")
+        self.assertEqual(row["owner"], "shared")
+
+    def test_control_surface_includes_paper_capture_template(self) -> None:
+        commands = {item["command"] for item in command_center.CONTROL_SURFACE_COMMANDS}
+        self.assertIn("./inferno paper-capture", commands)
+
     def test_reporting_map_includes_schwab_transaction_ledger(self) -> None:
         row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "schwab-transaction-ledger")
         self.assertEqual(row["artifact"], "reports/schwab_transaction_ledger_latest.txt")
