@@ -95,6 +95,7 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertEqual(payload["oneCommands"][0]["command"], "./inferno status")
             one_commands = {item["command"] for item in payload["oneCommands"]}
             self.assertIn("./inferno sync", one_commands)
+            self.assertIn("./inferno paper-capture", one_commands)
             self.assertIn("./inferno preflight", one_commands)
             self.assertIn("./inferno usage", one_commands)
             self.assertIn("./inferno oauth", one_commands)

@@ -114,6 +114,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "purpose": "open the one-letter operator decision screen",
     },
     {
+        "command": "./inferno paper-capture",
+        "purpose": "make a read-only paperMoney fill worksheet",
+    },
+    {
         "command": "./inferno doctor",
         "purpose": "run the full health verdict; warning lines become work queue items",
     },
