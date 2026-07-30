@@ -206,8 +206,14 @@ def artifact_lineage(
     return lineage
 
 
-def authority_boundary_errors(authority: dict[str, Any]) -> list[str]:
-    """Return hard safety violations in the authority manifest."""
+def authority_safety_errors(authority: dict[str, Any]) -> list[str]:
+    """Return unsafe live/broker permission drift in the authority manifest.
+
+    A halted manifest is intentionally safe: it preserves the hard-false live
+    and broker permissions while withholding paper-cycle authority.  Keep that
+    distinction explicit so an operator can tell a conservative data-freshness
+    halt from a genuine permission regression.
+    """
     decision = authority.get("decision") or {}
     errors: list[str] = []
     if not authority:
@@ -216,12 +222,24 @@ def authority_boundary_errors(authority: dict[str, Any]) -> list[str]:
         errors.append("liveTradingAllowed is not hard-false")
     if decision.get("brokerSubmitAllowed") is not False:
         errors.append("brokerSubmitAllowed is not hard-false")
-    level = str(decision.get("authorityLevel") or "")
-    if level not in SAFE_AUTHORITY_LEVELS:
-        errors.append(f"authority level {level or 'missing'} is not unattended paper scope")
     if "submit_live_order" in set(decision.get("allowedActions") or []):
         errors.append("submit_live_order appeared in allowed actions")
     return errors
+
+
+def authority_scope_errors(authority: dict[str, Any]) -> list[str]:
+    """Return whether the manifest grants the narrow paper-cycle scope."""
+    if not authority:
+        return []
+    level = str((authority.get("decision") or {}).get("authorityLevel") or "")
+    if level not in SAFE_AUTHORITY_LEVELS:
+        return [f"authority level {level or 'missing'} is not unattended paper scope"]
+    return []
+
+
+def authority_boundary_errors(authority: dict[str, Any]) -> list[str]:
+    """Return all errors that prevent the paper-evidence mutation cycle."""
+    return [*authority_safety_errors(authority), *authority_scope_errors(authority)]
 
 
 def process_boundary_errors(process: dict[str, Any]) -> list[str]:
@@ -237,12 +255,20 @@ def process_boundary_errors(process: dict[str, Any]) -> list[str]:
 
 def verify_precheck(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Verify the authority and process boundary before evidence mutation."""
-    errors = authority_boundary_errors(artifacts.get("authority") or {})
+    authority = artifacts.get("authority") or {}
+    safety_errors = authority_safety_errors(authority)
+    scope_errors = authority_scope_errors(authority)
+    errors = [*safety_errors, *scope_errors]
     errors.extend(process_boundary_errors(artifacts.get("processCompliance") or {}))
     return {
         "passed": not errors,
         "errors": errors,
-        "authorityIntact": not authority_boundary_errors(artifacts.get("authority") or {}),
+        # Kept for backward-compatible consumers: this means the full narrow
+        # paper-cycle authority is intact, not merely that live permissions
+        # remain safely disabled.
+        "authorityIntact": not [*safety_errors, *scope_errors],
+        "authoritySafetyInvariant": not safety_errors,
+        "paperCycleAuthorityGranted": not [*safety_errors, *scope_errors],
         "paperEntryGateOpen": not process_boundary_errors(
             artifacts.get("processCompliance") or {}
         ),
@@ -264,7 +290,10 @@ def verify_cycle(
 ) -> dict[str, Any]:
     """Independently verify a completed iteration against objective gates."""
     current = now or local_now()
-    errors = authority_boundary_errors(artifacts.get("authority") or {})
+    authority = artifacts.get("authority") or {}
+    safety_errors = authority_safety_errors(authority)
+    scope_errors = authority_scope_errors(authority)
+    errors = [*safety_errors, *scope_errors]
     errors.extend(process_boundary_errors(artifacts.get("processCompliance") or {}))
 
     failed_commands = [
@@ -318,7 +347,9 @@ def verify_cycle(
         "errors": errors,
         "failedCommands": failed_commands,
         "staleOrMissingArtifacts": stale_or_missing,
-        "authorityIntact": not authority_boundary_errors(artifacts.get("authority") or {}),
+        "authorityIntact": not [*safety_errors, *scope_errors],
+        "authoritySafetyInvariant": not safety_errors,
+        "paperCycleAuthorityGranted": not [*safety_errors, *scope_errors],
         "paperEntryGateOpen": not process_boundary_errors(
             artifacts.get("processCompliance") or {}
         ),
@@ -1117,7 +1148,8 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         "",
         "Verifier:",
         f"- passed: {verification.get('passed')}",
-        f"- authority intact: {verification.get('authorityIntact')}",
+        f"- live/broker safety invariant: {verification.get('authoritySafetyInvariant')}",
+        f"- paper-cycle authority granted: {verification.get('paperCycleAuthorityGranted')}",
         f"- paper entry gate open: {verification.get('paperEntryGateOpen')}",
     ]
     lineage_lines = ["Source lineage (point-in-time input cut):"]
@@ -1414,7 +1446,8 @@ def _knowledge_run_text(payload: dict[str, Any], state: dict[str, Any]) -> str:
             f"- Seconds per accepted progress point: {economics.get('secondsPerAcceptedProgressPoint')}",
             f"- Economics verdict: {economics.get('verdict')}",
             "",
-            "Authority remained paper-evidence-only. Live trading and broker submission remained disabled.",
+            f"Authority level: {payload.get('authorityLevel')}. "
+            "Live trading and broker submission remained disabled.",
             "",
         ]
     )

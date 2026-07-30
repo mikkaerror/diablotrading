@@ -19,6 +19,12 @@ The loop therefore tracks three evidence levels separately:
 
 The levels must never be conflated. Progress at a lower level can improve learning velocity but cannot grant live authority.
 
+The evidence loop also distinguishes live/broker safety from permission to
+mutate paper evidence. A halted authority manifest keeps live and broker flags
+hard-false, yet denies the paper-cycle scope when critical inputs are stale.
+That distinction is diagnostic only: a passing safety invariant never permits
+the harvest to run while paper-cycle authority is withheld.
+
 The paper variant scanner is part of the fast-paper evidence lane. It creates
 research-only defined-risk candidates when the main funnel goes stagnant, then
 hands them to the normal pricing and risk gates. Its output can increase paper

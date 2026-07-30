@@ -173,6 +173,37 @@ class EvidenceGoalLoopTests(unittest.TestCase):
             "authority level halted is not unattended paper scope",
             result["errors"],
         )
+        self.assertTrue(result["authoritySafetyInvariant"])
+        self.assertFalse(result["paperCycleAuthorityGranted"])
+
+    def test_precheck_marks_live_permission_drift_as_unsafe(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["authority"]["decision"]["liveTradingAllowed"] = True
+
+        result = loop.verify_precheck(artifacts)
+
+        self.assertFalse(result["authoritySafetyInvariant"])
+        self.assertFalse(result["paperCycleAuthorityGranted"])
+        self.assertIn("liveTradingAllowed is not hard-false", result["errors"])
+
+    def test_halted_report_separates_safe_permissions_from_paper_scope(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["authority"]["decision"]["authorityLevel"] = "halted"
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {
+                "name": name,
+                "ok": True,
+            },
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: {},
+            now=NOW,
+        )
+        report = loop.goal_loop_text(payload)
+
+        self.assertEqual(payload["iterationCount"], 0)
+        self.assertIn("live/broker safety invariant: True", report)
+        self.assertIn("paper-cycle authority granted: False", report)
 
     def test_precheck_rejects_process_breach(self) -> None:
         artifacts = safe_artifacts()

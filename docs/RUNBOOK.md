@@ -1248,6 +1248,12 @@ and before the U.S. equity close. It cannot approve tickets, submit orders,
 change the universe, or widen authority. Any authority drift or process breach
 stops the cycle before paper evidence is mutated.
 
+The loop reports the live/broker safety invariant separately from paper-cycle
+authority. A `halted` manifest can therefore show the safety invariant as
+passing while paper-cycle authority is denied because current inputs are stale;
+that is a conservative data-freshness halt, not permission to continue the
+harvest.
+
 After strategy-lab scoring, the loop also rebuilds the read-only
 promotion-evidence lineage diagnostic. It separates counted staged-paper
 outcomes from fast simulations and shadow observations, which never earn
