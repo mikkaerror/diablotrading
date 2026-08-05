@@ -570,5 +570,70 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-8f630bfa",
+    "createdAt": "2026-08-04T00:17:29.479868-06:00",
+    "updatedAt": "2026-08-04T00:26:36.210926-06:00",
+    "title": "Eliminate deployed-refresh workspace shell entrypoint failures",
+    "body": "Completed: deployed daily and evidence refresh paths now invoke reviewed Python modules directly instead of repository shell entrypoints that macOS background execution denied. Preserved the existing schedule, strategy-pricing scanner-before-pricing order, paper-only authority, read-only broker behavior, risk constants, and eligible universe. Deployed copies report script-sync synced; the controlled no-tracker run reached the Python research path without wrapper execution failures. Schwab remains fail-closed pending interactive reauthorization.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "automation",
+      "deployment",
+      "refresh",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-18cd8ae2",
+    "createdAt": "2026-08-05T17:08:31.646999-06:00",
+    "updatedAt": "2026-08-05T17:11:47.232239-06:00",
+    "title": "Align post-refresh paper evidence artifacts",
+    "body": "Ensure daily refresh ends with a paper-evidence audit derived from the final paper director/selection state, so the handoff cannot label a sandbox-only or stale entry as operator-routable. Research-only; does not approve, stage, close, promote, submit, change risk, or change universe.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "refresh-freshness",
+      "authority-safety",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-e3c0f964",
+    "createdAt": "2026-08-05T17:11:48.325887-06:00",
+    "updatedAt": "2026-08-05T17:12:44.876221-06:00",
+    "title": "Rebuild handoff artifacts at end of full sync",
+    "body": "Make the daily model refresh rebuild central status and the low-context usage packet after doctor completes, so post-sync model handoffs use the final evidence and gate state. Research-only; no broker, ticket, risk, universe, or authority changes.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "handoff",
+      "refresh-freshness",
+      "automation",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-d0780908",
+    "createdAt": "2026-08-05T17:14:03.330576-06:00",
+    "updatedAt": "2026-08-05T17:14:47.747014-06:00",
+    "title": "Keep model handoff within budget with safety headroom",
+    "body": "Move redundant central-status detail out of the default model handoff while retaining the compact command-center digest and system map. The goal is durable token headroom without reducing safety or authority context. Research-only; no broker, ticket, risk, universe, or authority changes.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "handoff",
+      "context-budget",
+      "automation",
+      "research-only"
+    ]
   }
 ]

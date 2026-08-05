@@ -66,8 +66,42 @@ PRECHECK_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("authority precheck", ("python3", "inferno_authority_controller.py", "build")),
 )
 
+# LaunchAgents can execute the deployed Python entrypoint but macOS can deny
+# direct execution of repository shell wrappers from Documents. Keep the
+# harvest's reviewed order explicit here so the deployed evidence service does
+# not silently lose a cycle after the paper scope is available.
+PAPER_EVIDENCE_HARVEST_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "paper test director harvest",
+        ("python3", "inferno_paper_test_director.py", "build"),
+    ),
+    (
+        "paper bottleneck reducer harvest",
+        ("python3", "inferno_paper_bottleneck_reducer.py", "build"),
+    ),
+    ("fast paper cohort", ("python3", "inferno_fast_paper_cohort.py", "run")),
+    (
+        "paper mark-to-market",
+        ("python3", "inferno_paper_mark_to_market.py", "run"),
+    ),
+    ("scenario evidence", ("python3", "inferno_scenario_evidence.py", "build")),
+    ("outcome review", ("python3", "inferno_outcome_reviewer.py", "review")),
+    (
+        "paper evidence loop",
+        ("python3", "inferno_paper_evidence_loop.py", "build"),
+    ),
+    (
+        "paper exit audit",
+        ("python3", "inferno_paper_exit_auditor.py", "build"),
+    ),
+    (
+        "scenario backtest",
+        ("python3", "inferno_scenario_backtest.py", "build"),
+    ),
+)
+
 CYCLE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("paper evidence harvest", ("./run_inferno_paper_evidence_harvest.sh",)),
+    *PAPER_EVIDENCE_HARVEST_COMMANDS,
     ("performance analytics", ("python3", "inferno_performance_analytics.py", "build")),
     ("strategy lab", ("python3", "inferno_strategy_lab.py", "build")),
     ("promotion evidence lineage", ("python3", "inferno_promotion_evidence_lineage.py", "build")),

@@ -104,6 +104,17 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertLess(names.index("promotion evidence lineage"), names.index("paper outcome completeness"))
         self.assertLess(names.index("paper outcome completeness"), names.index("paper velocity"))
 
+    def test_cycle_uses_python_commands_not_workspace_shell_wrappers(self) -> None:
+        """Deployed launchd jobs must not execute Documents shell files directly."""
+        commands = [*loop.PRECHECK_COMMANDS, *loop.CYCLE_COMMANDS]
+        harvest_count = len(loop.PAPER_EVIDENCE_HARVEST_COMMANDS)
+
+        self.assertTrue(all(argv[0] == "python3" for _name, argv in commands))
+        self.assertEqual(
+            [name for name, _argv in loop.CYCLE_COMMANDS[:harvest_count]],
+            [name for name, _argv in loop.PAPER_EVIDENCE_HARVEST_COMMANDS],
+        )
+
     def test_verifier_accepts_fresh_safe_research_cycle(self) -> None:
         commands = [{"name": "step", "ok": True}]
         result = loop.verify_cycle(safe_artifacts(), commands, now=NOW)

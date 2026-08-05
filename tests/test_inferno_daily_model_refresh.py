@@ -18,20 +18,28 @@ class DailyModelRefreshTests(unittest.TestCase):
         self.assertIn("LOCK_DIR=", text)
         self.assertIn("Advisory warning: Schwab OAuth preflight failed", text)
         self.assertIn(
-            'run_advisory "tracker and morning model refresh" ./run_inferno_dawn_cycle.sh --skip-email --refresh-prices',
+            'run_advisory "tracker and morning model refresh" "$BACKTEST_PYTHON" inferno_dawn_pipeline.py --skip-email --refresh-prices',
             text,
         )
         self.assertIn('skip_schwab_step "Schwab option-chain tape"', text)
         self.assertIn('run_advisory "snapshot price overlay"', text)
         self.assertIn('run_advisory "research cycle"', text)
         self.assertIn('run_advisory "ticket cap policy" python3 inferno_ticket_cap_policy.py', text)
-        self.assertIn("./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3", text)
+        self.assertIn('run_advisory "strategy alternative pricing" run_strategy_alternative_pricing --limit 6 --variants-per-ticker 3', text)
         self.assertIn('run_advisory "short premium study" python3 inferno_short_premium_study.py run', text)
-        self.assertIn('run_advisory "paper test director" ./run_inferno_paper_test_director.sh build', text)
-        self.assertIn('run_advisory "paper blocker swarm" ./run_inferno_paper_blocker_swarm.sh run', text)
-        self.assertIn('run_advisory "paper bottleneck reducer" ./run_inferno_paper_bottleneck_reducer.sh', text)
+        self.assertIn('run_advisory "paper test director" python3 inferno_paper_test_director.py build', text)
+        self.assertIn('run_advisory "paper blocker swarm" python3 inferno_paper_blocker_swarm.py run', text)
+        self.assertIn('run_advisory "paper bottleneck reducer" python3 inferno_paper_bottleneck_reducer.py build', text)
         self.assertIn('run_advisory "cash attribution" python3 inferno_cash_attribution.py', text)
         self.assertNotIn("python3 inferno_schwab_oauth.py ensure\n\nif", text)
+
+    def test_deployed_refresh_avoids_workspace_shell_entrypoints(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("./run_inferno_", text)
+        self.assertNotIn("./inferno ", text)
+        self.assertIn("run_strategy_alternative_pricing()", text)
+        self.assertIn("inferno_paper_variant_scanner.py run", text)
 
     def test_paper_selection_sync_follows_fresh_strategy_pricing(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
@@ -41,12 +49,21 @@ class DailyModelRefreshTests(unittest.TestCase):
         director = text.index('run_advisory "paper test director"')
         blocker = text.index('run_advisory "paper blocker swarm"')
         reducer = text.index('run_advisory "paper bottleneck reducer"')
+        evidence_audit = text.index('run_advisory "paper evidence audit"')
         command_center = text.index('run_advisory "model command center"')
+        doctor = text.index('run_advisory "doctor"')
+        central_handoff = text.index('run_advisory "central handoff"')
+        usage_handoff = text.index('run_advisory "usage handoff"')
 
         self.assertLess(pricing, shadow)
         self.assertLess(shadow, director)
         self.assertLess(director, blocker)
         self.assertLess(blocker, reducer)
+        self.assertLess(reducer, evidence_audit)
+        self.assertLess(evidence_audit, command_center)
+        self.assertLess(command_center, doctor)
+        self.assertLess(doctor, central_handoff)
+        self.assertLess(central_handoff, usage_handoff)
         self.assertLess(reducer, command_center)
 
     def test_individual_schwab_read_failures_remain_advisory(self) -> None:
