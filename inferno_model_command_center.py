@@ -76,6 +76,7 @@ EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
 SHORT_PREMIUM_STUDY_FILE = DATA_DIR / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
+STRATEGY_QUOTE_COVERAGE_FILE = DATA_DIR / "inferno_strategy_quote_coverage.json"
 STRATEGY_SHADOW_COMPARISON_FILE = DATA_DIR / "inferno_strategy_shadow_comparison.json"
 TECH_COHORT_EVALUATOR_FILE = DATA_DIR / "inferno_tech_cohort_evaluator.json"
 AI_BASKET_REFRESH_FILE = DATA_DIR / "inferno_ai_basket_refresh.json"
@@ -345,6 +346,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "Does defined-risk short premium have usable backward or forward evidence?",
         "artifact": "reports/short_premium_study_latest.txt",
         "owner": "shared",
+    },
+    {
+        "lane": "strategy-quote-coverage",
+        "question": "Did bounded supplemental Schwab chains cover missing strategy-pricing candidates without changing the primary tape?",
+        "artifact": "reports/strategy_quote_coverage_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "strategy-alternatives",
@@ -876,6 +883,7 @@ def build_executive_summary(
             f"threshold-audit={metrics.get('scoreThresholdAuditVerdict')}; "
             f"expected move={metrics.get('expectedMoveVerdict')}; "
             f"alternatives={metrics.get('strategyAlternativeVerdict')}; "
+            f"quote coverage={metrics.get('strategyQuoteCoverageStatus')}; "
             f"alt pricing={metrics.get('strategyAlternativePricingVerdict')}; "
             f"shadow compare={metrics.get('strategyShadowComparisonVerdict')}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
@@ -998,6 +1006,7 @@ def build_command_center() -> dict[str, Any]:
     score_threshold_audit = load_json_file(SCORE_THRESHOLD_AUDIT_FILE) or {}
     expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
     strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
+    strategy_quote_coverage = load_json_file(STRATEGY_QUOTE_COVERAGE_FILE) or {}
     strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
     strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
     strategy_shadow_pricing_freshness = source_pricing_freshness(
@@ -1112,6 +1121,7 @@ def build_command_center() -> dict[str, Any]:
         "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "shortPremiumStudy": artifact_summary(SHORT_PREMIUM_STUDY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "usableBackwardRecords")),
         "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyQuoteCoverage": artifact_summary(STRATEGY_QUOTE_COVERAGE_FILE, keys=("stage", "status", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
         "strategyAlternativePricing": artifact_summary(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyShadowComparison": artifact_summary(STRATEGY_SHADOW_COMPARISON_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "techCohortEvaluator": artifact_summary(TECH_COHORT_EVALUATOR_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
@@ -1337,6 +1347,8 @@ def build_command_center() -> dict[str, Any]:
         "strategyAlternativeVerdict": strategy_alternatives.get("verdict"),
         "strategyAlternativeRecommendations": (strategy_alternatives.get("counts") or {}).get("recommendations") or {},
         "strategyAlternativeVerdicts": (strategy_alternatives.get("counts") or {}).get("verdicts") or {},
+        "strategyQuoteCoverageStatus": strategy_quote_coverage.get("status"),
+        "strategyQuoteCoverageCounts": strategy_quote_coverage.get("counts") or {},
         "strategyAlternativeTop": [
             {
                 "ticker": item.get("ticker"),
@@ -1656,6 +1668,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Score threshold audit: {status_value(status.get('scoreThresholdAudit') or {})}",
             f"- Expected move ledger: {status_value(status.get('expectedMoveLedger') or {})}",
             f"- Strategy alternative scorer: {status_value(status.get('strategyAlternativeScorer') or {})}",
+            f"- Strategy quote coverage: {status_value(status.get('strategyQuoteCoverage') or {}, key='status')}",
             f"- Strategy alternative pricing: {status_value(status.get('strategyAlternativePricing') or {})}",
             f"- Strategy shadow comparison: {status_value(status.get('strategyShadowComparison') or {})}",
             f"- Paper evidence loop: {status_value(status.get('paperEvidenceLoop') or {})}",
@@ -1765,6 +1778,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Strategy alternatives: {metrics.get('strategyAlternativeVerdict')} | "
             f"recommendations {json.dumps(metrics.get('strategyAlternativeRecommendations') or {})}",
             f"- Strategy alternative top: {json.dumps(metrics.get('strategyAlternativeTop') or [])}",
+            f"- Strategy quote coverage: {metrics.get('strategyQuoteCoverageStatus')} | "
+            f"counts {json.dumps(metrics.get('strategyQuoteCoverageCounts') or {})}",
             f"- Strategy alternative pricing: {metrics.get('strategyAlternativePricingVerdict')} | "
             f"counts {json.dumps(metrics.get('strategyAlternativePricingCounts') or {})}",
             f"- Strategy alternative priced top: {json.dumps(metrics.get('strategyAlternativePricedTop') or [])}",

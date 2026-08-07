@@ -75,6 +75,7 @@ EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
 SHORT_PREMIUM_STUDY_FILE = ROOT / "data" / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
+STRATEGY_QUOTE_COVERAGE_FILE = ROOT / "data" / "inferno_strategy_quote_coverage.json"
 STRATEGY_SHADOW_COMPARISON_FILE = ROOT / "data" / "inferno_strategy_shadow_comparison.json"
 PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
@@ -1213,6 +1214,37 @@ def strategy_alternative_pricing_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def strategy_quote_coverage_status(report: dict) -> tuple[bool, str]:
+    """Check supplemental chain coverage without treating it as trading authority."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt") or "")
+    fresh = recent_or_today(generated, max_age_hours=36)
+    status = str(report.get("status") or "unknown")
+    counts = report.get("counts") or {}
+    safe = (
+        report.get("stage") == "strategy-quote-coverage-research-only"
+        and report.get("researchOnly") is True
+        and report.get("promotable") is False
+        and report.get("authorityChanged") is False
+        and report.get("brokerSubmitAllowed") is False
+        and report.get("liveTradingAllowed") is False
+    )
+    # A partial read remains useful, and it is explicitly allowed to fail soft.
+    # A complete provider error is visible as a Doctor warning rather than
+    # changing pricing, paper, or broker authority.
+    ok = fresh and safe and status in {"ok", "no-gap", "partial-error"}
+    detail = (
+        f"{status} | primary-covered={counts.get('primaryCoveredTickers', 0)} | "
+        f"supplemental={counts.get('capturedSupplementalTickers', 0)}/"
+        f"{counts.get('requestedSupplementalTickers', 0)} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "status": status})
+    )
+    return ok, detail
+
+
 def strategy_shadow_comparison_status(report: dict, pricing: dict | None = None) -> tuple[bool, str]:
     ok, detail = _research_module_status(
         report,
@@ -2278,6 +2310,12 @@ def main() -> int:
     strategy_alternatives_ok, strategy_alternatives_detail = strategy_alternative_scorer_status(strategy_alternatives)
     lines.append(summarize_status("Strategy alternative scorer", strategy_alternatives_ok, strategy_alternatives_detail))
     if not strategy_alternatives_ok:
+        warnings += 1
+
+    strategy_quote_coverage = load_json_file(STRATEGY_QUOTE_COVERAGE_FILE) or {}
+    strategy_quote_coverage_ok, strategy_quote_coverage_detail = strategy_quote_coverage_status(strategy_quote_coverage)
+    lines.append(summarize_status("Strategy quote coverage", strategy_quote_coverage_ok, strategy_quote_coverage_detail))
+    if not strategy_quote_coverage_ok:
         warnings += 1
 
     strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}

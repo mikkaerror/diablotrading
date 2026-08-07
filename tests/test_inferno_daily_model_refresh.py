@@ -26,6 +26,7 @@ class DailyModelRefreshTests(unittest.TestCase):
         self.assertIn('run_advisory "research cycle"', text)
         self.assertIn('run_advisory "ticket cap policy" python3 inferno_ticket_cap_policy.py', text)
         self.assertIn('run_advisory "strategy alternative pricing" run_strategy_alternative_pricing --limit 6 --variants-per-ticker 3', text)
+        self.assertIn('run_advisory "strategy quote coverage" python3 inferno_strategy_quote_coverage.py run --limit 6 --variants-per-ticker 3', text)
         self.assertIn('run_advisory "short premium study" python3 inferno_short_premium_study.py run', text)
         self.assertIn('run_advisory "paper test director" python3 inferno_paper_test_director.py build', text)
         self.assertIn('run_advisory "paper blocker swarm" python3 inferno_paper_blocker_swarm.py run', text)

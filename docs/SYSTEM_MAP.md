@@ -26,7 +26,9 @@ liveTradingAllowed: false
 2. Scoring modules enrich the universe with readiness, conviction, risk, and
    evidence strength.
 3. Schwab option-chain data is the primary read-only option quote-quality tape
-   when the local OAuth token is healthy.
+   when the local OAuth token is healthy. A separately persisted, bounded
+   supplemental tape may fill only missing strategy-pricing chains; it never
+   overwrites the primary tape or changes paper/live authority.
 4. Daily/ops pipelines generate reports, doctor checks, morning/pre-close
    briefs, and command-center artifacts.
 5. Paper and shadow lanes collect outcomes until strategy evidence earns more
@@ -83,6 +85,7 @@ Generated artifacts beat durable docs when they disagree.
 | Broker cash attribution | `reports/cash_attribution_latest.txt` |
 | Ticket cap and call posture | `reports/ticket_cap_policy_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
+| Supplemental strategy-pricing quote coverage | `reports/strategy_quote_coverage_latest.txt` |
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
 | Full-tracker reference taxonomy | `reports/tracker_taxonomy_latest.txt` |

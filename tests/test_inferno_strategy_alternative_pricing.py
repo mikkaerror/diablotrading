@@ -875,6 +875,24 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertFalse(payload["items"][0]["brokerSubmitAllowed"])
         self.assertFalse(payload["items"][0]["liveTradingAllowed"])
 
+    def test_default_build_uses_supplemental_chain_with_explicit_provenance(self) -> None:
+        scorer = {"scorecards": [scorer_payload()["scorecards"][1]]}
+        reducer = {"scenarioSlate": [reducer_item()]}
+        supplemental = condor_schwab_options("BBB")
+        supplemental["BBB"]["chainSource"] = "schwab-options-supplemental"
+
+        with patch("inferno_strategy_alternative_pricing.load_schwab_options_index", return_value={}):
+            with patch(
+                "inferno_strategy_alternative_pricing.load_supplemental_schwab_options_index",
+                return_value=supplemental,
+            ):
+                payload = pricing.build_strategy_alternative_pricing(scorer=scorer, reducer=reducer)
+
+        self.assertEqual(payload["counts"]["supplementalSchwabOptionTickers"], 1)
+        self.assertEqual(payload["items"][0]["chainSource"], "schwab-options-supplemental")
+        self.assertFalse(payload["items"][0]["brokerSubmitAllowed"])
+        self.assertFalse(payload["items"][0]["liveTradingAllowed"])
+
     def test_empty_build_is_authority_safe(self) -> None:
         payload = pricing.build_strategy_alternative_pricing(
             scorer={"scorecards": []},

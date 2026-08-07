@@ -36,6 +36,10 @@ run_strategy_alternative_pricing() {
   # Keep the wrapper's scanner-before-pricing contract without directly
   # executing a repository shell file from a background Documents process.
   python3 inferno_paper_variant_scanner.py run >/dev/null || return $?
+  # This bounded supplemental tape is read-only and deliberately does not
+  # replace the primary Schwab options snapshot.  A fetch failure is advisory:
+  # pricing still runs against the core tape and remains fail-closed on gaps.
+  run_advisory "strategy quote coverage" python3 inferno_strategy_quote_coverage.py run --limit 6 --variants-per-ticker 3
   python3 inferno_strategy_alternative_pricing.py "$@"
 }
 
@@ -122,7 +126,7 @@ run_advisory "DTE policy analysis" python3 inferno_dte_policy_analysis.py build
 run_advisory "trading behavior audit" python3 inferno_trading_behavior_audit.py build
 run_advisory "process compliance" python3 inferno_process_compliance.py build
 
-echo "12/18 Strategy alternatives, short-premium monitor, and shadow comparison"
+echo "12/18 Strategy alternatives, supplemental quote coverage, short-premium monitor, and shadow comparison"
 run_advisory "ticket cap policy" python3 inferno_ticket_cap_policy.py
 run_advisory "strategy alternative scorer" python3 inferno_strategy_alternative_scorer.py
 run_advisory "strategy alternative pricing" run_strategy_alternative_pricing --limit 6 --variants-per-ticker 3

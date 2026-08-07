@@ -87,6 +87,7 @@ Safety            — authority, risk, secrets
 | `inferno_approval_inbox.py` | Narrow IMAP approval-reply ingestor with bounded UID dedupe state | `reports/approval_inbox_latest.txt` |
 | `inferno_approval_dispatch.py` | Route approved tickets to the staging lanes | side-effects on staging |
 | `inferno_schwab_daily_ops.py` | Refresh and classify Schwab option-chain tape for daily decisions | `reports/schwab_daily_ops_latest.txt` |
+| `inferno_strategy_quote_coverage.py` | Bounded read-only supplemental Schwab chains for missing strategy-pricing candidates; preserves primary-tape precedence and cannot change authority | `reports/strategy_quote_coverage_latest.txt` |
 | `inferno_strike_selector.py` | Choose strikes for approved tickets, with concentration governor | `data/inferno_strike_plan.json` |
 | `inferno_capital_allocator.py` | Allocate paper capital across approved tickets | `data/inferno_capital_allocation.json` |
 | `inferno_edge_research.py` | Score the shovel universe by lane and theme | `data/inferno_edge_research.json` |

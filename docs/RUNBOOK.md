@@ -1286,6 +1286,13 @@ Each saved run writes an Obsidian-compatible Markdown note under
 `Agent Loop Runs.base` to review structured run properties. JSON remains the
 machine source of truth.
 
+Every invocation still runs the process and authority prechecks. A full
+harvest can be skipped only when all inputs are fresh, the prior verified
+state matches, and there is no operator-routable/auto/approval paper candidate,
+no due isolated fast-paper settlement, and no scenario observation whose own
+review horizon has elapsed. Newly opened in-horizon scenario observations are
+telemetry, not a reason to repeat the full 21-command harvest.
+
 The cooldown is an initial floor, not a fixed cadence. Consecutive no-progress
 runs back off exponentially up to 24 hours, while known fast-paper exit
 eligibility caps the wait. `knowledge/agent-loop/Loop Beliefs.md` consolidates

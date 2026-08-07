@@ -21,7 +21,7 @@ import json
 import re
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -423,6 +423,33 @@ def _active_dominant_blocker(
     return _dominant_blocker(performance)
 
 
+def _eligible_scenario_reviews(
+    scenario_evidence: dict[str, Any],
+    *,
+    now: datetime,
+) -> int:
+    """Count open observations whose recorded review horizon has elapsed.
+
+    Open observations are normally expected during the review horizon.  They
+    become useful work only when their own ledger says that a review is due;
+    treating every new open row as an action signal caused redundant full
+    harvests without creating evidence.
+    """
+    eligible = 0
+    for observation in scenario_evidence.get("observations") or []:
+        outcome = observation.get("outcome") or {}
+        if outcome.get("status") != "open":
+            continue
+        try:
+            trade_date = date.fromisoformat(str(observation.get("tradeDate") or ""))
+        except ValueError:
+            continue
+        review_horizon = max(0, int(_number(observation.get("reviewHorizonDays", 1))))
+        if now.date() >= trade_date + timedelta(days=review_horizon):
+            eligible += 1
+    return eligible
+
+
 def progress_snapshot(
     artifacts: dict[str, dict[str, Any]],
     *,
@@ -463,6 +490,11 @@ def progress_snapshot(
             ((paper_loop.get("counts") or {}).get("remainingForPromotion")) or 0
         ),
         "paperLoopVerdict": paper_loop.get("verdict"),
+        "paperResearchTickers": sorted(
+            str(ticker).upper()
+            for ticker in paper_loop.get("paperResearchTickers") or []
+            if str(ticker).strip()
+        ),
         "paperDirectorVerdict": paper_director.get("verdict"),
         "paperStageableNow": int(_number(paper_director_counts.get("stageableNow"))),
         "paperAutoSelected": int(_number(paper_director_counts.get("autoPaperSelected"))),
@@ -495,6 +527,10 @@ def progress_snapshot(
         "nextFastPaperExitEligibleDate": exit_dates[0] if exit_dates else None,
         "scenarioObservationsClosed": int(_number(scenario_counts.get("closed"))),
         "scenarioObservationsOpen": int(_number(scenario_counts.get("open"))),
+        "eligibleScenarioReviews": _eligible_scenario_reviews(
+            scenario_evidence,
+            now=current,
+        ),
         "strategyLabVerdict": (strategy_lab.get("deskVerdict") or {}).get("level"),
         "weeklyCloseRate": (velocity.get("velocity") or {}).get("weeklyRate30dWindow"),
         "projectedWeeksToPromotion": (velocity.get("velocity") or {}).get(
@@ -507,6 +543,30 @@ def progress_snapshot(
         "dominantBlocker": dominant_blocker,
         "dominantBlockerCount": dominant_blocker_count,
     }
+
+
+def actionable_work(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Return only readiness that justifies another full evidence harvest.
+
+    This is intentionally narrower than the progress vector.  A newly opened
+    scenario remains useful context, but it does not need a 19-command harvest
+    until its recorded review horizon is due.  Safety prechecks and freshness
+    checks are still performed on every invocation before this result can
+    suppress duplicate work.
+    """
+    checks = (
+        ("operator-routable paper candidate", "paperStageableNow"),
+        ("auto-paper candidate", "paperAutoSelected"),
+        ("approval-only paper candidate", "paperApprovalOnly"),
+        ("due isolated fast-paper settlement", "eligibleFastPaperExits"),
+        ("due scenario review", "eligibleScenarioReviews"),
+    )
+    reasons = [
+        label
+        for label, field in checks
+        if int(_number(snapshot.get(field))) > 0
+    ]
+    return {"ready": bool(reasons), "reasons": reasons}
 
 
 def progress_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -583,10 +643,15 @@ def work_signature(snapshot: dict[str, Any], *, now: datetime | None = None) -> 
         "localDate": current.date().isoformat(),
         "scoredPaperTickets": snapshot.get("scoredPaperTickets"),
         "remainingForPromotion": snapshot.get("remainingForPromotion"),
+        "paperLoopVerdict": snapshot.get("paperLoopVerdict"),
+        "paperResearchTickers": snapshot.get("paperResearchTickers"),
         "fastPaperVerdict": snapshot.get("fastPaperVerdict"),
         "fastPaperClosedLifetime": snapshot.get("fastPaperClosedLifetime"),
         "fastPaperOpen": snapshot.get("fastPaperOpen"),
         "paperDirectorVerdict": snapshot.get("paperDirectorVerdict"),
+        "paperStageableNow": snapshot.get("paperStageableNow"),
+        "paperAutoSelected": snapshot.get("paperAutoSelected"),
+        "paperApprovalOnly": snapshot.get("paperApprovalOnly"),
         "verifiedPaperCandidates": snapshot.get("verifiedPaperCandidates"),
         "paperHardBlocked": snapshot.get("paperHardBlocked"),
         "paperBlockerSwarmVerdict": snapshot.get("paperBlockerSwarmVerdict"),
@@ -601,7 +666,7 @@ def work_signature(snapshot: dict[str, Any], *, now: datetime | None = None) -> 
         "eligibleFastPaperExits": snapshot.get("eligibleFastPaperExits"),
         "nextFastPaperExitEligibleDate": snapshot.get("nextFastPaperExitEligibleDate"),
         "scenarioObservationsClosed": snapshot.get("scenarioObservationsClosed"),
-        "scenarioObservationsOpen": snapshot.get("scenarioObservationsOpen"),
+        "eligibleScenarioReviews": snapshot.get("eligibleScenarioReviews"),
         "capFitAnyFits": snapshot.get("capFitAnyFits"),
         "capFitTotal": snapshot.get("capFitTotal"),
         "dominantBlocker": snapshot.get("dominantBlocker"),
@@ -967,6 +1032,7 @@ def build_goal_loop(
     repairs: list[str] = []
     value_class = "blocked"
     signature = work_signature(baseline_progress, now=started)
+    readiness = actionable_work(baseline_progress)
     cadence_gate = {"blocked": False, "reason": None, "nextCheckAt": None}
 
     if precheck.get("passed"):
@@ -980,12 +1046,12 @@ def build_goal_loop(
             now=started,
             fallback_cooldown_minutes=duplicate_cooldown_minutes,
         )
-        useful_work_ready = int(
-            _number(baseline_progress.get("eligibleFastPaperExits"))
-        ) > 0
-        if cadence_gate.get("blocked") and all_fresh and not useful_work_ready:
+        if cadence_gate.get("blocked") and all_fresh and not readiness.get("ready"):
             verdict = "skipped-duplicate-work"
-            stop_reason = str(cadence_gate.get("reason"))
+            stop_reason = (
+                f"{cadence_gate.get('reason')}; no eligible paper, settlement, "
+                "or scenario-review work"
+            )
             value_class = "skipped"
             final_verification = verify_cycle(precheck_artifacts, [], now=started)
         else:
@@ -1032,6 +1098,7 @@ def build_goal_loop(
                 repairs = iteration_repairs
                 value_class = iteration_value
                 signature = work_signature(progress, now=started)
+                readiness = actionable_work(progress)
                 if verification.get("passed"):
                     verdict = iteration_value
                     if iteration_value == "productive":
@@ -1100,6 +1167,7 @@ def build_goal_loop(
         "baselineProgress": baseline_progress,
         "progress": final_progress,
         "progressDelta": delta,
+        "actionability": readiness,
         "sourceLineage": artifact_lineage(final_artifacts, now=generated),
         "artifactRepairs": repairs,
         "workSignature": signature,
@@ -1159,6 +1227,8 @@ def goal_loop_text(payload: dict[str, Any]) -> str:
         f"- fast paper: {progress.get('fastPaperVerdict')}",
         f"- isolated simulations settled lifetime: {progress.get('fastPaperClosedLifetime')}",
         f"- scenario observations closed: {progress.get('scenarioObservationsClosed')}",
+        f"- eligible scenario reviews: {progress.get('eligibleScenarioReviews')}",
+        f"- actionable work: {', '.join((payload.get('actionability') or {}).get('reasons') or []) or 'none'}",
         f"- universe cap fit: {progress.get('capFitVerdict')} | "
         f"{progress.get('capFitAnyFits')}/{progress.get('capFitTotal')} fit",
         f"- dominant blocker: {progress.get('dominantBlocker')} ({progress.get('dominantBlockerCount')})",
@@ -1646,6 +1716,7 @@ def build_verification_only() -> dict[str, Any]:
         "baselineProgress": progress,
         "progress": progress,
         "progressDelta": delta,
+        "actionability": actionable_work(progress),
         "sourceLineage": artifact_lineage(artifacts, now=started),
         "artifactRepairs": [],
         "workSignature": work_signature(progress, now=started),

@@ -28,6 +28,7 @@ from inferno_config import (
 )
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_risk_policy import evaluate_strike_item
+from inferno_strategy_quote_coverage import load_supplemental_schwab_options_index
 from inferno_strike_selector import (
     AUTOMATION_STAGE,
     build_liquidity_notes,
@@ -1241,7 +1242,7 @@ def build_priced_item(
                 strategy=strategy,
                 pricing_intent=pricing_intent,
                 expirations=schwab_expirations,
-                chain_source="schwab-options",
+                chain_source=text((schwab_options or {}).get("chainSource")) or "schwab-options",
                 chain_loader=lambda expiration: (
                     schwab_contract_frame(schwab_options, expiration=expiration, put_call="CALL"),
                     schwab_contract_frame(schwab_options, expiration=expiration, put_call="PUT"),
@@ -1326,7 +1327,16 @@ def build_strategy_alternative_pricing(
         variants_per_ticker=variants_per_ticker,
         paper_variant_scanner=paper_variant_scanner,
     )
-    schwab_index = load_schwab_options_index() if schwab_options_index is None else schwab_options_index
+    if schwab_options_index is None:
+        # The primary tape keeps precedence.  Supplemental coverage exists only
+        # for ticker groups absent from that fixed daily snapshot.
+        supplemental_schwab_index = load_supplemental_schwab_options_index()
+        primary_schwab_index = load_schwab_options_index()
+        schwab_index = {**supplemental_schwab_index, **primary_schwab_index}
+    else:
+        supplemental_schwab_index = {}
+        primary_schwab_index = schwab_options_index
+        schwab_index = schwab_options_index
     generated_at = local_now().isoformat()
     cap_policy = ticket_cap_policy()
     items = [
@@ -1373,6 +1383,8 @@ def build_strategy_alternative_pricing(
             "variantsPerTicker": variants_per_ticker,
             "chainTimeoutSeconds": chain_timeout_seconds,
             "yfinanceFallbackAllowed": allow_yfinance_fallback,
+            "primarySchwabOptionTickers": len(primary_schwab_index),
+            "supplementalSchwabOptionTickers": len(supplemental_schwab_index),
             "fallbackVariants": sum(1 for item in candidates if item.get("fallbackVariant")),
             "scannerCandidates": sum(1 for item in candidates if item.get("paperVariantOnly")),
             "requestedByStrategy": {
@@ -1402,6 +1414,7 @@ def build_strategy_alternative_pricing(
             "Broker submit remains false and every priced variant requires explicit human review.",
             "The ticket-cap policy sets a target band; only the hard cap is a blocking optimizer limit.",
             "Unattended runs use Schwab contracts only; yfinance option-chain fallback is manual diagnostics only.",
+            "A bounded supplemental Schwab tape may fill missing research-pricing chains; the primary tape retains precedence.",
         ],
     }
 
@@ -1479,6 +1492,7 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         f"- variants per ticker: {counts.get('variantsPerTicker', 0)}",
         f"- external chain timeout: {fmt(counts.get('chainTimeoutSeconds'))}s",
         f"- yfinance fallback allowed: {counts.get('yfinanceFallbackAllowed', False)}",
+        f"- primary/supplemental Schwab chain tickers: {counts.get('primarySchwabOptionTickers', 0)} / {counts.get('supplementalSchwabOptionTickers', 0)}",
         f"- fallback variants: {counts.get('fallbackVariants', 0)}",
         f"- scanner candidates: {counts.get('scannerCandidates', 0)}",
         f"- requested by strategy: {json.dumps(counts.get('requestedByStrategy') or {})}",

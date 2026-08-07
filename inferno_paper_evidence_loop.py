@@ -121,12 +121,22 @@ def build_actions(payload: dict[str, Any]) -> list[str]:
     """Generate the shortest next-step sequence for the current evidence bottleneck."""
     counts = payload.get("counts") or {}
     actions: list[str] = []
-    if counts.get("stageableNow", 0) > 0:
+    if counts.get("operatorRoutableNow", 0) > 0:
         actions.append("Record the current clean sandbox names for the operator-owned paper workflow; unattended agents must not stage them.")
     elif counts.get("autoPaperSelected", 0) > 0:
         actions.append("Record the model-selected auto slate for the operator-owned paper workflow; do not stage it autonomously.")
+    elif counts.get("paperResearchSelected", 0) > 0:
+        actions.append(
+            "Keep paper-research selections under observation only; they are not operator-routable or stageable "
+            "until the final paper workflow gates pass."
+        )
     elif counts.get("approvalOnly", 0) > 0:
         actions.append("Review the approval-only slate only for live-style discretion; do not let it block paper evidence throughput.")
+    if counts.get("sandboxStageableNow", 0) > counts.get("stageableNow", 0):
+        actions.append(
+            "TOS sandbox entries exceed the final paper-workflow slate; treat the unmatched sandbox rows as provisional "
+            "context, not operator-routable candidates."
+        )
     if counts.get("plannedFillRows", 0) > 0:
         actions.append("After the operator stages a paper test, replace planned fill-log placeholders with real paperMoney execution facts.")
     capture_template = payload.get("captureTemplate") or {}
@@ -167,11 +177,26 @@ def build_audit() -> dict[str, Any]:
     review_ready_shadows = shadow_ready_for_review(shadow)
     scored = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
     remaining = max(0, PROMOTION_TARGET - scored)
+    director_counts = paper_director.get("counts") or {}
+    operator_routable_slate = list(paper_director.get("operatorRoutableSlate") or [])
+    auto_paper_slate = list(paper_director.get("autoPaperSlate") or [])
+    paper_research_slate = [
+        candidate
+        for candidate in (paper_director.get("pricedPaperVariantWatchlist") or [])
+        if candidate.get("paperResearchSelected")
+    ]
+    sandbox_stageable = list(sandbox.get("stageableTickets") or [])
 
     counts = {
-        "stageableNow": int((sandbox.get("stageableCount") or 0)),
-        "autoPaperSelected": int(((paper_director.get("counts") or {}).get("autoPaperSelected")) or 0),
-        "approvalOnly": int(((paper_director.get("counts") or {}).get("approvalOnly")) or 0),
+        # The paper director is the final candidate gate. A raw TOS sandbox row
+        # can be provisional, stale, or superseded by pricing, liquidity, and
+        # risk checks, so it must never be represented as operator-routable.
+        "stageableNow": int(director_counts.get("stageableNow") or 0),
+        "operatorRoutableNow": int(director_counts.get("operatorRoutablePaper") or 0),
+        "autoPaperSelected": int(director_counts.get("autoPaperSelected") or 0),
+        "paperResearchSelected": int(director_counts.get("paperResearchSelected") or 0),
+        "sandboxStageableNow": len(sandbox_stageable),
+        "approvalOnly": int(director_counts.get("approvalOnly") or 0),
         "plannedFillRows": planned_fill_rows(fill_rows),
         "openFillRows": count_fill_status(fill_rows, "open"),
         "closedFillRows": count_fill_status(fill_rows, "closed"),
@@ -182,8 +207,10 @@ def build_audit() -> dict[str, Any]:
         "remainingForPromotion": remaining,
     }
 
-    if counts["stageableNow"] > 0 or counts["autoPaperSelected"] > 0:
+    if counts["operatorRoutableNow"] > 0 or counts["autoPaperSelected"] > 0:
         verdict = "operator-paper-candidates"
+    elif counts["paperResearchSelected"] > 0:
+        verdict = "paper-research-watch"
     elif counts["openFillRows"] > 0 or counts["paperOpenTickets"] > 0 or counts["closedFillRows"] > 0:
         verdict = "collect-paper-outcomes"
     elif counts["approvalOnly"] > 0:
@@ -203,9 +230,16 @@ def build_audit() -> dict[str, Any]:
             "openedRows": fill_ingest.get("openedRows", 0),
             "closedRows": fill_ingest.get("closedRows", 0),
         },
+        "sourceLineage": {
+            "paperDirectorGeneratedAt": paper_director.get("generatedAt"),
+            "tosSandboxGeneratedAt": sandbox.get("generatedAt"),
+        },
         "captureTemplate": capture_template,
         "actions": build_actions({"counts": counts, "captureTemplate": capture_template}),
-        "stageableTickers": [ticket.get("ticker") for ticket in (sandbox.get("stageableTickets") or [])],
+        "stageableTickers": [ticket.get("ticker") for ticket in operator_routable_slate],
+        "autoPaperTickers": [ticket.get("ticker") for ticket in auto_paper_slate],
+        "paperResearchTickers": [ticket.get("ticker") for ticket in paper_research_slate],
+        "sandboxStageableTickers": [ticket.get("ticker") for ticket in sandbox_stageable],
         "approvalTickers": [ticket.get("ticker") for ticket in (paper_director.get("approvalSlate") or [])],
         "openPaperTickers": [ticket.get("ticker") for ticket in open_tickets],
         "shadowReviewTickers": [ticket.get("ticker") for ticket in review_ready_shadows],
@@ -224,8 +258,11 @@ def audit_text(payload: dict[str, Any]) -> str:
         f"Strategy lab: {payload.get('strategyLabVerdict')}",
         "",
         "Counts:",
-        f"- operator-routable now: {counts.get('stageableNow', 0)}",
+        f"- final executable paper rows: {counts.get('stageableNow', 0)}",
+        f"- operator-routable now: {counts.get('operatorRoutableNow', 0)}",
         f"- auto paper selected: {counts.get('autoPaperSelected', 0)}",
+        f"- paper-research selections: {counts.get('paperResearchSelected', 0)}",
+        f"- provisional TOS sandbox rows: {counts.get('sandboxStageableNow', 0)}",
         f"- approval only: {counts.get('approvalOnly', 0)}",
         f"- planned fill rows: {counts.get('plannedFillRows', 0)}",
         f"- open fill rows: {counts.get('openFillRows', 0)}",
@@ -246,6 +283,9 @@ def audit_text(payload: dict[str, Any]) -> str:
         [
             "",
             f"Operator-routable tickers: {', '.join(payload.get('stageableTickers') or []) or 'none'}",
+            f"Auto-paper tickers: {', '.join(payload.get('autoPaperTickers') or []) or 'none'}",
+            f"Paper-research tickers: {', '.join(payload.get('paperResearchTickers') or []) or 'none'}",
+            f"Provisional TOS sandbox tickers: {', '.join(payload.get('sandboxStageableTickers') or []) or 'none'}",
             f"Approval tickers: {', '.join(payload.get('approvalTickers') or []) or 'none'}",
             f"Open paper tickers: {', '.join(payload.get('openPaperTickers') or []) or 'none'}",
             f"Shadow review tickers: {', '.join(payload.get('shadowReviewTickers') or []) or 'none'}",

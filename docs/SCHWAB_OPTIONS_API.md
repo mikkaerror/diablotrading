@@ -255,6 +255,17 @@ Daily operator tape:
 ./inferno daily-ops
 ```
 
+Bounded strategy-pricing coverage (the core tape remains untouched):
+
+```bash
+python3 inferno_strategy_quote_coverage.py run --limit 6 --supplemental-limit 6
+```
+
+This uses the same ignored local `.env.schwab` process setup as the daily
+adapter, writes `data/inferno_strategy_quote_coverage.json`, and labels every
+result as research-only supplemental evidence. It does not call account or
+order endpoints and has no paper- or live-trading authority.
+
 This is also run opportunistically by:
 
 - `./inferno action-pulse`

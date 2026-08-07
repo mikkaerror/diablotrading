@@ -623,7 +623,7 @@
   {
     "id": "mission-d0780908",
     "createdAt": "2026-08-05T17:14:03.330576-06:00",
-    "updatedAt": "2026-08-05T17:14:47.747014-06:00",
+    "updatedAt": "2026-08-05T17:15:32.038251-06:00",
     "title": "Keep model handoff within budget with safety headroom",
     "body": "Move redundant central-status detail out of the default model handoff while retaining the compact command-center digest and system map. The goal is durable token headroom without reducing safety or authority context. Research-only; no broker, ticket, risk, universe, or authority changes.",
     "owner": "codex",
@@ -634,6 +634,41 @@
       "context-budget",
       "automation",
       "research-only"
+    ]
+  },
+  {
+    "id": "mission-9f00c710",
+    "createdAt": "2026-08-05T20:34:42.818729-06:00",
+    "updatedAt": "2026-08-06T20:58:10.388457-06:00",
+    "title": "Bound supplemental strategy quote coverage",
+    "body": "Completed: added a capped six-ticker read-only Schwab supplemental chain artifact for missing strategy-pricing candidates; retained primary-tape precedence; labeled supplemental pricing provenance; wired it after scanner refresh; and added fail-closed loader, Doctor, and command-center visibility. A provider failure stays advisory to the pipeline but becomes visible; it cannot change paper/live authority. All research-only, paper staging off, broker submit off, live trading off.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "automation",
+      "schwab",
+      "pricing",
+      "source-lineage",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-3e27bac9",
+    "createdAt": "2026-08-06T11:50:28.745673-06:00",
+    "updatedAt": "2026-08-06T11:59:48.429656-06:00",
+    "title": "Throttle no-progress paper-evidence refreshes",
+    "body": "Completed shared-lane efficiency audit: the evidence loop now preserves process/authority prechecks and freshness verification on every invocation, skips only duplicate fresh state with no active paper candidate, due isolated settlement, or due scenario review, and records explicit actionability. Non-due scenario telemetry no longer causes a full harvest. No paper-ticket, risk, universe, broker, live-authority, or schedule changes.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "automation",
+      "efficiency",
+      "research-only",
+      "safety"
     ]
   }
 ]

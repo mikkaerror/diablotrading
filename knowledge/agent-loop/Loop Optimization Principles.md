@@ -29,6 +29,7 @@ Increase verified paper and research evidence per unit of time without widening 
 12. Freshness gates follow market sessions: on weekends and market holidays, the latest regular session plus same-day infrastructure checks are the active cycle.
 13. Operator-facing status must label stale action artifacts as historical or inactive; an old successful action is not proof of current execution.
 14. A convenience config may read a declared universe contract but cannot redefine or expand that universe; outsiders are diagnostic inputs and never signal candidates.
+15. Do not treat every new observation as work: repeat a full harvest only for fresh state with an eligible settlement, a due observation review, or a current paper-candidate state. Prechecks always run.
 
 ## Accepted progress
 

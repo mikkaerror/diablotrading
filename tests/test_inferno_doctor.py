@@ -35,6 +35,7 @@ from inferno_doctor import (
     schwab_oauth_status,
     schwab_transaction_ledger_status,
     short_premium_study_status,
+    strategy_quote_coverage_status,
     strategy_shadow_comparison_status,
     tos_export_bridge_status,
     trade_management_status,
@@ -380,6 +381,47 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         self.assertFalse(ok)
         self.assertIn("authority-safe=False", detail)
+
+    def test_strategy_quote_coverage_allows_partial_read_only_capture(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = strategy_quote_coverage_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "strategy-quote-coverage-research-only",
+                    "status": "partial-error",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "counts": {
+                        "primaryCoveredTickers": 5,
+                        "capturedSupplementalTickers": 2,
+                        "requestedSupplementalTickers": 6,
+                    },
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("partial-error", detail)
+        self.assertIn("supplemental=2/6", detail)
+
+    def test_strategy_quote_coverage_rejects_authority_drift(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = strategy_quote_coverage_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "strategy-quote-coverage-research-only",
+                    "status": "ok",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": True,
+                    "liveTradingAllowed": False,
+                    "counts": {},
+                }
+            )
+        self.assertFalse(ok)
+        self.assertIn("research-only=False", detail)
 
     def test_action_pulse_status_accepts_sent_pulse(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

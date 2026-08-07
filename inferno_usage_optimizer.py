@@ -38,16 +38,16 @@ READ_FIRST: tuple[dict[str, str], ...] = (
         "why": "compact command-center truth, safety rails, current next actions",
     },
     {
-        "path": "reports/central_command_latest.txt",
-        "why": "short supervisor status and recommended next move",
-    },
-    {
         "path": "docs/SYSTEM_MAP.md",
         "why": "one-page architecture, ownership map, and safety stack",
     },
 )
 
 READ_IF_NEEDED: tuple[dict[str, str], ...] = (
+    {
+        "path": "reports/central_command_latest.txt",
+        "why": "one-screen supervisor status when the current operational verdict is needed",
+    },
     {
         "path": "reports/model_command_center_latest.txt",
         "why": "full command-center report map; read before broad changes or deep report work",

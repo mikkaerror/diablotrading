@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -386,6 +387,175 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertEqual(payload["verdict"], "skipped-duplicate-work")
         self.assertEqual(payload["iterationCount"], 0)
         self.assertEqual(len(calls), len(loop.PRECHECK_COMMANDS))
+
+    def test_duplicate_skip_ignores_non_due_scenario_observation_growth(self) -> None:
+        """New in-horizon telemetry must not start another full harvest."""
+        prior_artifacts = safe_artifacts()
+        prior_artifacts["scenarioEvidence"]["observations"] = [
+            {
+                "tradeDate": NOW.date().isoformat(),
+                "reviewHorizonDays": 1,
+                "outcome": {"status": "open"},
+            }
+        ]
+        artifacts = deepcopy(prior_artifacts)
+        artifacts["scenarioEvidence"]["counts"]["open"] = 3
+        artifacts["scenarioEvidence"]["observations"].extend(
+            [
+                {
+                    "tradeDate": NOW.date().isoformat(),
+                    "reviewHorizonDays": 1,
+                    "outcome": {"status": "open"},
+                },
+                {
+                    "tradeDate": NOW.date().isoformat(),
+                    "reviewHorizonDays": 1,
+                    "outcome": {"status": "open"},
+                },
+            ]
+        )
+        signature = loop.work_signature(
+            loop.progress_snapshot(prior_artifacts, now=NOW),
+            now=NOW,
+        )
+        self.assertEqual(
+            signature,
+            loop.work_signature(loop.progress_snapshot(artifacts, now=NOW), now=NOW),
+        )
+        state = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:30:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ]
+        }
+        calls = []
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: (
+                calls.append(name) or {"name": name, "ok": True}
+            ),
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "skipped-duplicate-work")
+        self.assertEqual(payload["actionability"], {"ready": False, "reasons": []})
+        self.assertEqual(len(calls), len(loop.PRECHECK_COMMANDS))
+
+    def test_due_scenario_review_bypasses_duplicate_skip(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["scenarioEvidence"]["counts"]["open"] = 1
+        artifacts["scenarioEvidence"]["observations"] = [
+            {
+                "tradeDate": "2026-06-21",
+                "reviewHorizonDays": 1,
+                "outcome": {"status": "open"},
+            }
+        ]
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        state = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:30:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ]
+        }
+        calls = []
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: (
+                calls.append(name) or {"name": name, "ok": True}
+            ),
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["verdict"], "no-op")
+        self.assertEqual(payload["iterationCount"], 1)
+        self.assertIn("due scenario review", payload["actionability"]["reasons"])
+        self.assertEqual(
+            len(calls),
+            len(loop.PRECHECK_COMMANDS) + len(loop.CYCLE_COMMANDS),
+        )
+
+    def test_due_isolated_settlement_bypasses_duplicate_skip(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["fastPaper"]["openSlate"] = [
+            {"ticker": "QCOM", "exitEligibleDate": NOW.date().isoformat()}
+        ]
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        state = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:30:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ]
+        }
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {"name": name, "ok": True},
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["iterationCount"], 1)
+        self.assertIn(
+            "due isolated fast-paper settlement",
+            payload["actionability"]["reasons"],
+        )
+
+    def test_operator_ready_candidate_bypasses_duplicate_skip(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["paperDirector"]["verdict"] = "auto-paper-selected"
+        artifacts["paperDirector"]["counts"]["autoPaperSelected"] = 1
+        snapshot = loop.progress_snapshot(artifacts, now=NOW)
+        signature = loop.work_signature(snapshot, now=NOW)
+        state = {
+            "runs": [
+                {
+                    "generatedAt": "2026-06-22T12:30:00-06:00",
+                    "workSignature": signature,
+                    "verificationPassed": True,
+                    "valueClass": "no-op",
+                }
+            ]
+        }
+
+        payload = loop.build_goal_loop(
+            command_runner=lambda name, argv, timeout_seconds: {"name": name, "ok": True},
+            artifact_loader=lambda: artifacts,
+            state_loader=lambda: state,
+            now=NOW,
+        )
+
+        self.assertEqual(payload["iterationCount"], 1)
+        self.assertIn("auto-paper candidate", payload["actionability"]["reasons"])
+
+    def test_work_signature_tracks_research_tickers_but_not_open_scenario_count(self) -> None:
+        first = safe_artifacts()
+        first["paperEvidenceLoop"]["paperResearchTickers"] = ["ORCL"]
+        second = deepcopy(first)
+        second["paperEvidenceLoop"]["paperResearchTickers"] = ["AMD"]
+
+        self.assertNotEqual(
+            loop.work_signature(loop.progress_snapshot(first, now=NOW), now=NOW),
+            loop.work_signature(loop.progress_snapshot(second, now=NOW), now=NOW),
+        )
 
     def test_state_tracks_productive_rate_and_repeated_blocker(self) -> None:
         payload = loop.build_goal_loop(

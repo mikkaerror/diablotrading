@@ -70,14 +70,62 @@ class InfernoPaperEvidenceLoopTests(unittest.TestCase):
     @patch("inferno_paper_evidence_loop.load_paper_director")
     @patch("inferno_paper_evidence_loop.load_fill_rows")
     @patch("inferno_paper_evidence_loop.load_json_file")
-    def test_build_audit_preserves_stageable_count_as_operator_routable(
+    def test_build_audit_uses_final_director_routing_not_raw_sandbox_stageability(
         self,
         mock_load_json_file,
         mock_load_fill_rows,
         mock_load_paper_director,
     ) -> None:
         mock_load_fill_rows.return_value = []
-        mock_load_paper_director.return_value = {"counts": {"autoPaperSelected": 0}, "approvalSlate": []}
+        mock_load_paper_director.return_value = {
+            "generatedAt": "2026-08-05T10:00:00-06:00",
+            "counts": {
+                "stageableNow": 0,
+                "operatorRoutablePaper": 0,
+                "autoPaperSelected": 0,
+                "paperResearchSelected": 1,
+            },
+            "operatorRoutableSlate": [],
+            "pricedPaperVariantWatchlist": [{"ticker": "FCX", "paperResearchSelected": True}],
+            "approvalSlate": [],
+        }
+        mock_load_json_file.side_effect = [
+            {
+                "generatedAt": "2026-08-05T10:00:01-06:00",
+                "stageableCount": 1,
+                "stageableTickets": [{"ticker": "FCX"}],
+            },
+            {"unmatchedRows": [], "openedRows": 0, "closedRows": 0},
+            {"items": []},
+            {"items": []},
+            {"closedMetrics": {"scoredCount": 1}},
+            {"deskVerdict": {"level": "insufficient-data"}},
+        ]
+        payload = build_audit()
+        self.assertEqual(payload["verdict"], "paper-research-watch")
+        self.assertEqual(payload["counts"]["stageableNow"], 0)
+        self.assertEqual(payload["counts"]["operatorRoutableNow"], 0)
+        self.assertEqual(payload["counts"]["sandboxStageableNow"], 1)
+        self.assertEqual(payload["stageableTickers"], [])
+        self.assertEqual(payload["paperResearchTickers"], ["FCX"])
+        self.assertEqual(payload["sandboxStageableTickers"], ["FCX"])
+        self.assertIn("not operator-routable", " ".join(payload["actions"]))
+
+    @patch("inferno_paper_evidence_loop.load_paper_director")
+    @patch("inferno_paper_evidence_loop.load_fill_rows")
+    @patch("inferno_paper_evidence_loop.load_json_file")
+    def test_build_audit_preserves_final_operator_routable_slate(
+        self,
+        mock_load_json_file,
+        mock_load_fill_rows,
+        mock_load_paper_director,
+    ) -> None:
+        mock_load_fill_rows.return_value = []
+        mock_load_paper_director.return_value = {
+            "counts": {"stageableNow": 1, "operatorRoutablePaper": 1},
+            "operatorRoutableSlate": [{"ticker": "FCX"}],
+            "approvalSlate": [],
+        }
         mock_load_json_file.side_effect = [
             {"stageableCount": 1, "stageableTickets": [{"ticker": "FCX"}]},
             {"unmatchedRows": [], "openedRows": 0, "closedRows": 0},
@@ -86,9 +134,11 @@ class InfernoPaperEvidenceLoopTests(unittest.TestCase):
             {"closedMetrics": {"scoredCount": 1}},
             {"deskVerdict": {"level": "insufficient-data"}},
         ]
+
         payload = build_audit()
+
         self.assertEqual(payload["verdict"], "operator-paper-candidates")
-        self.assertEqual(payload["counts"]["stageableNow"], 1)
+        self.assertEqual(payload["counts"]["operatorRoutableNow"], 1)
         self.assertEqual(payload["stageableTickers"], ["FCX"])
 
     @patch("inferno_paper_evidence_loop.load_paper_director")

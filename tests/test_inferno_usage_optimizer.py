@@ -109,8 +109,9 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertIn("./inferno strike-cycle", one_commands)
             self.assertIn("./inferno approvals", one_commands)
             self.assertEqual(payload["readFirst"][0]["path"], "reports/model_command_center_onboard_latest.txt")
-            self.assertEqual(payload["readFirst"][2]["path"], "docs/SYSTEM_MAP.md")
-            self.assertEqual(payload["readIfNeeded"][0]["path"], "reports/model_command_center_latest.txt")
+            self.assertEqual(payload["readFirst"][1]["path"], "docs/SYSTEM_MAP.md")
+            self.assertEqual(payload["readIfNeeded"][0]["path"], "reports/central_command_latest.txt")
+            self.assertEqual(payload["readIfNeeded"][1]["path"], "reports/model_command_center_latest.txt")
             self.assertLessEqual(
                 payload["budget"]["readFirstEstimatedTokens"],
                 optimizer.LEAN_HANDOFF_TOKEN_BUDGET,
