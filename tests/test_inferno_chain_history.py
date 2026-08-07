@@ -76,6 +76,7 @@ class ChainHistoryTests(unittest.TestCase):
         self.assertFalse(payload["promotable"])
         self.assertFalse(payload["brokerSubmitAllowed"])
         self.assertFalse(payload["liveTradingAllowed"])
+        self.assertEqual(payload["source"]["stage"], "schwab-options-read-only")
         self.assertEqual(payload["readiness"]["recordedDays"], 1)
         descriptor = manifest["hotSnapshots"][0]
         path = self.data_dir / descriptor["path"]

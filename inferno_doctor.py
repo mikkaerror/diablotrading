@@ -1261,6 +1261,7 @@ def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
     capture = report.get("capture") or {}
     counts = report.get("counts") or {}
     readiness = report.get("readiness") or {}
+    source = report.get("source") or {}
     safe = (
         report.get("stage") == "schwab-chain-history-research-only"
         and report.get("researchOnly") is True
@@ -1268,6 +1269,7 @@ def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
         and report.get("authorityChanged") is False
         and report.get("brokerSubmitAllowed") is False
         and report.get("liveTradingAllowed") is False
+        and source.get("stage") == "schwab-options-read-only"
     )
     captured = str(capture.get("status") or "") in {"history-captured", "history-unchanged", "history-recovered"}
     ok = (
@@ -1282,7 +1284,7 @@ def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
         f"{verdict} | dates={readiness.get('recordedDays', 0)}/"
         f"{readiness.get('minimumDaysForCalibration', 0)} | "
         f"hot={counts.get('hotSnapshots', 0)} | archive={counts.get('archiveSnapshots', 0)} | "
-        f"source={capture.get('status') or 'unknown'} | research-only={safe}"
+        f"source={capture.get('status') or 'unknown'}:{source.get('stage') or 'unknown'} | research-only={safe}"
         if fresh
         else json.dumps({"generatedAt": generated, "verdict": verdict})
     )

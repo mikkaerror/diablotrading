@@ -436,6 +436,7 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                     "authorityChanged": False,
                     "brokerSubmitAllowed": False,
                     "liveTradingAllowed": False,
+                    "source": {"stage": "schwab-options-read-only"},
                     "capture": {"status": "history-captured"},
                     "counts": {"hotSnapshots": 1, "archiveSnapshots": 0},
                     "readiness": {
@@ -447,6 +448,7 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         self.assertTrue(ok)
         self.assertIn("dates=1/60", detail)
+        self.assertIn("schwab-options-read-only", detail)
         self.assertIn("research-only=True", detail)
 
     def test_schwab_chain_history_rejects_authority_drift(self) -> None:
@@ -461,8 +463,32 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                     "authorityChanged": False,
                     "brokerSubmitAllowed": True,
                     "liveTradingAllowed": False,
+                    "source": {"stage": "schwab-options-read-only"},
                     "capture": {"status": "history-unchanged"},
                     "readiness": {"recordedDays": 60, "missingSnapshotFiles": 0},
+                }
+            )
+        self.assertFalse(ok)
+
+    def test_schwab_chain_history_rejects_unpinned_public_source(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, _ = schwab_chain_history_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "schwab-chain-history-research-only",
+                    "verdict": "history-bootstrapping",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "source": {"stage": "unrelated-local-report"},
+                    "capture": {"status": "history-unchanged"},
+                    "readiness": {
+                        "recordedDays": 1,
+                        "minimumDaysForCalibration": 60,
+                        "missingSnapshotFiles": 0,
+                    },
                 }
             )
         self.assertFalse(ok)

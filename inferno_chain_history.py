@@ -386,6 +386,7 @@ def build_chain_history(
         "liveTradingAllowed": False,
         "source": {
             "artifact": SCHWAB_OPTIONS_FILE.name,
+            "stage": source.get("stage") if isinstance(source, dict) else None,
             "status": source.get("status") if isinstance(source, dict) else None,
             "generatedAt": source.get("generatedAt") if isinstance(source, dict) else None,
         },
