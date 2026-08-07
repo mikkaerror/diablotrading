@@ -51,6 +51,7 @@ LIVE_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_live_account_sync.json"
 SCHWAB_ACCOUNT_SYNC_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
 SCHWAB_PRICE_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
+SCHWAB_CHAIN_HISTORY_FILE = DATA_DIR / "inferno_chain_history.json"
 CAPITAL_DEPLOYMENT_READINESS_FILE = DATA_DIR / "inferno_capital_deployment_readiness.json"
 CAPITAL_SCENARIO_MATRIX_FILE = DATA_DIR / "inferno_capital_scenario_matrix.json"
 DEPOSIT_PLAN_FILE = DATA_DIR / "inferno_deposit_plan.json"
@@ -123,6 +124,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno usage", "description": "build the low-context handoff packet"},
     {"command": "./inferno oauth", "description": "run Schwab OAuth status, refresh, or restart"},
     {"command": "./inferno daily-ops", "description": "refresh the Schwab daily options operations tape"},
+    {"command": "./inferno chain-history", "description": "capture or show immutable local Schwab chain history; no network or authority change"},
     {"command": "./inferno action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "./inferno deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
     {"command": "./inferno growth-stack", "description": "layer broker NLV, observed account trend, scheduled deposits, and illustrative compounding; forecast-only"},
@@ -249,6 +251,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "schwab-account",
         "question": "What does the Schwab account API say about cash and positions?",
         "artifact": "reports/schwab_account_sync_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "schwab-chain-history",
+        "question": "How much immutable, read-only normalized-chain history exists before IV calibration?",
+        "artifact": "reports/chain_history_latest.txt",
         "owner": "codex",
     },
     {
@@ -894,6 +902,9 @@ def build_executive_summary(
             f"expected move={metrics.get('expectedMoveVerdict')}; "
             f"alternatives={metrics.get('strategyAlternativeVerdict')}; "
             f"quote coverage={metrics.get('strategyQuoteCoverageStatus')}; "
+            f"chain history={metrics.get('schwabChainHistoryVerdict')} "
+            f"({metrics.get('schwabChainHistoryReadiness', {}).get('recordedDays', 0)}/"
+            f"{metrics.get('schwabChainHistoryReadiness', {}).get('minimumDaysForCalibration', 0)}); "
             f"alt pricing={metrics.get('strategyAlternativePricingVerdict')}; "
             f"shadow compare={metrics.get('strategyShadowComparisonVerdict')}; "
             f"promotion gap={metrics.get('paperRemainingForPromotion', 0)}; "
@@ -1024,6 +1035,7 @@ def build_command_center() -> dict[str, Any]:
         strategy_alt_pricing,
     )
     paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
+    schwab_chain_history = load_json_file(SCHWAB_CHAIN_HISTORY_FILE) or {}
     performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
     shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
@@ -1091,6 +1103,7 @@ def build_command_center() -> dict[str, Any]:
         "depositPlan": artifact_summary(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "growthStack": artifact_summary(GROWTH_STACK_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "schwabTransactionLedger": artifact_summary(SCHWAB_TRANSACTION_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "brokerReadOnly", "sourceStatus")),
+        "schwabChainHistory": artifact_summary(SCHWAB_CHAIN_HISTORY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
         "cashAttribution": artifact_summary(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
@@ -1360,6 +1373,8 @@ def build_command_center() -> dict[str, Any]:
         "strategyAlternativeVerdicts": (strategy_alternatives.get("counts") or {}).get("verdicts") or {},
         "strategyQuoteCoverageStatus": strategy_quote_coverage.get("status"),
         "strategyQuoteCoverageCounts": strategy_quote_coverage.get("counts") or {},
+        "schwabChainHistoryVerdict": schwab_chain_history.get("verdict"),
+        "schwabChainHistoryReadiness": schwab_chain_history.get("readiness") or {},
         "strategyAlternativeTop": [
             {
                 "ticker": item.get("ticker"),
@@ -1661,6 +1676,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Deposit plan: {status_value(status.get('depositPlan') or {})}",
             f"- Growth stack: {status_value(status.get('growthStack') or {})}",
             f"- Schwab transaction ledger: {status_value(status.get('schwabTransactionLedger') or {})}",
+            f"- Schwab chain history: {status_value(status.get('schwabChainHistory') or {})}",
             f"- Cash attribution: {status_value(status.get('cashAttribution') or {})}",
             f"- Ticket cap policy: {status_value(status.get('ticketCapPolicy') or {})}",
             f"- Capital scenario matrix: {status_value(status.get('capitalScenarioMatrix') or {})}",
@@ -1792,6 +1808,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Strategy alternative top: {json.dumps(metrics.get('strategyAlternativeTop') or [])}",
             f"- Strategy quote coverage: {metrics.get('strategyQuoteCoverageStatus')} | "
             f"counts {json.dumps(metrics.get('strategyQuoteCoverageCounts') or {})}",
+            f"- Schwab chain history: {metrics.get('schwabChainHistoryVerdict')} | "
+            f"readiness {json.dumps(metrics.get('schwabChainHistoryReadiness') or {})}",
             f"- Strategy alternative pricing: {metrics.get('strategyAlternativePricingVerdict')} | "
             f"counts {json.dumps(metrics.get('strategyAlternativePricingCounts') or {})}",
             f"- Strategy alternative priced top: {json.dumps(metrics.get('strategyAlternativePricedTop') or [])}",

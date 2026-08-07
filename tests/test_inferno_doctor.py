@@ -32,6 +32,7 @@ from inferno_doctor import (
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
+    schwab_chain_history_status,
     schwab_oauth_status,
     schwab_transaction_ledger_status,
     short_premium_study_status,
@@ -422,6 +423,47 @@ class InfernoDoctorCycleTests(unittest.TestCase):
             )
         self.assertFalse(ok)
         self.assertIn("research-only=False", detail)
+
+    def test_schwab_chain_history_accepts_safe_bootstrapping(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, detail = schwab_chain_history_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "schwab-chain-history-research-only",
+                    "verdict": "history-bootstrapping",
+                    "researchOnly": True,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "capture": {"status": "history-captured"},
+                    "counts": {"hotSnapshots": 1, "archiveSnapshots": 0},
+                    "readiness": {
+                        "recordedDays": 1,
+                        "minimumDaysForCalibration": 60,
+                        "missingSnapshotFiles": 0,
+                    },
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("dates=1/60", detail)
+        self.assertIn("research-only=True", detail)
+
+    def test_schwab_chain_history_rejects_authority_drift(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, _ = schwab_chain_history_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "schwab-chain-history-research-only",
+                    "verdict": "history-ready",
+                    "researchOnly": True,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": True,
+                    "liveTradingAllowed": False,
+                    "capture": {"status": "history-unchanged"},
+                    "readiness": {"recordedDays": 60, "missingSnapshotFiles": 0},
+                }
+            )
+        self.assertFalse(ok)
 
     def test_action_pulse_status_accepts_sent_pulse(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

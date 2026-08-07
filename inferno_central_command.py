@@ -70,6 +70,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "usage", "description": "build the low-context handoff packet"},
     {"command": "oauth", "description": "run Schwab OAuth status, refresh, or restart from one place"},
     {"command": "daily-ops", "description": "refresh the Schwab daily options operations tape"},
+    {"command": "chain-history", "description": "capture or show immutable local Schwab chain history; no network or authority change"},
     {"command": "action-pulse", "description": "build the tactical action pulse; no email unless --send is passed"},
     {"command": "deposit-plan", "description": "show recurring deposit forecast separate from broker cash"},
     {"command": "growth-stack", "description": "layer NLV, observed account trend, scheduled deposits, and illustrative compounding; forecast-only"},
@@ -616,6 +617,7 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} usage",
             f"{CONTROL_ENTRYPOINT} oauth",
             f"{CONTROL_ENTRYPOINT} daily-ops",
+            f"{CONTROL_ENTRYPOINT} chain-history",
             f"{CONTROL_ENTRYPOINT} action-pulse",
             f"{CONTROL_ENTRYPOINT} deposit-plan",
             f"{CONTROL_ENTRYPOINT} growth-stack",
@@ -664,6 +666,9 @@ def build_parser() -> argparse.ArgumentParser:
     daily_ops_parser.add_argument("--skip-refresh", action="store_true")
     daily_ops_parser.add_argument("--json", action="store_true")
     daily_ops_parser.add_argument("--quiet", action="store_true")
+
+    chain_history_parser = subparsers.add_parser("chain-history")
+    chain_history_parser.add_argument("chain_history_action", nargs="?", choices=("run", "status"), default="run")
 
     action_pulse_parser = subparsers.add_parser("action-pulse")
     action_pulse_parser.add_argument("action_pulse_action", nargs="?", choices=("run", "status"))
@@ -839,6 +844,13 @@ def main() -> int:
             command_args.append("--quiet")
         command_args.extend(args.symbols or [])
         result = run_passthrough_command(command_args, timeout_seconds=1800)
+        return int(result["returncode"])
+
+    if command == "chain-history":
+        result = run_passthrough_command(
+            ["python3", "inferno_chain_history.py", args.chain_history_action],
+            timeout_seconds=600,
+        )
         return int(result["returncode"])
 
     if command == "action-pulse":

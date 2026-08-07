@@ -290,9 +290,13 @@ question the API cannot solve.
 - Risk policy enforcement on quote-quality failures
 - Fixture-driven testing without network
 
-### Remaining Phase 1 carryover
+### Phase 1 history status
 
-- Daily chain snapshot history storage (prerequisite for everything in Tier 1)
+- Daily chain snapshot history storage is now bootstrapping through
+  `inferno_chain_history.py`: it records one immutable local normalized-chain
+  snapshot per source date, retains 90 days hot and 365 days archived, and
+  cannot affect ticket, promotion, risk, or broker authority. Per-ticker IV
+  calibration remains unavailable until the documented minimum history exists.
 
 ### Proposed Phase 2 — Vol calibration layer
 
@@ -331,8 +335,9 @@ Built only when Phase 3 is stable and adding signal:
 
 ### Refresh & ops infrastructure (build alongside Phase 2)
 
-- **`inferno_chain_history.py`** — Daily EOD chain snapshot storage with
-  retention policy (90 days hot, 1 year archive).
+- **`inferno_chain_history.py`** — Shipped local immutable normalized-chain
+  snapshot storage with retention policy (90 days hot, 1 year archive). It is
+  the research-only prerequisite for historical IV calibration.
 - **`inferno_chain_diff.py`** — Snapshot diffing engine. Only emits events
   when meaningful changes happen.
 - **`inferno_schwab_freshness.py`** — Staleness assertions that fail closed

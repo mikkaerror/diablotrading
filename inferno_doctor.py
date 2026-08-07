@@ -62,6 +62,7 @@ TRACKER_ROLE_POLICY_PACKET_FILE = ROOT / "data" / "inferno_tracker_role_policy_p
 TRACKER_ROLE_POLICY_FILE = ROOT / "data" / "inferno_tracker_role_policy.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
+SCHWAB_CHAIN_HISTORY_FILE = ROOT / "data" / "inferno_chain_history.json"
 SCHWAB_TRANSACTION_LEDGER_FILE = ROOT / "data" / "inferno_schwab_transaction_ledger.json"
 CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
 GROWTH_STACK_FILE = ROOT / "data" / "inferno_growth_stack.json"
@@ -1245,6 +1246,48 @@ def strategy_quote_coverage_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
+    """Require safe local history collection without claiming calibration early."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt") or "")
+    fresh = in_current_service_cycle(
+        generated,
+        service_hour=18,
+        service_minute=30,
+    )
+    verdict = str(report.get("verdict") or "")
+    capture = report.get("capture") or {}
+    counts = report.get("counts") or {}
+    readiness = report.get("readiness") or {}
+    safe = (
+        report.get("stage") == "schwab-chain-history-research-only"
+        and report.get("researchOnly") is True
+        and report.get("authorityChanged") is False
+        and report.get("brokerSubmitAllowed") is False
+        and report.get("liveTradingAllowed") is False
+    )
+    captured = str(capture.get("status") or "") in {"history-captured", "history-unchanged", "history-recovered"}
+    ok = (
+        fresh
+        and safe
+        and captured
+        and verdict in {"history-bootstrapping", "history-ready"}
+        and int(readiness.get("recordedDays") or 0) > 0
+        and int(readiness.get("missingSnapshotFiles") or 0) == 0
+    )
+    detail = (
+        f"{verdict} | dates={readiness.get('recordedDays', 0)}/"
+        f"{readiness.get('minimumDaysForCalibration', 0)} | "
+        f"hot={counts.get('hotSnapshots', 0)} | archive={counts.get('archiveSnapshots', 0)} | "
+        f"source={capture.get('status') or 'unknown'} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
 def strategy_shadow_comparison_status(report: dict, pricing: dict | None = None) -> tuple[bool, str]:
     ok, detail = _research_module_status(
         report,
@@ -2231,6 +2274,12 @@ def main() -> int:
     schwab_edge_ok, schwab_edge_detail = schwab_edge_signals_status(schwab_edge)
     lines.append(summarize_status("Schwab edge signals", schwab_edge_ok, schwab_edge_detail))
     if not schwab_edge_ok:
+        warnings += 1
+
+    schwab_chain_history = load_json_file(SCHWAB_CHAIN_HISTORY_FILE) or {}
+    schwab_chain_history_ok, schwab_chain_history_detail = schwab_chain_history_status(schwab_chain_history)
+    lines.append(summarize_status("Schwab chain history", schwab_chain_history_ok, schwab_chain_history_detail))
+    if not schwab_chain_history_ok:
         warnings += 1
 
     try:

@@ -703,5 +703,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-0039776b",
+    "createdAt": "2026-08-06T23:57:12.568582-06:00",
+    "updatedAt": "2026-08-07T00:10:06.529644-06:00",
+    "title": "Start read-only Schwab chain history",
+    "body": "Delivered the research-only Schwab chain-history collector. It writes one immutable complete normalized-chain snapshot per source date with 90-day hot and 365-day archive retention, a public health payload plus internal manifest, crash-safe recovery, nightly scheduling, Doctor and command-center visibility, and 60-date IV-calibration readiness only. The first local source date (2026-08-06) is recorded, so readiness is 1/60. It made no network request and cannot affect tickets, promotion, risk constants, eligible universe, broker submission, live trading, or other authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "schwab",
+      "chain-history",
+      "iv-calibration",
+      "research-only",
+      "safety"
+    ]
   }
 ]

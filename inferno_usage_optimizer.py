@@ -138,6 +138,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "purpose": "refresh the Schwab daily options operations tape",
     },
     {
+        "command": "./inferno chain-history",
+        "purpose": "capture or inspect immutable local Schwab chain history without a network or authority change",
+    },
+    {
         "command": "./inferno action-pulse",
         "purpose": "build the tactical action pulse without sending email by default",
     },

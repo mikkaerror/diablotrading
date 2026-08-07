@@ -82,6 +82,7 @@ if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
   run_step "schwab transaction ledger" "$PYTHON" inferno_schwab_transaction_ledger.py build --skip-refresh --quiet
   run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_step "schwab chain history" "$PYTHON" inferno_chain_history.py run
   run_step "schwab edge signals"   "$PYTHON" inferno_schwab_edge_signals.py run
   run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
   run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet

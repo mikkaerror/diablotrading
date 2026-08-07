@@ -295,6 +295,8 @@ python3 inferno_secret_hygiene.py
   tiered-polling answer.
 - Chain scope: top-five briefing names only vs full tracker universe. The
   edge doc proposes a focus-list / working-universe / universe tier split.
-- Historical IV rank: compute from stored Schwab chain snapshots or keep current
-  tracker IV-rank feed until enough Schwab history exists. Phase 2 in the
-  edge doc proposes `inferno_chain_history.py` to make this real.
+- Historical IV rank: immutable local normalized-chain snapshots now collect via
+  `inferno_chain_history.py`, but the tracker IV-rank feed remains the only
+  usable history context until the local record reaches its documented minimum
+  coverage. The history collector is research-only and cannot alter a ticket,
+  risk setting, promotion gate, or broker authority.

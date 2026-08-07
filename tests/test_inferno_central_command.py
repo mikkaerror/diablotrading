@@ -101,6 +101,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("cash-ledger", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("ticket-cap", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("daily-ops", {item["command"] for item in saved["controlPlane"]["commands"]})
+            self.assertIn("chain-history", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("capital-check", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("strike-cycle", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("approvals", {item["command"] for item in saved["controlPlane"]["commands"]})
