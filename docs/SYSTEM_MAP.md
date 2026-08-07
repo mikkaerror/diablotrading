@@ -86,6 +86,7 @@ Generated artifacts beat durable docs when they disagree.
 | Ticket cap and call posture | `reports/ticket_cap_policy_latest.txt` |
 | Schwab option chains | `reports/schwab_options_latest.txt` |
 | Schwab chain-history readiness | `reports/chain_history_latest.txt` |
+| Schwab chain-diff evidence | `reports/chain_diff_latest.txt` |
 | Supplemental strategy-pricing quote coverage | `reports/strategy_quote_coverage_latest.txt` |
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |

@@ -142,6 +142,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "purpose": "capture or inspect immutable local Schwab chain history without a network or authority change",
     },
     {
+        "command": "./inferno chain-diff",
+        "purpose": "compare immutable local chain snapshots without a network or authority change",
+    },
+    {
         "command": "./inferno action-pulse",
         "purpose": "build the tactical action pulse without sending email by default",
     },

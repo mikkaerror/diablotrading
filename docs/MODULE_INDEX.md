@@ -50,6 +50,7 @@ Safety            — authority, risk, secrets
 | `inferno_schwab_oauth.py` | Local read-only Schwab OAuth helper: auth URL, token exchange, refresh, ignored vault status | operator-triggered + daily ops refresh |
 | `inferno_schwab_options.py` | **NEW** Read-only Schwab option-chain adapter for bid/ask, Greeks, liquidity, and expected-move enrichment | on-demand + future strike cycle |
 | `inferno_chain_history.py` | Immutable local daily normalized-chain snapshots for future IV calibration; reads the existing Schwab artifact only and cannot change tickets, promotion, risk, or broker authority | nightly research refresh |
+| `inferno_chain_diff.py` | Offline, thresholded comparison of the latest two immutable normalized-chain snapshots; emits research observations only when spread, volume, or open interest changes materially | nightly research refresh after history capture |
 | `inferno_schwab_account_sync.py` | **NEW** Read-only Schwab account/balance/position sync for the approved suffix; TOS-independent broker truth, no order endpoints | `reports/schwab_account_sync_latest.txt` |
 | `inferno_ai_basket_config.py` | Read the fixed 30-name basket from the tracked universe contract; missing or malformed input yields an empty universe | importable helper |
 | `inferno_ai_basket_refresh.py` | Read-only Schwab candle refresh for the declared AI basket; publishes only complete snapshot/momentum inputs | nightly research refresh |

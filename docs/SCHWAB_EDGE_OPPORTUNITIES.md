@@ -338,8 +338,11 @@ Built only when Phase 3 is stable and adding signal:
 - **`inferno_chain_history.py`** — Shipped local immutable normalized-chain
   snapshot storage with retention policy (90 days hot, 1 year archive). It is
   the research-only prerequisite for historical IV calibration.
-- **`inferno_chain_diff.py`** — Snapshot diffing engine. Only emits events
-  when meaningful changes happen.
+- **`inferno_chain_diff.py`** — Shipped local snapshot-diff engine. After two
+  valid immutable capture dates, it emits research observations only when
+  spread widens >25%, volume exceeds 2× the prior snapshot, or open interest
+  changes >10%; it cannot influence ticket, promotion, risk, or broker
+  authority.
 - **`inferno_schwab_freshness.py`** — Staleness assertions that fail closed
   into strike selection and the morning brief.
 - **Doctor integration** — Extend `inferno_doctor.py` to assert Schwab

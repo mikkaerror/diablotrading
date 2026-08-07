@@ -32,6 +32,7 @@ from inferno_doctor import (
     paper_test_director_status,
     action_pulse_status,
     research_cycle_status,
+    schwab_chain_diff_status,
     schwab_chain_history_status,
     schwab_oauth_status,
     schwab_transaction_ledger_status,
@@ -489,6 +490,45 @@ class InfernoDoctorCycleTests(unittest.TestCase):
                         "minimumDaysForCalibration": 60,
                         "missingSnapshotFiles": 0,
                     },
+                }
+            )
+        self.assertFalse(ok)
+
+    def test_schwab_chain_diff_accepts_safe_insufficient_history(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, detail = schwab_chain_diff_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "schwab-chain-diff-research-only",
+                    "verdict": "insufficient-history",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "history": {"availableSnapshots": 1, "requiredSnapshots": 2},
+                    "counts": {"events": 0},
+                    "validationErrors": [],
+                }
+            )
+        self.assertTrue(ok)
+        self.assertIn("snapshots=1/2", detail)
+
+    def test_schwab_chain_diff_rejects_events_without_history(self) -> None:
+        with patch("inferno_doctor.in_current_service_cycle", return_value=True):
+            ok, _ = schwab_chain_diff_status(
+                {
+                    "generatedAt": "2026-08-06T18:30:00-06:00",
+                    "stage": "schwab-chain-diff-research-only",
+                    "verdict": "meaningful-changes",
+                    "researchOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "history": {"availableSnapshots": 1, "requiredSnapshots": 2},
+                    "counts": {"events": 1},
+                    "validationErrors": [],
                 }
             )
         self.assertFalse(ok)

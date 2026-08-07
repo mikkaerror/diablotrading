@@ -300,3 +300,7 @@ python3 inferno_secret_hygiene.py
   usable history context until the local record reaches its documented minimum
   coverage. The history collector is research-only and cannot alter a ticket,
   risk setting, promotion gate, or broker authority.
+- Snapshot change evidence: `inferno_chain_diff.py` compares the latest two
+  valid local captures and emits only documented spread, volume, or open-
+  interest threshold crossings. It is diagnostic-only and never a trade,
+  ticket, or promotion instruction.

@@ -63,6 +63,7 @@ TRACKER_ROLE_POLICY_FILE = ROOT / "data" / "inferno_tracker_role_policy.json"
 SCHWAB_ACCOUNT_SYNC_FILE = ROOT / "data" / "inferno_schwab_account_sync.json"
 SCHWAB_EDGE_SIGNALS_FILE = ROOT / "data" / "inferno_schwab_edge_signals.json"
 SCHWAB_CHAIN_HISTORY_FILE = ROOT / "data" / "inferno_chain_history.json"
+SCHWAB_CHAIN_DIFF_FILE = ROOT / "data" / "inferno_chain_diff.json"
 SCHWAB_TRANSACTION_LEDGER_FILE = ROOT / "data" / "inferno_schwab_transaction_ledger.json"
 CASH_ATTRIBUTION_FILE = ROOT / "data" / "inferno_cash_attribution.json"
 GROWTH_STACK_FILE = ROOT / "data" / "inferno_growth_stack.json"
@@ -1291,6 +1292,44 @@ def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_chain_diff_status(report: dict) -> tuple[bool, str]:
+    """Require an inert, fresh diff report without treating observations as trades."""
+    if not report:
+        return False, "missing"
+    generated = str(report.get("generatedAt") or "")
+    fresh = in_current_service_cycle(
+        generated,
+        service_hour=18,
+        service_minute=30,
+    )
+    verdict = str(report.get("verdict") or "")
+    history = report.get("history") or {}
+    counts = report.get("counts") or {}
+    safe = (
+        report.get("stage") == "schwab-chain-diff-research-only"
+        and report.get("researchOnly") is True
+        and report.get("promotable") is False
+        and report.get("authorityChanged") is False
+        and report.get("brokerSubmitAllowed") is False
+        and report.get("liveTradingAllowed") is False
+    )
+    snapshot_count = int(history.get("availableSnapshots") or 0)
+    event_count = int(counts.get("events") or 0)
+    valid_verdict = (
+        (verdict == "insufficient-history" and snapshot_count < 2 and event_count == 0)
+        or (verdict == "no-meaningful-change" and snapshot_count >= 2 and event_count == 0)
+        or (verdict == "meaningful-changes" and snapshot_count >= 2 and event_count > 0)
+    )
+    ok = fresh and safe and valid_verdict and not report.get("validationErrors")
+    detail = (
+        f"{verdict} | snapshots={snapshot_count}/{history.get('requiredSnapshots', 2)} | "
+        f"events={event_count} | research-only={safe}"
+        if fresh
+        else json.dumps({"generatedAt": generated, "verdict": verdict})
+    )
+    return ok, detail
+
+
 def strategy_shadow_comparison_status(report: dict, pricing: dict | None = None) -> tuple[bool, str]:
     ok, detail = _research_module_status(
         report,
@@ -2283,6 +2322,12 @@ def main() -> int:
     schwab_chain_history_ok, schwab_chain_history_detail = schwab_chain_history_status(schwab_chain_history)
     lines.append(summarize_status("Schwab chain history", schwab_chain_history_ok, schwab_chain_history_detail))
     if not schwab_chain_history_ok:
+        warnings += 1
+
+    schwab_chain_diff = load_json_file(SCHWAB_CHAIN_DIFF_FILE) or {}
+    schwab_chain_diff_ok, schwab_chain_diff_detail = schwab_chain_diff_status(schwab_chain_diff)
+    lines.append(summarize_status("Schwab chain diff", schwab_chain_diff_ok, schwab_chain_diff_detail))
+    if not schwab_chain_diff_ok:
         warnings += 1
 
     try:

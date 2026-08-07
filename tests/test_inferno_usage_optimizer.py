@@ -106,6 +106,7 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertIn("./inferno cash-ledger", one_commands)
             self.assertIn("./inferno daily-ops", one_commands)
             self.assertIn("./inferno chain-history", one_commands)
+            self.assertIn("./inferno chain-diff", one_commands)
             self.assertIn("./inferno capital-check", one_commands)
             self.assertIn("./inferno strike-cycle", one_commands)
             self.assertIn("./inferno approvals", one_commands)

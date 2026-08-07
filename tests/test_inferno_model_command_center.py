@@ -78,6 +78,11 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
         self.assertEqual(row["artifact"], "reports/chain_history_latest.txt")
         self.assertEqual(row["owner"], "codex")
 
+    def test_reporting_map_includes_schwab_chain_diff(self) -> None:
+        row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "schwab-chain-diff")
+        self.assertEqual(row["artifact"], "reports/chain_diff_latest.txt")
+        self.assertEqual(row["owner"], "codex")
+
     def test_control_surface_includes_schwab_transaction_ledger(self) -> None:
         commands = {item["command"] for item in command_center.CONTROL_SURFACE_COMMANDS}
         self.assertIn("./inferno schwab-transactions", commands)
@@ -681,6 +686,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("./inferno ticket-cap", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno daily-ops", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno chain-history", {item["command"] for item in payload["controlSurface"]["commands"]})
+            self.assertIn("./inferno chain-diff", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno capital-check", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno strike-cycle", {item["command"] for item in payload["controlSurface"]["commands"]})
             self.assertIn("./inferno approvals", {item["command"] for item in payload["controlSurface"]["commands"]})

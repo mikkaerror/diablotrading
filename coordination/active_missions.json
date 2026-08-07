@@ -737,5 +737,21 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-9f844813",
+    "createdAt": "2026-08-07T07:08:27.589668-06:00",
+    "updatedAt": "2026-08-07T07:15:00.111109-06:00",
+    "title": "Add read-only Schwab chain diff evidence",
+    "body": "Delivered the offline read-only Schwab chain-diff lane. It validates the latest two immutable normalized-chain snapshots and emits only documented spread (>25%), volume (>2x), and open-interest (>10%) changes; one available snapshot correctly yields insufficient-history with zero events. It is nightly-scheduled, Doctor/command-center visible, non-promotable, and cannot make network, ticket, promotion, risk, universe, broker-submit, or live-trading changes.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "schwab",
+      "chain-diff",
+      "research-only",
+      "safety"
+    ]
   }
 ]
