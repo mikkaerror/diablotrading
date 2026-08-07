@@ -112,6 +112,15 @@ or construction-watch alternatives from the strategy-pricing lane. Those rows
 are research visibility only for unattended agents: they do not approve, stage,
 close, promote, or submit tickets.
 
+`inferno_strategy_alternative_pricing.py` leads its research-chain work with
+the pre-registered `SHORT_PREMIUM_DEFINED` arm, then prices the ordinary
+defined-risk alternatives. When the paper-blocker swarm identifies a
+cap-busting `LONG_STRADDLE`/`STRADDLE`, the pricing pass can also compare only
+the cap-fit audit's bounded structures: a $5-wide-or-narrower debit spread, a
+$1-wide-or-narrower credit spread, and a single long leg. The audit estimate
+is an input to construction only—not a pass: live quotes, existing optimizer
+checks, the complete paper-risk policy, and human review remain mandatory.
+
 ## Model Ownership
 
 | Lane | Owner | Boundary |

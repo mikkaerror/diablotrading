@@ -768,5 +768,21 @@
       "hygiene",
       "fail-closed"
     ]
+  },
+  {
+    "id": "mission-47d45548",
+    "createdAt": "2026-08-07T08:46:59.470018-06:00",
+    "updatedAt": "2026-08-07T09:00:30.332128-06:00",
+    "title": "Rebalance candidate generation off the long-premium monoculture",
+    "body": "Completed documented items 1-2: the research pricing pass now leads with pre-registered SHORT_PREMIUM_DEFINED candidates, then prices cap-busting STRADDLE/LONG_STRADDLE blocker-swarm findings as bounded 5-wide-or-narrower debit spreads, 1-wide-or-narrower credit spreads, and cap-fitting single long legs. Cap-fit estimates only select a pricing attempt; normal live-chain construction, optimizer, paper-risk, liquidity, freshness, and human-review gates remain mandatory. Added focused integration tests plus full unittest discovery; research-only and broker/live submit flags remain false. No authority, promotion, risk-constant, or eligible-universe changes.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "generation",
+      "optimization",
+      "research-only"
+    ]
   }
 ]

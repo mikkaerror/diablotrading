@@ -44,6 +44,7 @@ from inferno_strike_selector import (
     sellable,
     schwab_options_for_intent,
     to_leg,
+    VERTICAL_DEBIT_MAX_WIDTH_RATIO,
     vertical_call_plan,
 )
 from inferno_ticket_cap_policy import current_ticket_cap_policy
@@ -57,6 +58,7 @@ STRATEGY_ALTERNATIVE_PRICING_STAGE = "strategy-alternative-pricing-research-only
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 PAPER_VARIANT_SCANNER_FILE = DATA_DIR / "inferno_paper_variant_scanner.json"
+PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
 
 DEFAULT_LIMIT = 6
 DEFAULT_VARIANTS_PER_TICKER = 3
@@ -73,11 +75,17 @@ IRON_CONDOR_LADDER_REPORT_LIMIT = 12
 IRON_CONDOR_RANGE_SAFE_REPORT_LIMIT = 5
 SHORT_PREMIUM_DEFINED_STRATEGY = "SHORT_PREMIUM_DEFINED"
 SHORT_PREMIUM_DEFINED_PRICE_LIMIT = 40
+CAP_FIT_FALLBACK_PRICE_LIMIT = 40
+CAP_FIT_DEBIT_MAX_WIDTH = 5.0
+CAP_FIT_CREDIT_MAX_WIDTH = 1.0
+CAP_FIT_LONG_LEG_STRATEGIES = {"LONG_CALL", "LONG_PUT"}
+CAP_FIT_STRADDLE_STRATEGIES = {"STRADDLE", "LONG_STRADDLE", "LONG_STRANGLE"}
 PRICEABLE_RECOMMENDATIONS = {
     "CALL_DEBIT_SPREAD",
     "PUT_CREDIT_SPREAD",
     "IRON_CONDOR",
     "PUT_DEBIT_SPREAD",
+    *CAP_FIT_LONG_LEG_STRATEGIES,
     SHORT_PREMIUM_DEFINED_STRATEGY,
 }
 FALLBACK_RECOMMENDATION_VERDICT = "fallback-price-check"
@@ -338,14 +346,113 @@ def short_premium_scanner_rows(paper_variant_scanner: dict[str, Any] | None) -> 
     ]
 
 
+def cap_fit_fallback_strategy_rows(finding: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Map a cap-busting long-vol finding to bounded structures to price.
+
+    The cap-fit audit is only an estimate.  These rows are deliberately routed
+    into the normal chain, optimizer, and paper-risk evaluators; they do not
+    inherit a pass merely because the estimate says a structure can fit.
+    """
+    cap_fit = finding.get("capFit") or {}
+    fits = cap_fit.get("fits") or {}
+    rows: list[tuple[str, str, str]] = []
+    if bool(fits.get("debit_5w")):
+        rows.extend(
+            [
+                ("CALL_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
+                ("PUT_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
+            ]
+        )
+    if bool(fits.get("credit_1w")):
+        rows.append(("PUT_CREDIT_SPREAD", "credit_1w", "1-wide credit spread"))
+    if bool(fits.get("long_leg")):
+        rows.extend(
+            [
+                ("LONG_CALL", "long_leg", "single long leg"),
+                ("LONG_PUT", "long_leg", "single long leg"),
+            ]
+        )
+    return rows
+
+
+def cap_fit_fallback_rows(
+    paper_blocker_swarm: dict[str, Any] | None,
+    *,
+    reducer_by_ticker: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return bounded fallback variants for cap-busting straddles only.
+
+    A blocker-swarm finding is a research route, not permission to stage.  We
+    use it only when the originating long-vol structure exceeds the current
+    cap-fit estimate, carry its estimate into the pricing artifact, and retain
+    every existing quality and risk gate downstream.
+    """
+    if not paper_blocker_swarm:
+        return []
+    reducer_by_ticker = reducer_by_ticker or {}
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for finding in paper_blocker_swarm.get("candidateFindings") or []:
+        if not isinstance(finding, dict) or not finding.get("strategyFallbackSuggested"):
+            continue
+        source_strategy = norm(finding.get("strategy"))
+        cap_fit = finding.get("capFit") or {}
+        fits = cap_fit.get("fits") or {}
+        ticker = norm(finding.get("ticker"))
+        if (
+            not ticker
+            or source_strategy not in CAP_FIT_STRADDLE_STRATEGIES
+            or fits.get("straddle") is not False
+        ):
+            continue
+        source_context = reducer_by_ticker.get(ticker) or {}
+        structure_estimates = cap_fit.get("structures") or {}
+        for strategy, structure_key, structure_label in cap_fit_fallback_strategy_rows(finding):
+            key = (ticker, strategy)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(
+                {
+                    **source_context,
+                    "ticker": ticker,
+                    "sourceFamily": "cap-fit-fallback",
+                    "paperVariantOnly": True,
+                    "recommendedStrategy": strategy,
+                    "sourceRecommendedStrategy": source_strategy,
+                    "recommendationVerdict": FALLBACK_RECOMMENDATION_VERDICT,
+                    "recommendationReason": (
+                        f"cap-busting {source_strategy} routes to estimated-cap-fitting "
+                        f"{structure_label}; normal pricing and paper-risk gates decide"
+                    ),
+                    "candidateStrategyRank": len(rows) + 1,
+                    "fallbackVariant": True,
+                    "sourceAlternativeScore": number(finding.get("priorityScore")),
+                    "sourceAlternativeRawScore": number(finding.get("priorityScore")),
+                    "sourceAlternativeEdgeVsLongVol": None,
+                    "sourceAlternativeWarnings": list(finding.get("warnings") or []),
+                    "capFitFallback": True,
+                    "capFitFallbackOfStrategy": source_strategy,
+                    "capFitFallbackStructure": structure_key,
+                    "capFitFallbackLabel": structure_label,
+                    "capFitEstimatedStructureCost": number(structure_estimates.get(structure_key)),
+                    "capFitEstimatedStraddleCost": number(structure_estimates.get("straddle")),
+                    "capFitSourceVerdict": cap_fit.get("verdict"),
+                }
+            )
+    return rows[:CAP_FIT_FALLBACK_PRICE_LIMIT]
+
+
 def source_candidates(
     scorer: dict[str, Any],
     *,
     limit: int = DEFAULT_LIMIT,
     variants_per_ticker: int = 1,
     paper_variant_scanner: dict[str, Any] | None = None,
+    paper_blocker_swarm: dict[str, Any] | None = None,
+    reducer_by_ticker: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return prioritized defined-risk strategy variants for pricing."""
+    """Return short-premium-led, defined-risk variants for research pricing."""
     rows = [item for item in scorer.get("scorecards") or [] if isinstance(item, dict)]
     priceable_scorecards = [
         item
@@ -353,7 +460,7 @@ def source_candidates(
         if priceable_strategy_rows(item, variants_per_ticker=1)
     ]
     priceable_scorecards.sort(key=scorecard_priority)
-    candidates: list[dict[str, Any]] = []
+    standard_candidates: list[dict[str, Any]] = []
     selected_tickers: set[str] = set()
     selected_keys: set[tuple[str, str]] = set()
     for item in priceable_scorecards[: max(0, limit)]:
@@ -365,7 +472,7 @@ def source_candidates(
             key = (norm(row.get("ticker")), norm(row.get("recommendedStrategy")))
             if key[0] and key[1] and key not in selected_keys:
                 selected_keys.add(key)
-                candidates.append(row)
+                standard_candidates.append(row)
     remaining_ticker_slots = max(0, limit - len(selected_tickers))
 
     added_scanner_tickers: set[str] = set()
@@ -383,22 +490,46 @@ def source_candidates(
                 break
             selected_keys.add(key)
             added_scanner_tickers.add(ticker)
-            candidates.append(row)
+            standard_candidates.append(row)
 
+    short_premium_candidates: list[dict[str, Any]] = []
     short_premium_tickers: set[str] = set()
-    blocked_tickers = selected_tickers | added_scanner_tickers
     for row in short_premium_scanner_rows(paper_variant_scanner):
         ticker = norm(row.get("ticker"))
         strategy = norm(row.get("recommendedStrategy"))
         key = (ticker, strategy)
-        if not ticker or not strategy or key in selected_keys or ticker in blocked_tickers:
+        if not ticker or not strategy or key in selected_keys:
             continue
         if len(short_premium_tickers) >= SHORT_PREMIUM_DEFINED_PRICE_LIMIT:
             break
         selected_keys.add(key)
         short_premium_tickers.add(ticker)
-        candidates.append(row)
-    return candidates
+        short_premium_candidates.append(row)
+
+    cap_fit_candidates: list[dict[str, Any]] = []
+    cap_fit_keys: set[tuple[str, str]] = set()
+    for row in cap_fit_fallback_rows(
+        paper_blocker_swarm,
+        reducer_by_ticker=reducer_by_ticker,
+    ):
+        key = (norm(row.get("ticker")), norm(row.get("recommendedStrategy")))
+        if not key[0] or not key[1] or key in cap_fit_keys:
+            continue
+        cap_fit_keys.add(key)
+        cap_fit_candidates.append(row)
+
+    # A cap-fit candidate must retain its bounded construction constraints even
+    # when the scorer independently picked the same ticker/strategy pair.
+    standard_candidates = [
+        row
+        for row in standard_candidates
+        if (norm(row.get("ticker")), norm(row.get("recommendedStrategy"))) not in cap_fit_keys
+    ]
+
+    # The broad short-premium arm leads the chain work.  Cap-fitting fallbacks
+    # follow, then the ordinary scorer/scan candidates; all still share the
+    # exact same pricing, optimizer, and paper-risk gates.
+    return short_premium_candidates + cap_fit_candidates + standard_candidates
 
 
 def trend_label(value: Any) -> str:
@@ -477,7 +608,141 @@ def plan_for_strategy(
     if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
         plan = iron_condor_plan(pricing_intent, expiration, calls, puts)
         return mark_short_premium_defined(plan) if plan else None
+    if strategy == "LONG_CALL":
+        return single_long_leg_plan("LONG_CALL", pricing_intent, expiration, calls)
+    if strategy == "LONG_PUT":
+        return single_long_leg_plan("LONG_PUT", pricing_intent, expiration, puts)
     return None
+
+
+def bounded_debit_plan(
+    strategy: str,
+    pricing_intent: dict[str, Any],
+    expiration: str,
+    chain,
+) -> dict[str, Any] | None:
+    """Build a $5-wide-or-narrower debit spread for a cap-fit fallback.
+
+    This is deliberately separate from the normal selector path: a normal
+    directional spread may use the next listed strike, while the cap-fit audit
+    specifically promised a five-dollar-wide (or narrower) construction.
+    """
+    if strategy not in {"CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD"}:
+        return None
+    price = number(pricing_intent.get("price"), 0.0) or 0.0
+    if price <= 0:
+        return None
+    put_call = "CALL" if strategy == "CALL_DEBIT_SPREAD" else "PUT"
+    long_rows = buyable(chain).copy()
+    short_rows = sellable(chain).copy()
+    if long_rows.empty or short_rows.empty:
+        return None
+    long_rows = long_rows.assign(_distance=(long_rows["strike"] - price).abs()).sort_values(
+        by=["_distance", "openInterest", "volume"],
+        ascending=[True, False, False],
+    ).head(16)
+    candidates: list[tuple[tuple[float, float, float], dict[str, Any]]] = []
+    for _, long_row in long_rows.iterrows():
+        long_strike = number(long_row.get("strike"), 0.0) or 0.0
+        if strategy == "CALL_DEBIT_SPREAD":
+            eligible_shorts = short_rows[
+                (short_rows["strike"] > long_strike)
+                & ((short_rows["strike"] - long_strike) <= CAP_FIT_DEBIT_MAX_WIDTH)
+            ]
+        else:
+            eligible_shorts = short_rows[
+                (short_rows["strike"] < long_strike)
+                & ((long_strike - short_rows["strike"]) <= CAP_FIT_DEBIT_MAX_WIDTH)
+            ]
+        for _, short_row in eligible_shorts.iterrows():
+            long_leg = to_leg(long_row, "BUY_TO_OPEN", put_call, expiration, price)
+            short_leg = to_leg(short_row, "SELL_TO_OPEN", put_call, expiration, price)
+            width = (
+                short_leg.strike - long_leg.strike
+                if strategy == "CALL_DEBIT_SPREAD"
+                else long_leg.strike - short_leg.strike
+            )
+            debit = round(long_leg.ask - short_leg.bid, 4)
+            if width <= 0 or debit <= 0 or debit > width * VERTICAL_DEBIT_MAX_WIDTH_RATIO:
+                continue
+            max_profit = round(max(0.0, width - debit) * 100.0, 2)
+            legs = [long_leg, short_leg]
+            plan = {
+                "strategy": strategy,
+                "direction": "bullish-defined-risk" if put_call == "CALL" else "bearish-defined-risk",
+                "expiration": expiration,
+                "legs": [leg.as_dict() for leg in legs],
+                "estimatedDebit": debit,
+                "estimatedMaxLoss": round(debit * 100.0, 2),
+                "estimatedMaxProfit": max_profit,
+                "breakEven": round(long_leg.strike + debit if put_call == "CALL" else long_leg.strike - debit, 4),
+                "width": round(width, 4),
+                "capFitBounded": True,
+                "capFitStructure": "debit_5w",
+                "greekSummary": net_greek_summary(legs),
+                "liquidityNotes": build_liquidity_notes(legs),
+            }
+            candidates.append(
+                (
+                    (
+                        abs(long_leg.strike - price),
+                        -max_profit,
+                        plan["estimatedMaxLoss"],
+                    ),
+                    plan,
+                )
+            )
+    return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+
+def single_long_leg_plan(
+    strategy: str,
+    pricing_intent: dict[str, Any],
+    expiration: str,
+    chain,
+) -> dict[str, Any] | None:
+    """Build a cap-fitting single long option only when a live quote fits.
+
+    The universe cap-fit estimate only authorizes a pricing attempt.  The
+    actual ask must still fit the unchanged construction cap, then the normal
+    optimizer and paper-risk review decide whether the row remains usable.
+    """
+    if strategy not in CAP_FIT_LONG_LEG_STRATEGIES:
+        return None
+    price = number(pricing_intent.get("price"), 0.0) or 0.0
+    if price <= 0:
+        return None
+    max_debit = effective_ticket_cap_dollars() / 100.0
+    rows = buyable(chain).copy()
+    if rows.empty:
+        return None
+    rows = rows[rows["ask"] <= max_debit]
+    if rows.empty:
+        return None
+    row = rows.assign(_distance=(rows["strike"] - price).abs()).sort_values(
+        by=["_distance", "openInterest", "volume"],
+        ascending=[True, False, False],
+    ).iloc[0]
+    put_call = "CALL" if strategy == "LONG_CALL" else "PUT"
+    leg = to_leg(row, "BUY_TO_OPEN", put_call, expiration, price)
+    debit = round(leg.ask, 4)
+    if debit <= 0:
+        return None
+    return {
+        "strategy": strategy,
+        "direction": "bullish-single-leg" if put_call == "CALL" else "bearish-single-leg",
+        "expiration": expiration,
+        "legs": [leg.as_dict()],
+        "estimatedDebit": debit,
+        "estimatedMaxLoss": round(debit * 100.0, 2),
+        "estimatedMaxProfit": "uncapped",
+        "breakEven": round(leg.strike + debit if put_call == "CALL" else leg.strike - debit, 4),
+        "longStrike": leg.strike,
+        "capFitBounded": True,
+        "capFitStructure": "long_leg",
+        "greekSummary": net_greek_summary([leg]),
+        "liquidityNotes": build_liquidity_notes([leg]),
+    }
 
 
 def mark_short_premium_defined(plan: dict[str, Any]) -> dict[str, Any]:
@@ -588,6 +853,36 @@ def strategy_optimizer_notes(plan: dict[str, Any], pricing_intent: dict[str, Any
             blocks.append(f"put debit spread debit {debit:.2f} is not positive")
         if max_profit <= 0:
             blocks.append("put debit spread has no positive max-profit estimate")
+    elif strategy in CAP_FIT_LONG_LEG_STRATEGIES:
+        debit = number(plan.get("estimatedDebit"), 0.0) or 0.0
+        expected_delta = 1 if strategy == "LONG_CALL" else -1
+        delta = number(greeks.get("netDelta"), 0.0) or 0.0
+        trend = trend_label(context.get("trend"))
+        if debit <= 0:
+            blocks.append(f"{strategy.lower().replace('_', ' ')} debit {debit:.2f} is not positive")
+        if not greeks.get("greeksComplete"):
+            blocks.append("single long leg requires complete Greek estimates")
+        if (expected_delta > 0 and delta <= 0) or (expected_delta < 0 and delta >= 0):
+            blocks.append("single long leg delta conflicts with its directional thesis")
+        if number(greeks.get("netTheta"), 0.0) >= 0 or number(greeks.get("netVega"), 0.0) <= 0:
+            blocks.append("single long leg does not show long-premium Greek posture")
+        break_even = number(plan.get("breakEven"))
+        if strategy == "LONG_CALL":
+            resistance = number(context.get("resistance"))
+            if trend in {"Bearish", "Downtrend"}:
+                blocks.append("single long call conflicts with bearish trend")
+            if resistance and number(context.get("distanceToResistancePct"), 999.0) <= 1.5:
+                blocks.append("single long call is too close to resistance")
+            if resistance and break_even and break_even >= resistance:
+                warnings.append(f"single long call breakeven {break_even:.2f} is at/above resistance {resistance:.2f}")
+        else:
+            support = number(context.get("support"))
+            if trend in {"Bullish", "Uptrend"}:
+                blocks.append("single long put conflicts with bullish trend")
+            if support and number(context.get("distanceToSupportPct"), 999.0) <= 1.5:
+                blocks.append("single long put is too close to support")
+            if support and break_even and break_even <= support:
+                warnings.append(f"single long put breakeven {break_even:.2f} is at/below support {support:.2f}")
 
     return blocks, warnings
 
@@ -905,8 +1200,13 @@ def build_put_credit_ladder(
     *,
     base_item: dict[str, Any],
     generated_at: str,
+    max_width: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Enumerate and evaluate multiple put-credit strike pairs."""
+    """Enumerate and evaluate multiple put-credit strike pairs.
+
+    ``max_width`` is only used by the explicit cap-fit fallback route; ordinary
+    put-credit pricing continues to inspect its full bounded ladder.
+    """
     short_rows = support_aware_short_put_rows(puts, pricing_intent)
     if short_rows.empty:
         return []
@@ -916,6 +1216,9 @@ def build_put_credit_ladder(
         short_strike = number(short_row.get("strike"))
         long_rows = buyable(puts[puts["strike"] < short_strike]).sort_values("strike", ascending=False).head(PUT_CREDIT_LADDER_LONG_LIMIT)
         for _, long_row in long_rows.iterrows():
+            width = (short_strike or 0.0) - (number(long_row.get("strike"), 0.0) or 0.0)
+            if max_width is not None and width > max_width:
+                continue
             evaluations += 1
             if evaluations > PUT_CREDIT_LADDER_EVALUATION_LIMIT:
                 return sorted_put_credit_ladder_rows(ladder)
@@ -996,6 +1299,8 @@ def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[st
     strategy = norm(candidate.get("recommendedStrategy"))
     if strategy == SHORT_PREMIUM_DEFINED_STRATEGY:
         plan = mark_short_premium_defined(plan)
+    cap_fit_fallback = bool(candidate.get("capFitFallback"))
+    cap_fit_structure = text(candidate.get("capFitFallbackStructure"))
     return {
         **plan,
         "paperVariantOnly": True,
@@ -1004,6 +1309,8 @@ def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[st
         "variantFamily": (
             "short-premium-defined"
             if strategy == SHORT_PREMIUM_DEFINED_STRATEGY
+            else f"cap-fit-{cap_fit_structure.replace('_', '-')}"
+            if cap_fit_fallback and cap_fit_structure
             else f"priced-{text(plan.get('strategy')).lower().replace('_', '-')}"
         ),
         "variantForStrategy": candidate.get("sourceFamily") or "pressured-long-vol",
@@ -1022,6 +1329,12 @@ def annotate_variant(plan: dict[str, Any], candidate: dict[str, Any]) -> dict[st
         "shortPremiumDefined": bool(candidate.get("shortPremiumDefined") or plan.get("shortPremiumDefined")),
         "preRegisteredCampaign": candidate.get("preRegisteredCampaign"),
         "campaignRiskShareTargetPct": candidate.get("campaignRiskShareTargetPct"),
+        "capFitFallback": cap_fit_fallback,
+        "capFitFallbackOfStrategy": candidate.get("capFitFallbackOfStrategy"),
+        "capFitFallbackStructure": candidate.get("capFitFallbackStructure"),
+        "capFitFallbackLabel": candidate.get("capFitFallbackLabel"),
+        "capFitEstimatedStructureCost": candidate.get("capFitEstimatedStructureCost"),
+        "capFitEstimatedStraddleCost": candidate.get("capFitEstimatedStraddleCost"),
     }
 
 
@@ -1040,6 +1353,7 @@ def build_priced_item_from_expirations(
     attempts: list[str] = []
     put_credit_ladder: list[dict[str, Any]] = []
     iron_condor_ladder: list[dict[str, Any]] = []
+    cap_fit_structure = text(candidate.get("capFitFallbackStructure"))
     for expiration in expirations:
         calls_raw, puts_raw = chain_loader(expiration)
         calls = clean_chain(calls_raw)
@@ -1051,6 +1365,7 @@ def build_priced_item_from_expirations(
                 puts,
                 base_item={**base, "expiration": expiration, "chainSource": chain_source},
                 generated_at=generated_at,
+                max_width=CAP_FIT_CREDIT_MAX_WIDTH if cap_fit_structure == "credit_1w" else None,
             )
             if not expiration_ladder:
                 attempts.append(expiration)
@@ -1071,7 +1386,15 @@ def build_priced_item_from_expirations(
                 continue
             iron_condor_ladder.extend(expiration_ladder)
             continue
-        plan = plan_for_strategy(strategy, pricing_intent, expiration, calls, puts)
+        if cap_fit_structure == "debit_5w" and strategy in {"CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD"}:
+            plan = bounded_debit_plan(
+                strategy,
+                pricing_intent,
+                expiration,
+                calls if strategy == "CALL_DEBIT_SPREAD" else puts,
+            )
+        else:
+            plan = plan_for_strategy(strategy, pricing_intent, expiration, calls, puts)
         if not plan:
             attempts.append(expiration)
             continue
@@ -1194,6 +1517,12 @@ def build_priced_item(
         "sourceAlternativeEdgeVsLongVol": candidate.get("sourceAlternativeEdgeVsLongVol"),
         "sourceAlternativeWarnings": candidate.get("sourceAlternativeWarnings") or [],
         "recommendationVerdict": candidate.get("recommendationVerdict"),
+        "capFitFallback": bool(candidate.get("capFitFallback")),
+        "capFitFallbackOfStrategy": candidate.get("capFitFallbackOfStrategy"),
+        "capFitFallbackStructure": candidate.get("capFitFallbackStructure"),
+        "capFitFallbackLabel": candidate.get("capFitFallbackLabel"),
+        "capFitEstimatedStructureCost": candidate.get("capFitEstimatedStructureCost"),
+        "capFitEstimatedStraddleCost": candidate.get("capFitEstimatedStraddleCost"),
         "longVolHurdle": candidate.get("hurdle"),
         "longVolAtrMultiple": candidate.get("hurdleAtrMultiple"),
         "longVolPressureScore": candidate.get("longVolPressureScore"),
@@ -1306,6 +1635,7 @@ def build_strategy_alternative_pricing(
     scorer: dict[str, Any] | None = None,
     reducer: dict[str, Any] | None = None,
     paper_variant_scanner: dict[str, Any] | None = None,
+    paper_blocker_swarm: dict[str, Any] | None = None,
     limit: int = DEFAULT_LIMIT,
     variants_per_ticker: int = DEFAULT_VARIANTS_PER_TICKER,
     ticker_factory: Callable[[str], Any] = yf.Ticker,
@@ -1316,16 +1646,21 @@ def build_strategy_alternative_pricing(
     """Build the research-only alternative pricing artifact."""
     ensure_dirs()
     should_load_scanner = scorer is None and paper_variant_scanner is None
+    should_load_blocker_swarm = scorer is None and reducer is None and paper_blocker_swarm is None
     scorer = scorer if scorer is not None else (load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {})
     reducer = reducer if reducer is not None else (load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
     if should_load_scanner:
         paper_variant_scanner = load_json_file(PAPER_VARIANT_SCANNER_FILE) or {}
+    if should_load_blocker_swarm:
+        paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
     reducer_by_ticker = reducer_lookup(reducer)
     candidates = source_candidates(
         scorer,
         limit=limit,
         variants_per_ticker=variants_per_ticker,
         paper_variant_scanner=paper_variant_scanner,
+        paper_blocker_swarm=paper_blocker_swarm,
+        reducer_by_ticker=reducer_by_ticker,
     )
     if schwab_options_index is None:
         # The primary tape keeps precedence.  Supplemental coverage exists only
@@ -1387,6 +1722,14 @@ def build_strategy_alternative_pricing(
             "supplementalSchwabOptionTickers": len(supplemental_schwab_index),
             "fallbackVariants": sum(1 for item in candidates if item.get("fallbackVariant")),
             "scannerCandidates": sum(1 for item in candidates if item.get("paperVariantOnly")),
+            "shortPremiumLeadCandidates": sum(
+                1 for item in candidates if norm(item.get("recommendedStrategy")) == SHORT_PREMIUM_DEFINED_STRATEGY
+            ),
+            "capFitFallbackCandidates": sum(1 for item in candidates if item.get("capFitFallback")),
+            "capFitFallbackPriced": sum(1 for item in priced if item.get("capFitFallback")),
+            "capFitFallbackRiskPassed": sum(
+                1 for item in risk_pass if item.get("capFitFallback")
+            ),
             "requestedByStrategy": {
                 strategy: sum(1 for item in candidates if item.get("recommendedStrategy") == strategy)
                 for strategy in sorted({text(item.get("recommendedStrategy")) for item in candidates if text(item.get("recommendedStrategy"))})
@@ -1415,6 +1758,7 @@ def build_strategy_alternative_pricing(
             "The ticket-cap policy sets a target band; only the hard cap is a blocking optimizer limit.",
             "Unattended runs use Schwab contracts only; yfinance option-chain fallback is manual diagnostics only.",
             "A bounded supplemental Schwab tape may fill missing research-pricing chains; the primary tape retains precedence.",
+            "Cap-fit fallback estimates only select bounded structures to price; they never bypass optimizer, paper-risk, or human-review gates.",
         ],
     }
 
@@ -1468,6 +1812,8 @@ def plan_strike_summary(plan: dict[str, Any]) -> str:
             f"puts {plan.get('shortPutStrike')}/{plan.get('longPutStrike')} | "
             f"credit/risk {fmt(plan.get('creditRisk'))}"
         )
+    if strategy in CAP_FIT_LONG_LEG_STRATEGIES:
+        return f"long strike {fmt(plan.get('longStrike'))} | breakeven {fmt(plan.get('breakEven'))}"
     return f"breakeven {fmt(plan.get('breakEven'))}"
 
 
@@ -1495,6 +1841,9 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
         f"- primary/supplemental Schwab chain tickers: {counts.get('primarySchwabOptionTickers', 0)} / {counts.get('supplementalSchwabOptionTickers', 0)}",
         f"- fallback variants: {counts.get('fallbackVariants', 0)}",
         f"- scanner candidates: {counts.get('scannerCandidates', 0)}",
+        f"- short-premium lead candidates: {counts.get('shortPremiumLeadCandidates', 0)}",
+        f"- cap-fit fallback requested/priced/combined passed: {counts.get('capFitFallbackCandidates', 0)} / "
+        f"{counts.get('capFitFallbackPriced', 0)} / {counts.get('capFitFallbackRiskPassed', 0)}",
         f"- requested by strategy: {json.dumps(counts.get('requestedByStrategy') or {})}",
         f"- priced: {counts.get('priced', 0)}",
         f"- combined passed: {counts.get('riskPassed', 0)}",
@@ -1541,6 +1890,13 @@ def strategy_alternative_pricing_text(payload: dict[str, Any]) -> str:
             f"score {fmt(item.get('sourceAlternativeScore'))} | edge {fmt(item.get('sourceAlternativeEdgeVsLongVol'))} | "
             f"chain {item.get('chainSource') or 'n/a'}"
         )
+        if item.get("capFitFallback"):
+            lines.append(
+                f"  cap-fit route: {item.get('capFitFallbackOfStrategy')} -> "
+                f"{item.get('capFitFallbackLabel')} | estimated structure/straddle "
+                f"{fmt_money(item.get('capFitEstimatedStructureCost'))} / "
+                f"{fmt_money(item.get('capFitEstimatedStraddleCost'))}"
+            )
         lines.append(
             f"  gates: optimizer {'pass' if optimizer_passed else 'block'} | "
             f"paper risk {'pass' if paper_risk_passed else 'block'}"

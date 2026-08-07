@@ -190,6 +190,125 @@ def condor_schwab_options(symbol: str = "SP0") -> dict:
     }
 
 
+def cap_fit_blocker_swarm() -> dict:
+    return {
+        "candidateFindings": [
+            {
+                "ticker": "CAP",
+                "strategy": "LONG_STRADDLE",
+                "priorityScore": 88,
+                "strategyFallbackSuggested": True,
+                "warnings": ["long-vol construction exceeded the research cap"],
+                "capFit": {
+                    "verdict": "any-fits",
+                    "fits": {
+                        "straddle": False,
+                        "debit_5w": True,
+                        "credit_1w": True,
+                        "long_leg": True,
+                    },
+                    "structures": {
+                        "straddle": 900.0,
+                        "debit_5w": 180.0,
+                        "credit_1w": 65.0,
+                        "long_leg": 320.0,
+                    },
+                },
+            },
+            {
+                "ticker": "FIT",
+                "strategy": "LONG_STRADDLE",
+                "strategyFallbackSuggested": True,
+                "capFit": {
+                    "fits": {"straddle": True, "debit_5w": True, "credit_1w": True, "long_leg": True},
+                    "structures": {"straddle": 300.0},
+                },
+            },
+            {
+                "ticker": "UNKNOWN",
+                "strategy": "LONG_STRADDLE",
+                "strategyFallbackSuggested": True,
+                "capFit": {
+                    "fits": {"debit_5w": True, "credit_1w": True},
+                    "structures": {"debit_5w": 180.0, "credit_1w": 65.0},
+                },
+            },
+        ]
+    }
+
+
+def cap_fit_reducer() -> dict:
+    return {
+        "scenarioSlate": [
+            {
+                "ticker": "CAP",
+                "price": 100,
+                "daysUntilEarnings": 21,
+                "marketContextSummary": {
+                    "trend": "Uptrend",
+                    "rvol": 0.8,
+                    "support": 90,
+                    "resistance": 110,
+                    "distanceToSupportPct": 10,
+                    "distanceToResistancePct": 10,
+                    "atrPercent": 4,
+                    "ivRank": 55,
+                },
+            }
+        ]
+    }
+
+
+def cap_fit_schwab_options(symbol: str = "CAP") -> dict:
+    contracts = []
+    quotes = {
+        "CALL": {
+            100: (2.0, 2.1),
+            105: (0.6, 0.7),
+        },
+        "PUT": {
+            100: (2.0, 2.1),
+            95: (1.0, 1.1),
+            92: (0.7, 0.8),
+            89: (0.6, 0.7),
+            88: (0.2, 0.3),
+        },
+    }
+    for put_call, strikes in quotes.items():
+        for strike, (bid, ask) in strikes.items():
+            contracts.append(
+                {
+                    "symbol": f"{symbol}   260619{put_call[0]}{int(strike * 1000):08d}",
+                    "putCall": put_call,
+                    "expirationDate": "2026-06-19",
+                    "strikePrice": strike,
+                    "bid": bid,
+                    "ask": ask,
+                    "mark": round((bid + ask) / 2, 2),
+                    "last": round((bid + ask) / 2, 2),
+                    "volume": 100,
+                    "openInterest": 500,
+                    "volatility": 35,
+                }
+            )
+    return {
+        symbol: {
+            "symbol": symbol,
+            "status": "ok",
+            "underlyingPrice": 100,
+            "qualityFlags": [],
+            "sourceStatus": "fixture",
+            "sourceGeneratedAt": "2026-05-01T12:00:00+00:00",
+            "paperLiquidityPass": True,
+            "liveLiquidityPass": True,
+            "atmWindowMedianSpreadPct": 0.08,
+            "atmWindowOpenInterest": 2000,
+            "paperFillFrictionPct": 0.08,
+            "contracts": contracts,
+        }
+    }
+
+
 class StrategyAlternativePricingTests(unittest.TestCase):
     """Alternative pricing should not mutate authority or operational queues."""
 
@@ -350,10 +469,69 @@ class StrategyAlternativePricingTests(unittest.TestCase):
             paper_variant_scanner=short_premium_scanner_payload(count=3),
         )
 
-        self.assertEqual([row["ticker"] for row in rows[:2]], ["BBB", "AAA"])
+        self.assertEqual([row["ticker"] for row in rows[:3]], ["SP0", "SP1", "SP2"])
         short_rows = [row for row in rows if row["recommendedStrategy"] == "SHORT_PREMIUM_DEFINED"]
         self.assertEqual([row["ticker"] for row in short_rows], ["SP0", "SP1", "SP2"])
         self.assertTrue(all(row["shortPremiumDefined"] for row in short_rows))
+        self.assertEqual([row["ticker"] for row in rows[3:]], ["BBB", "AAA"])
+
+    def test_cap_fit_fallback_rows_only_route_cap_busting_straddles(self) -> None:
+        reducer_by_ticker = pricing.reducer_lookup(cap_fit_reducer())
+        rows = pricing.source_candidates(
+            {"scorecards": []},
+            paper_blocker_swarm=cap_fit_blocker_swarm(),
+            reducer_by_ticker=reducer_by_ticker,
+        )
+
+        self.assertEqual(
+            [row["recommendedStrategy"] for row in rows],
+            ["CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "LONG_CALL", "LONG_PUT"],
+        )
+        self.assertTrue(all(row["ticker"] == "CAP" for row in rows))
+        self.assertTrue(all(row["capFitFallback"] for row in rows))
+        self.assertTrue(all(row["capFitFallbackOfStrategy"] == "LONG_STRADDLE" for row in rows))
+        self.assertNotIn("FIT", [row["ticker"] for row in rows])
+        self.assertNotIn("UNKNOWN", [row["ticker"] for row in rows])
+        self.assertEqual(rows[0]["capFitFallbackStructure"], "debit_5w")
+        self.assertEqual(rows[2]["capFitFallbackStructure"], "credit_1w")
+        self.assertEqual(rows[3]["capFitFallbackStructure"], "long_leg")
+
+    def test_short_premium_leads_before_cap_fit_and_standard_candidates(self) -> None:
+        rows = pricing.source_candidates(
+            scorer_payload(),
+            limit=1,
+            paper_variant_scanner=short_premium_scanner_payload(count=1),
+            paper_blocker_swarm=cap_fit_blocker_swarm(),
+            reducer_by_ticker=pricing.reducer_lookup(cap_fit_reducer()),
+        )
+
+        self.assertEqual(rows[0]["recommendedStrategy"], "SHORT_PREMIUM_DEFINED")
+        self.assertTrue(rows[1]["capFitFallback"])
+        self.assertEqual(rows[-1]["ticker"], "BBB")
+
+    def test_cap_fit_constraints_replace_matching_standard_variant(self) -> None:
+        scorer = {
+            "scorecards": [
+                {
+                    "ticker": "CAP",
+                    "longVolPressureScore": 80,
+                    "recommendation": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "verdict": "prefer-alternative-research",
+                    },
+                }
+            ]
+        }
+        rows = pricing.source_candidates(
+            scorer,
+            paper_blocker_swarm=cap_fit_blocker_swarm(),
+            reducer_by_ticker=pricing.reducer_lookup(cap_fit_reducer()),
+        )
+
+        call_rows = [row for row in rows if row["recommendedStrategy"] == "CALL_DEBIT_SPREAD"]
+        self.assertEqual(len(call_rows), 1)
+        self.assertTrue(call_rows[0]["capFitFallback"])
+        self.assertEqual(call_rows[0]["capFitFallbackStructure"], "debit_5w")
 
     def test_intent_from_candidate_carries_market_context(self) -> None:
         candidate = pricing.source_candidates(scorer_payload(), limit=1)[0]
@@ -789,6 +967,42 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertGreater(plan["estimatedCredit"], 0)
         self.assertFalse(item["brokerSubmitAllowed"])
         self.assertFalse(item["liveTradingAllowed"])
+
+    def test_cap_fit_fallback_prices_bounded_structures_through_normal_gates(self) -> None:
+        payload = pricing.build_strategy_alternative_pricing(
+            scorer={"scorecards": []},
+            reducer=cap_fit_reducer(),
+            paper_variant_scanner={},
+            paper_blocker_swarm=cap_fit_blocker_swarm(),
+            schwab_options_index=cap_fit_schwab_options(),
+        )
+
+        self.assertEqual(payload["counts"]["capFitFallbackCandidates"], 5)
+        self.assertEqual(payload["counts"]["capFitFallbackPriced"], 5)
+        self.assertEqual(payload["counts"]["requestedByStrategy"], {
+            "CALL_DEBIT_SPREAD": 1,
+            "LONG_CALL": 1,
+            "LONG_PUT": 1,
+            "PUT_CREDIT_SPREAD": 1,
+            "PUT_DEBIT_SPREAD": 1,
+        })
+        items = {item["recommendedStrategy"]: item for item in payload["items"]}
+        call_debit = items["CALL_DEBIT_SPREAD"]["strikePlan"]
+        put_debit = items["PUT_DEBIT_SPREAD"]["strikePlan"]
+        put_credit = items["PUT_CREDIT_SPREAD"]["strikePlan"]
+        long_call = items["LONG_CALL"]["strikePlan"]
+
+        self.assertLessEqual(call_debit["width"], 5.0)
+        self.assertLessEqual(put_debit["width"], 5.0)
+        self.assertLessEqual(put_credit["width"], 1.0)
+        self.assertEqual(len(long_call["legs"]), 1)
+        self.assertLessEqual(long_call["estimatedMaxLoss"], 500.0)
+        self.assertTrue(all(item["capFitFallback"] for item in payload["items"]))
+        self.assertTrue(all(item["paperOnly"] for item in payload["items"]))
+        self.assertTrue(all(not item["brokerSubmitAllowed"] for item in payload["items"]))
+        self.assertTrue(all(not item["liveTradingAllowed"] for item in payload["items"]))
+        self.assertTrue(all("riskVerdict" in item for item in payload["items"]))
+        self.assertTrue(all("optimizerPassed" in item for item in payload["items"]))
 
     def test_yfinance_fallback_timeout_becomes_failed_research_row(self) -> None:
         scorer = {
