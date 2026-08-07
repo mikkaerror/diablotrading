@@ -784,5 +784,22 @@
       "optimization",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-5baa81d7",
+    "createdAt": "2026-08-07T16:51:03.445122-06:00",
+    "updatedAt": "2026-08-07T16:54:39.226898-06:00",
+    "title": "Align supplemental quote coverage with cap-fit pricing slate",
+    "body": "Completed: quote coverage now calls the same source-candidate policy and current scorer, scanner, blocker-swarm, and reducer inputs as strategy pricing, including bounded cap-fit fallbacks. The 2026-08-07 validation rebuilt quote coverage at 66 candidate rows / 44 tickers, with primary coverage 8 and the unchanged six-ticker supplemental cap. Rebuilt pricing and shadow registers from those artifacts; 0 variants passed combined research quality, so no paper or live action was created. Full unittest discovery, math verification, secret hygiene, Doctor, and diff check passed. No risk, universe, ticket, promotion, broker-submit, or live-authority change.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "quote-coverage",
+      "cap-fit",
+      "provenance",
+      "research-only",
+      "safety"
+    ]
   }
 ]

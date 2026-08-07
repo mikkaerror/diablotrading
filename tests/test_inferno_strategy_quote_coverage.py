@@ -38,6 +38,35 @@ def primary_report() -> dict:
     }
 
 
+def cap_fit_blocker_swarm() -> dict:
+    return {
+        "candidateFindings": [
+            {
+                "ticker": "CAP",
+                "strategy": "LONG_STRADDLE",
+                "strategyFallbackSuggested": True,
+                "priorityScore": 55,
+                "capFit": {
+                    "fits": {"straddle": False, "debit_5w": True},
+                    "structures": {"straddle": 900, "debit_5w": 250},
+                },
+            }
+        ]
+    }
+
+
+def cap_fit_reducer() -> dict:
+    return {
+        "scenarioSlate": [
+            {
+                "ticker": "CAP",
+                "price": 50,
+                "marketContextSummary": {"trend": "Bullish"},
+            }
+        ]
+    }
+
+
 class StrategyQuoteCoverageTests(unittest.TestCase):
     def test_fetches_only_uncovered_pricing_candidates_with_bounded_cap(self) -> None:
         calls: list[list[str]] = []
@@ -68,6 +97,45 @@ class StrategyQuoteCoverageTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["primaryCoveredTickers"], 1)
         self.assertEqual(payload["counts"]["missingTickerGroups"], 1)
         self.assertEqual(payload["chainSource"], coverage.SUPPLEMENTAL_CHAIN_SOURCE)
+        self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["brokerSubmitAllowed"])
+        self.assertFalse(payload["liveTradingAllowed"])
+
+    def test_cap_fit_fallbacks_share_the_pricing_slate_and_supplemental_cap(self) -> None:
+        calls: list[list[str]] = []
+
+        def report_builder(symbols: list[str]) -> dict:
+            calls.append(symbols)
+            return {
+                "generatedAt": "2026-05-01T12:05:00+00:00",
+                "stage": "schwab-options-read-only",
+                "status": "ok",
+                "rows": [],
+                "errors": [],
+            }
+
+        payload = coverage.build_strategy_quote_coverage(
+            scorer=scorer_payload(),
+            paper_variant_scanner={"pricingCandidates": []},
+            paper_blocker_swarm=cap_fit_blocker_swarm(),
+            reducer=cap_fit_reducer(),
+            primary_report=primary_report(),
+            limit=2,
+            variants_per_ticker=1,
+            supplemental_limit=1,
+            report_builder=report_builder,
+            environment_loader=lambda: {},
+        )
+
+        self.assertEqual(payload["counts"]["pricingCandidateRows"], 3)
+        self.assertEqual(payload["counts"]["pricingCandidateTickers"], 3)
+        self.assertEqual(payload["candidateTickers"], ["CAP", "AAA", "BBB"])
+        self.assertEqual(payload["targets"], ["CAP"])
+        self.assertEqual(calls, [["CAP"]])
+        self.assertEqual(
+            payload["sourceLineage"]["candidateInputs"]["paperBlockerSwarmGeneratedAt"],
+            None,
+        )
         self.assertTrue(payload["researchOnly"])
         self.assertFalse(payload["brokerSubmitAllowed"])
         self.assertFalse(payload["liveTradingAllowed"])

@@ -19,6 +19,12 @@ live-chain construction, the unchanged optimizer, and
 `evaluate_strike_item(..., mode="paper")`; a cap-fit estimate is not a staging
 pass.
 
+The bounded supplemental quote-coverage lane must derive its request list from
+the same scorer, scanner, blocker-swarm, and reducer inputs as pricing. A
+coverage report with fewer candidates than that complete slate is stale or
+incomplete provenance, not evidence that the omitted fallback is ineligible.
+The supplemental request cap and primary-tape precedence remain unchanged.
+
 Falsifier: a fallback candidate is emitted for a straddle that fits the cap,
 uses a wider debit or credit construction than declared, bypasses a quality or
 risk block, changes promotion/authority/universe/risk constants, or carries a

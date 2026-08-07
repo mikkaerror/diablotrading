@@ -27,8 +27,9 @@ liveTradingAllowed: false
    evidence strength.
 3. Schwab option-chain data is the primary read-only option quote-quality tape
    when the local OAuth token is healthy. A separately persisted, bounded
-   supplemental tape may fill only missing strategy-pricing chains; it never
-   overwrites the primary tape or changes paper/live authority.
+   supplemental tape may fill only missing chains from the complete current
+   strategy-pricing slate, including bounded cap-fit fallback candidates; it
+   never overwrites the primary tape or changes paper/live authority.
 4. Daily/ops pipelines generate reports, doctor checks, morning/pre-close
    briefs, and command-center artifacts.
 5. Paper and shadow lanes collect outcomes until strategy evidence earns more

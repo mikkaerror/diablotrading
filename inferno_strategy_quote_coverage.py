@@ -70,6 +70,8 @@ def has_usable_contracts(row: dict[str, Any] | None) -> bool:
 def candidate_tickers(
     scorer: dict[str, Any] | None,
     paper_variant_scanner: dict[str, Any] | None,
+    paper_blocker_swarm: dict[str, Any] | None = None,
+    reducer: dict[str, Any] | None = None,
     *,
     limit: int,
     variants_per_ticker: int,
@@ -80,13 +82,15 @@ def candidate_tickers(
     saved tape, while this refresh asks the pricing module only for its existing
     candidate selection policy.
     """
-    from inferno_strategy_alternative_pricing import source_candidates
+    from inferno_strategy_alternative_pricing import reducer_lookup, source_candidates
 
     rows = source_candidates(
         scorer or {},
         limit=limit,
         variants_per_ticker=variants_per_ticker,
         paper_variant_scanner=paper_variant_scanner,
+        paper_blocker_swarm=paper_blocker_swarm,
+        reducer_by_ticker=reducer_lookup(reducer or {}),
     )
     tickers: list[str] = []
     seen: set[str] = set()
@@ -102,6 +106,8 @@ def build_strategy_quote_coverage(
     *,
     scorer: dict[str, Any] | None = None,
     paper_variant_scanner: dict[str, Any] | None = None,
+    paper_blocker_swarm: dict[str, Any] | None = None,
+    reducer: dict[str, Any] | None = None,
     primary_report: dict[str, Any] | None = None,
     limit: int = DEFAULT_LIMIT,
     variants_per_ticker: int = 3,
@@ -111,8 +117,12 @@ def build_strategy_quote_coverage(
 ) -> dict[str, Any]:
     """Fetch only missing option chains required by the existing pricing slate."""
     ensure_dirs()
-    if scorer is None or paper_variant_scanner is None:
+    should_load_scanner = scorer is None and paper_variant_scanner is None
+    should_load_blocker_swarm = scorer is None and reducer is None and paper_blocker_swarm is None
+    if scorer is None or should_load_scanner or should_load_blocker_swarm:
         from inferno_strategy_alternative_pricing import (
+            PAPER_BLOCKER_SWARM_FILE,
+            PAPER_BOTTLENECK_REDUCER_FILE,
             PAPER_VARIANT_SCANNER_FILE,
             STRATEGY_ALTERNATIVE_SCORER_FILE,
         )
@@ -121,13 +131,25 @@ def build_strategy_quote_coverage(
         paper_variant_scanner = (
             paper_variant_scanner
             if paper_variant_scanner is not None
-            else (load_json_file(PAPER_VARIANT_SCANNER_FILE) or {})
+            else ((load_json_file(PAPER_VARIANT_SCANNER_FILE) or {}) if should_load_scanner else {})
+        )
+        paper_blocker_swarm = (
+            paper_blocker_swarm
+            if paper_blocker_swarm is not None
+            else ((load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}) if should_load_blocker_swarm else {})
+        )
+        reducer = (
+            reducer
+            if reducer is not None
+            else ((load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}) if should_load_blocker_swarm else {})
         )
     primary_report = primary_report if primary_report is not None else (load_json_file(SCHWAB_OPTIONS_FILE) or {})
     primary_index = report_index(primary_report)
     tickers, candidate_count = candidate_tickers(
         scorer,
         paper_variant_scanner,
+        paper_blocker_swarm,
+        reducer,
         limit=max(0, limit),
         variants_per_ticker=max(1, variants_per_ticker),
     )
@@ -167,6 +189,16 @@ def build_strategy_quote_coverage(
             "primaryOptionsGeneratedAt": primary_report.get("generatedAt") if isinstance(primary_report, dict) else None,
             "primaryOptionsStatus": primary_report.get("status") if isinstance(primary_report, dict) else None,
             "candidatePolicy": "strategy-alternative-pricing/source-candidates",
+            "candidateInputs": {
+                "scorerGeneratedAt": scorer.get("generatedAt") if isinstance(scorer, dict) else None,
+                "paperVariantScannerGeneratedAt": (
+                    paper_variant_scanner.get("generatedAt") if isinstance(paper_variant_scanner, dict) else None
+                ),
+                "paperBlockerSwarmGeneratedAt": (
+                    paper_blocker_swarm.get("generatedAt") if isinstance(paper_blocker_swarm, dict) else None
+                ),
+                "paperBottleneckReducerGeneratedAt": reducer.get("generatedAt") if isinstance(reducer, dict) else None,
+            },
             "supplementalStage": supplemental.get("stage"),
             "supplementalGeneratedAt": supplemental.get("generatedAt"),
         },
