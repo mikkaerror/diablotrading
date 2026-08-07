@@ -1,4 +1,6 @@
+import io
 import unittest
+from contextlib import redirect_stderr
 import inferno_ai_basket_momentum as m
 
 class MomentumTests(unittest.TestCase):
@@ -102,9 +104,12 @@ class CoverageGuardTests(unittest.TestCase):
 
     def test_shrinking_coverage_is_refused(self):
         self.mom.save(self._payload(27))
-        r = self.mom.save(self._payload(3))
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            r = self.mom.save(self._payload(3))
         self.assertFalse(r["written"])
         self.assertIn("would shrink coverage 27 -> 3", r["reason"])
+        self.assertIn("[momentum.save]", stderr.getvalue())
         # the good artifact must survive untouched
         self.assertEqual(self.mom.existing_coverage(), 27)
 

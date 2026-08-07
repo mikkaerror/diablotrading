@@ -753,5 +753,20 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-b42d4755",
+    "createdAt": "2026-08-07T07:31:37.716799-06:00",
+    "updatedAt": "2026-08-07T07:31:38.403867-06:00",
+    "title": "Quiet expected momentum test diagnostics",
+    "body": "Completed the narrow test-signal cleanup: the partial-coverage regression now captures and asserts its expected fail-closed stderr, so a clean full suite is quiet while the refusal contract remains verified. No market, ticket, risk, universe, broker, or authority behavior changed.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "low",
+    "tags": [
+      "tests",
+      "hygiene",
+      "fail-closed"
+    ]
   }
 ]
