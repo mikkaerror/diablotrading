@@ -15,6 +15,25 @@ import inferno_model_command_center as command_center
 class InfernoModelCommandCenterTests(unittest.TestCase):
     """Protect the shared model brain from drifting or losing queue state."""
 
+    def test_fast_paper_next_actions_rewrites_stale_open_count(self) -> None:
+        actions = [
+            "Close and score the 5 fast-paper simulations at the first eligible later-session quote, then open the next diversified cohort.",
+            "Preserve the research-only boundary.",
+        ]
+
+        refreshed = command_center.fast_paper_next_actions(
+            actions,
+            fast_paper_counts={"open": 4, "closedToday": 0},
+            fast_paper_backlog_count=0,
+        )
+
+        self.assertEqual(
+            refreshed[0],
+            "Close and score the 4 fast-paper simulations at the first eligible later-session quote, then open the next diversified cohort.",
+        )
+        self.assertNotIn(actions[0], refreshed)
+        self.assertIn(actions[1], refreshed)
+
     def test_reporting_map_includes_common_risk_tech_cohort(self) -> None:
         row = next(item for item in command_center.REPORTING_MAP if item["lane"] == "tech-cohort")
         self.assertEqual(row["artifact"], "reports/tech_cohort_evaluator_latest.txt")
@@ -711,6 +730,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Paper scenarios: 12", text_report)
             self.assertIn("Paper top five: FLNC, THR", text_report)
             self.assertIn("Fast paper: no-priceable-candidates | opened 0 | closed 4 | open 0", text_report)
+            self.assertIn("lifetime quarantined 0", text_report)
             self.assertNotIn("Close and score the 4 fast-paper simulations", text_report)
             self.assertIn("Fast-paper due simulations are closed; wait for market-open refresh", text_report)
             self.assertIn("Scenario backtest evidence: 4", text_report)

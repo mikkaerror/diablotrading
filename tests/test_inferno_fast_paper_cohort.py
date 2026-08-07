@@ -226,6 +226,57 @@ class ExitTests(unittest.TestCase):
         self.assertTrue(any("boundary failed" in message for message in pending))
         self.assertEqual(updated["items"][0]["outcome"]["status"], "open")
 
+    def test_expired_unmarked_simulation_is_quarantined_without_pnl(self) -> None:
+        entry = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 400), now=NOW)
+        entry["expiration"] = "2026-06-17"
+        entry["legs"][0]["expiration"] = "2026-06-17"
+        ledger = {"items": [entry]}
+        after_expiration = datetime(2026, 6, 22, 15, 30, tzinfo=MOUNTAIN)
+        updated, quarantined = fast.quarantine_expired_unmarked_entries(
+            ledger,
+            {"marksByTicketId": {entry["ticketId"]: {"fetchStatus": "partial"}}},
+            now=after_expiration,
+        )
+
+        self.assertEqual(quarantined[0]["ticketId"], entry["ticketId"])
+        item = updated["items"][0]
+        self.assertEqual(item["status"], "sim-quarantined")
+        self.assertEqual(item["outcome"]["status"], "quarantined-expired-unmarked")
+        self.assertIsNone(item["outcome"]["estimatedPnl"])
+        self.assertIsNone(item["outcome"]["exitValue"])
+        self.assertEqual(fast.open_items(updated), [])
+
+    def test_expired_operator_ticket_is_never_quarantined(self) -> None:
+        entry = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 400), now=NOW)
+        entry["expiration"] = "2026-06-17"
+        entry["operatorTicket"] = True
+        ledger = {"items": [entry]}
+        updated, quarantined = fast.quarantine_expired_unmarked_entries(
+            ledger,
+            {"marksByTicketId": {entry["ticketId"]: {"fetchStatus": "partial"}}},
+            now=datetime(2026, 6, 22, 15, 30, tzinfo=MOUNTAIN),
+        )
+
+        self.assertEqual(quarantined, [])
+        self.assertEqual(updated["items"][0]["outcome"]["status"], "open")
+
+    def test_settlement_only_run_cannot_open_replacements(self) -> None:
+        entry = fast.build_fast_entry(candidate("A", "LONG_STRANGLE", 400), now=NOW)
+        entry["expiration"] = "2026-06-17"
+        payload, updated = fast.build_fast_paper_cohort(
+            now=datetime(2026, 6, 22, 15, 30, tzinfo=MOUNTAIN),
+            ledger_override={"items": [entry]},
+            mtm_override={"marksByTicketId": {entry["ticketId"]: {"fetchStatus": "partial"}}},
+            target_trades=0,
+        )
+
+        self.assertFalse(payload["scanPerformed"])
+        self.assertEqual(payload["counts"]["selectedToday"], 0)
+        self.assertEqual(payload["counts"]["quarantinedExpired"], 1)
+        self.assertEqual(payload["counts"]["quarantinedExpiredLifetime"], 1)
+        self.assertEqual(payload["expiredUnmarkedQuarantineHistory"][0]["ticketId"], entry["ticketId"])
+        self.assertEqual(updated["items"][0]["outcome"]["status"], "quarantined-expired-unmarked")
+
 
 if __name__ == "__main__":
     unittest.main()

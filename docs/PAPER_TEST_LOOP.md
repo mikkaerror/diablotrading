@@ -24,6 +24,13 @@ closed and remains untouched. These isolated settlements are exploratory
 telemetry; they never reduce the 30-trade promotion gap or count as accepted
 evidence-loop progress.
 
+If an isolated simulation has passed expiration while a complete later-session
+option mark is unavailable, it receives a terminal `quarantined-expired-unmarked`
+research state instead of an invented expiry P/L. The row stays auditable, has
+no exit value, score, or promotion credit, and no longer consumes the open
+simulation cohort. Run a bounded settlement-only pass without opening a new
+cohort via `./run_inferno_fast_paper_cohort.sh settle`.
+
 The scheduled evidence goal loop also runs the universe cap-fit audit,
 paper-test director, and paper blocker swarm. The swarm decomposes failed paper
 candidates into independent lanes: operator action, data freshness, liquidity,

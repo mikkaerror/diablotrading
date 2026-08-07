@@ -623,7 +623,7 @@ def fast_paper_next_actions(
     fast_paper_counts: dict[str, Any],
     fast_paper_backlog_count: int,
 ) -> list[str]:
-    """Remove stale fast-paper close instructions after the slate is empty."""
+    """Keep fast-paper close instructions aligned with the current open slate."""
     open_count = int(fast_paper_counts.get("open") or 0)
     closed_today = int(fast_paper_counts.get("closedToday") or 0)
     close_due_pattern = re.compile(
@@ -632,11 +632,21 @@ def fast_paper_next_actions(
     )
     filtered: list[str] = []
     removed_close_due = False
+    replaced_close_due = False
     for action in next_actions:
-        if open_count <= 0 and close_due_pattern.search(action):
+        if not close_due_pattern.search(action):
+            filtered.append(action)
+            continue
+        if open_count <= 0:
             removed_close_due = True
             continue
-        filtered.append(action)
+        if not replaced_close_due:
+            simulation_label = "simulation" if open_count == 1 else "simulations"
+            filtered.append(
+                f"Close and score the {open_count} fast-paper {simulation_label} "
+                "at the first eligible later-session quote, then open the next diversified cohort."
+            )
+            replaced_close_due = True
 
     if removed_close_due and closed_today > 0 and fast_paper_backlog_count <= 0:
         filtered.append(
@@ -1300,6 +1310,7 @@ def build_command_center() -> dict[str, Any]:
         "fastPaperClosedToday": fast_paper_counts.get("closedToday", 0),
         "fastPaperOpen": fast_paper_counts.get("open", 0),
         "fastPaperClosedLifetime": fast_paper_counts.get("closedLifetime", 0),
+        "fastPaperQuarantinedExpiredLifetime": fast_paper_counts.get("quarantinedExpiredLifetime", 0),
         "fastPaperBacklog": fast_paper_backlog_count,
         "fastPaperPromotionEligible": False,
         "paperMtmFetchStatus": paper_mtm.get("fetchStatus"),
@@ -1744,6 +1755,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"open {metrics.get('fastPaperOpen', 0)} | "
             f"backlog {metrics.get('fastPaperBacklog', 0)} | "
             f"lifetime closed {metrics.get('fastPaperClosedLifetime', 0)} | "
+            f"lifetime quarantined {metrics.get('fastPaperQuarantinedExpiredLifetime', 0)} | "
             "promotion credit off",
             f"- Evidence goal loop: {metrics.get('evidenceGoalLoopVerdict') or '-'} | "
             f"iterations {metrics.get('evidenceGoalLoopIterations', 0)}",

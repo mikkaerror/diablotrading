@@ -95,6 +95,16 @@ def open_items(ledger: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def terminal_quarantined_items(ledger: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return boundary-qualified expired simulations kept as research evidence."""
+    return [
+        item
+        for item in ledger.get("items") or []
+        if (item.get("outcome") or {}).get("status") == "quarantined-expired-unmarked"
+        and is_isolated_fast_simulation(item)
+    ]
+
+
 def isolated_simulation_boundary_errors(item: dict[str, Any]) -> list[str]:
     """Return contract failures that prohibit automated simulation settlement.
 
@@ -104,7 +114,7 @@ def isolated_simulation_boundary_errors(item: dict[str, Any]) -> list[str]:
     ambiguity fails closed and leaves the row untouched.
     """
     errors: list[str] = []
-    if str(item.get("status") or "") not in {"sim-open", "sim-closed"}:
+    if str(item.get("status") or "") not in {"sim-open", "sim-closed", "sim-quarantined"}:
         errors.append("status is not an isolated simulation status")
     if item.get("paperOnly") is not True:
         errors.append("paperOnly is not true")
@@ -440,6 +450,81 @@ def close_due_entries(
     }, closed_ids, pending
 
 
+def quarantine_expired_unmarked_entries(
+    ledger: dict[str, Any],
+    mtm: dict[str, Any],
+    *,
+    now: datetime,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Terminally quarantine expired simulations that lack a complete exit mark.
+
+    A next-session simulation must never be repriced at expiration merely
+    because its option contracts disappeared from the live chain.  Once it is
+    past expiration, preserve the immutable row and its missing-mark reason,
+    but remove it from the open cohort without assigning P/L, a score, or any
+    promotion credit.  This applies only to rows that already pass the strict
+    isolated-simulation boundary; operator tickets remain untouched.
+    """
+    marks = mtm.get("marksByTicketId") or {}
+    quarantined: list[dict[str, str]] = []
+    updated_items: list[dict[str, Any]] = []
+    for item in ledger.get("items") or []:
+        outcome = item.get("outcome") or {}
+        if outcome.get("status") != "open":
+            updated_items.append(item)
+            continue
+        if isolated_simulation_boundary_errors(item):
+            updated_items.append(item)
+            continue
+        try:
+            expiration = date.fromisoformat(str(item.get("expiration") or ""))
+        except ValueError:
+            updated_items.append(item)
+            continue
+        if now.date() <= expiration:
+            updated_items.append(item)
+            continue
+        mark = marks.get(str(item.get("ticketId") or "")) or {}
+        if mark.get("fetchStatus") == "ok":
+            updated_items.append(item)
+            continue
+
+        reason = "expired-before-complete-later-session-option-mark"
+        quarantined.append(
+            {
+                "ticketId": str(item.get("ticketId") or ""),
+                "ticker": str(item.get("ticker") or ""),
+                "expiration": expiration.isoformat(),
+                "reason": reason,
+            }
+        )
+        note = "terminal research quarantine: expired before a complete later-session option mark could be recorded"
+        existing_notes = str(outcome.get("notes") or "").strip()
+        updated_items.append(
+            {
+                **item,
+                "status": "sim-quarantined",
+                "outcome": {
+                    **outcome,
+                    "status": "quarantined-expired-unmarked",
+                    "reviewedAt": now.isoformat(),
+                    "exitValue": None,
+                    "estimatedPnl": None,
+                    "notes": f"{existing_notes} | {note}" if existing_notes else note,
+                    "quarantineReason": reason,
+                    "settlementMethod": "none",
+                    "promotionEligible": False,
+                },
+            }
+        )
+    return {
+        **ledger,
+        "updatedAt": now.isoformat(),
+        "count": len(updated_items),
+        "items": updated_items,
+    }, quarantined
+
+
 def build_priceable_slate(
     snapshot: dict[str, Any],
     approval_queue: dict[str, Any],
@@ -494,8 +579,24 @@ def build_fast_paper_cohort(
     else:
         mtm = {"fetchStatus": "no-due-positions", "marksByTicketId": {}}
     ledger, closed_ids, close_pending = close_due_entries(ledger, mtm, now=now)
+    ledger, expired_quarantines = quarantine_expired_unmarked_entries(ledger, mtm, now=now)
+    quarantined_tickers = {entry["ticker"] for entry in expired_quarantines}
+    close_pending = [
+        message
+        for message in close_pending
+        if not any(message.startswith(f"{ticker}:") for ticker in quarantined_tickers)
+    ]
 
     existing_open = open_items(ledger)
+    terminal_quarantines = [
+        {
+            "ticketId": str(item.get("ticketId") or ""),
+            "ticker": str(item.get("ticker") or ""),
+            "expiration": str(item.get("expiration") or ""),
+            "reason": str((item.get("outcome") or {}).get("quarantineReason") or ""),
+        }
+        for item in terminal_quarantined_items(ledger)
+    ]
     opened_today = [
         item for item in ledger.get("items") or []
         if item.get("tradeDate") == now.date().isoformat()
@@ -619,6 +720,8 @@ def build_fast_paper_cohort(
             "selectedToday": len(opened_ids),
             "closedToday": len(closed_ids),
             "settledToday": len(closed_ids),
+            "quarantinedExpired": len(expired_quarantines),
+            "quarantinedExpiredLifetime": len(terminal_quarantines),
             "closePending": len(close_pending),
             "open": len(current_open),
             "closedLifetime": len(closed),
@@ -650,12 +753,15 @@ def build_fast_paper_cohort(
         "settledSimulationIds": closed_ids,
         "closedTicketIds": closed_ids,
         "closePendingReasons": close_pending,
+        "expiredUnmarkedQuarantines": expired_quarantines,
+        "expiredUnmarkedQuarantineHistory": terminal_quarantines,
         "settlementBoundary": {
             "ledger": FAST_PAPER_LEDGER_FILE.name,
             "operatorTicketMutation": False,
             "promotionEligible": False,
             "qualifiedOpenSimulations": len(current_open) - len(boundary_violations),
             "quarantinedOpenEntries": boundary_violations,
+            "terminalExpiredQuarantines": len(expired_quarantines),
         },
         "performance": {
             "scoredCount": len(closed_pnls),
@@ -698,6 +804,8 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
         f"- priceable candidates: {counts.get('priceableCandidates', 0)}",
         f"- selected today: {counts.get('selectedToday', 0)} / {payload.get('targetDailyTrades')}",
         f"- isolated simulations settled today: {counts.get('settledToday', counts.get('closedToday', 0))}",
+        f"- expired without mark (quarantined today): {counts.get('quarantinedExpired', 0)}",
+        f"- terminal quarantines (lifetime): {counts.get('quarantinedExpiredLifetime', 0)}",
         f"- open now: {counts.get('open', 0)}",
         f"- close pending: {counts.get('closePending', 0)}",
         f"- opened-today max loss: ${number(risk.get('openedTodayMaxLoss')):,.2f}",
@@ -743,6 +851,13 @@ def fast_paper_text(payload: dict[str, Any]) -> str:
     if pending:
         lines.extend(["", "Pending simulation settlements:"])
         lines.extend(f"- {reason}" for reason in pending)
+    quarantines = payload.get("expiredUnmarkedQuarantineHistory") or []
+    if quarantines:
+        lines.extend(["", "Terminal research quarantines:"])
+        lines.extend(
+            f"- {item.get('ticker')} | expiration {item.get('expiration')} | {item.get('reason')}"
+            for item in quarantines
+        )
     boundary = payload.get("settlementBoundary") or {}
     quarantined = boundary.get("quarantinedOpenEntries") or []
     lines.extend(
@@ -771,7 +886,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the isolated accelerated option-paper simulation cohort."
     )
-    parser.add_argument("command", nargs="?", default="run", choices=["run", "status"])
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "settle", "status"])
     parser.add_argument("--scan-limit", type=int, default=SCAN_LIMIT)
     parser.add_argument("--target", type=int, default=TARGET_DAILY_TRADES)
     return parser.parse_args()
@@ -784,6 +899,15 @@ def main() -> int:
             print(FAST_PAPER_TEXT_FILE.read_text(encoding="utf-8"))
         else:
             print("(no cached fast-paper cohort report)")
+        return 0
+    if args.command == "settle":
+        payload, ledger = build_fast_paper_cohort(
+            scan_limit=max(1, args.scan_limit),
+            target_trades=0,
+        )
+        payload["settlementOnly"] = True
+        save_fast_paper(payload, ledger)
+        print(fast_paper_text(payload))
         return 0
     payload, ledger = build_fast_paper_cohort(
         scan_limit=max(1, args.scan_limit),

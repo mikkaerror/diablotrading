@@ -670,5 +670,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-03e5ea0e",
+    "createdAt": "2026-08-06T22:36:57.967542-06:00",
+    "updatedAt": "2026-08-06T22:40:47.577809-06:00",
+    "title": "Quarantine expired unmarked fast simulations",
+    "body": "Implemented terminal quarantine for boundary-qualified isolated simulations that expire before a complete later-session option mark. QCOM was quarantined without P/L, scoring, promotion credit, operator-ticket mutation, broker action, or any risk, universe, or authority change.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "fast-paper",
+      "simulation-boundary",
+      "evidence-hygiene",
+      "research-only",
+      "safety"
+    ]
   }
 ]

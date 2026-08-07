@@ -26,6 +26,12 @@ settlement is research telemetry only: it cannot approve, stage, reject, close,
 or promote an operator paper ticket, and it earns no accepted progress in the
 evidence-goal evaluator.
 
+If an otherwise valid simulation is past expiration but has no complete
+later-session option mark, terminally record `quarantined-expired-unmarked`.
+Do not substitute expiry intrinsic value for the defined next-session exit,
+and do not assign P/L, a score, or promotion credit. This preserves the failed
+data condition while releasing only isolated simulation capacity.
+
 Falsifier: a test or artifact showing an operator-ticket field can pass this
 boundary or that a simulation settlement changes promotion evidence. Either
 case is a safety regression and must fail closed.
