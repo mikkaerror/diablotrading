@@ -687,5 +687,21 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-6b171be0",
+    "createdAt": "2026-08-06T23:30:10.398976-06:00",
+    "updatedAt": "2026-08-06T23:31:20.332338-06:00",
+    "title": "Refresh durable project-status facts",
+    "body": "Reconciled docs/PROJECT_STATUS.md against the 2026-08-06 command-center artifact: research-only and broker-read-only boundary, NLV and zero cash, live cap zero, two risk hard fails, complete tracker reference coverage with decisions pending, 29-outcome evidence gap, bounded quote coverage, and the non-promotable fast-paper quarantine. No risk, universe, ticket, broker, or authority change.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "normal",
+    "tags": [
+      "documentation",
+      "command-center",
+      "research-only",
+      "safety"
+    ]
   }
 ]
