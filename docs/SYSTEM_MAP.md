@@ -118,8 +118,10 @@ defined-risk alternatives. When the paper-blocker swarm identifies a
 cap-busting `LONG_STRADDLE`/`STRADDLE`, the pricing pass can also compare only
 the cap-fit audit's bounded structures: a $5-wide-or-narrower debit spread, a
 $1-wide-or-narrower credit spread, and a single long leg. The audit estimate
-is an input to construction only—not a pass: live quotes, existing optimizer
-checks, the complete paper-risk policy, and human review remain mandatory.
+is an input to construction only—not a pass. Known market direction suppresses
+opposite-side debit or single-leg attempts, while missing direction does not
+invent a single-leg thesis. Live quotes, existing optimizer checks, the complete
+paper-risk policy, and human review remain mandatory.
 
 ## Model Ownership
 

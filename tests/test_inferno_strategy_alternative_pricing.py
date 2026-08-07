@@ -485,7 +485,7 @@ class StrategyAlternativePricingTests(unittest.TestCase):
 
         self.assertEqual(
             [row["recommendedStrategy"] for row in rows],
-            ["CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "LONG_CALL", "LONG_PUT"],
+            ["CALL_DEBIT_SPREAD", "PUT_CREDIT_SPREAD", "LONG_CALL"],
         )
         self.assertTrue(all(row["ticker"] == "CAP" for row in rows))
         self.assertTrue(all(row["capFitFallback"] for row in rows))
@@ -493,8 +493,18 @@ class StrategyAlternativePricingTests(unittest.TestCase):
         self.assertNotIn("FIT", [row["ticker"] for row in rows])
         self.assertNotIn("UNKNOWN", [row["ticker"] for row in rows])
         self.assertEqual(rows[0]["capFitFallbackStructure"], "debit_5w")
-        self.assertEqual(rows[2]["capFitFallbackStructure"], "credit_1w")
-        self.assertEqual(rows[3]["capFitFallbackStructure"], "long_leg")
+        self.assertEqual(rows[1]["capFitFallbackStructure"], "credit_1w")
+        self.assertEqual(rows[2]["capFitFallbackStructure"], "long_leg")
+
+    def test_cap_fit_fallback_uses_known_direction_without_opposite_side_noise(self) -> None:
+        finding = cap_fit_blocker_swarm()["candidateFindings"][0]
+
+        strategies = [
+            row[0]
+            for row in pricing.cap_fit_fallback_strategy_rows(finding, trend="Bearish")
+        ]
+
+        self.assertEqual(strategies, ["PUT_DEBIT_SPREAD", "LONG_PUT"])
 
     def test_short_premium_leads_before_cap_fit_and_standard_candidates(self) -> None:
         rows = pricing.source_candidates(
@@ -977,23 +987,19 @@ class StrategyAlternativePricingTests(unittest.TestCase):
             schwab_options_index=cap_fit_schwab_options(),
         )
 
-        self.assertEqual(payload["counts"]["capFitFallbackCandidates"], 5)
-        self.assertEqual(payload["counts"]["capFitFallbackPriced"], 5)
+        self.assertEqual(payload["counts"]["capFitFallbackCandidates"], 3)
+        self.assertEqual(payload["counts"]["capFitFallbackPriced"], 3)
         self.assertEqual(payload["counts"]["requestedByStrategy"], {
             "CALL_DEBIT_SPREAD": 1,
             "LONG_CALL": 1,
-            "LONG_PUT": 1,
             "PUT_CREDIT_SPREAD": 1,
-            "PUT_DEBIT_SPREAD": 1,
         })
         items = {item["recommendedStrategy"]: item for item in payload["items"]}
         call_debit = items["CALL_DEBIT_SPREAD"]["strikePlan"]
-        put_debit = items["PUT_DEBIT_SPREAD"]["strikePlan"]
         put_credit = items["PUT_CREDIT_SPREAD"]["strikePlan"]
         long_call = items["LONG_CALL"]["strikePlan"]
 
         self.assertLessEqual(call_debit["width"], 5.0)
-        self.assertLessEqual(put_debit["width"], 5.0)
         self.assertLessEqual(put_credit["width"], 1.0)
         self.assertEqual(len(long_call["legs"]), 1)
         self.assertLessEqual(long_call["estimatedMaxLoss"], 500.0)

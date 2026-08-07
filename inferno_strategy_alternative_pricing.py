@@ -346,32 +346,44 @@ def short_premium_scanner_rows(paper_variant_scanner: dict[str, Any] | None) -> 
     ]
 
 
-def cap_fit_fallback_strategy_rows(finding: dict[str, Any]) -> list[tuple[str, str, str]]:
-    """Map a cap-busting long-vol finding to bounded structures to price.
+def cap_fit_fallback_strategy_rows(
+    finding: dict[str, Any],
+    *,
+    trend: str,
+) -> list[tuple[str, str, str]]:
+    """Map a cap-busting long-vol finding to directional bounded structures.
 
     The cap-fit audit is only an estimate.  These rows are deliberately routed
     into the normal chain, optimizer, and paper-risk evaluators; they do not
-    inherit a pass merely because the estimate says a structure can fit.
+    inherit a pass merely because the estimate says a structure can fit.  A
+    known trend keeps the fallback from generating its opposite-direction
+    debit or long-leg counterpart; unknown context gets no single-leg thesis.
     """
     cap_fit = finding.get("capFit") or {}
     fits = cap_fit.get("fits") or {}
+    normalized_trend = norm(trend)
+    bullish = normalized_trend in {"BULLISH", "UPTREND", "BASE"}
+    bearish = normalized_trend in {"BEARISH", "DOWNTREND"}
     rows: list[tuple[str, str, str]] = []
     if bool(fits.get("debit_5w")):
-        rows.extend(
-            [
-                ("CALL_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
-                ("PUT_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
-            ]
-        )
-    if bool(fits.get("credit_1w")):
+        if bullish:
+            rows.append(("CALL_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"))
+        elif bearish:
+            rows.append(("PUT_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"))
+        else:
+            rows.extend(
+                [
+                    ("CALL_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
+                    ("PUT_DEBIT_SPREAD", "debit_5w", "5-wide debit spread"),
+                ]
+            )
+    if bool(fits.get("credit_1w")) and not bearish:
         rows.append(("PUT_CREDIT_SPREAD", "credit_1w", "1-wide credit spread"))
     if bool(fits.get("long_leg")):
-        rows.extend(
-            [
-                ("LONG_CALL", "long_leg", "single long leg"),
-                ("LONG_PUT", "long_leg", "single long leg"),
-            ]
-        )
+        if bullish:
+            rows.append(("LONG_CALL", "long_leg", "single long leg"))
+        elif bearish:
+            rows.append(("LONG_PUT", "long_leg", "single long leg"))
     return rows
 
 
@@ -406,8 +418,13 @@ def cap_fit_fallback_rows(
         ):
             continue
         source_context = reducer_by_ticker.get(ticker) or {}
+        source_market = source_context.get("marketContextSummary") or {}
+        trend = trend_label(source_market.get("trend") or source_context.get("trend"))
         structure_estimates = cap_fit.get("structures") or {}
-        for strategy, structure_key, structure_label in cap_fit_fallback_strategy_rows(finding):
+        for strategy, structure_key, structure_label in cap_fit_fallback_strategy_rows(
+            finding,
+            trend=trend,
+        ):
             key = (ticker, strategy)
             if key in seen:
                 continue
@@ -1721,7 +1738,11 @@ def build_strategy_alternative_pricing(
             "primarySchwabOptionTickers": len(primary_schwab_index),
             "supplementalSchwabOptionTickers": len(supplemental_schwab_index),
             "fallbackVariants": sum(1 for item in candidates if item.get("fallbackVariant")),
-            "scannerCandidates": sum(1 for item in candidates if item.get("paperVariantOnly")),
+            "scannerCandidates": sum(
+                1
+                for item in candidates
+                if item.get("paperVariantOnly") and item.get("sourceFamily") != "cap-fit-fallback"
+            ),
             "shortPremiumLeadCandidates": sum(
                 1 for item in candidates if norm(item.get("recommendedStrategy")) == SHORT_PREMIUM_DEFINED_STRATEGY
             ),
