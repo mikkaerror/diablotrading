@@ -1103,7 +1103,7 @@ def build_command_center() -> dict[str, Any]:
         "depositPlan": artifact_summary(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "growthStack": artifact_summary(GROWTH_STACK_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "schwabTransactionLedger": artifact_summary(SCHWAB_TRANSACTION_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "brokerReadOnly", "sourceStatus")),
-        "schwabChainHistory": artifact_summary(SCHWAB_CHAIN_HISTORY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
+        "schwabChainHistory": artifact_summary(SCHWAB_CHAIN_HISTORY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
         "cashAttribution": artifact_summary(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),

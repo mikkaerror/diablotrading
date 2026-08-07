@@ -73,6 +73,7 @@ class ChainHistoryTests(unittest.TestCase):
 
         self.assertEqual(payload["capture"]["status"], "history-captured")
         self.assertTrue(payload["researchOnly"])
+        self.assertFalse(payload["promotable"])
         self.assertFalse(payload["brokerSubmitAllowed"])
         self.assertFalse(payload["liveTradingAllowed"])
         self.assertEqual(payload["readiness"]["recordedDays"], 1)
@@ -116,6 +117,16 @@ class ChainHistoryTests(unittest.TestCase):
         self.assertIn("research-only", payload["capture"]["reason"])
         self.assertEqual(manifest["hotSnapshots"], [])
         self.assertEqual(manifest["archiveSnapshots"], [])
+
+    def test_rejects_a_similarly_shaped_unexpected_source_stage(self) -> None:
+        payload, manifest = history.build_chain_history(
+            source_report=source_report(stage="unrelated-local-report"),
+            now=NOW,
+        )
+
+        self.assertEqual(payload["capture"]["status"], "source-rejected")
+        self.assertIn("normalized read-only Schwab chain artifact", payload["capture"]["reason"])
+        self.assertEqual(manifest["hotSnapshots"], [])
 
     def test_old_hot_snapshot_moves_to_archive(self) -> None:
         old_day = "2026-01-01T16:20:00-06:00"

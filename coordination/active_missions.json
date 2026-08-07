@@ -720,5 +720,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-36ad42ff",
+    "createdAt": "2026-08-07T00:13:53.869578-06:00",
+    "updatedAt": "2026-08-07T00:15:31.893026-06:00",
+    "title": "Harden Schwab chain-history provenance",
+    "body": "Completed the chain-history provenance hardening. The collector accepts only the documented local schwab-options-read-only source stage, publishes and Doctor-enforces promotable=false, and has focused regressions for unexpected-source rejection and non-promotable bootstrapping. The refreshed artifact remains 1/60 and history-bootstrapping. No network, ticket, promotion, risk, universe, broker, or live-trading authority changed.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "schwab",
+      "chain-history",
+      "provenance",
+      "research-only",
+      "safety"
+    ]
   }
 ]

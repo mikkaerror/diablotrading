@@ -1264,6 +1264,7 @@ def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
     safe = (
         report.get("stage") == "schwab-chain-history-research-only"
         and report.get("researchOnly") is True
+        and report.get("promotable") is False
         and report.get("authorityChanged") is False
         and report.get("brokerSubmitAllowed") is False
         and report.get("liveTradingAllowed") is False

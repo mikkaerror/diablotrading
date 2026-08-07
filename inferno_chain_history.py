@@ -30,6 +30,7 @@ CHAIN_HISTORY_HOT_DIR = CHAIN_HISTORY_ROOT / "hot"
 CHAIN_HISTORY_ARCHIVE_DIR = CHAIN_HISTORY_ROOT / "archive"
 
 CHAIN_HISTORY_STAGE = "schwab-chain-history-research-only"
+EXPECTED_SOURCE_STAGE = "schwab-options-read-only"
 HOT_RETENTION_DAYS = 90
 ARCHIVE_RETENTION_DAYS = 365
 CALIBRATION_MINIMUM_DAYS = 60
@@ -43,6 +44,7 @@ def empty_manifest() -> dict[str, Any]:
         "generatedAt": None,
         "stage": CHAIN_HISTORY_STAGE,
         "researchOnly": True,
+        "promotable": False,
         "authorityChanged": False,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
@@ -123,6 +125,8 @@ def _descriptor_path(descriptor: dict[str, Any]) -> Path | None:
 def source_errors(source: dict[str, Any]) -> list[str]:
     """Return fail-closed reasons a source cannot become calibration history."""
     errors: list[str] = []
+    if source.get("stage") != EXPECTED_SOURCE_STAGE:
+        errors.append("source is not the normalized read-only Schwab chain artifact")
     if source.get("researchOnly") is not True:
         errors.append("source is not marked research-only")
     if source.get("authorityChanged") is not False:
@@ -170,6 +174,7 @@ def _snapshot_payload(
         "version": 1,
         "stage": CHAIN_HISTORY_STAGE,
         "researchOnly": True,
+        "promotable": False,
         "authorityChanged": False,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
@@ -375,6 +380,7 @@ def build_chain_history(
         "stage": CHAIN_HISTORY_STAGE,
         "verdict": "history-ready" if readiness["readyForCalibration"] else "history-bootstrapping",
         "researchOnly": True,
+        "promotable": False,
         "authorityChanged": False,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,

@@ -8,6 +8,10 @@ capture date, stores full normalized rows for later surface calculations, and
 never sends a network request. Snapshot capture has no ticket, promotion,
 risk, universe, broker-submit, or live-trading authority.
 
+The collector accepts only the documented `schwab-options-read-only` source
+stage. A similarly shaped local artifact is rejected rather than being
+mistaken for normalized chain history.
+
 Retention is bounded: 90 days remain hot, then snapshots move to a controlled
 archive for up to 365 days. A source that is partial, unsafe, unmarked as
 research-only, or has incomplete normalized rows is rejected rather than
