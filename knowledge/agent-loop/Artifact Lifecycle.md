@@ -1,6 +1,6 @@
 ---
 type: agent-loop-operations
-updated: "2026-07-26"
+updated: "2026-08-08"
 research_only: true
 live_trading_allowed: false
 tags:
@@ -32,6 +32,10 @@ A successful recomputation advances `updatedAt`, `lastSuccessfulAt`, and
 `lastFailure`, and changes `lifecycleStatus` to `failed`; it must never advance
 successful evidence freshness or replace the last valid source-as-of time.
 
+Dated durable analysis must label its snapshot explicitly. It may preserve
+historical observations, but it must not present them as current when a newer
+generated artifact exists.
+
 ## Evidence
 
 On 2026-07-26, the shadow-evidence and paper-execution ledgers had been
@@ -44,5 +48,5 @@ risk setting, universe, or authority.
 
 The contract is failing if a failed ledger refresh advances
 `lastSuccessfulAt`, if a dashboard treats `generatedAt` as a mutable ledger's
-freshness timestamp, or if a source timestamp is absent while the artifact is
-called current.
+freshness timestamp, if a dated durable memo is labeled current, or if a source
+timestamp is absent while the artifact is called current.

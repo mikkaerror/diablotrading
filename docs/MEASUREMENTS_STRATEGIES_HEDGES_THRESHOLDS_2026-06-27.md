@@ -6,6 +6,13 @@ Authority change: none
 Live trading allowed: false
 Broker submit allowed: false
 
+## Time Scope
+
+This is a dated research inventory from 2026-06-27. Its quantitative examples
+are preserved as that day's snapshot, not a claim about the live desk. For
+today's state, use the generated command-center and threshold-audit artifacts
+listed below; those artifacts outrank this memo whenever they differ.
+
 This memo is the desk inventory for what we are actually measuring, which
 strategy families are live in research, what is functioning as a hedge, and
 which thresholds are hard rails versus calibration hypotheses. It does not
@@ -18,9 +25,9 @@ The desk should keep optimizing measurement and evidence throughput, not loosen
 gates. The current bottleneck is not a shortage of ideas. It is a shortage of
 clean, priced, risk-passed, closed paper evidence.
 
-Current generated state says:
+The 2026-06-27 generated snapshot said:
 
-| Area | Current read |
+| Area | Snapshot read |
 |---|---|
 | Authority | `paper-evidence-only`; `liveTradingAllowed=false`; `brokerSubmitAllowed=false` |
 | Account truth | Schwab suffix 8499 read-only account artifacts are canonical for NLV, cash, and positions |
@@ -120,10 +127,10 @@ These answer: "Which names deserve attention before we even price options?"
 | Setup recommendation | Straddle, vertical, avoid, etc. | Initial structure hint | Current funnel has premium-buy monoculture bias |
 | IV rank / IV context | Implied volatility regime proxy | Paper variant scanner and structure context | IV rank alone is not a debit/credit switch |
 
-The score-threshold audit's important warning is that readiness >=72 currently
-admits 53% of the 146-name universe, while the operator-level default intends
-roughly top-20% selectivity. That is a calibration finding, not permission to
-move the gate autonomously.
+That snapshot's score-threshold audit warned that readiness >=72 admitted 53%
+of the 146-name universe, while the operator-level default intended roughly
+top-20% selectivity. That is a calibration finding, not permission to move the
+gate autonomously.
 
 ### 3. Option Quote And Structure Measurements
 
