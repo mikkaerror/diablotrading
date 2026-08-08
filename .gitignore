@@ -36,6 +36,7 @@ site/
 __pypackages__/
 node_modules/
 .codex-spreadsheet-runtime/
+$CODEX_HOME/
 *.egg-info/
 *.egg
 .env.smtp
