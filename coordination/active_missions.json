@@ -801,5 +801,21 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-45a782a6",
+    "createdAt": "2026-08-07T23:31:07.512507-06:00",
+    "updatedAt": "2026-08-07T23:40:53.477329-06:00",
+    "title": "Diagnose liquidity and premium blockers without gate changes",
+    "body": "Completed a research-only liquidity/premium blocker matrix with row/ticker/quote-observation denominators, snapshot-time provenance, source long-vol hurdle joins, missing-evidence labeling, normal refresh/Doctor/command-center integration, tests, and knowledge note. No gate, authority, risk, universe, ticket, or broker-submit behavior changed.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "research-only",
+      "liquidity",
+      "premium-hurdle",
+      "data-quality"
+    ]
   }
 ]

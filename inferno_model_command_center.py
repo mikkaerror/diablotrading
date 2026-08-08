@@ -65,6 +65,7 @@ RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_CAPTURE_TEMPLATE_FILE = DATA_DIR / "inferno_paper_capture_template.json"
 PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
+LIQUIDITY_PREMIUM_MATRIX_FILE = DATA_DIR / "inferno_liquidity_premium_matrix.json"
 PAPER_BOTTLENECK_REDUCER_FILE = DATA_DIR / "inferno_paper_bottleneck_reducer.json"
 FAST_PAPER_COHORT_FILE = DATA_DIR / "inferno_fast_paper_cohort.json"
 EVIDENCE_GOAL_LOOP_FILE = DATA_DIR / "inferno_evidence_goal_loop.json"
@@ -283,6 +284,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "paper-blocker-swarm",
         "question": "Which independent blocker lane is preventing paper progress?",
         "artifact": "reports/paper_blocker_swarm_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "liquidity-premium-matrix",
+        "question": "Are quote-quality and source premium blockers distinct, and how many independent ticker/quote observations support them?",
+        "artifact": "reports/liquidity_premium_matrix_latest.txt",
         "owner": "codex",
     },
     {
@@ -1026,6 +1033,7 @@ def build_command_center() -> dict[str, Any]:
     paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
     paper_capture_template = load_json_file(PAPER_CAPTURE_TEMPLATE_FILE) or {}
     paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
+    liquidity_premium_matrix = load_json_file(LIQUIDITY_PREMIUM_MATRIX_FILE) or {}
     paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
     fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
     evidence_goal_loop = load_json_file(EVIDENCE_GOAL_LOOP_FILE) or {}
@@ -1137,6 +1145,10 @@ def build_command_center() -> dict[str, Any]:
         "paperBlockerSwarm": artifact_summary(
             PAPER_BLOCKER_SWARM_FILE,
             keys=("stage", "verdict", "generatedAt", "dominantLane", "researchOnly", "promotable"),
+        ),
+        "liquidityPremiumMatrix": artifact_summary(
+            LIQUIDITY_PREMIUM_MATRIX_FILE,
+            keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged"),
         ),
         "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
         "fastPaperCohort": artifact_summary(
@@ -1325,6 +1337,8 @@ def build_command_center() -> dict[str, Any]:
         "paperBlockerSwarmOutcomeReward": (
             paper_blocker_swarm.get("rewards") or {}
         ).get("outcomeReward"),
+        "liquidityPremiumMatrixVerdict": liquidity_premium_matrix.get("verdict"),
+        "liquidityPremiumMatrixCounts": liquidity_premium_matrix.get("counts") or {},
         "paperScenarioCount": (paper_reducer.get("counts") or {}).get("scenarios", 0),
         "paperScenarioResearchSelected": (paper_reducer.get("counts") or {}).get("paperResearchSelected", 0),
         "paperScenarioShadowOnly": (paper_reducer.get("counts") or {}).get("shadowOnly", 0),
@@ -1604,6 +1618,7 @@ def build_command_center() -> dict[str, Any]:
             str(ROOT / "reports/account_optimization_latest.txt"),
             str(ROOT / "reports/live_book_review_packet_latest.txt"),
             str(ROOT / "reports/paper_blocker_swarm_latest.txt"),
+            str(ROOT / "reports/liquidity_premium_matrix_latest.txt"),
             str(ROOT / "reports/risk_gate_audit_latest.txt"),
             str(ROOT / "reports/scenario_evidence_latest.txt"),
             str(ROOT / "reports/scenario_backtest_latest.txt"),
@@ -1699,6 +1714,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"- Paper director: {status_value(status.get('paperTestDirector') or {})}",
             f"- Paper capture template: {status_value(status.get('paperCaptureTemplate') or {}, key='stage')}",
             f"- Paper blocker swarm: {status_value(status.get('paperBlockerSwarm') or {})}",
+            f"- Liquidity/premium matrix: {status_value(status.get('liquidityPremiumMatrix') or {})}",
             f"- Paper bottleneck reducer: {status_value(status.get('paperBottleneckReducer') or {})}",
             f"- Fast paper cohort: {status_value(status.get('fastPaperCohort') or {})}",
             f"- Evidence goal loop: {status_value(status.get('evidenceGoalLoop') or {})}",
@@ -1777,6 +1793,8 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
             f"tooling-fixable {metrics.get('paperBlockerSwarmFixableByTooling', 0)} | "
             f"fallbacks {metrics.get('paperBlockerSwarmFallbacks', 0)} | "
             f"outcome reward {metrics.get('paperBlockerSwarmOutcomeReward')}",
+            f"- Liquidity/premium matrix: {metrics.get('liquidityPremiumMatrixVerdict') or '-'} | "
+            f"counts {json.dumps(metrics.get('liquidityPremiumMatrixCounts') or {})}",
             f"- Paper scenarios: {metrics.get('paperScenarioCount', 0)} | "
             f"research {metrics.get('paperScenarioResearchSelected', 0)} | "
             f"shadow {metrics.get('paperScenarioShadowOnly', 0)}",

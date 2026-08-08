@@ -136,6 +136,7 @@ run_advisory "strategy shadow comparison" python3 inferno_strategy_shadow_compar
 echo "13/18 Paper selection sync"
 run_advisory "paper test director" python3 inferno_paper_test_director.py build
 run_advisory "paper blocker swarm" python3 inferno_paper_blocker_swarm.py run
+run_advisory "liquidity/premium matrix" python3 inferno_liquidity_premium_matrix.py run
 run_advisory "paper bottleneck reducer" python3 inferno_paper_bottleneck_reducer.py build
 run_advisory "paper evidence audit" python3 inferno_paper_evidence_loop.py build
 

@@ -79,6 +79,7 @@ STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
 STRATEGY_QUOTE_COVERAGE_FILE = ROOT / "data" / "inferno_strategy_quote_coverage.json"
 STRATEGY_SHADOW_COMPARISON_FILE = ROOT / "data" / "inferno_strategy_shadow_comparison.json"
+LIQUIDITY_PREMIUM_MATRIX_FILE = ROOT / "data" / "inferno_liquidity_premium_matrix.json"
 PORTFOLIO_CORRELATION_FILE = ROOT / "data" / "inferno_portfolio_correlation.json"
 DRAWDOWN_PROTOCOL_FILE = ROOT / "data" / "inferno_drawdown_protocol.json"
 CONSENSUS_MONITOR_FILE = ROOT / "data" / "inferno_consensus_monitor.json"
@@ -1443,6 +1444,33 @@ def paper_blocker_swarm_status(report: dict) -> tuple[bool, str]:
     )
 
 
+def liquidity_premium_matrix_status(report: dict) -> tuple[bool, str]:
+    """Verify the read-only matrix stays fresh and cannot carry authority."""
+    ok, detail = _research_module_status(
+        report,
+        ok_verdicts={
+            "no-pricing-candidates",
+            "market-quality-blocked",
+            "premium-pressure-observed",
+            "mixed-market-quality-and-premium-pressure",
+            "no-current-market-quality-or-premium-pressure",
+        },
+    )
+    safe = (
+        bool(report.get("researchOnly"))
+        and bool(report.get("diagnosticOnly"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    counts = report.get("counts") or {}
+    return (
+        ok and safe,
+        f"{detail} | tickers={counts.get('tickerExposures', 0)} | "
+        f"quote-observations={counts.get('quoteObservations', 0)} | safe={safe}",
+    )
+
+
 def paper_capture_template_status(report: dict, now: datetime | None = None) -> tuple[bool, str]:
     """Verify the fill worksheet is fresh, read-only, and never authority-bearing."""
     if not report:
@@ -2775,6 +2803,12 @@ def main() -> int:
     paper_blocker_swarm_ok, paper_blocker_swarm_detail = paper_blocker_swarm_status(paper_blocker_swarm)
     lines.append(summarize_status("Paper blocker swarm", paper_blocker_swarm_ok, paper_blocker_swarm_detail))
     if paper_blocker_swarm and not paper_blocker_swarm_ok:
+        warnings += 1
+
+    liquidity_premium_matrix = load_json_file(LIQUIDITY_PREMIUM_MATRIX_FILE) or {}
+    liquidity_premium_matrix_ok, liquidity_premium_matrix_detail = liquidity_premium_matrix_status(liquidity_premium_matrix)
+    lines.append(summarize_status("Liquidity/premium matrix", liquidity_premium_matrix_ok, liquidity_premium_matrix_detail))
+    if liquidity_premium_matrix and not liquidity_premium_matrix_ok:
         warnings += 1
 
     paper_reducer_ok, paper_reducer_detail = paper_bottleneck_reducer_status(paper_reducer, now)

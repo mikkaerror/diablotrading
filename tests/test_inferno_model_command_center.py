@@ -389,6 +389,28 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (data_dir / "inferno_liquidity_premium_matrix.json").write_text(
+                json.dumps(
+                    {
+                        "generatedAt": "2026-05-10T10:03:10-06:00",
+                        "stage": "liquidity-premium-matrix-research-only",
+                        "verdict": "mixed-market-quality-and-premium-pressure",
+                        "researchOnly": True,
+                        "diagnosticOnly": True,
+                        "promotable": False,
+                        "authorityChanged": False,
+                        "brokerSubmitAllowed": False,
+                        "liveTradingAllowed": False,
+                        "counts": {
+                            "tickerExposures": 2,
+                            "quoteObservations": 1,
+                            "liquidityBlockedTickers": 1,
+                            "premiumHurdleBlockedTickers": 2,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
             (data_dir / "inferno_paper_bottleneck_reducer.json").write_text(
                 json.dumps(
                     {
@@ -578,6 +600,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
                 ("RISK_GATE_AUDIT_FILE", data_dir / "inferno_risk_gate_audit.json"),
                 ("PAPER_TEST_DIRECTOR_FILE", data_dir / "inferno_paper_test_director.json"),
                 ("PAPER_BLOCKER_SWARM_FILE", data_dir / "inferno_paper_blocker_swarm.json"),
+                ("LIQUIDITY_PREMIUM_MATRIX_FILE", data_dir / "inferno_liquidity_premium_matrix.json"),
                 ("PAPER_BOTTLENECK_REDUCER_FILE", data_dir / "inferno_paper_bottleneck_reducer.json"),
                 ("FAST_PAPER_COHORT_FILE", data_dir / "inferno_fast_paper_cohort.json"),
                 ("PAPER_MTM_FILE", data_dir / "inferno_paper_mark_to_market.json"),
@@ -624,6 +647,9 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmDominantLane"], "data_freshness")
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmFixableByTooling"], 1)
             self.assertEqual(payload["headlineMetrics"]["paperBlockerSwarmFallbacks"], 1)
+            self.assertEqual(payload["headlineMetrics"]["liquidityPremiumMatrixVerdict"], "mixed-market-quality-and-premium-pressure")
+            self.assertEqual(payload["headlineMetrics"]["liquidityPremiumMatrixCounts"]["tickerExposures"], 2)
+            self.assertEqual(payload["systemStatus"]["liquidityPremiumMatrix"]["verdict"], "mixed-market-quality-and-premium-pressure")
             self.assertEqual(payload["headlineMetrics"]["paperScenarioCount"], 12)
             self.assertEqual(payload["headlineMetrics"]["paperMtmFetchStatus"], "disabled")
             self.assertEqual(payload["headlineMetrics"]["paperMtmOpenPositions"], 2)
@@ -732,6 +758,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("Risk gate audit: blocked", text_report)
             self.assertIn("Executive summary:", text_report)
             self.assertIn("Paper blocker swarm: fixable-blockers-present", text_report)
+            self.assertIn("Liquidity/premium matrix: mixed-market-quality-and-premium-pressure", text_report)
             self.assertIn("dominant data_freshness", text_report)
             self.assertIn("Paper bottleneck reducer: scenario-slate-ready", text_report)
             self.assertIn("Paper mark-to-market: disabled", text_report)
@@ -762,6 +789,7 @@ class InfernoModelCommandCenterTests(unittest.TestCase):
             self.assertIn("reports/cash_attribution_latest.txt", text_report)
             self.assertIn("reports/ticket_cap_policy_latest.txt", text_report)
             self.assertIn("reports/paper_blocker_swarm_latest.txt", text_report)
+            self.assertIn("reports/liquidity_premium_matrix_latest.txt", text_report)
             self.assertIn("reports/paper_mark_to_market_latest.txt", text_report)
             self.assertIn("reports/trade_management_latest.txt", text_report)
             self.assertIn("reports/conviction_research_latest.txt", text_report)

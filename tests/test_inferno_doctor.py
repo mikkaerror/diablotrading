@@ -22,6 +22,7 @@ from inferno_doctor import (
     cycle_reference_day,
     in_current_service_cycle,
     launch_agent_status,
+    liquidity_premium_matrix_status,
     live_position_review_status,
     model_command_center_status,
     paper_bottleneck_reducer_status,
@@ -692,6 +693,47 @@ class InfernoDoctorCycleTests(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertIn("outcome-reward=1.0", detail)
+
+    def test_liquidity_premium_matrix_requires_explicit_safety_flags(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = liquidity_premium_matrix_status(
+                {
+                    "generatedAt": "2026-06-24T09:30:00-06:00",
+                    "stage": "liquidity-premium-matrix-research-only",
+                    "verdict": "mixed-market-quality-and-premium-pressure",
+                    "researchOnly": True,
+                    "diagnosticOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": False,
+                    "liveTradingAllowed": False,
+                    "counts": {"tickerExposures": 2, "quoteObservations": 1},
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn("tickers=2", detail)
+        self.assertIn("quote-observations=1", detail)
+        self.assertIn("safe=True", detail)
+
+    def test_liquidity_premium_matrix_rejects_authority_drift(self) -> None:
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            ok, detail = liquidity_premium_matrix_status(
+                {
+                    "generatedAt": "2026-06-24T09:30:00-06:00",
+                    "verdict": "market-quality-blocked",
+                    "researchOnly": True,
+                    "diagnosticOnly": True,
+                    "promotable": False,
+                    "authorityChanged": False,
+                    "brokerSubmitAllowed": True,
+                    "liveTradingAllowed": False,
+                    "counts": {},
+                }
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("safe=False", detail)
 
     def test_trade_management_status_accepts_actions_recommended(self) -> None:
         with patch("inferno_doctor.recent_or_today", return_value=True):

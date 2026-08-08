@@ -74,6 +74,7 @@ Generated artifacts beat durable docs when they disagree.
 | Secret hygiene | `reports/secret_hygiene_latest.txt` |
 | Paper bottleneck | `reports/paper_bottleneck_reducer_latest.txt` |
 | Paper blocker diagnosis | `reports/paper_blocker_swarm_latest.txt` |
+| Liquidity/premium blocker matrix | `reports/liquidity_premium_matrix_latest.txt` |
 | Paper fill worksheet | `reports/paper_capture_template_latest.txt` |
 | Paper variant backfill | `reports/paper_variant_scanner_latest.txt` |
 | Score/threshold assumptions | `reports/score_threshold_audit_latest.txt` |
@@ -123,6 +124,13 @@ is an input to construction only—not a pass. Known market direction suppresses
 opposite-side debit or single-leg attempts, while missing direction does not
 invent a single-leg thesis. Live quotes, existing optimizer checks, the complete
 paper-risk policy, and human review remain mandatory.
+
+`inferno_liquidity_premium_matrix.py` reconciles the current pricing pass,
+source-candidate blocker swarm, and expected-move ledger. It reports both
+priced-variant rows and deduplicated ticker/quote observations so alternatives
+sharing one snapshot are never counted as independent market failures. Its
+snapshot clock time is descriptive provenance, not an intraday timing claim;
+it does not create or alter a gate.
 
 ## Model Ownership
 
