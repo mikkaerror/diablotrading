@@ -160,7 +160,7 @@ Safety            — authority, risk, secrets
 | `inferno_outcome_attribution.py` | Research-only Brinson-style decomposition of closed paper/shadow outcomes | `reports/outcome_attribution_latest.txt` |
 | `inferno_rule_edge_decay.py` | Research-only Wilson + half-life monitor for conviction-audit rule bullets | `reports/rule_edge_decay_latest.txt` |
 | `inferno_slippage_estimator.py` | Research-only quoted/effective spread and family slippage anchor table | `reports/slippage_estimator_latest.txt` |
-| `inferno_liquidity_premium_matrix.py` | Research-only join of pricing variants, quote quality, source long-vol hurdle, expiry, and snapshot provenance; ticker/quote counts are deduped separately from variant rows | `reports/liquidity_premium_matrix_latest.txt` |
+| `inferno_liquidity_premium_matrix.py` | Research-only join of pricing variants, quote quality, source long-vol hurdle, expiry, and snapshot provenance; keeps source premium pressure separate from alternative-structure premium blocks and dedupes ticker/quote counts from variant rows | `reports/liquidity_premium_matrix_latest.txt` |
 | `inferno_portfolio_correlation.py` | Research-only effective bet count, concentration, and pairwise outcome correlation monitor | `reports/portfolio_correlation_latest.txt` |
 | `inferno_drawdown_protocol.py` | Research-only drawdown-state sizing ladder and recovery discipline monitor | `reports/drawdown_protocol_latest.txt` |
 | `inferno_consensus_monitor.py` | Research-only crowdedness monitor over Schwab skew, own-side lean, and family-pair fusion | `reports/consensus_monitor_latest.txt` |

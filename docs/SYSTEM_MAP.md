@@ -129,8 +129,11 @@ paper-risk policy, and human review remain mandatory.
 source-candidate blocker swarm, and expected-move ledger. It reports both
 priced-variant rows and deduplicated ticker/quote observations so alternatives
 sharing one snapshot are never counted as independent market failures. Its
-snapshot clock time is descriptive provenance, not an intraday timing claim;
-it does not create or alter a gate.
+source-premium pressure remains provenance for the original long-vol candidate,
+not a failure of an alternative structure; structure-specific premium blocks
+must come from that structure's own pricing risk record. Its snapshot clock
+time is descriptive provenance, not an intraday timing claim; it does not
+create or alter a gate.
 
 ## Model Ownership
 

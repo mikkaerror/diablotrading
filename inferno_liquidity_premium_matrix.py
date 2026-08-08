@@ -177,8 +177,7 @@ def source_row(
     premium_label = text(expected_candidate.get("premiumHurdleLabel")) or None
     quote_evidence_available = bool(quote_snapshot_at)
     liquidity_blocked = bool(priced_structure_liquidity_blocked or source_candidate_liquidity_blocked)
-    premium_blocked = bool(source_candidate_premium_blocked or priced_structure_premium_blocked)
-    premium_evidence_available = bool(expected_candidate) or premium_blocked
+    source_premium_evidence_available = bool(expected_candidate) or source_candidate_premium_blocked
     return {
         "ticker": ticker,
         "pricingStatus": text(item.get("status")) or "unknown",
@@ -214,13 +213,17 @@ def source_row(
         "sourceLongVolImpliedMovePct": number(expected_candidate.get("impliedMovePct")),
         "sourceLongVolHurdleAction": text(expected_candidate.get("hurdleAction")) or None,
         "sourceCandidatePremiumHurdleBlocked": source_candidate_premium_blocked,
-        "pricedStructurePremiumEvidenceBlocked": priced_structure_premium_blocked,
-        "premiumEvidenceAvailable": premium_evidence_available,
-        "premiumHurdleBlocked": premium_blocked,
-        "premiumEvidenceStatus": (
-            "blocked" if premium_blocked else "observed-no-block" if premium_evidence_available else "unobserved"
+        "sourcePremiumPressure": source_candidate_premium_blocked,
+        "sourcePremiumEvidenceAvailable": source_premium_evidence_available,
+        "sourcePremiumEvidenceStatus": (
+            "source-pressure"
+            if source_candidate_premium_blocked
+            else "observed-no-pressure"
+            if source_premium_evidence_available
+            else "unobserved"
         ),
-        "premiumReasons": [reason for reason in risk_blocks if premium_reason(reason)],
+        "pricedStructurePremiumEvidenceBlocked": priced_structure_premium_blocked,
+        "pricedStructurePremiumReasons": [reason for reason in risk_blocks if premium_reason(reason)],
         "combinedPassed": bool(item.get("combinedPassed", risk.get("passed"))),
         "riskBlocks": risk_blocks,
     }
@@ -249,9 +252,16 @@ def aggregate_rows(rows: list[dict[str, Any]], *, key: str) -> list[dict[str, An
                 "tickers": tickers,
                 "quoteObservations": len(snapshots),
                 "liquidityBlockedRows": sum(bool(row.get("liquidityBlocked")) for row in group),
-                "premiumHurdleBlockedRows": sum(bool(row.get("premiumHurdleBlocked")) for row in group),
-                "bothBlockedRows": sum(
-                    bool(row.get("liquidityBlocked")) and bool(row.get("premiumHurdleBlocked"))
+                "sourcePremiumPressureRows": sum(bool(row.get("sourcePremiumPressure")) for row in group),
+                "pricedStructurePremiumEvidenceBlockedRows": sum(
+                    bool(row.get("pricedStructurePremiumEvidenceBlocked")) for row in group
+                ),
+                "liquidityAndSourcePremiumPressureRows": sum(
+                    bool(row.get("liquidityBlocked")) and bool(row.get("sourcePremiumPressure"))
+                    for row in group
+                ),
+                "liquidityAndPricedStructurePremiumBlockedRows": sum(
+                    bool(row.get("liquidityBlocked")) and bool(row.get("pricedStructurePremiumEvidenceBlocked"))
                     for row in group
                 ),
             }
@@ -282,9 +292,19 @@ def ticker_summaries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "quoteObservations": len(snapshots),
                 "quoteSnapshotTimesLocal": sorted({row["quoteSnapshotTimeLocal"] for row in group if row.get("quoteSnapshotTimeLocal")}),
                 "liquidityBlocked": any(row.get("liquidityBlocked") for row in group),
-                "premiumHurdleBlocked": any(row.get("premiumHurdleBlocked") for row in group),
+                "sourcePremiumPressure": any(row.get("sourcePremiumPressure") for row in group),
+                "sourcePremiumEvidenceStatus": (
+                    "source-pressure"
+                    if any(row.get("sourcePremiumPressure") for row in group)
+                    else "observed-no-pressure"
+                    if any(row.get("sourcePremiumEvidenceAvailable") for row in group)
+                    else "unobserved"
+                ),
+                "pricedStructurePremiumEvidenceBlocked": any(
+                    row.get("pricedStructurePremiumEvidenceBlocked") for row in group
+                ),
                 "quoteEvidenceAvailable": any(row.get("quoteEvidenceAvailable") for row in group),
-                "premiumEvidenceAvailable": any(row.get("premiumEvidenceAvailable") for row in group),
+                "sourcePremiumEvidenceAvailable": any(row.get("sourcePremiumEvidenceAvailable") for row in group),
                 "sourceLongVolHurdleLabels": sorted({row["sourceLongVolHurdleLabel"] for row in group if row.get("sourceLongVolHurdleLabel")}),
                 "capFitFallbackRows": sum(bool(row.get("capFitFallback")) for row in group),
                 "combinedPassedRows": sum(bool(row.get("combinedPassed")) for row in group),
@@ -298,12 +318,12 @@ def matrix_verdict(ticker_rows: list[dict[str, Any]]) -> str:
     if not ticker_rows:
         return "no-pricing-candidates"
     liquidity = any(row.get("liquidityBlocked") for row in ticker_rows)
-    premium = any(row.get("premiumHurdleBlocked") for row in ticker_rows)
-    if liquidity and premium:
+    source_premium_pressure = any(row.get("sourcePremiumPressure") for row in ticker_rows)
+    if liquidity and source_premium_pressure:
         return "mixed-market-quality-and-premium-pressure"
     if liquidity:
         return "market-quality-blocked"
-    if premium:
+    if source_premium_pressure:
         return "premium-pressure-observed"
     return "no-current-market-quality-or-premium-pressure"
 
@@ -342,12 +362,31 @@ def build_liquidity_premium_matrix(
         "rowsWithQuoteEvidence": sum(row.get("quoteSnapshotAt") is not None for row in rows),
         "rowsWithoutQuoteEvidence": sum(row.get("quoteSnapshotAt") is None for row in rows),
         "liquidityBlockedRows": sum(bool(row.get("liquidityBlocked")) for row in rows),
-        "premiumHurdleBlockedRows": sum(bool(row.get("premiumHurdleBlocked")) for row in rows),
-        "bothBlockedRows": sum(bool(row.get("liquidityBlocked")) and bool(row.get("premiumHurdleBlocked")) for row in rows),
+        "sourcePremiumPressureRows": sum(bool(row.get("sourcePremiumPressure")) for row in rows),
+        "pricedStructurePremiumEvidenceBlockedRows": sum(
+            bool(row.get("pricedStructurePremiumEvidenceBlocked")) for row in rows
+        ),
+        "liquidityAndSourcePremiumPressureRows": sum(
+            bool(row.get("liquidityBlocked")) and bool(row.get("sourcePremiumPressure")) for row in rows
+        ),
+        "liquidityAndPricedStructurePremiumBlockedRows": sum(
+            bool(row.get("liquidityBlocked")) and bool(row.get("pricedStructurePremiumEvidenceBlocked"))
+            for row in rows
+        ),
         "liquidityBlockedTickers": sum(bool(row.get("liquidityBlocked")) for row in ticker_rows),
         "tickerExposuresWithoutQuoteEvidence": sum(not bool(row.get("quoteEvidenceAvailable")) for row in ticker_rows),
-        "premiumHurdleBlockedTickers": sum(bool(row.get("premiumHurdleBlocked")) for row in ticker_rows),
-        "bothBlockedTickers": sum(bool(row.get("liquidityBlocked")) and bool(row.get("premiumHurdleBlocked")) for row in ticker_rows),
+        "sourcePremiumPressureTickers": sum(bool(row.get("sourcePremiumPressure")) for row in ticker_rows),
+        "pricedStructurePremiumEvidenceBlockedTickers": sum(
+            bool(row.get("pricedStructurePremiumEvidenceBlocked")) for row in ticker_rows
+        ),
+        "liquidityAndSourcePremiumPressureTickers": sum(
+            bool(row.get("liquidityBlocked")) and bool(row.get("sourcePremiumPressure"))
+            for row in ticker_rows
+        ),
+        "liquidityAndPricedStructurePremiumBlockedTickers": sum(
+            bool(row.get("liquidityBlocked")) and bool(row.get("pricedStructurePremiumEvidenceBlocked"))
+            for row in ticker_rows
+        ),
         "capFitFallbackRows": sum(bool(row.get("capFitFallback")) for row in rows),
         "capFitFallbackTickers": sum(bool(row.get("capFitFallbackRows")) for row in ticker_rows),
         "combinedPassedRows": sum(bool(row.get("combinedPassed")) for row in rows),
@@ -378,7 +417,8 @@ def build_liquidity_premium_matrix(
             rows,
             key=lambda row: (
                 not bool(row.get("liquidityBlocked")),
-                not bool(row.get("premiumHurdleBlocked")),
+                not bool(row.get("sourcePremiumPressure")),
+                not bool(row.get("pricedStructurePremiumEvidenceBlocked")),
                 row.get("ticker") or "",
                 row.get("recommendedStrategy") or "",
             ),
@@ -387,12 +427,13 @@ def build_liquidity_premium_matrix(
             "pricingRows counts each priced-structure request; one ticker can have several variants.",
             "tickerExposures deduplicates underlying symbols for market-observation headlines.",
             "quoteObservations deduplicates ticker plus source snapshot timestamp; variants sharing a quote are not independent quotes.",
-            "Liquidity and premium lanes may both apply to one row; use bothBlocked rather than adding lane counts to estimate unique failures.",
-            "A missing quote or source premium record is unobserved, not clear; it is excluded from blocker counts rather than inferred to pass.",
+            "Source-premium pressure records the original long-vol candidate only; it is not an alternative-structure gate failure.",
+            "Structure-specific premium blocks come only from the alternative pricing risk record; do not add source-pressure and structure-block counts to estimate unique failures.",
+            "A missing quote or source premium record is unobserved, not clear; it is excluded from blocker and pressure counts rather than inferred to pass.",
         ],
         "limitations": [
             "Quote snapshot time is the source artifact clock time, not an intraday time-of-day study or proof of a recurring session effect.",
-            "Expected-move labels describe the source long-vol candidate; they do not by themselves fail or pass an alternative structure.",
+            "Expected-move labels and source premium pressure describe the source long-vol candidate; they do not by themselves fail or pass an alternative structure.",
             "This matrix records existing gate evidence only and creates no new threshold, recommendation, or promotion path.",
         ],
         "reminders": [
@@ -435,8 +476,9 @@ def render_text(payload: dict[str, Any]) -> str:
         f"- ticker exposures / quote observations: {counts.get('tickerExposures', 0)} / {counts.get('quoteObservations', 0)}",
         f"- rows / ticker exposures without quote evidence: {counts.get('rowsWithoutQuoteEvidence', 0)} / {counts.get('tickerExposuresWithoutQuoteEvidence', 0)}",
         f"- liquidity blocked rows / tickers: {counts.get('liquidityBlockedRows', 0)} / {counts.get('liquidityBlockedTickers', 0)}",
-        f"- premium-hurdle blocked rows / tickers: {counts.get('premiumHurdleBlockedRows', 0)} / {counts.get('premiumHurdleBlockedTickers', 0)}",
-        f"- both lanes rows / tickers: {counts.get('bothBlockedRows', 0)} / {counts.get('bothBlockedTickers', 0)}",
+        f"- source premium-pressure rows / tickers: {counts.get('sourcePremiumPressureRows', 0)} / {counts.get('sourcePremiumPressureTickers', 0)}",
+        f"- structure-specific premium-block rows / tickers: {counts.get('pricedStructurePremiumEvidenceBlockedRows', 0)} / {counts.get('pricedStructurePremiumEvidenceBlockedTickers', 0)}",
+        f"- liquidity plus source-premium-pressure rows / tickers: {counts.get('liquidityAndSourcePremiumPressureRows', 0)} / {counts.get('liquidityAndSourcePremiumPressureTickers', 0)}",
         f"- cap-fit fallback rows / tickers: {counts.get('capFitFallbackRows', 0)} / {counts.get('capFitFallbackTickers', 0)}",
         f"- combined-passed rows: {counts.get('combinedPassedRows', 0)}",
         "",
@@ -450,7 +492,8 @@ def render_text(payload: dict[str, Any]) -> str:
         lines.append(
             f"- {row.get('ticker')} | variants {row.get('pricingRows')} | exp {', '.join(row.get('expirations') or []) or 'n/a'} | "
             f"liq {'block' if row.get('liquidityBlocked') else 'observed-clear' if row.get('quoteEvidenceAvailable') else 'unobserved'} | "
-            f"premium {'block' if row.get('premiumHurdleBlocked') else 'observed-clear' if row.get('premiumEvidenceAvailable') else 'unobserved'} | "
+            f"source premium {row.get('sourcePremiumEvidenceStatus')} | "
+            f"structure premium {'block' if row.get('pricedStructurePremiumEvidenceBlocked') else 'not-flagged'} | "
             f"source hurdle {', '.join(row.get('sourceLongVolHurdleLabels') or []) or 'n/a'}"
         )
     lines.extend(["", "Pricing-row matrix:"])
@@ -463,7 +506,8 @@ def render_text(payload: dict[str, Any]) -> str:
             f"spread {pct(row.get('atmSpreadPct'))} | OI {fmt(row.get('atmWindowOpenInterest'))} | "
             f"quote {row.get('quoteQualityLabel') or 'n/a'} | source hurdle {row.get('sourceLongVolHurdleLabel') or 'n/a'} | "
             f"ATRx {fmt(row.get('sourceLongVolRequiredMoveAtrMultiple'))} | "
-            f"liq {row.get('liquidityEvidenceStatus')} | premium {row.get('premiumEvidenceStatus')}"
+            f"liq {row.get('liquidityEvidenceStatus')} | source premium {row.get('sourcePremiumEvidenceStatus')} | "
+            f"structure premium {'blocked' if row.get('pricedStructurePremiumEvidenceBlocked') else 'not-flagged'}"
         )
         if row.get("capFitFallback"):
             lines.append(
