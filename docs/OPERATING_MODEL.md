@@ -34,7 +34,7 @@ Responsible for:
 
 Main file:
 
-- [morning_inferno_pipeline.py](morning_inferno_pipeline.py)
+- [morning_inferno_pipeline.py](../morning_inferno_pipeline.py)
 
 ### Inferno Watchdog
 
@@ -47,7 +47,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_watchdog.py](inferno_watchdog.py)
+- [inferno_watchdog.py](../inferno_watchdog.py)
 
 ### Approval Desk
 
@@ -58,7 +58,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_approval_queue.py](inferno_approval_queue.py)
+- [inferno_approval_queue.py](../inferno_approval_queue.py)
 
 ### Execution Clerk
 
@@ -70,7 +70,7 @@ Responsible for:
 
 Main file:
 
-- [inferno_execution_clerk.py](inferno_execution_clerk.py)
+- [inferno_execution_clerk.py](../inferno_execution_clerk.py)
 
 ### Dashboard
 

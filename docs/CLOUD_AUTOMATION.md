@@ -237,8 +237,8 @@ After running both jobs manually, run:
 
 The audit writes:
 
-- [data/inferno_cloud_execution_audit.json](data/inferno_cloud_execution_audit.json)
-- [reports/cloud_execution_audit_latest.txt](reports/cloud_execution_audit_latest.txt)
+- [data/inferno_cloud_execution_audit.json](../data/inferno_cloud_execution_audit.json)
+- [reports/cloud_execution_audit_latest.txt](../reports/cloud_execution_audit_latest.txt)
 
 ## Local Cloud-Native Smoke Test
 

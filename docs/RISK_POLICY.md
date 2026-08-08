@@ -16,8 +16,8 @@ The system is still paper-only for contract-level execution.
 
 The central policy lives in:
 
-- [inferno_risk_policy.py](inferno_risk_policy.py)
-- [inferno_risk_gate_audit.py](inferno_risk_gate_audit.py)
+- [inferno_risk_policy.py](../inferno_risk_policy.py)
+- [inferno_risk_gate_audit.py](../inferno_risk_gate_audit.py)
 
 `inferno_risk_policy.py` checks ticket-level risk:
 
@@ -80,8 +80,8 @@ cd "<repo-root>"
 
 The output lives at:
 
-- [data/inferno_risk_gate_audit.json](data/inferno_risk_gate_audit.json)
-- [reports/risk_gate_audit_latest.txt](reports/risk_gate_audit_latest.txt)
+- [data/inferno_risk_gate_audit.json](../data/inferno_risk_gate_audit.json)
+- [reports/risk_gate_audit_latest.txt](../reports/risk_gate_audit_latest.txt)
 
 If the audit says `blocked`, no new deployment should be sized until the hard
 gate is reviewed.
@@ -108,7 +108,7 @@ analytics layer should aggregate:
 
 That analytics layer has started in:
 
-- [inferno_performance_analytics.py](inferno_performance_analytics.py)
+- [inferno_performance_analytics.py](../inferno_performance_analytics.py)
 
 It will stay conservative until enough closed paper tickets exist to make the
 sample meaningful.

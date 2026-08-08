@@ -20,11 +20,11 @@ This builds a daily session packet from:
 
 ## Outputs
 
-- [data/inferno_tos_sandbox_session.json](data/inferno_tos_sandbox_session.json)
-- [reports/tos_sandbox_session_latest.txt](reports/tos_sandbox_session_latest.txt)
-- [data/inferno_tos_fill_log_template.csv](data/inferno_tos_fill_log_template.csv)
-- [data/inferno_tos_fill_log.csv](data/inferno_tos_fill_log.csv)
-- [reports/tos_fill_ingest_latest.txt](reports/tos_fill_ingest_latest.txt)
+- [data/inferno_tos_sandbox_session.json](../data/inferno_tos_sandbox_session.json)
+- [reports/tos_sandbox_session_latest.txt](../reports/tos_sandbox_session_latest.txt)
+- [data/inferno_tos_fill_log_template.csv](../data/inferno_tos_fill_log_template.csv)
+- [data/inferno_tos_fill_log.csv](../data/inferno_tos_fill_log.csv)
+- [reports/tos_fill_ingest_latest.txt](../reports/tos_fill_ingest_latest.txt)
 
 ## Rules
 

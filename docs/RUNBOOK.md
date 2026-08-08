@@ -222,14 +222,14 @@ python3 inferno_execution_clerk.py
 
 This writes:
 
-- [data/inferno_strike_plan.json](data/inferno_strike_plan.json)
-- [reports/strike_plan_latest.txt](reports/strike_plan_latest.txt)
-- [data/inferno_paper_execution_ledger.json](data/inferno_paper_execution_ledger.json)
-- [reports/paper_execution_ledger_latest.txt](reports/paper_execution_ledger_latest.txt)
-- [data/inferno_shadow_evidence.json](data/inferno_shadow_evidence.json)
-- [reports/shadow_evidence_latest.txt](reports/shadow_evidence_latest.txt)
-- [data/inferno_strategy_lab.json](data/inferno_strategy_lab.json)
-- [reports/strategy_lab_latest.txt](reports/strategy_lab_latest.txt)
+- [data/inferno_strike_plan.json](../data/inferno_strike_plan.json)
+- [reports/strike_plan_latest.txt](../reports/strike_plan_latest.txt)
+- [data/inferno_paper_execution_ledger.json](../data/inferno_paper_execution_ledger.json)
+- [reports/paper_execution_ledger_latest.txt](../reports/paper_execution_ledger_latest.txt)
+- [data/inferno_shadow_evidence.json](../data/inferno_shadow_evidence.json)
+- [reports/shadow_evidence_latest.txt](../reports/shadow_evidence_latest.txt)
+- [data/inferno_strategy_lab.json](../data/inferno_strategy_lab.json)
+- [reports/strategy_lab_latest.txt](../reports/strategy_lab_latest.txt)
 
 Run this after regular options markets open. A 6 AM Mountain run can produce stale or zero option quotes.
 
@@ -280,8 +280,8 @@ option chains for the active execution/approval/watchlist slate, classifies
 each chain into `tradable-research`, `paper-ready`, `manual-review`, or
 `avoid-chain`, and writes:
 
-- [data/inferno_schwab_daily_ops.json](data/inferno_schwab_daily_ops.json)
-- [reports/schwab_daily_ops_latest.txt](reports/schwab_daily_ops_latest.txt)
+- [data/inferno_schwab_daily_ops.json](../data/inferno_schwab_daily_ops.json)
+- [reports/schwab_daily_ops_latest.txt](../reports/schwab_daily_ops_latest.txt)
 
 Use it before strike selection if you want the latest broker-grade spread,
 liquidity, IV, Greek, and expected-move checks.
@@ -368,12 +368,12 @@ paper-only rehearsal plan from the broader eligible slate. The shadow lab will
 prefer that expanded plan when it is fresh, so research continues without
 changing the live execution queue:
 
-- [data/inferno_paper_rehearsal_strike_plan.json](data/inferno_paper_rehearsal_strike_plan.json)
-- [reports/paper_rehearsal_strike_plan_latest.txt](reports/paper_rehearsal_strike_plan_latest.txt)
+- [data/inferno_paper_rehearsal_strike_plan.json](../data/inferno_paper_rehearsal_strike_plan.json)
+- [reports/paper_rehearsal_strike_plan_latest.txt](../reports/paper_rehearsal_strike_plan_latest.txt)
 
 Risk limits are documented in:
 
-- [docs/RISK_POLICY.md](docs/RISK_POLICY.md)
+- [docs/RISK_POLICY.md](RISK_POLICY.md)
 
 ### Review paper outcomes
 
@@ -383,7 +383,7 @@ Risk limits are documented in:
 
 This closes eligible open paper tickets after expiration and writes:
 
-- [reports/paper_outcome_review_latest.txt](reports/paper_outcome_review_latest.txt)
+- [reports/paper_outcome_review_latest.txt](../reports/paper_outcome_review_latest.txt)
 
 The morning pipeline now attempts this review automatically before writing the
 latest snapshot. Outcome review warnings do not block the morning email.
@@ -396,8 +396,8 @@ latest snapshot. Outcome review warnings do not block the morning email.
 
 This writes:
 
-- [data/inferno_broker_preview.json](data/inferno_broker_preview.json)
-- [reports/broker_preview_latest.txt](reports/broker_preview_latest.txt)
+- [data/inferno_broker_preview.json](../data/inferno_broker_preview.json)
+- [reports/broker_preview_latest.txt](../reports/broker_preview_latest.txt)
 
 This does not connect to thinkorswim or Schwab. It only creates broker-neutral
 order previews from clean paper-staged tickets.
@@ -410,8 +410,8 @@ order previews from clean paper-staged tickets.
 
 This writes:
 
-- [data/inferno_performance_analytics.json](data/inferno_performance_analytics.json)
-- [reports/performance_analytics_latest.txt](reports/performance_analytics_latest.txt)
+- [data/inferno_performance_analytics.json](../data/inferno_performance_analytics.json)
+- [reports/performance_analytics_latest.txt](../reports/performance_analytics_latest.txt)
 
 This is the promotion/demotion engine. It tracks block reasons, false-positive
 rates, closed-ticket expectancy, strategy summaries, and whether any setup has
@@ -460,10 +460,10 @@ For narrow debugging:
 
 This writes:
 
-- [data/inferno_scenario_evidence.json](data/inferno_scenario_evidence.json)
-- [reports/scenario_evidence_latest.txt](reports/scenario_evidence_latest.txt)
-- [data/inferno_scenario_backtest.json](data/inferno_scenario_backtest.json)
-- [reports/scenario_backtest_latest.txt](reports/scenario_backtest_latest.txt)
+- [data/inferno_scenario_evidence.json](../data/inferno_scenario_evidence.json)
+- [reports/scenario_evidence_latest.txt](../reports/scenario_evidence_latest.txt)
+- [data/inferno_scenario_backtest.json](../data/inferno_scenario_backtest.json)
+- [reports/scenario_backtest_latest.txt](../reports/scenario_backtest_latest.txt)
 
 This is the “what can today actually teach us?” layer. It compares the current
 paper bottleneck reducer slate against closed paper and shadow outcomes by
@@ -491,8 +491,8 @@ instead of the desk's default planning base.
 
 This writes:
 
-- [data/inferno_exposure_analytics.json](data/inferno_exposure_analytics.json)
-- [reports/exposure_analytics_latest.txt](reports/exposure_analytics_latest.txt)
+- [data/inferno_exposure_analytics.json](../data/inferno_exposure_analytics.json)
+- [reports/exposure_analytics_latest.txt](../reports/exposure_analytics_latest.txt)
 
 This is the portfolio/context risk layer. It checks sector concentration, setup
 concentration, high-correlation clusters, and broad-market regime before the
@@ -509,14 +509,14 @@ desk graduates toward more broker authority.
 
 This writes:
 
-- [data/inferno_schwab_account_sync.json](data/inferno_schwab_account_sync.json)
-- [reports/schwab_account_sync_latest.txt](reports/schwab_account_sync_latest.txt)
-- [data/inferno_live_account_sync.json](data/inferno_live_account_sync.json)
-- [reports/live_account_sync_latest.txt](reports/live_account_sync_latest.txt)
-- [data/inferno_live_position_review.json](data/inferno_live_position_review.json)
-- [reports/live_position_review_latest.txt](reports/live_position_review_latest.txt)
-- [data/inferno_live_book_review_packet.json](data/inferno_live_book_review_packet.json)
-- [reports/live_book_review_packet_latest.txt](reports/live_book_review_packet_latest.txt)
+- [data/inferno_schwab_account_sync.json](../data/inferno_schwab_account_sync.json)
+- [reports/schwab_account_sync_latest.txt](../reports/schwab_account_sync_latest.txt)
+- [data/inferno_live_account_sync.json](../data/inferno_live_account_sync.json)
+- [reports/live_account_sync_latest.txt](../reports/live_account_sync_latest.txt)
+- [data/inferno_live_position_review.json](../data/inferno_live_position_review.json)
+- [reports/live_position_review_latest.txt](../reports/live_position_review_latest.txt)
+- [data/inferno_live_book_review_packet.json](../data/inferno_live_book_review_packet.json)
+- [reports/live_book_review_packet_latest.txt](../reports/live_book_review_packet_latest.txt)
 
 Use this when you want a read-only answer to:
 
@@ -546,12 +546,12 @@ blocker or only a warning.
 
 This writes:
 
-- [data/inferno_edge_research.json](data/inferno_edge_research.json)
-- [reports/edge_research_latest.txt](reports/edge_research_latest.txt)
-- [data/inferno_market_context_audit.json](data/inferno_market_context_audit.json)
-- [reports/market_context_audit_latest.txt](reports/market_context_audit_latest.txt)
-- [data/inferno_ticker_universe_audit.json](data/inferno_ticker_universe_audit.json)
-- [reports/ticker_universe_audit_latest.txt](reports/ticker_universe_audit_latest.txt)
+- [data/inferno_edge_research.json](../data/inferno_edge_research.json)
+- [reports/edge_research_latest.txt](../reports/edge_research_latest.txt)
+- [data/inferno_market_context_audit.json](../data/inferno_market_context_audit.json)
+- [reports/market_context_audit_latest.txt](../reports/market_context_audit_latest.txt)
+- [data/inferno_ticker_universe_audit.json](../data/inferno_ticker_universe_audit.json)
+- [reports/ticker_universe_audit_latest.txt](../reports/ticker_universe_audit_latest.txt)
 
 This is the thematic research layer for tech shovel names: compute, chips,
 cloud/data rails, cybersecurity, ad rails, creator platforms, and payment rails.
@@ -597,10 +597,10 @@ python3 install_inferno_ops_maintenance_service.py install
 
 This writes:
 
-- [data/inferno_model_command_center.json](data/inferno_model_command_center.json)
-- [reports/model_command_center_latest.txt](reports/model_command_center_latest.txt)
-- [coordination/active_missions.json](coordination/active_missions.json)
-- [coordination/model_notes.jsonl](coordination/model_notes.jsonl)
+- [data/inferno_model_command_center.json](../data/inferno_model_command_center.json)
+- [reports/model_command_center_latest.txt](../reports/model_command_center_latest.txt)
+- [coordination/active_missions.json](../coordination/active_missions.json)
+- [coordination/model_notes.jsonl](../coordination/model_notes.jsonl)
 
 Use this when you want one canonical brain for multiple models working the same
 desk. It aggregates deployment health, live-book review, paper evidence, and
@@ -637,8 +637,8 @@ This is the shortest full-desk refresh for a human or collaborating model. It:
 - rebuilds the shared command center
 - captures the latest doctor verdict
 - writes:
-  - [data/inferno_central_command.json](data/inferno_central_command.json)
-  - [reports/central_command_latest.txt](reports/central_command_latest.txt)
+  - [data/inferno_central_command.json](../data/inferno_central_command.json)
+  - [reports/central_command_latest.txt](../reports/central_command_latest.txt)
 
 For a fast new-model landing packet:
 
@@ -664,8 +664,8 @@ checks with the one-command shortcuts it prints.
 
 This writes:
 
-- [data/inferno_authority_manifest.json](data/inferno_authority_manifest.json)
-- [reports/authority_manifest_latest.txt](reports/authority_manifest_latest.txt)
+- [data/inferno_authority_manifest.json](../data/inferno_authority_manifest.json)
+- [reports/authority_manifest_latest.txt](../reports/authority_manifest_latest.txt)
 
 This is the permission layer. It combines snapshot freshness, execution queue,
 paper evidence, exposure warnings, broker-preview state, and live-trading flags
@@ -680,8 +680,8 @@ gate before any future account-connected action.
 
 This writes:
 
-- [data/inferno_capital_allocator.json](data/inferno_capital_allocator.json)
-- [reports/capital_allocator_latest.txt](reports/capital_allocator_latest.txt)
+- [data/inferno_capital_allocator.json](../data/inferno_capital_allocator.json)
+- [reports/capital_allocator_latest.txt](../reports/capital_allocator_latest.txt)
 
 This is the allocator layer. It separates catalyst-trade risk from long-term
 accumulation, assigns sleeve weights, and publishes a tactical options budget
@@ -695,10 +695,10 @@ without pretending that every good name belongs in the same bucket.
 
 This writes:
 
-- [data/inferno_tos_sandbox_session.json](data/inferno_tos_sandbox_session.json)
-- [reports/tos_sandbox_session_latest.txt](reports/tos_sandbox_session_latest.txt)
-- [data/inferno_tos_fill_log_template.csv](data/inferno_tos_fill_log_template.csv)
-- [data/inferno_tos_fill_log.csv](data/inferno_tos_fill_log.csv)
+- [data/inferno_tos_sandbox_session.json](../data/inferno_tos_sandbox_session.json)
+- [reports/tos_sandbox_session_latest.txt](../reports/tos_sandbox_session_latest.txt)
+- [data/inferno_tos_fill_log_template.csv](../data/inferno_tos_fill_log_template.csv)
+- [data/inferno_tos_fill_log.csv](../data/inferno_tos_fill_log.csv)
 
 This is the paperMoney rehearsal packet. It turns authority-approved execution
 intents into a short list of operator-routable paper candidates for
@@ -716,8 +716,8 @@ the execution queue first.
 
 This writes:
 
-- [data/inferno_paper_test_director.json](data/inferno_paper_test_director.json)
-- [reports/paper_test_director_latest.txt](reports/paper_test_director_latest.txt)
+- [data/inferno_paper_test_director.json](../data/inferno_paper_test_director.json)
+- [reports/paper_test_director_latest.txt](../reports/paper_test_director_latest.txt)
 
 Use this when you want the shortest honest answer to:
 
@@ -737,8 +737,8 @@ decision loop without weakening the desk's authority gates.
 
 This writes:
 
-- [data/inferno_paper_evidence_loop.json](data/inferno_paper_evidence_loop.json)
-- [reports/paper_evidence_loop_latest.txt](reports/paper_evidence_loop_latest.txt)
+- [data/inferno_paper_evidence_loop.json](../data/inferno_paper_evidence_loop.json)
+- [reports/paper_evidence_loop_latest.txt](../reports/paper_evidence_loop_latest.txt)
 
 Use this when you want to know what the paper lane is missing right now:
 
@@ -761,8 +761,8 @@ The exit audit adds a narrower open-position lens:
 
 This writes:
 
-- [data/inferno_downloads_manager.json](data/inferno_downloads_manager.json)
-- [reports/downloads_manager_latest.txt](reports/downloads_manager_latest.txt)
+- [data/inferno_downloads_manager.json](../data/inferno_downloads_manager.json)
+- [reports/downloads_manager_latest.txt](../reports/downloads_manager_latest.txt)
 
 The scanner looks for recent trading-like CSVs in your Downloads folder,
 normalizes supported files into the canonical fill log, archives processed
@@ -862,10 +862,10 @@ python3 install_inferno_desktop_automation_service.py uninstall
 
 This writes:
 
-- [data/inferno_tos_fill_ingest.json](data/inferno_tos_fill_ingest.json)
-- [reports/tos_fill_ingest_latest.txt](reports/tos_fill_ingest_latest.txt)
+- [data/inferno_tos_fill_ingest.json](../data/inferno_tos_fill_ingest.json)
+- [reports/tos_fill_ingest_latest.txt](../reports/tos_fill_ingest_latest.txt)
 
-This importer reads [data/inferno_tos_fill_log.csv](data/inferno_tos_fill_log.csv),
+This importer reads [data/inferno_tos_fill_log.csv](../data/inferno_tos_fill_log.csv),
 matches rows back to paper tickets, and updates realized paper outcomes before
 performance analytics run.
 
@@ -1378,49 +1378,49 @@ It does not override the live conviction gates.
 
 ### Health and state
 
-- [data/inferno_ops_status.json](data/inferno_ops_status.json)
-- [data/inferno_watchdog_status.json](data/inferno_watchdog_status.json)
-- [data/inferno_approval_queue.json](data/inferno_approval_queue.json)
-- [data/inferno_execution_queue.json](data/inferno_execution_queue.json)
-- [data/inferno_strike_plan.json](data/inferno_strike_plan.json)
-- [data/inferno_paper_execution_ledger.json](data/inferno_paper_execution_ledger.json)
-- [data/inferno_exposure_analytics.json](data/inferno_exposure_analytics.json)
-- [data/inferno_edge_research.json](data/inferno_edge_research.json)
-- [data/inferno_authority_manifest.json](data/inferno_authority_manifest.json)
-- [data/inferno_tos_sandbox_session.json](data/inferno_tos_sandbox_session.json)
-- [data/inferno_tos_fill_ingest.json](data/inferno_tos_fill_ingest.json)
-- [data/inferno_downloads_manager.json](data/inferno_downloads_manager.json)
-- [data/inferno_tos_export_bridge.json](data/inferno_tos_export_bridge.json)
-- [data/inferno_downloads_watch.json](data/inferno_downloads_watch.json)
-- [data/latest_snapshot.json](data/latest_snapshot.json)
+- [data/inferno_ops_status.json](../data/inferno_ops_status.json)
+- [data/inferno_watchdog_status.json](../data/inferno_watchdog_status.json)
+- [data/inferno_approval_queue.json](../data/inferno_approval_queue.json)
+- [data/inferno_execution_queue.json](../data/inferno_execution_queue.json)
+- [data/inferno_strike_plan.json](../data/inferno_strike_plan.json)
+- [data/inferno_paper_execution_ledger.json](../data/inferno_paper_execution_ledger.json)
+- [data/inferno_exposure_analytics.json](../data/inferno_exposure_analytics.json)
+- [data/inferno_edge_research.json](../data/inferno_edge_research.json)
+- [data/inferno_authority_manifest.json](../data/inferno_authority_manifest.json)
+- [data/inferno_tos_sandbox_session.json](../data/inferno_tos_sandbox_session.json)
+- [data/inferno_tos_fill_ingest.json](../data/inferno_tos_fill_ingest.json)
+- [data/inferno_downloads_manager.json](../data/inferno_downloads_manager.json)
+- [data/inferno_tos_export_bridge.json](../data/inferno_tos_export_bridge.json)
+- [data/inferno_downloads_watch.json](../data/inferno_downloads_watch.json)
+- [data/latest_snapshot.json](../data/latest_snapshot.json)
 
 ### Human-readable outputs
 
-- [reports/morning_brief_latest.txt](reports/morning_brief_latest.txt)
-- [reports/morning_brief_latest.html](reports/morning_brief_latest.html)
-- [reports/paper_tickets_latest.txt](reports/paper_tickets_latest.txt)
-- [reports/long_term_buys_latest.txt](reports/long_term_buys_latest.txt)
-- [reports/execution_desk_latest.txt](reports/execution_desk_latest.txt)
-- [reports/strike_plan_latest.txt](reports/strike_plan_latest.txt)
-- [reports/paper_execution_ledger_latest.txt](reports/paper_execution_ledger_latest.txt)
-- [reports/paper_outcome_review_latest.txt](reports/paper_outcome_review_latest.txt)
-- [reports/broker_preview_latest.txt](reports/broker_preview_latest.txt)
-- [reports/performance_analytics_latest.txt](reports/performance_analytics_latest.txt)
-- [reports/exposure_analytics_latest.txt](reports/exposure_analytics_latest.txt)
-- [reports/edge_research_latest.txt](reports/edge_research_latest.txt)
-- [reports/authority_manifest_latest.txt](reports/authority_manifest_latest.txt)
-- [reports/tos_sandbox_session_latest.txt](reports/tos_sandbox_session_latest.txt)
-- [reports/tos_fill_ingest_latest.txt](reports/tos_fill_ingest_latest.txt)
-- [reports/downloads_manager_latest.txt](reports/downloads_manager_latest.txt)
-- [reports/tos_export_bridge_latest.txt](reports/tos_export_bridge_latest.txt)
-- [reports/downloads_watch_latest.txt](reports/downloads_watch_latest.txt)
+- [reports/morning_brief_latest.txt](../reports/morning_brief_latest.txt)
+- [reports/morning_brief_latest.html](../reports/morning_brief_latest.html)
+- [reports/paper_tickets_latest.txt](../reports/paper_tickets_latest.txt)
+- [reports/long_term_buys_latest.txt](../reports/long_term_buys_latest.txt)
+- [reports/execution_desk_latest.txt](../reports/execution_desk_latest.txt)
+- [reports/strike_plan_latest.txt](../reports/strike_plan_latest.txt)
+- [reports/paper_execution_ledger_latest.txt](../reports/paper_execution_ledger_latest.txt)
+- [reports/paper_outcome_review_latest.txt](../reports/paper_outcome_review_latest.txt)
+- [reports/broker_preview_latest.txt](../reports/broker_preview_latest.txt)
+- [reports/performance_analytics_latest.txt](../reports/performance_analytics_latest.txt)
+- [reports/exposure_analytics_latest.txt](../reports/exposure_analytics_latest.txt)
+- [reports/edge_research_latest.txt](../reports/edge_research_latest.txt)
+- [reports/authority_manifest_latest.txt](../reports/authority_manifest_latest.txt)
+- [reports/tos_sandbox_session_latest.txt](../reports/tos_sandbox_session_latest.txt)
+- [reports/tos_fill_ingest_latest.txt](../reports/tos_fill_ingest_latest.txt)
+- [reports/downloads_manager_latest.txt](../reports/downloads_manager_latest.txt)
+- [reports/tos_export_bridge_latest.txt](../reports/tos_export_bridge_latest.txt)
+- [reports/downloads_watch_latest.txt](../reports/downloads_watch_latest.txt)
 
 ### Logs
 
-- [logs/inferno_dawn.stdout.log](logs/inferno_dawn.stdout.log)
-- [logs/inferno_dawn.stderr.log](logs/inferno_dawn.stderr.log)
-- [logs/inferno_watchdog.stdout.log](logs/inferno_watchdog.stdout.log)
-- [logs/inferno_watchdog.stderr.log](logs/inferno_watchdog.stderr.log)
+- [logs/inferno_dawn.stdout.log](../logs/inferno_dawn.stdout.log)
+- [logs/inferno_dawn.stderr.log](../logs/inferno_dawn.stderr.log)
+- [logs/inferno_watchdog.stdout.log](../logs/inferno_watchdog.stdout.log)
+- [logs/inferno_watchdog.stderr.log](../logs/inferno_watchdog.stderr.log)
 
 ## If The Brief Is Missing
 
@@ -1433,13 +1433,13 @@ Run this first:
 Then check:
 
 1. Did today’s run happen?
-   - open [data/inferno_ops_status.json](data/inferno_ops_status.json)
+   - open [data/inferno_ops_status.json](../data/inferno_ops_status.json)
 2. Did the watchdog rescue it?
-   - open [data/inferno_watchdog_status.json](data/inferno_watchdog_status.json)
+   - open [data/inferno_watchdog_status.json](../data/inferno_watchdog_status.json)
 3. Did the updater jobs fail?
-   - open [logs/inferno_dawn.stderr.log](logs/inferno_dawn.stderr.log)
+   - open [logs/inferno_dawn.stderr.log](../logs/inferno_dawn.stderr.log)
 4. Is the latest local brief still stale?
-   - open [reports/morning_brief_latest.txt](reports/morning_brief_latest.txt)
+   - open [reports/morning_brief_latest.txt](../reports/morning_brief_latest.txt)
 
 If you need a same-day recovery:
 
@@ -1458,7 +1458,7 @@ Check:
 Then verify:
 
 - `.env.smtp` still exists locally
-- `emailSent` is `true` in [data/inferno_ops_status.json](data/inferno_ops_status.json)
+- `emailSent` is `true` in [data/inferno_ops_status.json](../data/inferno_ops_status.json)
 - the SMTP account still accepts the app password
 
 If needed, send a fresh brief manually:
@@ -1499,8 +1499,8 @@ If you want to force a rebuild:
 
 Then inspect:
 
-- [data/inferno_ops_status.json](data/inferno_ops_status.json)
-- [reports/morning_brief_latest.txt](reports/morning_brief_latest.txt)
+- [data/inferno_ops_status.json](../data/inferno_ops_status.json)
+- [reports/morning_brief_latest.txt](../reports/morning_brief_latest.txt)
 
 ## If TOS-Style Formula Values Look Off
 
@@ -1512,8 +1512,8 @@ Run the local formula mirror audit:
 
 Then inspect:
 
-- [reports/tos_formula_audit_latest.txt](reports/tos_formula_audit_latest.txt)
-- [docs/TOS_FORMULA_MIRROR.md](docs/TOS_FORMULA_MIRROR.md)
+- [reports/tos_formula_audit_latest.txt](../reports/tos_formula_audit_latest.txt)
+- [docs/TOS_FORMULA_MIRROR.md](TOS_FORMULA_MIRROR.md)
 
 The audit is diagnostic-only. It compares RVOL, trend, support, resistance,
 and momentum against local history calculations and does not touch Sheets,
@@ -1535,7 +1535,7 @@ Pull formulas from the local TOS custom quote cache:
 
 Then review or edit each custom column's exact ThinkScript in:
 
-- [data/tos_custom_metric_registry.json](data/tos_custom_metric_registry.json)
+- [data/tos_custom_metric_registry.json](../data/tos_custom_metric_registry.json)
 
 To capture current TOS-produced values, export the watchlist/custom quote table
 to CSV and run:
@@ -1567,11 +1567,11 @@ scale-safe and ATR% being a risk/sizing signal rather than a directional edge.
 
 Then inspect:
 
-- [reports/tos_custom_metrics_latest.txt](reports/tos_custom_metrics_latest.txt)
-- [reports/schwab_tos_metrics_sync_latest.txt](reports/schwab_tos_metrics_sync_latest.txt)
-- [reports/tos_metric_theory_audit_latest.txt](reports/tos_metric_theory_audit_latest.txt)
-- [docs/TOS_CUSTOM_METRICS.md](docs/TOS_CUSTOM_METRICS.md)
-- [docs/SCHWAB_PRICE_HISTORY.md](docs/SCHWAB_PRICE_HISTORY.md)
+- [reports/tos_custom_metrics_latest.txt](../reports/tos_custom_metrics_latest.txt)
+- [reports/schwab_tos_metrics_sync_latest.txt](../reports/schwab_tos_metrics_sync_latest.txt)
+- [reports/tos_metric_theory_audit_latest.txt](../reports/tos_metric_theory_audit_latest.txt)
+- [docs/TOS_CUSTOM_METRICS.md](TOS_CUSTOM_METRICS.md)
+- [docs/SCHWAB_PRICE_HISTORY.md](SCHWAB_PRICE_HISTORY.md)
 
 Captured values are joined by ticker into the next tracker snapshot as
 `tosCustomMetrics` and into `marketContext.tosCustomMetrics`.

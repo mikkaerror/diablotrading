@@ -8,12 +8,12 @@ separate repeatable edge from expensive noise.
 
 These are produced by:
 
-- [inferno_performance_analytics.py](inferno_performance_analytics.py)
-- [inferno_shadow_evidence.py](inferno_shadow_evidence.py)
-- [inferno_strategy_lab.py](inferno_strategy_lab.py)
-- [inferno_exposure_analytics.py](inferno_exposure_analytics.py)
-- [inferno_edge_research.py](inferno_edge_research.py)
-- [inferno_authority_controller.py](inferno_authority_controller.py)
+- [inferno_performance_analytics.py](../inferno_performance_analytics.py)
+- [inferno_shadow_evidence.py](../inferno_shadow_evidence.py)
+- [inferno_strategy_lab.py](../inferno_strategy_lab.py)
+- [inferno_exposure_analytics.py](../inferno_exposure_analytics.py)
+- [inferno_edge_research.py](../inferno_edge_research.py)
+- [inferno_authority_controller.py](../inferno_authority_controller.py)
 
 Run:
 
