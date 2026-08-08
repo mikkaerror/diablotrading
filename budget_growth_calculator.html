@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Budget → Growth Calculator</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#171d2b; --ink:#e8edf6; --muted:#93a0b5;
+    --accent:#5b9dff; --good:#37d39a; --warn:#ffb454; --line:#26304a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);padding:24px;}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+  label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;font-size:14px}
+  label span{color:var(--muted)}
+  input[type=number]{width:120px;background:#0c111b;border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:8px 10px;font-size:14px;text-align:right}
+  input:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
+  .big{font-size:28px;font-weight:700}
+  .good{color:var(--good)} .warn{color:var(--warn)} .accent{color:var(--accent)}
+  .timeline{margin-top:16px}
+  .bar{display:flex;align-items:center;gap:10px;margin:10px 0}
+  .bar .lab{width:70px;color:var(--muted);font-size:13px}
+  .track{flex:1;height:22px;background:#0c111b;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--good));width:0;transition:width .3s}
+  .yrs{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+  .note{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  .slider{width:100%;margin-top:6px}
+  .pill{display:inline-block;background:#0c111b;border:1px solid var(--line);border-radius:999px;
+    padding:4px 10px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Budget → Growth Calculator</h1>
+  <p class="sub">Fill in your real numbers. Nothing is saved or sent anywhere — it all
+  stays in this page. Find the one number that actually moves the account: what you
+  can automate each month.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Money in (monthly)</h2>
+      <label>Take-home income <input type="number" id="income" value="0" min="0"></label>
+      <label>Any side income <input type="number" id="side" value="0" min="0"></label>
+    </div>
+    <div class="card">
+      <h2>Money out (monthly)</h2>
+      <label>Rent / housing <input type="number" id="rent" value="0" min="0"></label>
+      <label>Food / groceries <input type="number" id="food" value="0" min="0"></label>
+      <label>Transport <input type="number" id="transport" value="0" min="0"></label>
+      <label>Debt / minimums <input type="number" id="debt" value="0" min="0"></label>
+      <label>Subscriptions <input type="number" id="subs" value="0" min="0"></label>
+      <label>Everything else <input type="number" id="other" value="0" min="0"></label>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="row"><span>Total in</span><span id="totalIn" class="good">$0</span></div>
+    <div class="row"><span>Total out</span><span id="totalOut" class="warn">$0</span></div>
+    <div class="row"><span>Left over each month</span><span id="leftover" class="big">$0</span></div>
+
+    <div style="margin-top:16px">
+      <label style="display:block">
+        <span>Automate this much per month toward the account</span>
+      </label>
+      <input class="slider" type="range" id="contrib" min="0" max="500" step="10" value="0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <span class="pill">Starting balance: $<span id="startBal">1100</span></span>
+        <span class="big accent" id="contribVal">$0/mo</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card timeline">
+    <h2>Time to reach each milestone (~8%/yr assumed)</h2>
+    <div id="bars"></div>
+    <p class="note">
+      Contributions do the heavy lifting: at a $1,100 balance, a good market year adds
+      about $88 — a $100/month habit adds $1,200. The account grows from what you feed
+      it, not from clever trades, until it's much larger. This is an illustrative
+      model at ~8%/yr, not a promise or financial advice; real returns vary and can be
+      negative in any given year.
+    </p>
+  </div>
+</div>
+
+<script>
+  const START = 1100;
+  const AR = 0.08, r = AR/12;
+  const $ = id => document.getElementById(id);
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  const milestones = [
+    {label:'$5,000', t:5000},
+    {label:'$10,000', t:10000},
+    {label:'$25,000', t:25000},
+  ];
+
+  function monthsTo(target, C){
+    let bal = START, n = 0;
+    if (bal >= target) return 0;
+    while (bal < target && n < 1200){ bal = bal*(1+r) + C; n++; }
+    return bal >= target ? n : null;
+  }
+
+  function recalc(){
+    const inc = (+$('income').value||0) + (+$('side').value||0);
+    const out = ['rent','food','transport','debt','subs','other']
+      .reduce((s,id)=> s + (+$(id).value||0), 0);
+    const left = inc - out;
+    $('totalIn').textContent = fmt(inc);
+    $('totalOut').textContent = fmt(out);
+    $('leftover').textContent = fmt(left);
+    $('leftover').className = 'big ' + (left>=0?'good':'warn');
+
+    // default the slider ceiling/value to leftover when sensible
+    const slider = $('contrib');
+    const cap = Math.max(500, Math.ceil(Math.max(left,0)/50)*50);
+    slider.max = cap;
+    const C = +slider.value;
+    $('contribVal').textContent = fmt(C) + '/mo';
+
+    // Bar width = time to reach this milestone as a fraction of time to $25k.
+    // So $25k is a full bar, sooner milestones are shorter — longer bar = longer wait.
+    const mo25 = monthsTo(25000, C) || 1200;
+    const bars = milestones.map(m=>{
+      const mo = monthsTo(m.t, C);
+      const width = mo==null ? 100 : Math.max(6, 100 * mo / mo25);
+      const label = mo==null ? '—'
+        : (mo < 12 ? mo + ' mo' : (mo/12).toFixed(1) + ' yr');
+      return `<div class="bar">
+        <div class="lab">${m.label}</div>
+        <div class="track"><div class="fill" style="width:${width}%"></div></div>
+        <div class="yrs">${label}</div>
+      </div>`;
+    }).join('');
+    $('bars').innerHTML = bars;
+  }
+
+  document.querySelectorAll('input').forEach(el=> el.addEventListener('input', recalc));
+  recalc();
+</script>
+</body>
+</html>
