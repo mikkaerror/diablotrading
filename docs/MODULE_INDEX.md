@@ -96,8 +96,8 @@ Safety            — authority, risk, secrets
 | `inferno_risk_policy.py` | Centralised risk caps + violation surfaces | `data/inferno_risk_policy.json` |
 | `inferno_exposure_analytics.py` | Concentration and setup-mix verdict | `data/inferno_exposure_analytics.json` |
 | `inferno_operator_briefing.py` | Daily "what do I trade today" memo — the operator-facing summary of approval-ready tickets | `reports/operator_briefing_latest.txt` |
-| `inferno_capital_deployment_readiness.py` | Manual-review capital readiness brief; sizes the desk against caps without touching the broker | `reports/capital_deployment_readiness_latest.txt` |
-| `inferno_capital_launch_check.py` | One-command capital preflight refreshing the read-only safety artifacts | `reports/capital_launch_check_latest.txt` |
+| `inferno_capital_deployment_readiness.py` | Manual-review capital readiness brief; sizes the desk against caps without touching the broker or approving a candidate/order | `reports/capital_deployment_readiness_latest.txt` |
+| `inferno_capital_launch_check.py` | One-command capital preflight refreshing read-only safety artifacts; opens no order authority | `reports/capital_launch_check_latest.txt` |
 | `inferno_account_optimization.py` | Research-only growth, contribution, concentration, and contract-risk stress test from live Schwab truth | `reports/account_optimization_latest.txt` |
 | `inferno_sizing_positioning_timing.py` | Total-NLV sleeve drift, candidate price reconciliation, and dated deployment timing overlay | `reports/sizing_positioning_timing_latest.txt` |
 | `inferno_market_mastery_plan.py` | Source-ranked strategy, sizing, exit, behavior, and Browser learning action register | `reports/market_mastery_next_actions_latest.txt` |

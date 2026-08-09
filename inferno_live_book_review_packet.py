@@ -272,6 +272,8 @@ def build_review_packet() -> dict[str, Any]:
         "sourceCapitalReadinessGeneratedAt": capital.get("generatedAt"),
         "capitalReadinessVerdict": capital.get("verdict"),
         "manualDeploymentAllowed": bool(capital.get("manualDeploymentAllowed")),
+        "manualReviewEligible": bool(capital.get("manualReviewEligible", capital.get("manualDeploymentAllowed"))),
+        "orderAuthorization": capital.get("orderAuthorization", "none"),
         "autoLiveAllowed": bool(capital.get("autoLiveAllowed")),
         "counts": {
             "positions": len(positions),
@@ -315,7 +317,8 @@ def render_review_packet(packet: dict[str, Any]) -> str:
         f"Generated: {packet.get('generatedAt')}",
         f"Verdict: {packet.get('verdict')}",
         f"Capital readiness: {packet.get('capitalReadinessVerdict')}",
-        f"Manual deployment allowed: {packet.get('manualDeploymentAllowed')}",
+        f"Manual review path eligible: {packet.get('manualReviewEligible', packet.get('manualDeploymentAllowed'))}",
+        f"System order authorization: {packet.get('orderAuthorization', 'none')}",
         f"Auto live allowed: {packet.get('autoLiveAllowed')}",
         "",
         "Counts:",

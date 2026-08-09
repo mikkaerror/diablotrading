@@ -19,6 +19,8 @@ def launch_payload(cash: float) -> dict:
         "verdict": "blocked",
         "message": "blocked",
         "manualDeploymentAllowed": False,
+        "manualReviewEligible": False,
+        "orderAuthorization": "none",
         "autoLiveAllowed": False,
         "capitalReadiness": {
             "guardrails": {
@@ -56,6 +58,8 @@ class CapitalScenarioMatrixTests(unittest.TestCase):
         self.assertEqual(row["maxStarterTicket"], 375)
         self.assertEqual(row["maxLongTermBuy"], 1200)
         self.assertEqual(row["reserveCash"], 1050)
+        self.assertFalse(row["manualReviewEligible"])
+        self.assertEqual(row["orderAuthorization"], "none")
         self.assertEqual(row["requiredHumanDecisionSymbols"], ["TE", "CLSK"])
 
     def test_build_matrix_persists_text_report(self) -> None:

@@ -62,6 +62,10 @@ def scenario_row(launch_check: dict[str, Any]) -> dict[str, Any]:
         "verdict": launch_check.get("verdict"),
         "message": launch_check.get("message"),
         "manualDeploymentAllowed": bool(launch_check.get("manualDeploymentAllowed")),
+        "manualReviewEligible": bool(
+            launch_check.get("manualReviewEligible", launch_check.get("manualDeploymentAllowed"))
+        ),
+        "orderAuthorization": launch_check.get("orderAuthorization", "none"),
         "autoLiveAllowed": bool(launch_check.get("autoLiveAllowed")),
         "maxOptionsRisk": number(guardrails.get("maxOptionsRisk")),
         "maxStarterTicket": number(guardrails.get("maxStarterTicket")),
@@ -117,8 +121,8 @@ def build_capital_scenario_matrix(
         "deploymentDate": for_date or (rows[0].get("deploymentDate") if rows else None),
         "scenarios": rows,
         "operatorRule": (
-            "Planning only. No broker submit, no live order, and no authority "
-            "promotion without explicit user confirmation."
+            "Planning only. A scenario amount never approves a candidate or order. "
+            "No broker submit, no live order, and no authority promotion without explicit user confirmation."
         ),
     }
     save_capital_scenario_matrix(payload)

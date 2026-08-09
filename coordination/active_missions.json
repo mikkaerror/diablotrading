@@ -833,5 +833,21 @@
       "observability",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-440882e6",
+    "createdAt": "2026-08-09T10:29:59.898002-06:00",
+    "updatedAt": "2026-08-09T10:36:23.166824-06:00",
+    "title": "Clarify capital review versus order authority",
+    "body": "Make capital-readiness and launch-check reporting distinguish eligibility for a human review from authority to approve or submit an order, then propagate that contract to action-pulse, live-book, risk, scenario, while-away, and command-center views. Preserve all existing gates and compatibility fields; do not alter risk constants, universe, tickets, broker state, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "capital-readiness",
+      "reporting",
+      "safety",
+      "research-only"
+    ]
   }
 ]

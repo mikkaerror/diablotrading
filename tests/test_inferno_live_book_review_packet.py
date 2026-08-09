@@ -88,6 +88,8 @@ class LiveBookReviewPacketTests(unittest.TestCase):
                 "generatedAt": "2026-05-14T17:01:00-06:00",
                 "verdict": "not-ready",
                 "manualDeploymentAllowed": False,
+                "manualReviewEligible": False,
+                "orderAuthorization": "none",
                 "autoLiveAllowed": False,
             },
         ]
@@ -98,6 +100,8 @@ class LiveBookReviewPacketTests(unittest.TestCase):
         self.assertEqual(packet["counts"]["hardBlockers"], 1)
         self.assertEqual(packet["counts"]["warnings"], 1)
         self.assertEqual(packet["counts"]["supported"], 1)
+        self.assertFalse(packet["manualReviewEligible"])
+        self.assertEqual(packet["orderAuthorization"], "none")
         self.assertIn("Resolve GDS", "\n".join(packet["unlockChecklist"]))
 
 

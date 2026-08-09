@@ -71,13 +71,29 @@ class InfernoCapitalLaunchCheckTests(unittest.TestCase):
 
             self.assertEqual(payload["depositPlan"]["plan"]["amountDollars"], 250.0)
             self.assertFalse(payload["depositPlan"]["capitalTreatment"]["plannedDepositsAreDeployable"])
+            self.assertFalse(payload["manualReviewEligible"])
+            self.assertEqual(payload["orderAuthorization"], "none")
             rendered = text_file.read_text(encoding="utf-8")
+            self.assertIn("Manual review path eligible: False", rendered)
+            self.assertIn("System order authorization: none", rendered)
             self.assertIn("Deposit plan", rendered)
             self.assertIn("Broker-confirmed cash: $42.50", rendered)
             self.assertIn("planned deposits are not deployable", rendered)
             self.assertIn("Cash attribution", rendered)
             self.assertIn("Realized options profit known: False", rendered)
             self.assertIn("cash changes are not option profit", rendered)
+
+    def test_launch_verdict_keeps_manual_review_separate_from_order_authorization(self) -> None:
+        verdict = launch_check.launch_verdict(
+            {"verdict": "manual-ready", "manualDeploymentAllowed": True},
+            {"verdict": "clear", "summary": {"hardFails": 0}},
+            {"counts": {"hardBlockers": 0}},
+        )
+
+        self.assertTrue(verdict["manualDeploymentAllowed"])
+        self.assertTrue(verdict["manualReviewEligible"])
+        self.assertEqual(verdict["orderAuthorization"], "none")
+        self.assertIn("does not approve a candidate or an order", verdict["message"])
 
 
 if __name__ == "__main__":

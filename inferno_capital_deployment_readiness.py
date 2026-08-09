@@ -189,7 +189,11 @@ def evaluate_readiness(
     *,
     deployable_cash_source: str = "operator-argument",
 ) -> dict[str, Any]:
-    """Evaluate tomorrow's manual deployment readiness from desk artifacts."""
+    """Evaluate whether a human may review fresh deployment evidence.
+
+    This is deliberately narrower than order authority: the artifact can open
+    a review path while the desk remains unable to approve or submit orders.
+    """
     blockers: list[str] = []
     warnings: list[str] = []
     next_actions: list[str] = []
@@ -323,17 +327,28 @@ def evaluate_readiness(
         message = "Do not deploy new capital until blockers are cleared."
     elif warnings:
         verdict = "manual-ready-with-warnings"
-        message = "Manual deployment can be reviewed, but automation remains locked."
+        message = (
+            "A human may review fresh evidence and guardrails, but this brief "
+            "does not approve a candidate or an order; automation remains locked."
+        )
     else:
         verdict = "manual-ready"
-        message = "Manual review is clean. Automation remains locked by policy."
+        message = (
+            "Fresh evidence and guardrails are clean for human review, but this "
+            "brief does not approve a candidate or an order; automation remains locked."
+        )
 
     return {
         "generatedAt": local_now().isoformat(),
         "deploymentDate": deployment_date,
         "verdict": verdict,
         "message": message,
+        # Preserve the legacy field for downstream reports, but publish an
+        # unambiguous review-only name beside it. Neither value grants order
+        # approval or software submit authority.
         "manualDeploymentAllowed": not blockers,
+        "manualReviewEligible": not blockers,
+        "orderAuthorization": "none",
         "autoLiveAllowed": False,
         "liveAccountScopeRequired": approved_account_scope(),
         "authorityLevel": authority_level,
@@ -369,7 +384,8 @@ def render_readiness_text(readiness: dict[str, Any]) -> str:
         f"- Reserve cash: ${number(guardrails.get('reserveCash')):,.2f}",
         "",
         "Safety locks",
-        f"- Manual deployment allowed: {readiness.get('manualDeploymentAllowed')}",
+        f"- Manual review path eligible: {readiness.get('manualReviewEligible', readiness.get('manualDeploymentAllowed'))}",
+        f"- System order authorization: {text(readiness.get('orderAuthorization'), 'none')}",
         f"- Auto live trading allowed: {readiness.get('autoLiveAllowed')}",
         f"- Required account scope: {text(first_present(readiness.get('liveAccountScopeRequired'), readiness.get('liveAccountSuffixRequired')))}",
         f"- Authority level: {text(readiness.get('authorityLevel'))}",

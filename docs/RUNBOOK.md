@@ -242,8 +242,10 @@ Run this after regular options markets open. A 6 AM Mountain run can produce sta
 This is the one-command preflight before real cash is deployed. It refreshes
 live account sync, live position review, capital readiness, live-book blockers,
 risk gates, and the model command center. A `blocked` verdict means no new
-capital. A `manual-ready-with-warnings` verdict means a human can review a trade,
-but automation remains locked and warnings must be accepted explicitly.
+capital. A `manual-ready-with-warnings` verdict means a human can review fresh
+evidence and candidate state, but it does not approve a candidate or order;
+automation remains locked and warnings must be examined explicitly. The
+report's manual-review path is not broker-submit authority.
 
 ### Send the twice-daily action pulse
 

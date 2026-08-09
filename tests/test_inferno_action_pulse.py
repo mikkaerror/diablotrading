@@ -123,6 +123,8 @@ class InfernoActionPulseTests(unittest.TestCase):
                 "verdict": "blocked",
                 "message": "Do not deploy fresh capital.",
                 "manualDeploymentAllowed": False,
+                "manualReviewEligible": False,
+                "orderAuthorization": "none",
                 "autoLiveAllowed": False,
                 "deployableCash": 1000,
                 "capitalLaunch": {
@@ -187,6 +189,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("TOS is running, but no main window is visible", rendered)
         self.assertIn("tracker snapshot: fresh", rendered)
         self.assertIn("Auto live trading allowed: False", rendered)
+        self.assertIn("Manual review path eligible: False", rendered)
+        self.assertIn("System order authorization: none", rendered)
         self.assertIn("Max options risk: $250.00", rendered)
         self.assertIn("Schwab options tape", rendered)
         self.assertIn("NVDA: tradable-research", rendered)
@@ -196,6 +200,7 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("./inferno capital-check --deployable-cash 1000", rendered)
         self.assertIn("executablePaper=true means operator-routable paper candidate", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
+        self.assertIn("No broker submit.", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
 
     @patch("inferno_action_pulse.save_action_pulse")
@@ -224,6 +229,8 @@ class InfernoActionPulseTests(unittest.TestCase):
             "verdict": "blocked",
             "message": "blocked",
             "manualDeploymentAllowed": False,
+            "manualReviewEligible": False,
+            "orderAuthorization": "none",
             "capitalReadiness": {"guardrails": {}},
         }
 
@@ -233,6 +240,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         build_daily_loop_mock.assert_not_called()
         self.assertTrue(payload["fastMode"])
         self.assertEqual(payload["dailyLoop"]["deskVerdict"], "saved")
+        self.assertFalse(payload["manualReviewEligible"])
+        self.assertEqual(payload["orderAuthorization"], "none")
         self.assertIn("--fast", payload["operatorCommands"][1])
 
 

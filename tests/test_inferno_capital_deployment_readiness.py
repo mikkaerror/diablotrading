@@ -114,6 +114,8 @@ class CapitalDeploymentReadinessTests(unittest.TestCase):
         self.assertEqual(result["verdict"], "manual-ready-with-warnings")
         self.assertEqual(result["deployableCashSource"], "operator-argument")
         self.assertTrue(result["manualDeploymentAllowed"])
+        self.assertTrue(result["manualReviewEligible"])
+        self.assertEqual(result["orderAuthorization"], "none")
         self.assertFalse(result["autoLiveAllowed"])
         self.assertTrue(self.files["CAPITAL_DEPLOYMENT_READINESS_FILE"].exists())
         self.assertIn("Paper evidence loop", "\n".join(result["warnings"]))

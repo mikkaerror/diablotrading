@@ -113,35 +113,53 @@ def launch_verdict(
             "verdict": "blocked",
             "message": "Do not deploy fresh capital until hard blockers are cleared.",
             "manualDeploymentAllowed": False,
+            "manualReviewEligible": False,
+            "orderAuthorization": "none",
         }
 
     if readiness_verdict == "manual-ready" and risk_verdict == "clear":
         return {
             "verdict": "manual-ready",
-            "message": "Manual execution review is clean; live automation remains locked.",
+            "message": (
+                "Fresh evidence and guardrails are clean for human review, but this "
+                "check does not approve a candidate or an order; live automation remains locked."
+            ),
             "manualDeploymentAllowed": True,
+            "manualReviewEligible": True,
+            "orderAuthorization": "none",
         }
 
     return {
         "verdict": "manual-ready-with-warnings",
-        "message": "Manual execution can be reviewed, but warnings must be accepted explicitly.",
+        "message": (
+            "A human may review fresh evidence and warnings, but this check does "
+            "not approve a candidate or an order."
+        ),
         "manualDeploymentAllowed": truthy(readiness.get("manualDeploymentAllowed")),
+        "manualReviewEligible": truthy(
+            readiness.get("manualReviewEligible", readiness.get("manualDeploymentAllowed"))
+        ),
+        "orderAuthorization": "none",
     }
 
 
 def build_execution_process(verdict: str) -> list[str]:
-    """Return the concise human process for moving from signal to real order."""
+    """Return the human review process without treating it as order authority."""
     if verdict == "blocked":
-        opening = "Clear hard blockers first; do not size new orders yet."
+        opening = "Clear hard blockers first; this report never authorizes an order."
     else:
-        opening = "Review the candidates and size only inside the guardrails below."
+        opening = (
+            "Review fresh candidates and size only inside the guardrails below; "
+            "review eligibility is not candidate approval or order authorization."
+        )
     return [
         opening,
         "Run this launch check again after any position exit, tracker update, or cash change.",
-        "Approve one candidate from the approval queue; reject anything you cannot explain in one sentence.",
-        "Run ./inferno strike-cycle after options markets are open for current strikes.",
-        "Review reports/strike_plan_latest.txt and any broker preview before touching TOS.",
-        f"Enter orders manually in {approved_account_scope()} only; final submit requires your explicit confirmation.",
+        "Confirm a current candidate clears its independent gates; a candidate, paper row, or this report is not an approved order.",
+        "If no current candidate is stageable, preserve cash and rerun after the next fresh market-data cycle.",
+        "Run ./inferno strike-cycle after options markets are open for current research pricing; its output is not an order.",
+        "Review reports/strike_plan_latest.txt and any broker preview as evidence only, never as authorization.",
+        f"Only an explicit final human confirmation can precede a manual decision in {approved_account_scope()}; this software has no submit power.",
         "After fills, run capture/ingest and rebuild the command center so evidence stays current.",
     ]
 
@@ -185,6 +203,8 @@ def build_capital_launch_check(
         "verdict": verdict_block["verdict"],
         "message": verdict_block["message"],
         "manualDeploymentAllowed": verdict_block["manualDeploymentAllowed"],
+        "manualReviewEligible": verdict_block["manualReviewEligible"],
+        "orderAuthorization": verdict_block["orderAuthorization"],
         "autoLiveAllowed": False,
         "liveAccountScopeRequired": approved_account_scope(),
         "liveAccountSync": {
@@ -237,7 +257,10 @@ def build_capital_launch_check(
         },
         "commandCenterGeneratedAt": command_center.get("generatedAt"),
         "executionProcess": build_execution_process(verdict_block["verdict"]),
-        "operatorRule": "No broker submit, no live order, and no authority promotion without explicit user confirmation.",
+        "operatorRule": (
+            "No candidate, planning amount, or review verdict is order authorization. "
+            "No broker submit, no live order, and no authority promotion without explicit user confirmation."
+        ),
     }
     save_capital_launch_check(payload)
     return payload
@@ -269,7 +292,8 @@ def render_capital_launch_check(payload: dict[str, Any]) -> str:
         f"Message: {payload.get('message')}",
         "",
         "Safety locks",
-        f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
+        f"- Manual review path eligible: {payload.get('manualReviewEligible', payload.get('manualDeploymentAllowed'))}",
+        f"- System order authorization: {payload.get('orderAuthorization', 'none')}",
         f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
         f"- Required account scope: {payload.get('liveAccountScopeRequired') or payload.get('liveAccountSuffixRequired')}",
         "",

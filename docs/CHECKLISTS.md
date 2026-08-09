@@ -34,12 +34,12 @@ If any answer is no, slow down.
 
 1. Run `./inferno capital-check --deployable-cash 1000`.
 2. If the verdict is `blocked`, do not deploy fresh capital.
-3. If the verdict is `manual-ready-with-warnings`, explicitly accept or clear every warning first.
+3. If the verdict is `manual-ready-with-warnings`, examine or clear every warning first; the verdict does not approve a candidate or order.
 4. Confirm the account suffix still matches local approved config.
 5. Confirm auto live trading is still `False`.
 6. Keep every order inside the printed allocator guardrails.
 7. Can the trade survive being wrong without damaging the week?
-8. Did you explicitly approve the final order before submit?
+8. Did you make an explicit final manual decision outside this report? Neither a planning amount nor a candidate is submit authority.
 
 ## Twice-Daily Action Pulse Checklist
 
@@ -47,7 +47,7 @@ If any answer is no, slow down.
 2. Did the `Pre-Close Watch` email arrive before the 2:00 PM Mountain close?
 3. If either pulse says `blocked`, do not deploy fresh capital.
 4. If either pulse lists human decisions, resolve those before sizing anything new.
-5. If the pulse says `manual-ready-with-warnings`, explicitly accept the warnings before acting.
+5. If the pulse says `manual-ready-with-warnings`, investigate the warnings before any manual action; the pulse does not approve a candidate or order.
 6. Keep final trade entry manual and account-scoped to the approved suffix.
 
 ## Delivery And Capture Checklist

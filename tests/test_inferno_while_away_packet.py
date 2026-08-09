@@ -121,6 +121,8 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
                 "verdict": capital_verdict,
                 "deploymentDate": "2026-05-27",
                 "manualDeploymentAllowed": manual_allowed,
+                "manualReviewEligible": manual_allowed,
+                "orderAuthorization": "none",
                 "autoLiveAllowed": False,
                 "guardrails": {
                     "deployableCash": 167.88,
@@ -271,9 +273,11 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
 
         self.assertEqual(packet["verdict"], "manual-review-ready")
         self.assertTrue(packet["capital"]["manualDeploymentAllowed"])
+        self.assertTrue(packet["capital"]["manualReviewEligible"])
+        self.assertEqual(packet["capital"]["orderAuthorization"], "none")
         self.assertFalse(packet["capital"]["autoLiveAllowed"])
         self.assertIn(
-            "Consider manual orders only after a fresh capital-readiness rerun and explicit final confirmation.",
+            "Consider a manual decision only after a fresh capital-readiness rerun and explicit final confirmation; this packet does not approve a candidate or order.",
             packet["operatorActions"]["allowed"],
         )
 

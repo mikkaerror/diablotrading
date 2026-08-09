@@ -335,6 +335,8 @@ def build_action_pulse(
         "verdict": launch.get("verdict"),
         "message": launch.get("message"),
         "manualDeploymentAllowed": launch.get("manualDeploymentAllowed"),
+        "manualReviewEligible": launch.get("manualReviewEligible", launch.get("manualDeploymentAllowed")),
+        "orderAuthorization": launch.get("orderAuthorization", "none"),
         "autoLiveAllowed": False,
         "maintenanceStatus": (maintenance or {}).get("ok") if maintenance is not None else "skipped",
         "dailyLoop": {
@@ -359,7 +361,10 @@ def build_action_pulse(
             f'./inferno strike-cycle --deployable-cash {cash_arg}',
             "./inferno approvals",
         ],
-        "operatorRule": "If this says blocked, do not deploy fresh capital. Real orders still require explicit final confirmation.",
+        "operatorRule": (
+            "If this says blocked, do not deploy fresh capital. A planning amount, "
+            "candidate, or review verdict never approves an order."
+        ),
     }
     save_action_pulse(payload)
     return payload
@@ -456,7 +461,8 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         [
             "",
             "What action is allowed",
-            f"- Manual deployment allowed: {payload.get('manualDeploymentAllowed')}",
+            f"- Manual review path eligible: {payload.get('manualReviewEligible', payload.get('manualDeploymentAllowed'))}",
+            f"- System order authorization: {payload.get('orderAuthorization', 'none')}",
             f"- Auto live trading allowed: {payload.get('autoLiveAllowed')}",
             "- Broker submit: False",
             "- Paper rule: executablePaper=true means operator-routable paper candidate; unattended agents must not stage tickets.",

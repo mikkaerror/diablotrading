@@ -237,7 +237,9 @@ def evaluate_capital_gate(capital: dict[str, Any]) -> dict[str, Any]:
         "capital",
         HARD,
         status,
-        f"verdict={cap_verdict} manualAllowed={capital.get('manualDeploymentAllowed')} autoLive={capital.get('autoLiveAllowed')}",
+        "verdict="
+        f"{cap_verdict} manualReview={capital.get('manualReviewEligible', capital.get('manualDeploymentAllowed'))} "
+        f"orderAuthorization={capital.get('orderAuthorization', 'none')} autoLive={capital.get('autoLiveAllowed')}",
         next_action,
         artifact="data/inferno_capital_deployment_readiness.json",
     )

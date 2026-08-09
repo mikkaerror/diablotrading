@@ -208,7 +208,7 @@ def decide_verdict(
 
     if capital_verdict == "not-ready" or risk_verdict == "blocked" or hard_blockers:
         return "monitor-only"
-    if capital.get("manualDeploymentAllowed"):
+    if capital.get("manualReviewEligible", capital.get("manualDeploymentAllowed")):
         return "manual-review-ready"
     return "research-only"
 
@@ -221,7 +221,10 @@ def build_action_lists(verdict: str, live_book: dict[str, Any]) -> dict[str, lis
         "Track paper/shadow evidence and formula-theory warnings.",
     ]
     if verdict == "manual-review-ready":
-        allowed.append("Consider manual orders only after a fresh capital-readiness rerun and explicit final confirmation.")
+        allowed.append(
+            "Consider a manual decision only after a fresh capital-readiness rerun and explicit final confirmation; "
+            "this packet does not approve a candidate or order."
+        )
     else:
         allowed.append("Make notes and plan trims; keep fresh exposure off until blockers clear.")
 
@@ -295,6 +298,8 @@ def build_while_away_packet() -> dict[str, Any]:
             "verdict": capital.get("verdict"),
             "deploymentDate": capital.get("deploymentDate"),
             "manualDeploymentAllowed": bool(capital.get("manualDeploymentAllowed")),
+            "manualReviewEligible": bool(capital.get("manualReviewEligible", capital.get("manualDeploymentAllowed"))),
+            "orderAuthorization": capital.get("orderAuthorization", "none"),
             "autoLiveAllowed": bool(capital.get("autoLiveAllowed")),
             "deployableCash": safe_round(guardrails.get("deployableCash")),
             "maxOptionsRisk": safe_round(guardrails.get("maxOptionsRisk")),
@@ -389,7 +394,8 @@ def render_while_away_packet(packet: dict[str, Any]) -> str:
         "",
         "Capital guardrails:",
         f"- Readiness: {capital.get('verdict')} | session {capital.get('deploymentDate')} | "
-        f"manual allowed {capital.get('manualDeploymentAllowed')} | auto-live {capital.get('autoLiveAllowed')}",
+        f"manual review {capital.get('manualReviewEligible', capital.get('manualDeploymentAllowed'))} | "
+        f"order authorization {capital.get('orderAuthorization', 'none')} | auto-live {capital.get('autoLiveAllowed')}",
         f"- Deployable cash {money(capital.get('deployableCash'))} | "
         f"starter cap {money(capital.get('maxStarterTicket'))} | "
         f"max options risk {money(capital.get('maxOptionsRisk'))} | reserve {money(capital.get('reserveCash'))}",

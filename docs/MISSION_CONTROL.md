@@ -1,6 +1,6 @@
 # Mission Control
 
-Current as of 2026-06-17.
+Current as of 2026-08-09.
 
 This is the shortest honest description of the desk. Read this before changing
 code, interpreting a signal, opening thinkorswim, or asking another model to
@@ -32,14 +32,14 @@ liveTradingAllowed: false
 
 ## Current Desk Snapshot
 
-Updated 2026-06-17 after the long-term-hold cleanup and Schwab tape refresh.
+Updated 2026-08-09. Generated artifacts take precedence for current market and account facts.
 
 | Lane | Current read |
 |---|---|
 | Approved account scope | read-only Schwab account ending 8499; TOS remains a manual visual cockpit |
 | Live positions captured | TE, IREN, HIVE, CLSK |
 | Tracker sync | HIVE, TE, and CLSK appended; IREN already existed; formulas hydrated and audits healthy |
-| Fresh capital posture | manual-ready-with-warnings; no live-book hard blockers; paper/strategy evidence still blocks automation |
+| Fresh capital posture | manual review may be possible when current artifacts qualify; no candidate or order authorization; paper/strategy evidence keeps automation off |
 | Schwab option tape | fresh; current active read is thin-data-only, so use it as research context rather than sizing permission |
 | Automation authority | unchanged: research/paper only, no live submit |
 
