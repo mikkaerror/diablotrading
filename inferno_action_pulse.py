@@ -414,10 +414,12 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         f"- Max long-term buy: ${number(guardrails.get('maxLongTermBuy')):,.2f}",
         f"- Reserve cash: ${number(guardrails.get('reserveCash')):,.2f}",
         "",
-        "Act-now queue",
+        "Research review queue (not an order queue)",
     ])
     decide = daily.get("decideTodayTickers") or []
     lines.extend([f"- {ticker}" for ticker in decide] or ["- none"])
+    if decide:
+        lines.append("- Listed symbols require fresh briefs and independent gates; none is stageable or approved by this queue.")
     schwab = payload.get("schwabDailyOps") or {}
     lines.extend(["", "Schwab options tape"])
     if schwab.get("available"):

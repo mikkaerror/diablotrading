@@ -294,6 +294,8 @@ class DailyLoopTests(unittest.TestCase):
                           "convictionResearch", "commandCenter", "cycleJournal"):
             self.assertIn(step_name, text)
         self.assertIn("Narrative:", text)
+        self.assertIn("Decide-today research/paper review queue (not an order queue):", text)
+        self.assertIn("listed review symbols are not stageable candidates or approved orders", text)
         self.assertIn("Watch the brain operate", text)
 
     def test_save_writes_both_artifacts(self) -> None:
@@ -341,6 +343,7 @@ class ComposeNarrativeTests(unittest.TestCase):
             counterfactual_payload=HEALTHY_COUNTERFACTUAL,
         )
         self.assertIn("CEG", narrative)
+        self.assertIn("not an order queue", narrative)
         self.assertIn("stable", narrative.lower())
         self.assertIn("fresh artifacts", narrative.lower())
 

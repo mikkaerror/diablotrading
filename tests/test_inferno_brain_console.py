@@ -150,6 +150,8 @@ class BrainConsoleTests(unittest.TestCase):
         text = console.render_console(state)
         self.assertIn("INFERNO BRAIN CONSOLE", text)
         self.assertIn("Desk verdict", text)
+        self.assertIn("Review today", text)
+        self.assertIn("not an order queue", text)
         self.assertIn("TOP HYPOTHESES", text)
         self.assertIn("BREATHING", text)
 

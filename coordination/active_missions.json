@@ -849,5 +849,21 @@
       "safety",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-d3e7cef2",
+    "createdAt": "2026-08-09T10:37:01.642180-06:00",
+    "updatedAt": "2026-08-09T10:44:25.799650-06:00",
+    "title": "Label research review queues as non-order queues",
+    "body": "Clarify operator-facing action-pulse and related queue language so research review or decide-today rows cannot be mistaken for stageable candidates, candidate approval, or broker order authorization. Reporting only; do not alter gates, risk, universe, tickets, broker state, or authority.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "reporting",
+      "queue-labels",
+      "safety",
+      "research-only"
+    ]
   }
 ]

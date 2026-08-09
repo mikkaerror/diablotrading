@@ -29,6 +29,10 @@ Capital readiness and the capital launch check preserve the legacy
 rendered reports must state that a candidate, a planning amount, and a review
 verdict never authorize a broker submission.
 
+Listed tickers in a decide-today or action-pulse review queue must be labeled
+as research/paper review only. A queue row is not a stageable candidate,
+candidate approval, or an order.
+
 The check remains research-only: it does not change risk constants, candidates,
 approval state, tickets, broker state, eligible universe, or authority.
 

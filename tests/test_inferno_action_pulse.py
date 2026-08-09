@@ -185,6 +185,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("What changed", rendered)
         self.assertIn("Fast mode: True", rendered)
         self.assertIn("What matters today", rendered)
+        self.assertIn("Research review queue (not an order queue)", rendered)
+        self.assertIn("Listed symbols require fresh briefs and independent gates", rendered)
         self.assertIn("What action is allowed", rendered)
         self.assertIn("TOS is running, but no main window is visible", rendered)
         self.assertIn("tracker snapshot: fresh", rendered)

@@ -685,7 +685,7 @@ def build_daily_loop() -> dict[str, Any]:
         "failedCount": sum(1 for step in steps if not step["ok"]),
         "researchNotes": [
             "diagnostic only; cannot change desk state",
-            "operator should walk the decideTodayTickers list using the brief memos",
+            "operator should use decideTodayTickers for research/paper review using the brief memos; listed symbols are not approved orders",
             "see reports/decision_briefs_latest.txt for per-ticker context",
             "see reports/trade_conviction_audit_latest.txt for the bull/bear/disagreement math case per ticket",
             "see reports/blowup_guardrails_latest.txt for the six historical-blow-up visibility checks against the slate",
@@ -777,9 +777,9 @@ def compose_narrative(
     )
     if decide_today:
         where_we_are.append(
-            "The decide-today queue has "
+            "The decide-today research/paper review queue has "
             f"{len(decide_today)} ticker(s): {', '.join(decide_today)}. "
-            "Walk the decision briefs and approve/reject each."
+            "Walk the decision briefs before any operator-owned paper decision; this is not an order queue."
         )
     elif pending_count:
         where_we_are.append(
@@ -925,7 +925,7 @@ def daily_loop_text(payload: dict[str, Any]) -> str:
         lines.extend(["", "Narrative:", narrative])
     lines.extend([
         "",
-        "Decide-today queue:",
+        "Decide-today research/paper review queue (not an order queue):",
     ])
     decide = payload.get("decideTodayTickers") or []
     if not decide:
@@ -971,6 +971,7 @@ def daily_loop_text(payload: dict[str, Any]) -> str:
         "",
         "Reminders:",
         "- read-only; nothing here changes desk state",
+        "- listed review symbols are not stageable candidates or approved orders",
         "- approve/reject decisions still flow through inferno_approval_queue.py",
     ])
     return "\n".join(lines).rstrip() + "\n"

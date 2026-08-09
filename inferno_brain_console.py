@@ -425,7 +425,7 @@ def render_console(state: dict[str, Any]) -> str:
     if scorecard.get("passCount") is not None and scorecard.get("totalCount") is not None:
         lines[-1] += f"  ({scorecard.get('passCount')}/{scorecard.get('totalCount')} scorecard criteria)"
     lines.append(f"Authority         : {_format_authority(state)}")
-    lines.append(f"Decide today      : {_format_decide(state)}")
+    lines.append(f"Review today      : {_format_decide(state)} (not an order queue)")
     cadence_counts = state.get("cadenceCounts") or {}
     if cadence_counts:
         lines.append(
