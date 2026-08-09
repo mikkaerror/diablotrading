@@ -39,6 +39,7 @@ from install_inferno_daily_model_refresh_service import (
     script_sync_status as daily_model_refresh_script_sync_status,
 )
 from install_inferno_daily_loop_service import (
+    DEFAULT_TIMES as DAILY_LOOP_DEFAULT_TIMES,
     SERVICE_LABEL as DAILY_LOOP_SERVICE_LABEL,
     script_sync_status as daily_loop_script_sync_status,
 )
@@ -60,6 +61,17 @@ CONTROL_ENTRYPOINT = "./inferno"
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 CODEX_AUTOMATIONS_DIR = Path.home() / ".codex" / "automations"
 WEEKDAY_LABELS = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"}
+WEEKDAY_CODES = {0: "SU", 1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
+WEEKDAY_CODE_LABELS = {
+    "SU": "Sun",
+    "MO": "Mon",
+    "TU": "Tue",
+    "WE": "Wed",
+    "TH": "Thu",
+    "FR": "Fri",
+    "SA": "Sat",
+}
+ALL_WEEKDAY_CODES = tuple(WEEKDAY_CODE_LABELS)
 CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "status", "description": "show the latest command-center state"},
     {"command": "sync", "description": "run the full daily model refresh now"},
@@ -86,7 +98,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "capital-check", "description": "run the capital launch check; defaults to deployable cash 0"},
     {"command": "strike-cycle", "description": "run the strike cycle; defaults to deployable cash 0"},
     {"command": "approvals", "description": "show approval queue status only"},
-    {"command": "schedule", "description": "show launchd and Codex automation schedules"},
+    {"command": "schedule", "description": "show schedules and read-only cadence hygiene diagnostics"},
     {"command": "onboard", "description": "print the compact handoff packet"},
 )
 LAUNCH_AGENT_SCHEDULES: tuple[tuple[str, str], ...] = (
@@ -182,6 +194,36 @@ def _format_calendar_intervals(intervals: Any) -> str:
     return f"{weekday_label} at {', '.join(times)}"
 
 
+def _calendar_intervals(intervals: Any) -> list[dict[str, Any]]:
+    """Normalize a launchd calendar payload without interpreting repeat intervals."""
+    if isinstance(intervals, dict):
+        intervals = [intervals]
+    return [item for item in intervals if isinstance(item, dict)] if isinstance(intervals, list) else []
+
+
+def _calendar_slots_from_launchd(intervals: Any) -> list[dict[str, Any]]:
+    """Expose fixed launchd clock slots for diagnostics only.
+
+    ``StartInterval`` intentionally has no slot representation because launchd
+    does not promise a fixed wall-clock firing time for an interval job.
+    """
+    slots: set[tuple[str, tuple[str, ...]]] = set()
+    for item in _calendar_intervals(intervals):
+        time_label = _hhmm(item.get("Hour"), item.get("Minute"))
+        if time_label == "unknown":
+            continue
+        weekday_value = item.get("Weekday")
+        try:
+            day_codes = (WEEKDAY_CODES[int(weekday_value)],) if weekday_value is not None else ALL_WEEKDAY_CODES
+        except (KeyError, TypeError, ValueError):
+            day_codes = ALL_WEEKDAY_CODES
+        slots.add((time_label, tuple(day_codes)))
+    return [
+        {"time": time_label, "days": list(day_codes)}
+        for time_label, day_codes in sorted(slots)
+    ]
+
+
 def _format_start_interval(interval_seconds: Any) -> str | None:
     """Render a launchd repeat interval without pretending it is a clock time."""
     try:
@@ -230,6 +272,7 @@ def _read_launch_agent(label: str, purpose: str) -> dict[str, Any]:
         "path": str(path),
         "program": " ".join(str(item) for item in payload.get("ProgramArguments", [])),
         "schedule": schedule,
+        "calendarSlots": _calendar_slots_from_launchd(payload.get("StartCalendarInterval")),
     }
 
 
@@ -238,14 +281,19 @@ def _toml_string(body: str, key: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _rrule_parts(rrule: str | None) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for chunk in (rrule or "").split(";"):
+        if "=" in chunk:
+            key, value = chunk.split("=", 1)
+            parts[key.upper()] = value
+    return parts
+
+
 def _describe_rrule(rrule: str | None) -> str:
     if not rrule:
         return "not scheduled"
-    parts: dict[str, str] = {}
-    for chunk in rrule.split(";"):
-        if "=" in chunk:
-            key, value = chunk.split("=", 1)
-            parts[key] = value
+    parts = _rrule_parts(rrule)
     time_label = _hhmm(parts.get("BYHOUR"), parts.get("BYMINUTE"))
     days = parts.get("BYDAY")
     freq = parts.get("FREQ", "").lower()
@@ -254,6 +302,31 @@ def _describe_rrule(rrule: str | None) -> str:
     if freq:
         return f"{freq} at {time_label}"
     return rrule
+
+
+def _calendar_slots_from_rrule(rrule: str | None) -> list[dict[str, Any]]:
+    """Expose fixed Codex cron slots for comparison with launchd.
+
+    The result deliberately declines to guess when an rrule lacks an exact
+    time. It is a timing observation, not a scheduler or a claim of duplicate
+    work.
+    """
+    parts = _rrule_parts(rrule)
+    if parts.get("FREQ") not in {"DAILY", "WEEKLY"}:
+        return []
+    time_label = _hhmm(parts.get("BYHOUR"), parts.get("BYMINUTE"))
+    if time_label == "unknown":
+        return []
+    listed_days = tuple(day.strip().upper() for day in (parts.get("BYDAY") or "").split(",") if day.strip())
+    if listed_days and all(day in WEEKDAY_CODE_LABELS for day in listed_days):
+        day_codes = listed_days
+    elif listed_days:
+        return []
+    elif parts.get("FREQ") == "DAILY":
+        day_codes = ALL_WEEKDAY_CODES
+    else:
+        return []
+    return [{"time": time_label, "days": list(day_codes)}]
 
 
 def _prompt_audit(automation_id: str, body: str) -> dict[str, Any] | None:
@@ -292,6 +365,7 @@ def _read_codex_automation(automation_id: str) -> dict[str, Any]:
         "path": str(path),
         "rrule": rrule,
         "schedule": _describe_rrule(rrule),
+        "calendarSlots": _calendar_slots_from_rrule(rrule),
         "promptAudit": _prompt_audit(automation_id_value, body),
     }
 
@@ -303,6 +377,84 @@ def _codex_automation_ids() -> list[str]:
         for path in CODEX_AUTOMATIONS_DIR.glob("*/automation.toml"):
             ids.add(path.parent.name)
     return sorted(ids)
+
+
+def _daily_loop_cadence(launch_agents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compare the installed loop's clock times with its installer defaults.
+
+    A non-default cadence is a configuration fact, not deployment drift and
+    not a request to change a local LaunchAgent.
+    """
+    default_times = sorted(_hhmm(hour, minute) for hour, minute in DAILY_LOOP_DEFAULT_TIMES)
+    agent = next((item for item in launch_agents if item.get("id") == DAILY_LOOP_SERVICE_LABEL), None)
+    if not agent or agent.get("status") != "configured":
+        return {"status": "not-configured", "actualTimes": [], "installerDefaultTimes": default_times}
+    actual_times = sorted({str(slot.get("time")) for slot in agent.get("calendarSlots") or [] if slot.get("time")})
+    if not actual_times:
+        return {"status": "non-calendar-cadence", "actualTimes": [], "installerDefaultTimes": default_times}
+    return {
+        "status": "installer-default" if actual_times == default_times else "custom-cadence",
+        "actualTimes": actual_times,
+        "installerDefaultTimes": default_times,
+    }
+
+
+def _same_minute_collisions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Find exact fixed-time overlaps, without assigning causality or remedy."""
+    occupancy: dict[tuple[str, str], dict[str, dict[str, str]]] = {}
+    for item in items:
+        if item.get("status") not in {"configured", "ACTIVE"}:
+            continue
+        for slot in item.get("calendarSlots") or []:
+            time_label = slot.get("time")
+            if not isinstance(time_label, str) or time_label == "unknown":
+                continue
+            for day in slot.get("days") or []:
+                if day not in WEEKDAY_CODE_LABELS:
+                    continue
+                job = {
+                    "id": str(item.get("id")),
+                    "kind": str(item.get("kind")),
+                    "label": str(item.get("purpose") or item.get("name") or item.get("id")),
+                }
+                occupancy.setdefault((day, time_label), {})[job["id"]] = job
+
+    grouped: dict[tuple[str, tuple[str, ...]], dict[str, Any]] = {}
+    for (day, time_label), jobs_by_id in occupancy.items():
+        jobs = [jobs_by_id[job_id] for job_id in sorted(jobs_by_id)]
+        if len(jobs) < 2:
+            continue
+        key = (time_label, tuple(job["id"] for job in jobs))
+        group = grouped.setdefault(
+            key,
+            {"time": time_label, "days": [], "jobs": jobs, "status": "review-only-same-minute"},
+        )
+        group["days"].append(day)
+
+    weekday_order = {day: index for index, day in enumerate(ALL_WEEKDAY_CODES)}
+    return sorted(
+        (
+            {**group, "days": sorted(group["days"], key=weekday_order.__getitem__)}
+            for group in grouped.values()
+        ),
+        key=lambda group: (group["time"], tuple(job["id"] for job in group["jobs"])),
+    )
+
+
+def _schedule_hygiene(launch_agents: list[dict[str, Any]], codex_automations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize scheduling facts without altering any configured job."""
+    all_items = launch_agents + codex_automations
+    active_items = [item for item in all_items if item.get("status") in {"configured", "ACTIVE"}]
+    return {
+        "calendarScheduledCount": sum(1 for item in active_items if item.get("calendarSlots")),
+        "intervalOnlyCount": sum(
+            1
+            for item in active_items
+            if not item.get("calendarSlots") and str(item.get("schedule") or "").startswith("every ")
+        ),
+        "sameMinuteCollisions": _same_minute_collisions(active_items),
+        "dailyLoopCadence": _daily_loop_cadence(launch_agents),
+    }
 
 
 def build_schedule_status() -> dict[str, Any]:
@@ -327,6 +479,7 @@ def build_schedule_status() -> dict[str, Any]:
         "configuredCount": configured,
         "launchAgents": launch_agents,
         "codexAutomations": codex_automations,
+        "hygiene": _schedule_hygiene(launch_agents, codex_automations),
     }
 
 
@@ -356,6 +509,22 @@ def render_schedule_status(payload: dict[str, Any]) -> str:
         lines.append(
             f"- {item.get('name')}: {item.get('status')} | {item.get('schedule')} | {item.get('id')}{audit_suffix}"
         )
+    hygiene = payload.get("hygiene") or {}
+    cadence = hygiene.get("dailyLoopCadence") or {}
+    collisions = hygiene.get("sameMinuteCollisions") or []
+    lines.extend(["", "Schedule hygiene (read-only):"])
+    if cadence:
+        lines.append(
+            "- daily-loop cadence: "
+            f"{cadence.get('status')} | actual {', '.join(cadence.get('actualTimes') or ['-'])} | "
+            f"installer default {', '.join(cadence.get('installerDefaultTimes') or ['-'])}"
+        )
+    lines.append(f"- same-minute calendar collisions: {len(collisions)}")
+    for collision in collisions:
+        days = ",".join(WEEKDAY_CODE_LABELS[day] for day in collision.get("days") or [])
+        jobs = " + ".join(job.get("label", job.get("id", "unknown")) for job in collision.get("jobs") or [])
+        lines.append(f"- review-only: {days} {collision.get('time')} | {jobs}")
+    lines.append("- Timing observations do not prove duplicate work; this report never changes a schedule.")
     lines.extend(
         [
             "",
@@ -460,6 +629,9 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
     doctor = payload.get("doctor") or {}
     control = payload.get("controlPlane") or {}
     schedules = control.get("schedules") or {}
+    schedule_hygiene = schedules.get("hygiene") or {}
+    daily_loop_cadence = schedule_hygiene.get("dailyLoopCadence") or {}
+    same_minute_collisions = schedule_hygiene.get("sameMinuteCollisions") or []
     metrics = (command_center.get("headlineMetrics") or {})
     lines = [
         "Inferno Central Command",
@@ -497,6 +669,15 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
             )
             for item in schedules.get("codexAutomations", [])
         ],
+        *(
+            [
+                "- Schedule hygiene (read-only): "
+                f"daily loop {daily_loop_cadence.get('status')} | "
+                f"same-minute observations {len(same_minute_collisions)}"
+            ]
+            if schedule_hygiene
+            else []
+        ),
         "",
         "Headline metrics:",
         (

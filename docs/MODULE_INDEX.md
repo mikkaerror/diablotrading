@@ -4,7 +4,7 @@ Curated index of every `inferno_*.py` module, grouped by the layer it operates i
 
 This is the *navigational* doc — when you need to find which module owns a piece of behaviour, start here, then open the module's docstring for the contract. Module docstrings are the source of truth; this file is a directory.
 
-Last updated: 2026-08-07.
+Last updated: 2026-08-09.
 
 For the one-page purpose and strategy brief, start with
 [`MISSION_CONTROL.md`](MISSION_CONTROL.md). This file is the module directory,
@@ -183,9 +183,9 @@ Safety            — authority, risk, secrets
 
 | Module | Purpose | Cadence |
 |---|---|---|
-| `inferno_daily_loop.py` | Master 15-step read-only operator routine + narrative | 06:30 + 16:30 weekdays |
+| `inferno_daily_loop.py` | Master 15-step read-only operator routine + narrative | installer default 06:30 + 16:30 weekdays; use `./inferno schedule` for installed cadence |
 | `inferno_model_command_center.py` | Cross-model coordination + onboarding digest | each daily loop; writes `reports/model_command_center_latest.txt` and `reports/model_command_center_onboard_latest.txt` |
-| `inferno_central_command.py` | Cross-subsystem coordination surface | as needed |
+| `inferno_central_command.py` | Cross-subsystem coordination surface with read-only schedule cadence and timing-overlap diagnostics | as needed |
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
 | `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer | ~09:00 + ~15:30 weekdays |
 | `inferno_deposit_plan.py` | Recurring deposit forecast that keeps planned deposits separate from broker-confirmed cash and trading profit | `reports/deposit_plan_latest.txt` |

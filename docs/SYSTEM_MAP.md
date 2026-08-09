@@ -189,7 +189,7 @@ tested subsystems instead of replacing them:
 - `./inferno capital-check` — capital launch check; defaults to deployable cash 0
 - `./inferno strike-cycle` — strike cycle; defaults to deployable cash 0
 - `./inferno approvals` — approval queue status only
-- `./inferno schedule` — all installed Inferno LaunchAgents and Codex automation schedules, including repeat intervals
+- `./inferno schedule` — all installed Inferno LaunchAgents and Codex automation schedules, including repeat intervals, plus read-only custom-cadence and exact same-minute timing observations; it never changes a schedule
 - `python3 inferno_promotion_evidence_lineage.py` — read-only reconciliation of counted paper evidence versus quarantined fast and shadow research
 - `./inferno onboard` — compact handoff packet for another model
 

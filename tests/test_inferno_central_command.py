@@ -74,6 +74,10 @@ class InfernoCentralCommandTests(unittest.TestCase):
                         "entrypoint": "./inferno",
                         "launchAgents": [],
                         "codexAutomations": [],
+                        "hygiene": {
+                            "dailyLoopCadence": {"status": "custom-cadence"},
+                            "sameMinuteCollisions": [{"time": "07:30"}],
+                        },
                     },
                 ),
             ):
@@ -126,6 +130,10 @@ class InfernoCentralCommandTests(unittest.TestCase):
             report_text = report_text_file.read_text(encoding="utf-8")
             self.assertIn("Supervisor verdict: healthy", report_text)
             self.assertIn("Unified entrypoint: ./inferno", report_text)
+            self.assertIn(
+                "Schedule hygiene (read-only): daily loop custom-cadence | same-minute observations 1",
+                report_text,
+            )
             self.assertIn(
                 "Deposit plan: $250.00 every 14 day(s) | next 2026-05-15 | 30d $500.00 planned | broker cash $0.00",
                 report_text,
@@ -211,6 +219,95 @@ class InfernoCentralCommandTests(unittest.TestCase):
         strategy_audit = by_id["inferno-strategy-shadow-engine-daily"]["promptAudit"]
         self.assertFalse(strategy_audit["ok"])
         self.assertIn("./run_inferno_paper_test_director.sh build", strategy_audit["missing"])
+
+    def test_schedule_hygiene_reports_custom_daily_loop_and_same_minute_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            launch_agents = root / "LaunchAgents"
+            automations = root / "automations"
+            launch_agents.mkdir()
+            morning_dir = automations / "morning-conviction-brief"
+            morning_dir.mkdir(parents=True)
+            intervals = [
+                {"Weekday": weekday, "Hour": hour, "Minute": minute}
+                for hour, minute in ((7, 30), (17, 10))
+                for weekday in range(1, 6)
+            ]
+            with (launch_agents / "io.diablotrading.inferno-daily-loop.plist").open("wb") as handle:
+                plistlib.dump({"StartCalendarInterval": intervals}, handle)
+            (morning_dir / "automation.toml").write_text(
+                "\n".join(
+                    [
+                        'id = "morning-conviction-brief"',
+                        'kind = "cron"',
+                        'name = "Morning Conviction Brief"',
+                        'status = "ACTIVE"',
+                        'rrule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=7;BYMINUTE=30"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(central_command, "LAUNCH_AGENTS_DIR", launch_agents),
+                patch.object(central_command, "CODEX_AUTOMATIONS_DIR", automations),
+                patch.object(
+                    central_command,
+                    "LAUNCH_AGENT_SCHEDULES",
+                    (("io.diablotrading.inferno-daily-loop", "digest"),),
+                ),
+                patch.object(central_command, "CODEX_AUTOMATIONS", ()),
+                patch.object(
+                    central_command,
+                    "daily_loop_script_sync_status",
+                    return_value={"status": "synced"},
+                ),
+            ):
+                payload = central_command.build_schedule_status()
+                rendered = central_command.render_schedule_status(payload)
+
+        hygiene = payload["hygiene"]
+        self.assertEqual(hygiene["dailyLoopCadence"]["status"], "custom-cadence")
+        self.assertEqual(hygiene["dailyLoopCadence"]["actualTimes"], ["07:30", "17:10"])
+        self.assertEqual(hygiene["dailyLoopCadence"]["installerDefaultTimes"], ["06:30", "16:30"])
+        self.assertEqual(len(hygiene["sameMinuteCollisions"]), 1)
+        collision = hygiene["sameMinuteCollisions"][0]
+        self.assertEqual(collision["days"], ["MO", "TU", "WE", "TH", "FR"])
+        self.assertEqual(collision["time"], "07:30")
+        self.assertEqual(
+            {job["id"] for job in collision["jobs"]},
+            {"io.diablotrading.inferno-daily-loop", "morning-conviction-brief"},
+        )
+        self.assertIn("Schedule hygiene (read-only):", rendered)
+        self.assertIn("daily-loop cadence: custom-cadence", rendered)
+        self.assertIn("same-minute calendar collisions: 1", rendered)
+        self.assertIn("Timing observations do not prove duplicate work", rendered)
+
+    def test_schedule_hygiene_excludes_interval_jobs_from_clock_collisions(self) -> None:
+        hygiene = central_command._schedule_hygiene(
+            [
+                {
+                    "id": "interval-job",
+                    "kind": "launchagent",
+                    "purpose": "interval job",
+                    "status": "configured",
+                    "schedule": "every 30 minutes",
+                    "calendarSlots": [],
+                }
+            ],
+            [
+                {
+                    "id": "morning-job",
+                    "kind": "cron",
+                    "name": "Morning job",
+                    "status": "ACTIVE",
+                    "calendarSlots": [{"time": "07:30", "days": ["MO"]}],
+                }
+            ],
+        )
+
+        self.assertEqual(hygiene["intervalOnlyCount"], 1)
+        self.assertEqual(hygiene["sameMinuteCollisions"], [])
 
     def test_strategy_shadow_automation_prompt_audit_accepts_paper_sync_steps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

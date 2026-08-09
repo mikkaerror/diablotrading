@@ -1220,6 +1220,18 @@ times on weekdays only. Default times are 06:30 (after dawn cycle) and 16:30
 - `logs/inferno_daily_loop.stdout.log`
 - `logs/inferno_daily_loop.stderr.log`
 
+### Audit automation timing without changing it
+
+```bash
+./inferno schedule
+```
+
+The schedule report distinguishes deployment script drift from an intentionally
+custom daily-loop cadence, and reports exact same-minute fixed-clock overlaps.
+An overlap is a review-only timing observation: it does not establish duplicate
+work or authorize a reschedule. Interval-based jobs are not presented as
+clock-time collisions because their actual firing minute is not guaranteed.
+
 ### Run and schedule the bounded evidence goal loop
 
 The evidence goal loop wraps the paper/fast-paper harvest in the controls that

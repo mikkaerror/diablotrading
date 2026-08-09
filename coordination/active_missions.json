@@ -817,5 +817,21 @@
       "premium-hurdle",
       "data-quality"
     ]
+  },
+  {
+    "id": "mission-c43f0a40",
+    "createdAt": "2026-08-09T09:54:26.694993-06:00",
+    "updatedAt": "2026-08-09T09:58:15.498581-06:00",
+    "title": "Add read-only schedule hygiene diagnostics",
+    "body": "Surface scheduled cadence ownership, custom cadence versus installer default, and exact same-minute collision observations in ./inferno schedule. Reporting only: do not start, reinstall, or reschedule jobs; do not alter tickets, gates, authority, risk, universe, broker, or TOS.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "automation",
+      "schedule",
+      "observability",
+      "research-only"
+    ]
   }
 ]
