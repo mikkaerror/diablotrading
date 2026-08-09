@@ -271,6 +271,25 @@ def load_saved_daily_loop_summary() -> dict[str, Any]:
     }
 
 
+def daily_loop_narrative_metadata(
+    daily_loop: dict[str, Any],
+    *,
+    fast: bool,
+) -> dict[str, Any]:
+    """Describe whether the daily-loop prose was loaded or rebuilt for this pulse.
+
+    A fast pulse still refreshes its lightweight checks, but deliberately reuses
+    the last daily-loop artifact so it does not invoke the longer desktop-aware
+    diagnostic path.  Preserve that distinction in the persisted payload and
+    human-facing rendering; a saved narrative is context, never a current gate
+    result or order signal.
+    """
+    return {
+        "source": "saved-artifact" if fast else "fresh-build",
+        "generatedAt": daily_loop.get("generatedAt"),
+    }
+
+
 def load_saved_paper_evidence_summary() -> dict[str, Any]:
     """Return the latest paper-evidence reducer without rebuilding it."""
     return summarize_paper_evidence(load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
@@ -340,6 +359,7 @@ def build_action_pulse(
         "autoLiveAllowed": False,
         "maintenanceStatus": (maintenance or {}).get("ok") if maintenance is not None else "skipped",
         "dailyLoop": {
+            **daily_loop_narrative_metadata(daily_loop, fast=fast),
             "deskVerdict": daily_loop.get("deskVerdict"),
             "decideTodayTickers": daily_loop.get("decideTodayTickers") or [],
             "failedCount": daily_loop.get("failedCount"),
@@ -384,6 +404,16 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     daily = payload.get("dailyLoop") or {}
     freshness = payload.get("freshnessPanel") or {}
     tos_visibility = payload.get("tosVisibility") or {}
+    fast_mode = bool(payload.get("fastMode", False))
+    narrative_source = text(daily.get("source")) or (
+        "saved-artifact" if fast_mode else "fresh-build"
+    )
+    narrative_label = (
+        "Saved daily-loop narrative (context only)"
+        if narrative_source == "saved-artifact"
+        else "Fresh daily-loop narrative (context only)"
+    )
+    narrative_generated_at = text(daily.get("generatedAt"), "unknown")
     lines = [
         "Inferno Action Pulse",
         "=" * 21,
@@ -393,7 +423,8 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
         f"- Phase: {payload.get('phaseLabel')}",
         f"- Verdict: {payload.get('verdict')}",
         f"- Message: {payload.get('message')}",
-        f"- Fast mode: {payload.get('fastMode', False)}",
+        f"- Fast mode: {fast_mode}",
+        f"- Daily-loop narrative source: {narrative_source} (generated: {narrative_generated_at})",
         f"- TOS: {render_tos_visibility_line(tos_visibility)}",
         "",
         "Freshness panel",
@@ -458,7 +489,14 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in payload.get("warningSummary") or [])
     narrative = sanitize_tos_language(daily.get("narrative"), tos_visibility)
     if narrative:
-        lines.extend(["", "Desk narrative", narrative])
+        lines.extend(
+            [
+                "",
+                narrative_label,
+                narrative,
+                "- Current research-review queues and freshness checks above take precedence; this narrative cannot stage or approve an order.",
+            ]
+        )
     lines.extend(
         [
             "",

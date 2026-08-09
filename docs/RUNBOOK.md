@@ -259,6 +259,13 @@ Schwab options tape when configured, refreshes the read-only ops loop, builds
 the daily-loop digest, builds the capital launch check, and sends a short
 operator memo. It cannot submit orders or change authority.
 
+The default quick pulse uses lightweight current checks and labels its
+daily-loop prose as a `saved-artifact` when it reuses the prior digest. Treat
+that prose as context only: the current freshness panel and research-review
+queues take precedence, and neither can stage or approve an order. Use
+`./inferno action-pulse --full` only when an explicit fresh full diagnostic
+digest is needed; it may invoke the longer desktop-aware evidence path.
+
 Install the weekday schedule:
 
 ```bash

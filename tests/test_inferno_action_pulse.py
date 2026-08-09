@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from inferno_action_pulse import (
     build_action_pulse,
+    daily_loop_narrative_metadata,
     render_action_pulse,
     resolve_deployable_cash,
     sent_key,
@@ -25,6 +26,18 @@ class InfernoActionPulseTests(unittest.TestCase):
     def test_sent_key_is_phase_scoped(self) -> None:
         self.assertEqual(sent_key("open", "2026-05-15"), "2026-05-15:open")
         self.assertEqual(sent_key("preclose", "2026-05-15"), "2026-05-15:preclose")
+
+    def test_daily_loop_narrative_metadata_labels_saved_and_fresh_sources(self) -> None:
+        daily_loop = {"generatedAt": "2026-06-13T08:00:00-06:00"}
+
+        self.assertEqual(
+            daily_loop_narrative_metadata(daily_loop, fast=True),
+            {"source": "saved-artifact", "generatedAt": "2026-06-13T08:00:00-06:00"},
+        )
+        self.assertEqual(
+            daily_loop_narrative_metadata(daily_loop, fast=False),
+            {"source": "fresh-build", "generatedAt": "2026-06-13T08:00:00-06:00"},
+        )
 
     @patch("inferno_action_pulse.freshness_status", return_value="fresh")
     @patch("inferno_action_pulse.load_json_file")
@@ -138,6 +151,8 @@ class InfernoActionPulseTests(unittest.TestCase):
                     }
                 },
                 "dailyLoop": {
+                    "source": "saved-artifact",
+                    "generatedAt": "2026-05-15T06:00:00-06:00",
                     "decideTodayTickers": ["NVDA"],
                     "narrative": (
                         "TOS is intentionally closed for low-performance mode; open it only "
@@ -184,6 +199,7 @@ class InfernoActionPulseTests(unittest.TestCase):
 
         self.assertIn("What changed", rendered)
         self.assertIn("Fast mode: True", rendered)
+        self.assertIn("Daily-loop narrative source: saved-artifact", rendered)
         self.assertIn("What matters today", rendered)
         self.assertIn("Research review queue (not an order queue)", rendered)
         self.assertIn("Listed symbols require fresh briefs and independent gates", rendered)
@@ -203,6 +219,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("executablePaper=true means operator-routable paper candidate", rendered)
         self.assertIn("GDS hard-blocks-new-capital", rendered)
         self.assertIn("No broker submit.", rendered)
+        self.assertIn("Saved daily-loop narrative (context only)", rendered)
+        self.assertIn("Current research-review queues and freshness checks above take precedence", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
 
     @patch("inferno_action_pulse.save_action_pulse")
@@ -223,7 +241,12 @@ class InfernoActionPulseTests(unittest.TestCase):
         _save_mock,
     ) -> None:
         load_json_mock.side_effect = [
-            {"deskVerdict": "saved", "decideTodayTickers": ["TE"], "narrative": "saved loop"},
+            {
+                "generatedAt": "2026-06-13T08:00:00-06:00",
+                "deskVerdict": "saved",
+                "decideTodayTickers": ["TE"],
+                "narrative": "saved loop",
+            },
             {"rows": [], "laneCounts": {}},
             {"counts": {"scenarios": 1, "executablePaper": 0, "approvalNeeded": 0, "shadowOnly": 1}},
         ]
@@ -242,6 +265,8 @@ class InfernoActionPulseTests(unittest.TestCase):
         build_daily_loop_mock.assert_not_called()
         self.assertTrue(payload["fastMode"])
         self.assertEqual(payload["dailyLoop"]["deskVerdict"], "saved")
+        self.assertEqual(payload["dailyLoop"]["source"], "saved-artifact")
+        self.assertEqual(payload["dailyLoop"]["generatedAt"], "2026-06-13T08:00:00-06:00")
         self.assertFalse(payload["manualReviewEligible"])
         self.assertEqual(payload["orderAuthorization"], "none")
         self.assertIn("--fast", payload["operatorCommands"][1])

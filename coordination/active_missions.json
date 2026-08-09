@@ -865,5 +865,21 @@
       "safety",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-1e7e678d",
+    "createdAt": "2026-08-09T10:46:40.159367-06:00",
+    "updatedAt": "2026-08-09T10:49:26.962316-06:00",
+    "title": "Label action-pulse narrative freshness",
+    "body": "Make saved daily-loop context explicit in the fast action pulse without triggering the full desktop path. Reporting only: do not alter schedules, TOS export, gates, risk, universe, tickets, broker submit, or authority.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "action-pulse",
+      "freshness",
+      "reporting",
+      "research-only"
+    ]
   }
 ]

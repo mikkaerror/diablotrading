@@ -187,7 +187,7 @@ Safety            — authority, risk, secrets
 | `inferno_model_command_center.py` | Cross-model coordination + onboarding digest | each daily loop; writes `reports/model_command_center_latest.txt` and `reports/model_command_center_onboard_latest.txt` |
 | `inferno_central_command.py` | Cross-subsystem coordination surface with read-only schedule cadence and timing-overlap diagnostics | as needed |
 | `inferno_deploy_preflight.py` | Pre-deployment all-systems-check | manual + cloud builds |
-| `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer | ~09:00 + ~15:30 weekdays |
+| `inferno_action_pulse.py` | Twice-daily action-pulse email (near open + before close); the easy-access tactical layer with labelled saved-versus-fresh daily-loop narrative provenance | ~09:00 + ~15:30 weekdays |
 | `inferno_deposit_plan.py` | Recurring deposit forecast that keeps planned deposits separate from broker-confirmed cash and trading profit | `reports/deposit_plan_latest.txt` |
 | `inferno_growth_stack.py` | Research-only forecast layering broker NLV, observed NLV trend, scheduled deposits, and explicit compounding scenarios; never makes planned deposits deployable or calls unattributed movement return | `reports/growth_stack_latest.txt` |
 | `inferno_schwab_transaction_ledger.py` | Strict GET-only, suffix-scoped normalization of redacted Schwab transaction facts for cash reconciliation; never stores account hashes, infers realized options P/L, or changes authority | `reports/schwab_transaction_ledger_latest.txt` |
