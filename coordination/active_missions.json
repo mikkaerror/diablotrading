@@ -915,5 +915,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-3d970c32",
+    "createdAt": "2026-08-10T14:56:22.986401-06:00",
+    "updatedAt": "2026-08-10T14:58:07.533188-06:00",
+    "title": "Synchronize deployed daily-loop script without cadence change",
+    "body": "Repair daily-loop source-to-deployed script drift by reinstalling the existing reviewed entrypoint with the already configured 07:30 and 17:10 weekday times. Preserve cadence and do not alter broker, tickets, gates, risk, universe, or authority.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "maintenance",
+      "schedule-sync",
+      "daily-loop",
+      "research-only",
+      "safety"
+    ]
   }
 ]

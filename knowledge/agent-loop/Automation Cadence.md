@@ -40,6 +40,12 @@ The weekday 07:30 Morning Conviction Brief shares a fixed minute with the daily
 digest. The jobs have different prompts and outputs, so the overlap is a
 review-only resource/duplication question, not duplicate-work evidence.
 
+On 2026-08-10, the daily-loop deployed entrypoint had drifted from the reviewed
+source. The installer was run with the existing explicit `07:30 17:10` times,
+not its defaults. The source/deployed checksum then reported `synced`; the
+loaded LaunchAgent retained the same weekday cadence and the same one
+review-only 07:30 overlap.
+
 ## Falsifier
 
 This belief is false if schedule output labels a custom cadence as deployment
