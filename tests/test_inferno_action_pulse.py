@@ -10,6 +10,7 @@ from inferno_action_pulse import (
     daily_loop_narrative_metadata,
     render_action_pulse,
     resolve_deployable_cash,
+    sanitize_saved_daily_loop_narrative,
     sent_key,
     subject_for_pulse,
 )
@@ -38,6 +39,17 @@ class InfernoActionPulseTests(unittest.TestCase):
             daily_loop_narrative_metadata(daily_loop, fast=False),
             {"source": "fresh-build", "generatedAt": "2026-06-13T08:00:00-06:00"},
         )
+
+    def test_saved_daily_loop_narrative_normalizes_legacy_approval_wording(self) -> None:
+        narrative = sanitize_saved_daily_loop_narrative(
+            "The decide-today queue has 2 ticker(s): AAA, BBB. "
+            "Walk the decision briefs and approve/reject each."
+        )
+
+        self.assertIn("The research/paper review queue has 2 ticker(s): AAA, BBB.", narrative)
+        self.assertIn("this queue cannot approve, stage, or submit an order.", narrative)
+        self.assertNotIn("decide-today", narrative)
+        self.assertNotIn("approve/reject", narrative)
 
     @patch("inferno_action_pulse.freshness_status", return_value="fresh")
     @patch("inferno_action_pulse.load_json_file")
@@ -155,6 +167,8 @@ class InfernoActionPulseTests(unittest.TestCase):
                     "generatedAt": "2026-05-15T06:00:00-06:00",
                     "decideTodayTickers": ["NVDA"],
                     "narrative": (
+                        "The decide-today queue has 1 ticker(s): NVDA. "
+                        "Walk the decision briefs and approve/reject each.\n\n"
                         "TOS is intentionally closed for low-performance mode; open it only "
                         "for supervised export or manual order staging."
                     ),
@@ -220,7 +234,10 @@ class InfernoActionPulseTests(unittest.TestCase):
         self.assertIn("GDS hard-blocks-new-capital", rendered)
         self.assertIn("No broker submit.", rendered)
         self.assertIn("Saved daily-loop narrative (context only)", rendered)
+        self.assertIn("The research/paper review queue has 1 ticker(s): NVDA.", rendered)
+        self.assertIn("this queue cannot approve, stage, or submit an order.", rendered)
         self.assertIn("Current research-review queues and freshness checks above take precedence", rendered)
+        self.assertNotIn("approve/reject", rendered)
         self.assertNotIn("TOS is intentionally closed", rendered)
 
     @patch("inferno_action_pulse.save_action_pulse")

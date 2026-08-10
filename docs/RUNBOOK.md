@@ -265,6 +265,8 @@ that prose as context only: the current freshness panel and research-review
 queues take precedence, and neither can stage or approve an order. Use
 `./inferno action-pulse --full` only when an explicit fresh full diagnostic
 digest is needed; it may invoke the longer desktop-aware evidence path.
+Known obsolete `approve/reject` language in saved prose is normalized to the
+same review-only boundary before it is shown.
 
 Install the weekday schedule:
 

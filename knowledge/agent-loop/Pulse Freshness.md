@@ -28,6 +28,10 @@ Fast mode skips heavy maintenance and loads the saved daily-loop artifact. Its
 payload and rendered memo label that narrative `saved-artifact` and preserve
 its source timestamp. A non-fast build labels the prose `fresh-build`.
 
+The saved-artifact renderer also normalizes obsolete `decide-today` and
+`approve/reject` wording to the review-only boundary. Current gates—not saved
+prose—remain the authority source.
+
 The pulse continues to show the independently refreshed research-review queue
 and freshness panel. Those checks take precedence over the narrative. The
 change does not alter scheduler cadence, native TOS export, quality or

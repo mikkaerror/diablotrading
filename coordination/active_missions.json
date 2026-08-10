@@ -898,5 +898,22 @@
       "evidence",
       "safety"
     ]
+  },
+  {
+    "id": "mission-cdb2f0fa",
+    "createdAt": "2026-08-10T14:51:00.945686-06:00",
+    "updatedAt": "2026-08-10T14:52:57.788141-06:00",
+    "title": "Sanitize legacy saved action-pulse narrative wording",
+    "body": "Normalize obsolete approve/reject wording only when rendering saved daily-loop prose in the fast action pulse. Reporting cleanup only: do not change tickets, approval actions, schedules, gates, risk, broker submit, or authority.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "action-pulse",
+      "reporting",
+      "legacy-wording",
+      "research-only",
+      "safety"
+    ]
   }
 ]

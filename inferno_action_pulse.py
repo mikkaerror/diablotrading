@@ -290,6 +290,28 @@ def daily_loop_narrative_metadata(
     }
 
 
+def sanitize_saved_daily_loop_narrative(value: Any) -> str:
+    """Remove obsolete action language from a reused daily-loop narrative.
+
+    The quick pulse may display prose written by an earlier daily-loop version.
+    Normalize only the known legacy queue wording so a saved artifact cannot
+    imply that a research-review symbol is an approval action.  Fresh narratives
+    are rendered unchanged and current gates remain the source of authority.
+    """
+    narrative = text(value)
+    replacements = {
+        "The decide-today research/paper review queue": "The research/paper review queue",
+        "The decide-today queue": "The research/paper review queue",
+        "Walk the decision briefs and approve/reject each.": (
+            "Review fresh briefs and independent gates; this queue cannot approve, "
+            "stage, or submit an order."
+        ),
+    }
+    for legacy, normalized in replacements.items():
+        narrative = narrative.replace(legacy, normalized)
+    return narrative
+
+
 def load_saved_paper_evidence_summary() -> dict[str, Any]:
     """Return the latest paper-evidence reducer without rebuilding it."""
     return summarize_paper_evidence(load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
@@ -488,6 +510,8 @@ def render_action_pulse(payload: dict[str, Any]) -> str:
     lines.extend(["", "Warnings / blockers"])
     lines.extend(f"- {item}" for item in payload.get("warningSummary") or [])
     narrative = sanitize_tos_language(daily.get("narrative"), tos_visibility)
+    if narrative_source == "saved-artifact":
+        narrative = sanitize_saved_daily_loop_narrative(narrative)
     if narrative:
         lines.extend(
             [
