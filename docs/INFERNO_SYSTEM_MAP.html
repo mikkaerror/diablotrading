@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inferno Desk — Working System Map & Glossary</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
+    --ink:#e6edf3; --dim:#9aa7b4; --faint:#6b7683;
+    --codex:#7c9cff; --claude:#f0a868; --shared:#b784f0; --op:#4cc38a; --auto:#4db6d6;
+    --danger:#ff6b6b; --gate:#f7c948; --ok:#4cc38a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+  h1{font-size:22px;margin:0 0 2px} h2{font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:30px 0 12px;border-bottom:1px solid var(--edge);padding-bottom:6px}
+  .sub{color:var(--faint);margin:0 0 16px;font-size:12.5px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+  .chip{background:var(--panel);border:1px solid var(--edge);border-radius:20px;padding:5px 12px;font-size:12.5px;color:var(--dim)}
+  .chip b{color:var(--ink)}
+  .chip.gate{border-color:var(--gate);color:var(--gate)} .chip.ok{border-color:var(--ok);color:var(--ok)} .chip.lock{border-color:var(--danger);color:var(--danger)}
+  .grid{display:grid;gap:14px}
+  .cols3{grid-template-columns:repeat(3,1fr)} .cols2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:14px 16px}
+  .card h3{margin:0 0 8px;font-size:13.5px}
+  .card p,.card li{color:var(--dim);font-size:12.8px} .card ul{margin:6px 0 0;padding-left:16px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 2px;font-size:12.5px;color:var(--dim)}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  .flow{display:flex;flex-direction:column;gap:0}
+  .stage{background:var(--panel2);border:1px solid var(--edge);border-left:4px solid var(--edge);border-radius:8px;padding:11px 14px;position:relative}
+  .stage .t{font-weight:600;font-size:13.5px} .stage .d{color:var(--dim);font-size:12.3px;margin-top:2px}
+  .stage .who{position:absolute;top:11px;right:12px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+  .arrow{align-self:center;color:var(--faint);font-size:15px;margin:3px 0}
+  .lc-codex{border-left-color:var(--codex)} .lc-claude{border-left-color:var(--claude)} .lc-shared{border-left-color:var(--shared)} .lc-op{border-left-color:var(--op)} .lc-auto{border-left-color:var(--auto)}
+  .gatebar{background:#241d05;border:1px dashed var(--gate);color:var(--gate);border-radius:8px;padding:9px 14px;font-size:12.5px;text-align:center;margin:3px 0}
+  .lockbar{background:#2a1414;border:1px solid var(--danger);color:#ffb4b4;border-radius:8px;padding:11px 14px;text-align:center}
+  .lockbar b{color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  td{padding:7px 8px;border-bottom:1px solid var(--edge);vertical-align:top;color:var(--dim)}
+  td.k{color:var(--ink);font-weight:600;white-space:nowrap;width:210px}
+  .task{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--edge)}
+  .task .clk{font-variant-numeric:tabular-nums;color:var(--auto);white-space:nowrap;font-size:12.5px;min-width:118px}
+  .task .nm{color:var(--ink);font-weight:600;font-size:12.8px} .task .ds{color:var(--faint);font-size:12px}
+  .gloss{columns:2;column-gap:26px} .gloss dt{color:var(--ink);font-weight:600;font-size:12.8px;margin-top:9px;break-after:avoid} .gloss dd{margin:1px 0 0;color:var(--dim);font-size:12.4px;break-before:avoid}
+  .foot{color:var(--faint);font-size:11.5px;margin-top:28px;border-top:1px solid var(--edge);padding-top:12px}
+  @media(max-width:760px){.cols3,.cols2{grid-template-columns:1fr}.gloss{columns:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔥 Inferno Desk — Working System Map</h1>
+  <p class="sub">A manual options paper-trading desk in "protect-and-prove" mode. Two AI collaborators (Codex + Claude) build & test; the human operator is the only one who approves or keys an order. Snapshot: 2026-08-07.</p>
+
+  <div class="chips">
+    <span class="chip gate">Promotion gate <b>1 / 30</b> scored</span>
+    <span class="chip ok">Doctor <b>healthy</b> (1 advisory)</span>
+    <span class="chip">Authority <b>paper-evidence-only</b></span>
+    <span class="chip lock">Live trading <b>LOCKED</b></span>
+    <span class="chip">Account <b>…8499</b> · NLV ~$669</span>
+    <span class="chip ok">Codex <b>working the engine backlog</b></span>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--codex)"></span>Codex lane</span>
+    <span><span class="dot" style="background:var(--claude)"></span>Claude lane</span>
+    <span><span class="dot" style="background:var(--shared)"></span>Shared lane</span>
+    <span><span class="dot" style="background:var(--op)"></span>Operator (you)</span>
+    <span><span class="dot" style="background:var(--auto)"></span>Automated</span>
+  </div>
+
+  <h2>The money path — one scored outcome at a time</h2>
+  <div class="flow">
+    <div class="stage lc-auto"><span class="who">automated · Mac</span><div class="t">1 · Data ingest</div><div class="d">Schwab API (account/options/prices) · Google Sheets tracker · TOS statement. Refreshed by the Mac's launchd (nightly_optimize + full-sync agents), not by this chat.</div></div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-codex"><span class="who">codex</span><div class="t">2 · Universe & signals — 146 names</div><div class="d">Tracker + conviction research + taxonomy. Strike selector builds candidate structures per name.</div></div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-codex"><span class="who">codex</span><div class="t">3 · Strategy engine</div><div class="d">Scorer + alternative pricing + supplemental quote coverage. <b>← the current fix zone:</b> rebalancing off the long-premium straddle monoculture toward the short-premium lead + defined-risk structures.</div></div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-shared"><span class="who">shared</span><div class="t">4 · Paper test director — classify</div><div class="d">Sorts every candidate into: stageable-now / auto-paper / approval-only / research-watch / construction-watch / hard-blocked.</div></div>
+    <div class="gatebar">QUALITY GATES — a candidate must clear ALL to become routable:<br>reward/risk ≥ 0.50 · decision card complete (paperComparisonAllowed) · premium-hurdle has edge · liquid chain · within $500 cap · direction agrees</div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-op"><span class="who">operator</span><div class="t">5 · Approve — <code>./inferno today</code></div><div class="d">You review the one-line candidate and press y/n. Nothing stages without you. This is the human gate.</div></div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-op"><span class="who">operator</span><div class="t">6 · Key it into thinkorswim paperMoney</div><div class="d">You place the paper order by hand and record the real fills. The desk never fills for you.</div></div>
+    <div class="arrow">↓</div>
+    <div class="stage lc-shared"><span class="who">shared</span><div class="t">7 · Capture → score</div><div class="d">Fills go into the capture-template CSV → import → strategy lab scores the closed outcome → <b>promotion gap drops by one</b>.</div></div>
+    <div class="arrow">↓</div>
+    <div class="gatebar">PROMOTION GATE — 30 scored operator-paper outcomes + distinct events. Currently <b>1 / 30</b>.</div>
+    <div class="arrow">↓</div>
+    <div class="lockbar"><b>LIVE TRADING</b> — reachable only after 30 outcomes <b>+ your explicit ack</b>. Hard-locked in code today: liveTradingAllowed = False, brokerSubmitAllowed = False.</div>
+  </div>
+
+  <h2>Guardrails — the parts nobody can flip</h2>
+  <div class="grid cols3">
+    <div class="card"><h3>🔒 Safety perimeter</h3><ul>
+      <li>liveTradingAllowed = <b>False</b> (hard-coded)</li>
+      <li>brokerSubmitAllowed = <b>False</b> (hard-coded)</li>
+      <li>submit_live_order — always blocked</li>
+      <li>Live graduation = 30 outcomes + human ack only</li>
+    </ul></div>
+    <div class="card"><h3>💵 Risk rails</h3><ul>
+      <li>Max single ticket — <b>$500</b></li>
+      <li>Max daily tickets — <b>$1,500</b></li>
+      <li>Max open paper tickets — <b>5</b></li>
+      <li>Live cap today — <b>$0</b> (drawdown pause)</li>
+    </ul></div>
+    <div class="card"><h3>📒 What counts as evidence</h3><ul>
+      <li>Operator-paper outcomes — <b>counts</b> (1 so far)</li>
+      <li>Fast sims (72 closed) — <b>credit OFF</b></li>
+      <li>Shadow (420 closed) — <b>credit OFF</b></li>
+      <li>Only real paper fills move the gate</li>
+    </ul></div>
+  </div>
+
+  <h2>Who owns what</h2>
+  <div class="grid cols3">
+    <div class="card" style="border-top:3px solid var(--codex)"><h3>Codex</h3><p>Capital readiness, risk gates, strategy engine, scoring/calibration, Schwab sync, docs, command-center. Doing the engine rebalance now.</p></div>
+    <div class="card" style="border-top:3px solid var(--claude)"><h3>Claude</h3><p>Native thinkorswim export stabilization & broker-UI evidence (mission in-progress, blocked until a TOS window is open).</p></div>
+    <div class="card" style="border-top:3px solid var(--shared)"><h3>Shared</h3><p>Paper-evidence loop, paper-auto selection, shadow/backtest artifacts. Coordinated via <code>coordination/active_missions.json</code> + <code>model_notes.jsonl</code>.</p></div>
+  </div>
+
+  <h2>Automations running for you</h2>
+  <div class="card">
+    <div class="task"><span class="clk">Mon–Fri 08:24</span><div><div class="nm">inferno-paper-candidate-brief <span style="color:var(--op)">· new</span></div><div class="ds">Morning: pings you only when a candidate clears the bar; digest of near-misses + why they're held.</div></div></div>
+    <div class="task"><span class="clk">Daily 18:07</span><div><div class="nm">inferno-daily-engine</div><div class="ds">Campaign verdict monitor: buy-side kill-gates (standing KILL) + short-premium lead progress.</div></div></div>
+    <div class="task"><span class="clk">Daily 21:32</span><div><div class="nm">inferno-nightly-hygiene <span style="color:var(--op)">· new</span></div><div class="ds">Repo + desk readiness sweep so tomorrow starts clean. Report-only, never mutates.</div></div></div>
+    <div class="task"><span class="clk">Sun 18:02</span><div><div class="nm">schwab-weekly-reauth</div><div class="ds">Reminder to re-sign Schwab before the 7-day refresh token expires (next: ~Aug 12).</div></div></div>
+    <div class="task"><span class="clk">Mon 08:01</span><div><div class="nm">ai-basket-trend-alerts</div><div class="ds">Weekly AI-basket review: regime, breadth, sizing, week-over-week signal trend.</div></div></div>
+  </div>
+
+  <h2>Where it's stuck & what's being done</h2>
+  <div class="grid cols2">
+    <div class="card"><h3>The bottleneck</h3><p>The candidate engine is a <b>premium-buy monoculture</b> — ~107 long-premium vs ~0 short-premium, 70/146 straddles — but long-premium is a data-supported <b>KILL</b>. So <b>85 of 92</b> paper attempts die at the quality gates. The gate isn't too strict; the pipeline lacks clean candidates. <i>Do not loosen gates.</i></p></div>
+    <div class="card"><h3>The fix (in flight)</h3><p>Codex is rebalancing generation toward the short-premium lead + defined-risk structures and auto-converting cap-busting straddles into cap-fitting spreads (5-wide debit / 1-wide credit / single long leg). Mission "Rebalance candidate generation" = <b>done</b>; follow-on quote-coverage alignment in progress.</p></div>
+  </div>
+
+  <h2>Glossary</h2>
+  <dl class="gloss">
+    <dt>Promotion gate</dt><dd>The 30 scored operator-paper outcomes (+ distinct events) required before live authority can even be considered. The desk's single binding constraint.</dd>
+    <dt>Scored outcome</dt><dd>A paper trade that was staged, filled in paperMoney, closed, and scored by the strategy lab. Only these count toward the 30.</dd>
+    <dt>Operator-paper vs Fast sim vs Shadow</dt><dd>Three evidence ledgers. Only operator-paper earns promotion credit; fast sims and shadow replays are research-only (credit OFF) so nothing is double-counted.</dd>
+    <dt>Quality gates</dt><dd>The filters a candidate must clear to be stageable: reward/risk ≥ 0.50, complete decision card, premium-hurdle edge, chain liquidity, ticket cap, direction agreement.</dd>
+    <dt>Reward/risk floor (0.50)</dt><dd>A debit spread must offer ≥ $0.50 reward per $1 risk. Most current candidates (e.g. 0.05–0.25) fail here.</dd>
+    <dt>Premium hurdle</dt><dd>A long-vol setup must have positive forecast edge over the premium it pays. The killed buy-side rarely clears it.</dd>
+    <dt>Decision card / paperComparisonAllowed</dt><dd>A candidate's readiness record. If incomplete, it's held in research-watch, not routable.</dd>
+    <dt>Classification buckets</dt><dd>stageable-now / operator-routable (ready to approve) · approval-only · research-watch (shadow only) · construction-watch (needs rebuild) · hard-blocked · event-capped.</dd>
+    <dt>Authority level</dt><dd>The desk's permission state: halted → paper-evidence-only (now) → (future) live. Live-submit stays hard-locked regardless.</dd>
+    <dt>Quote coverage</dt><dd>A bounded, read-only supplemental Schwab option-chain fetch so more candidates can be priced without blowing the 12-symbol tape cap. Built overnight; unblocked pricing.</dd>
+    <dt>Cap-fitting fallback</dt><dd>Converting a too-expensive straddle into a defined-risk structure that fits the $500 cap (5-wide debit / 1-wide credit / single long leg).</dd>
+    <dt>Premium-buy monoculture</dt><dd>The engine over-producing long-premium (straddle) ideas — the current root cause of the stalled gate.</dd>
+    <dt>Buy-side KILL / short-premium lead</dt><dd>Long-premium is a data-supported dead edge; short-premium (selling defined-risk premium) is the promising-but-unproven lead being investigated.</dd>
+    <dt>Doctor</dt><dd><code>./inferno doctor</code> — the full health verdict. Each WARN line becomes a work item. Currently healthy with 1 advisory.</dd>
+    <dt>paperMoney</dt><dd>thinkorswim's paper-trading sandbox where you hand-key approved tickets and record fills.</dd>
+    <dt>Capture template</dt><dd>The CSV worksheet where you enter real paperMoney fills so an outcome can be scored.</dd>
+    <dt>./inferno</dt><dd>The unified control surface. Key verbs: <code>today</code> (approve), <code>status</code>, <code>sync</code> (full refresh), <code>doctor</code>, <code>oauth</code> (Schwab).</dd>
+    <dt>Codex / Claude lanes</dt><dd>Ownership boundaries that keep the two AI agents from colliding on shared files; cross-lane work must be flagged and logged.</dd>
+    <dt>Coordination (missions/notes)</dt><dd>How the agents hand off: <code>active_missions.json</code> (who owns what) + <code>model_notes.jsonl</code> (what changed). Read on every session start.</dd>
+  </dl>
+
+  <div class="foot">Read-only synthesis of the desk's own artifacts · generated 2026-08-07 · nothing here changes authority, tickets, or risk. Live trading remains hard-locked pending 30 scored outcomes + your ack.</div>
+</div>
+</body>
+</html>
