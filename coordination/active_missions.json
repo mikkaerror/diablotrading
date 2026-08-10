@@ -881,5 +881,22 @@
       "reporting",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-2f26d8ef",
+    "createdAt": "2026-08-10T09:47:43.314461-06:00",
+    "updatedAt": "2026-08-10T09:48:34.287511-06:00",
+    "title": "Settle eligible isolated fast-paper simulations",
+    "body": "Run the existing settlement-only research pass after fresh read-only market data. Record only boundary-qualified isolated simulations; do not open replacements, mutate operator paper tickets, change promotion credit, schedules, risk, broker submit, or authority.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "fast-paper",
+      "settlement",
+      "research-only",
+      "evidence",
+      "safety"
+    ]
   }
 ]
