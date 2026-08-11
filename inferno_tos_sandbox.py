@@ -183,6 +183,64 @@ def latest_ledger_ticket_for_intent(intent: dict[str, Any], strategy_hint: str |
     return None
 
 
+def staged_cap_fit_variant_tickets() -> list[dict[str, Any]]:
+    """Return today's fillable cap-fit variants already staged in the ledger.
+
+    The ledger is the canonical evidence state.  This narrow read bridge lets
+    a cap-fit debit spread that passed the normal ledger gates seed the sandbox
+    even when the source queue still describes its blocked long-vol primary.
+    It does not create, approve, or submit any ticket.
+    """
+    ledger = load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {}
+    today = local_now().date().isoformat()
+    staged: list[dict[str, Any]] = []
+    for ticket in ledger.get("items") or []:
+        if not isinstance(ticket, dict):
+            continue
+        if not (
+            text(ticket.get("tradeDate")) == today
+            and text(ticket.get("status")) == "paper-staged"
+            and text((ticket.get("outcome") or {}).get("status")) == "open"
+            and ticket.get("paperVariantOnly")
+            and ticket.get("capFitFallback")
+            and ticket.get("liveTradingAllowed") is False
+            and ticket.get("brokerSubmitAllowed") is False
+        ):
+            continue
+        staged.append(ticket)
+    return staged
+
+
+def sandbox_ticket_from_staged_cap_fit_variant(ticket: dict[str, Any]) -> dict[str, Any]:
+    """Build a paperMoney-only sandbox row from a passed ledger variant."""
+    return {
+        "ticketId": ticket.get("ticketId"),
+        "ticker": ticket.get("ticker"),
+        "strategy": ticket.get("strategy"),
+        "expiration": ticket.get("expiration"),
+        "paperVariantOnly": True,
+        "paperVariantFamily": ticket.get("paperVariantFamily"),
+        "paperVariantOfStrategy": ticket.get("paperVariantOfStrategy"),
+        "status": "stage-in-papermoney",
+        "approvalStatus": ticket.get("approvalStatus"),
+        "paperAutoSelected": bool(ticket.get("paperAutoSelected")),
+        "routeFamily": ticket.get("routeFamily") or "cap-fit-defined-risk",
+        "setupRec": ticket.get("setupRec"),
+        "readiness": ticket.get("readiness"),
+        "daysUntilEarnings": ticket.get("daysUntilEarnings"),
+        "riskUnits": ticket.get("riskUnits"),
+        "nextStep": (
+            "Operator may key these exact legs into thinkorswim paperMoney after visual quote verification; "
+            "record only the operator-supplied fill facts."
+        ),
+        "reasons": [],
+        "ticketText": None,
+        "brokerSurface": None,
+        "previewOrder": None,
+        "legSymbols": [leg.get("symbol") for leg in ticket.get("legs") or []],
+    }
+
+
 def intent_stage_status(
     intent: dict[str, Any],
     strike_plan_item: dict[str, Any] | None,
@@ -273,28 +331,35 @@ def build_stageable_ticket(
     strike_plan_item = effective_paper_plan_item(strike_plan_item)
     strike_plan = strike_plan_item.get("strikePlan") or {}
     ledger_ticket = latest_ledger_ticket_for_intent(intent, strategy_hint=strike_plan.get("strategy"))
+    ledger_ticket = ledger_ticket or {}
+    cap_fit_variant = bool(ledger_ticket.get("paperVariantOnly") and ledger_ticket.get("capFitFallback"))
     ticket = {
-        "ticketId": (ledger_ticket or {}).get("ticketId"),
+        "ticketId": ledger_ticket.get("ticketId"),
         "ticker": intent.get("ticker"),
-        "strategy": (ledger_ticket or {}).get("strategy") or strike_plan.get("strategy"),
-        "expiration": (ledger_ticket or {}).get("expiration") or strike_plan.get("expiration") or strike_plan_item.get("expiration"),
-        "paperVariantOnly": bool((ledger_ticket or {}).get("paperVariantOnly") or strike_plan_item.get("paperVariantOnly")),
-        "paperVariantFamily": (ledger_ticket or {}).get("paperVariantFamily") or strike_plan_item.get("paperVariantFamily"),
-        "paperVariantOfStrategy": (ledger_ticket or {}).get("paperVariantOfStrategy") or strike_plan_item.get("paperVariantOfStrategy"),
+        "strategy": ledger_ticket.get("strategy") or strike_plan.get("strategy"),
+        "expiration": ledger_ticket.get("expiration") or strike_plan.get("expiration") or strike_plan_item.get("expiration"),
+        "paperVariantOnly": bool(ledger_ticket.get("paperVariantOnly") or strike_plan_item.get("paperVariantOnly")),
+        "paperVariantFamily": ledger_ticket.get("paperVariantFamily") or strike_plan_item.get("paperVariantFamily"),
+        "paperVariantOfStrategy": ledger_ticket.get("paperVariantOfStrategy") or strike_plan_item.get("paperVariantOfStrategy"),
         "status": status,
         "approvalStatus": intent.get("approvalStatus"),
         "paperAutoSelected": bool(status == "stage-in-papermoney" and intent.get("approvalStatus") != "approved"),
-        "routeFamily": intent.get("routeFamily"),
-        "setupRec": intent.get("setupRec"),
-        "readiness": intent.get("readiness"),
-        "daysUntilEarnings": intent.get("daysUntilEarnings"),
-        "riskUnits": intent.get("riskUnits"),
-        "nextStep": intent.get("nextStep"),
+        "routeFamily": ledger_ticket.get("routeFamily") or intent.get("routeFamily"),
+        "setupRec": ledger_ticket.get("setupRec") or intent.get("setupRec"),
+        "readiness": ledger_ticket.get("readiness") or intent.get("readiness"),
+        "daysUntilEarnings": ledger_ticket.get("daysUntilEarnings") or intent.get("daysUntilEarnings"),
+        "riskUnits": ledger_ticket.get("riskUnits") or intent.get("riskUnits"),
+        "nextStep": (
+            "Operator may key these exact legs into thinkorswim paperMoney after visual quote verification; "
+            "record only the operator-supplied fill facts."
+            if cap_fit_variant
+            else intent.get("nextStep")
+        ),
         "reasons": reasons,
-        "ticketText": intent.get("ticketText"),
+        "ticketText": None if cap_fit_variant else intent.get("ticketText"),
         "brokerSurface": intent.get("brokerSurface"),
         "previewOrder": preview_order,
-        "legSymbols": [leg.get("symbol") for leg in (((ledger_ticket or {}).get("legs") or strike_plan.get("legs") or []))],
+        "legSymbols": [leg.get("symbol") for leg in (ledger_ticket.get("legs") or strike_plan.get("legs") or [])],
     }
     if preview_order:
         ticket["orderSummary"] = (
@@ -461,6 +526,24 @@ def build_tos_sandbox_session() -> dict[str, Any]:
             watchlist.append(ticket)
         else:
             blocked.append(ticket)
+
+    # The source execution queue correctly keeps the cap-busting long-vol
+    # primary blocked.  A separately ledger-staged cap-fit spread is the only
+    # eligible route that may accompany it into paperMoney.
+    staged_ids = {text(ticket.get("ticketId")) for ticket in stageable}
+    if ready:
+        for ledger_ticket in staged_cap_fit_variant_tickets():
+            ticket_id = text(ledger_ticket.get("ticketId"))
+            if not ticket_id or ticket_id in staged_ids:
+                continue
+            ticket = sandbox_ticket_from_staged_cap_fit_variant(ledger_ticket)
+            if len(stageable) < MAX_STAGEABLE_TICKETS:
+                stageable.append(ticket)
+                staged_ids.add(ticket_id)
+            else:
+                ticket["status"] = "watchlist-stage-cap"
+                ticket["reasons"] = [f"daily paperMoney stage cap reached ({MAX_STAGEABLE_TICKETS})"]
+                watchlist.append(ticket)
 
     write_fill_log_template()
     fill_log_sync = seed_fill_log_from_stageable(stageable, local_now().date().isoformat())

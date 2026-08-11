@@ -139,6 +139,159 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
 
         self.assertIsNone(paper_execution.rehearsal_variant_item(item))
 
+    def test_cap_fit_spread_stages_while_its_blocked_straddle_remains_blocked(self) -> None:
+        generated_at = paper_execution.local_now().isoformat()
+        chain = {
+            "sourceStatus": "ok",
+            "sourceGeneratedAt": generated_at,
+            "underlyingPrice": 40.0,
+            "quoteQualityScore": 84,
+            "quoteQualityLabel": "usable",
+            "qualityFlags": [],
+            "atmSpreadQuality": "acceptable",
+            "atmLiquidityScore": 90,
+            "atmWindowMedianSpreadPct": 0.05,
+            "atmWindowOpenInterest": 1_000,
+            "paperLiquidityPass": True,
+            "liveLiquidityPass": True,
+            "paperFillFrictionPct": 0.05,
+        }
+        primary = {
+            "ticker": "IREN",
+            "setupRec": "Straddle",
+            "ok": True,
+            "approvalStatus": "pending",
+            "intentStatus": "blocked",
+            "intentBlocks": ["human approval still required"],
+            "price": 40.0,
+            "sourcePrice": 40.0,
+            "daysUntilEarnings": 10,
+            "marketContext": {
+                "trend": {"label": "Uptrend"},
+                "rvol": 0.82,
+                "support": 35.0,
+                "resistance": 45.0,
+                "distanceToSupportPct": 12.5,
+                "distanceToResistancePct": 12.5,
+            },
+            "schwabOptions": chain,
+            "paperOnly": True,
+            "liveTradingAllowed": False,
+            "strikePlan": {
+                "strategy": "LONG_STRADDLE",
+                "expiration": "2026-08-28",
+                "estimatedDebit": 7.6,
+                "estimatedMaxLoss": 760.0,
+                "estimatedMaxProfit": "uncapped",
+                "lowerBreakEven": 32.4,
+                "upperBreakEven": 47.6,
+                "greekSummary": {
+                    "netDelta": 0.0,
+                    "netGamma": 0.1,
+                    "netTheta": -0.2,
+                    "netVega": 0.3,
+                    "greeksComplete": True,
+                },
+                "liquidityNotes": [],
+                "legs": [
+                    {"symbol": "IREN260828C00040000", "instruction": "BUY_TO_OPEN", "ask": 3.8},
+                    {"symbol": "IREN260828P00040000", "instruction": "BUY_TO_OPEN", "ask": 3.8},
+                ],
+            },
+        }
+        cap_fit_pricing = {
+            "generatedAt": generated_at,
+            "items": [
+                {
+                    "ticker": "IREN",
+                    "status": "priced",
+                    "combinedPassed": True,
+                    "optimizerPassed": True,
+                    "paperRiskPassed": True,
+                    "capFitFallback": True,
+                    "capFitFallbackOfStrategy": "LONG_STRADDLE",
+                    "capFitFallbackStructure": "debit_5w",
+                    "paperVariantOnly": True,
+                    "paperOnly": True,
+                    "liveTradingAllowed": False,
+                    "brokerSubmitAllowed": False,
+                    "price": 40.0,
+                    "sourcePrice": 40.0,
+                    "daysUntilEarnings": 10,
+                    "marketContext": primary["marketContext"],
+                    "schwabOptions": chain,
+                    "strikePlan": {
+                        "strategy": "CALL_DEBIT_SPREAD",
+                        "expiration": "2026-08-28",
+                        "estimatedDebit": 2.0,
+                        "estimatedMaxLoss": 200.0,
+                        "estimatedMaxProfit": 300.0,
+                        "breakEven": 42.0,
+                        "variantFamily": "cap-fit-debit-5w",
+                        "variantForStrategy": "LONG_STRADDLE",
+                        "greekSummary": {
+                            "netDelta": 0.2,
+                            "netGamma": 0.01,
+                            "netTheta": -0.01,
+                            "netVega": 0.02,
+                            "greeksComplete": True,
+                        },
+                        "liquidityNotes": [],
+                        "legs": [
+                            {
+                                "symbol": "IREN260828C00040000",
+                                "instruction": "BUY_TO_OPEN",
+                                "ask": 2.4,
+                            },
+                            {
+                                "symbol": "IREN260828C00045000",
+                                "instruction": "SELL_TO_OPEN",
+                                "bid": 0.4,
+                            },
+                        ],
+                    },
+                    "riskVerdict": {
+                        "passed": True,
+                        "blocks": [],
+                        "warnings": [],
+                        "metrics": {
+                            "debitSpreadRewardRisk": 1.5,
+                            "schwabOptions": {
+                                "attached": True,
+                                "sourceStatus": "ok",
+                                "quoteQualityScore": 84,
+                                "quoteQualityLabel": "usable",
+                                "paperLiquidityPass": True,
+                            },
+                        },
+                    },
+                }
+            ],
+        }
+
+        with (
+            patch.object(paper_execution, "load_ledger", return_value={"items": []}),
+            patch.object(paper_execution, "save_ledger"),
+            patch.object(paper_execution, "load_json_file", return_value={"newPaperEntriesAllowed": True}),
+        ):
+            result = paper_execution.record_from_strike_plan(
+                {"generatedAt": generated_at, "items": [primary]},
+                strategy_pricing=cap_fit_pricing,
+            )
+
+        tickets = result["ledger"]["items"]
+        straddle = next(ticket for ticket in tickets if ticket["strategy"] == "LONG_STRADDLE")
+        variant = next(ticket for ticket in tickets if ticket["strategy"] == "CALL_DEBIT_SPREAD")
+        self.assertEqual(straddle["status"], "paper-blocked")
+        self.assertEqual(variant["status"], "paper-staged")
+        self.assertTrue(variant["riskVerdict"]["passed"])
+        self.assertEqual(variant["estimatedMaxLoss"], 200.0)
+        self.assertEqual(variant["legs"][1]["symbol"], "IREN260828C00045000")
+        self.assertTrue(variant["capFitFallback"])
+        self.assertEqual(variant["routeFamily"], "cap-fit-defined-risk")
+        self.assertFalse(variant["liveTradingAllowed"])
+        self.assertFalse(variant["brokerSubmitAllowed"])
+
     def test_ledger_entry_preserves_entry_score_context(self) -> None:
         item = {
             "rank": 3,

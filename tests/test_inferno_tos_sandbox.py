@@ -85,6 +85,40 @@ class InfernoTosSandboxFillLogTests(unittest.TestCase):
         self.assertEqual(status, "stage-in-papermoney")
         self.assertEqual(reasons, [])
 
+    def test_staged_cap_fit_variant_is_the_fillable_sandbox_route(self) -> None:
+        today = inferno_tos_sandbox.local_now().date().isoformat()
+        cap_fit_ticket = {
+            "ticketId": "capfit-iren",
+            "tradeDate": today,
+            "ticker": "IREN",
+            "strategy": "CALL_DEBIT_SPREAD",
+            "status": "paper-staged",
+            "outcome": {"status": "open"},
+            "paperVariantOnly": True,
+            "paperVariantFamily": "cap-fit-debit-5w",
+            "paperVariantOfStrategy": "LONG_STRADDLE",
+            "capFitFallback": True,
+            "routeFamily": "cap-fit-defined-risk",
+            "setupRec": "CALL_DEBIT_SPREAD",
+            "daysUntilEarnings": 16,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+            "legs": [
+                {"symbol": "IREN260828C00040000"},
+                {"symbol": "IREN260828C00045000"},
+            ],
+        }
+        unsafe_copy = {**cap_fit_ticket, "ticketId": "unsafe", "brokerSubmitAllowed": True}
+        with patch.object(inferno_tos_sandbox, "load_json_file", return_value={"items": [cap_fit_ticket, unsafe_copy]}):
+            staged = inferno_tos_sandbox.staged_cap_fit_variant_tickets()
+
+        self.assertEqual(staged, [cap_fit_ticket])
+        route = inferno_tos_sandbox.sandbox_ticket_from_staged_cap_fit_variant(staged[0])
+        self.assertEqual(route["status"], "stage-in-papermoney")
+        self.assertEqual(route["strategy"], "CALL_DEBIT_SPREAD")
+        self.assertEqual(route["routeFamily"], "cap-fit-defined-risk")
+        self.assertEqual(route["legSymbols"], ["IREN260828C00040000", "IREN260828C00045000"])
+
     def test_seed_fill_log_from_stageable_inserts_stub_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             work_file = Path(tmpdir) / "fill.csv"

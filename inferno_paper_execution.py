@@ -10,12 +10,18 @@ build evidence before any live automation earns authority.
 
 import argparse
 import hashlib
+import math
 import sys
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from inferno_artifact_lifecycle import failed_lifecycle, successful_lifecycle
-from inferno_config import AUTO_PAPER_SELECTION_ENABLED, local_now
+from inferno_config import (
+    AUTO_PAPER_SELECTION_ENABLED,
+    MAX_SINGLE_TICKET_DOLLARS,
+    MIN_DEBIT_SPREAD_REWARD_RISK,
+    local_now,
+)
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_risk_policy import evaluate_strike_item
 from inferno_trade_evidence import decision_card
@@ -27,6 +33,7 @@ PAPER_EXECUTION_LEDGER_FILE = DATA_DIR / "inferno_paper_execution_ledger.json"
 PAPER_EXECUTION_TEXT_FILE = REPORTS_DIR / "paper_execution_ledger_latest.txt"
 SCHWAB_ACCOUNT_FILE = DATA_DIR / "inferno_schwab_account_sync.json"
 PROCESS_COMPLIANCE_FILE = DATA_DIR / "inferno_process_compliance.json"
+STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
 
 LEDGER_VERSION = 1
 DEFAULT_LIMIT = 50
@@ -47,6 +54,7 @@ EXPLICIT_CAMPAIGN_ARMS = CAMPAIGN_ARMS | {SHORT_PREMIUM_DEFINED_ARM}
 HOLD_THROUGH_EXIT_RULE = "hold-through"
 EXIT_BEFORE_EARNINGS_RULE = "exit-before-earnings"
 CONTRACT_MULTIPLIER = 100.0
+CAP_FIT_DEFINED_RISK_STRATEGIES = {"CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD"}
 
 
 def load_strike_plan() -> dict[str, Any]:
@@ -310,6 +318,21 @@ def ledger_leg_symbols(entry: dict[str, Any]) -> str:
     return ",".join(str(leg.get("symbol", "")) for leg in entry.get("legs", []))
 
 
+def planned_ticket_id(item: dict[str, Any], trade_date: str | None = None) -> str:
+    """Return the stable id a strike item will receive in the paper ledger."""
+    strike_plan = item.get("strikePlan") or {}
+    leg_symbols = [leg.get("symbol") for leg in strike_plan.get("legs") or []]
+    return ticket_hash(
+        [
+            trade_date or local_now().date().isoformat(),
+            item.get("ticker"),
+            strike_plan.get("strategy"),
+            strike_plan.get("expiration"),
+            ",".join(str(symbol) for symbol in leg_symbols),
+        ]
+    )
+
+
 def semantic_ticket_key(entry: dict[str, Any]) -> str:
     """Group refreshed quotes for the same same-day ticket together."""
     if entry.get("status") != "paper-staged":
@@ -369,6 +392,15 @@ def strategy_cost(strike_plan: dict[str, Any]) -> tuple[str, float]:
     if "estimatedCredit" in strike_plan:
         return "credit", float(strike_plan.get("estimatedCredit") or 0)
     return "unknown", 0.0
+
+
+def number(value: Any, default: float = 0.0) -> float:
+    """Safely normalize a numeric artifact field for route qualification."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if math.isfinite(parsed) else default
 
 
 def normalize_reason(value: Any) -> str:
@@ -471,6 +503,94 @@ def rehearsal_variant_item(item: dict[str, Any]) -> dict[str, Any] | None:
         "strikePlan": variant,
         "riskVerdict": verdict,
     }
+
+
+def cap_fit_defined_risk_variant_item(
+    item: dict[str, Any],
+    strategy_pricing: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return one already-passed cap-fit debit spread for a blocked primary.
+
+    Strategy-alternative pricing is a research artifact, so this bridge is
+    intentionally much narrower than its general candidate list.  It accepts
+    only the same fully passed cap-fit debit-spread route that the paper-test
+    director can expose to an operator, then hands the reconstructed item back
+    to ``paper_status_for_item`` for a fresh normal paper-risk evaluation.
+    It never copies an approval, weakens a gate, or turns on broker authority.
+    """
+    primary_plan = item.get("strikePlan") or {}
+    primary_strategy = str(primary_plan.get("strategy") or "").upper()
+    ticker = str(item.get("ticker") or "").upper()
+    if not item.get("ok") or not ticker or not primary_strategy:
+        return None
+
+    for priced in strategy_pricing.get("items") or []:
+        if not isinstance(priced, dict) or str(priced.get("ticker") or "").upper() != ticker:
+            continue
+        if not (
+            priced.get("status") == "priced"
+            and priced.get("combinedPassed")
+            and priced.get("optimizerPassed")
+            and priced.get("paperRiskPassed")
+            and priced.get("capFitFallback")
+            and priced.get("paperVariantOnly")
+            and priced.get("paperOnly")
+            and priced.get("liveTradingAllowed") is False
+            and priced.get("brokerSubmitAllowed") is False
+        ):
+            continue
+
+        plan = priced.get("strikePlan") or {}
+        pricing_risk = priced.get("riskVerdict") or {}
+        pricing_metrics = pricing_risk.get("metrics") or {}
+        chain = pricing_metrics.get("schwabOptions") or {}
+        strategy = str(plan.get("strategy") or priced.get("recommendedStrategy") or "").upper()
+        max_loss = number(plan.get("estimatedMaxLoss"), -1.0)
+        reward_risk = number(pricing_metrics.get("debitSpreadRewardRisk"), -1.0)
+        if (
+            strategy not in CAP_FIT_DEFINED_RISK_STRATEGIES
+            or str(priced.get("capFitFallbackOfStrategy") or "").upper() != primary_strategy
+            or not pricing_risk.get("passed")
+            or not plan.get("legs")
+            or max_loss <= 0
+            or max_loss > MAX_SINGLE_TICKET_DOLLARS
+            or reward_risk < MIN_DEBIT_SPREAD_REWARD_RISK
+            or not chain.get("attached")
+            or str(chain.get("sourceStatus") or "").lower() != "ok"
+            or not chain.get("paperLiquidityPass")
+        ):
+            continue
+
+        # Preserve the primary execution intent's approval state and only
+        # replace the structure and its supporting market facts.  In
+        # particular, do not inherit the pricing artifact's research-only
+        # pseudo-approval; the normal paper-auto-selection rule will accept
+        # only an approval-only block after re-evaluation.
+        return {
+            **item,
+            "ticker": ticker,
+            "ok": True,
+            "setupRec": strategy,
+            "price": priced.get("price") or item.get("price"),
+            "sourcePrice": priced.get("sourcePrice") or item.get("sourcePrice") or item.get("price"),
+            "daysUntilEarnings": priced.get("daysUntilEarnings") or item.get("daysUntilEarnings"),
+            "marketContext": priced.get("marketContext") or item.get("marketContext") or {},
+            "marketContextSummary": priced.get("marketContextSummary") or item.get("marketContextSummary") or {},
+            "schwabOptions": priced.get("schwabOptions") or item.get("schwabOptions") or {},
+            "paperOnly": True,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+            "paperVariantOnly": True,
+            "routeFamily": "cap-fit-defined-risk",
+            "setupFamily": "cap-fit-defined-risk",
+            "paperVariantFamily": plan.get("variantFamily") or priced.get("paperVariantFamily"),
+            "paperVariantOfStrategy": priced.get("capFitFallbackOfStrategy"),
+            "capFitFallback": True,
+            "capFitFallbackStructure": priced.get("capFitFallbackStructure"),
+            "sourceStrategyPricingGeneratedAt": priced.get("generatedAt") or strategy_pricing.get("generatedAt"),
+            "strikePlan": plan,
+        }
+    return None
 
 
 def paper_status_for_item(
@@ -594,7 +714,6 @@ def build_ledger_entry(
     card = decision_card(item, account_nlv=account.get("netLiquidatingValue"))
     item = {**item, "decisionCard": card}
     legs = strike_plan.get("legs") or []
-    leg_symbols = [leg.get("symbol") for leg in legs]
     cost_type, cost = strategy_cost(strike_plan)
     status, block_reasons, risk_verdict, paper_auto_block_reason = paper_status_for_item(
         item, strike_plan_generated_at, ledger
@@ -602,15 +721,7 @@ def build_ledger_entry(
     event_id = paper_event_id({**item, "expiration": strike_plan.get("expiration")})
     arm = campaign_arm_for_ticket(item, event_id)
     friction = paper_fill_friction_model(item, entry_limit=cost, exit_rule=arm["exitRule"])
-    ticket_id = ticket_hash(
-        [
-            now.date().isoformat(),
-            item.get("ticker"),
-            strike_plan.get("strategy"),
-            strike_plan.get("expiration"),
-            ",".join(str(symbol) for symbol in leg_symbols),
-        ]
-    )
+    ticket_id = planned_ticket_id(item, now.date().isoformat())
 
     return {
         "ticketId": ticket_id,
@@ -625,12 +736,16 @@ def build_ledger_entry(
         "paperVariantOnly": bool(item.get("paperVariantOnly") or strike_plan.get("paperVariantOnly")),
         "paperVariantFamily": item.get("paperVariantFamily") or strike_plan.get("variantFamily"),
         "paperVariantOfStrategy": item.get("paperVariantOfStrategy") or strike_plan.get("variantForStrategy"),
+        "capFitFallback": bool(item.get("capFitFallback")),
+        "capFitFallbackStructure": item.get("capFitFallbackStructure"),
+        "sourceStrategyPricingGeneratedAt": item.get("sourceStrategyPricingGeneratedAt"),
         "shortPremiumDefined": bool(item.get("shortPremiumDefined") or strike_plan.get("shortPremiumDefined")),
         "preRegisteredCampaign": item.get("preRegisteredCampaign") or strike_plan.get("preRegisteredCampaign"),
         "status": status,
         "blockReasons": block_reasons,
         "paperOnly": True,
         "liveTradingAllowed": False,
+        "brokerSubmitAllowed": False,
         "paperAutoSelected": bool(status == "paper-staged" and item.get("approvalStatus") != "approved"),
         "paperAutoBlockReason": paper_auto_block_reason,
         "intentStatus": item.get("intentStatus"),
@@ -695,7 +810,10 @@ def merge_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any]]) -> 
     return updated, inserted
 
 
-def record_from_strike_plan(strike_plan: dict[str, Any] | None = None) -> dict[str, Any]:
+def record_from_strike_plan(
+    strike_plan: dict[str, Any] | None = None,
+    strategy_pricing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Record all tickets from a strike plan into the paper ledger.
 
     Passing the in-memory strike plan is safest because it prevents accidentally
@@ -703,16 +821,48 @@ def record_from_strike_plan(strike_plan: dict[str, Any] | None = None) -> dict[s
     """
     strike_plan = strike_plan or load_strike_plan()
     ledger = load_ledger()
+    strategy_pricing = strategy_pricing or load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {"items": []}
     compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
     process_entry_allowed = compliance.get("newPaperEntriesAllowed", True)
     entries: list[dict[str, Any]] = []
     for item in strike_plan.get("items", []):
         guarded_item = {**item, "processEntryAllowed": process_entry_allowed}
-        entries.append(build_ledger_entry(guarded_item, strike_plan.get("generatedAt"), ledger))
+        primary_entry = build_ledger_entry(
+            guarded_item,
+            strike_plan.get("generatedAt"),
+            {"items": list(ledger.get("items", [])) + entries},
+        )
+        entries.append(primary_entry)
         variant_item = rehearsal_variant_item(item)
         if variant_item:
             guarded_variant = {**variant_item, "processEntryAllowed": process_entry_allowed}
-            entries.append(build_ledger_entry(guarded_variant, strike_plan.get("generatedAt"), ledger))
+            entries.append(
+                build_ledger_entry(
+                    guarded_variant,
+                    strike_plan.get("generatedAt"),
+                    {"items": list(ledger.get("items", [])) + entries},
+                )
+            )
+        cap_fit_variant = cap_fit_defined_risk_variant_item(item, strategy_pricing)
+        if cap_fit_variant and primary_entry.get("status") == "paper-blocked":
+            guarded_variant = {**cap_fit_variant, "processEntryAllowed": process_entry_allowed}
+            variant_ticket_id = planned_ticket_id(guarded_variant)
+            # A refresh must not reject the same already-open cap-fit ticket as
+            # a duplicate of itself.  Keep every other open ticket in the
+            # evaluator input so ticker, event, and daily-exposure guards stay
+            # fully active.
+            variant_ledger_items = [
+                entry
+                for entry in list(ledger.get("items", [])) + entries
+                if entry.get("ticketId") != variant_ticket_id
+            ]
+            entries.append(
+                build_ledger_entry(
+                    guarded_variant,
+                    cap_fit_variant.get("sourceStrategyPricingGeneratedAt") or strike_plan.get("generatedAt"),
+                    {"items": variant_ledger_items},
+                )
+            )
     updated, inserted = merge_entries(ledger, entries)
     updated = successful_lifecycle(
         updated,
