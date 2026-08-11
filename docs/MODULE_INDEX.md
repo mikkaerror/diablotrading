@@ -218,6 +218,7 @@ Safety            — authority, risk, secrets
 | `inferno_tos_session_probe.py` | Live thinkorswim window inspection | read-only |
 | `inferno_tos_sandbox.py` | paperMoney-mode helpers | read-only |
 | `inferno_tos_fill_ingest.py` | Explicitly ingest matched paperMoney fills into the paper ledger; records accepted-progress versus planned/invalid/unmatched no-progress outcomes | side-effects on paper |
+| `inferno_record_fill.py` | Records one operator-supplied entry or exit against an already seeded paper-staged ticket, then runs canonical ingest and scoring | paper-only; never creates tickets or submits orders |
 | `inferno_desktop_automation.py` | macOS automation primitives shared across TOS modules | low-level |
 
 ## Operations — Paper

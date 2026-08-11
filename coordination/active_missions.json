@@ -965,5 +965,22 @@
       "liquidity",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-1b6bbff1",
+    "createdAt": "2026-08-11T15:21:09.717394-06:00",
+    "updatedAt": "2026-08-11T15:30:12.605995-06:00",
+    "title": "Build ./inferno record-fill to remove paper-fill CSV friction",
+    "body": "Completed docs/FILL_CAPTURE_FRICTION_MISSION.md. ./inferno record-fill now accepts an operator-supplied entry or exit against one existing sandbox-seeded paper-staged ticket row, validates before writing, invokes canonical fill ingest, and refreshes performance scoring. The isolated IREN seed id 1be6f96d665a730e round-trips planned to open to closed to one scored outcome. Blocked tickets, malformed prices, unmatched ids, and exits without a prior imported open fill fail closed without CSV writes. No authority, gate, risk, universe, ticket, approval, broker-submit, or live-trading change occurred.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "friction",
+      "tooling",
+      "record-fill",
+      "research-only"
+    ]
   }
 ]

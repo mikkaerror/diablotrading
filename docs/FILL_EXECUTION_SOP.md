@@ -22,8 +22,28 @@ If nothing's routable, there is no rep today. Do **not** force a blocked name.
 **3. Manage and close per plan; record the close fill.**
 - When you exit, note the exit net price and the close timestamp.
 
-**4. Fill one row in the capture CSV** — `reports/paper_capture_template_latest.csv`
-Columns and what goes in each:
+**4. Record the actual entry and exit with the short command.**
+
+After the paperMoney entry fill, run:
+
+```bash
+./inferno record-fill <TICKER|ticketId> --entry <actual-net-price> [--contracts N]
+```
+
+After the actual exit fill, run:
+
+```bash
+./inferno record-fill <TICKER|ticketId> --exit <actual-net-price>
+```
+
+It only accepts an existing sandbox-seeded `paper-staged` ticket, preserves
+the operator-supplied real prices, runs the canonical fill ingest, and refreshes
+the scored-outcome count. It does not create a ticket, approve one, or submit
+anything to a broker. If a flag is omitted, the command prompts for it.
+
+**CSV fallback:** `reports/paper_capture_template_latest.csv`
+
+The same facts can still be entered in the capture CSV if needed:
 | field | value |
 |---|---|
 | sessionDate | trade date, YYYY-MM-DD |
@@ -40,7 +60,7 @@ Columns and what goes in each:
 | openedAt / closedAt | **tz-aware ISO**, e.g. `2026-08-11T09:45:00-06:00` |
 | notes | optional |
 
-**5. Import → it scores.**
+**5. Import → it scores (CSV fallback only).**
 - The exact import command is printed at the bottom of
   `reports/paper_capture_template_latest.txt`. Run it.
 - Verify it counted: scored should tick **1/30 → 2/30** (`./inferno` or

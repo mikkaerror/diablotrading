@@ -78,6 +78,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "watchlist", "description": "show a compact research-first view of the current watchlist"},
     {"command": "today", "description": "open the one-letter operator decision screen"},
     {"command": "paper-capture", "description": "make a read-only paperMoney fill worksheet"},
+    {"command": "record-fill", "description": "record one operator-supplied paperMoney fill and refresh scoring"},
     {"command": "doctor", "description": "run the full health check"},
     {"command": "preflight", "description": "check reporting readiness without refreshing data"},
     {"command": "usage", "description": "build the low-context handoff packet"},
@@ -796,6 +797,7 @@ def build_central_command(
             f"{CONTROL_ENTRYPOINT} watchlist",
             f"{CONTROL_ENTRYPOINT} today",
             f"{CONTROL_ENTRYPOINT} paper-capture",
+            f"{CONTROL_ENTRYPOINT} record-fill <TICKER|ticketId> --entry <price>",
             f"{CONTROL_ENTRYPOINT} doctor",
             f"{CONTROL_ENTRYPOINT} preflight",
             f"{CONTROL_ENTRYPOINT} usage",
@@ -931,6 +933,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     paper_capture_parser = subparsers.add_parser("paper-capture")
     paper_capture_parser.add_argument("paper_capture_action", nargs="?", choices=("run", "status"), default="run")
+
+    record_fill_parser = subparsers.add_parser("record-fill")
+    record_fill_parser.add_argument("target", help="paper-staged ticker or exact ticketId")
+    record_fill_prices = record_fill_parser.add_mutually_exclusive_group()
+    record_fill_prices.add_argument("--entry")
+    record_fill_prices.add_argument("--exit")
+    record_fill_parser.add_argument("--contracts")
 
     note_parser = subparsers.add_parser("note")
     note_parser.add_argument("--author", required=True)
@@ -1193,6 +1202,17 @@ def main() -> int:
             ["python3", "inferno_paper_capture_template.py", args.paper_capture_action],
             timeout_seconds=600,
         )
+        return int(result["returncode"])
+
+    if command == "record-fill":
+        command_args = ["python3", "inferno_record_fill.py", args.target]
+        if args.entry is not None:
+            command_args.extend(["--entry", str(args.entry)])
+        if args.exit is not None:
+            command_args.extend(["--exit", str(args.exit)])
+        if args.contracts is not None:
+            command_args.extend(["--contracts", str(args.contracts)])
+        result = run_passthrough_command(command_args, timeout_seconds=600)
         return int(result["returncode"])
 
     if command == "sync":

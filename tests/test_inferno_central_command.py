@@ -93,6 +93,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("sync", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("watchlist", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("paper-capture", {item["command"] for item in saved["controlPlane"]["commands"]})
+            self.assertIn("record-fill", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("usage", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("preflight", {item["command"] for item in saved["controlPlane"]["commands"]})
             self.assertIn("oauth", {item["command"] for item in saved["controlPlane"]["commands"]})
@@ -117,6 +118,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("./inferno status", saved["shortcutCommands"])
             self.assertIn("./inferno watchlist", saved["shortcutCommands"])
             self.assertIn("./inferno paper-capture", saved["shortcutCommands"])
+            self.assertIn("./inferno record-fill <TICKER|ticketId> --entry <price>", saved["shortcutCommands"])
             self.assertIn("./inferno preflight", saved["shortcutCommands"])
             self.assertIn("./inferno usage", saved["shortcutCommands"])
             self.assertIn("./inferno action-pulse", saved["shortcutCommands"])
@@ -150,6 +152,17 @@ class InfernoCentralCommandTests(unittest.TestCase):
             )
             self.assertIn("Paper construction-watch: 2", report_text)
             self.assertIn("Fast-paper backlog: 8", report_text)
+
+    def test_record_fill_parser_accepts_the_operator_fast_path(self) -> None:
+        args = central_command.build_parser().parse_args(
+            ["record-fill", "IREN", "--entry", "2.10", "--contracts", "1"]
+        )
+
+        self.assertEqual(args.command, "record-fill")
+        self.assertEqual(args.target, "IREN")
+        self.assertEqual(args.entry, "2.10")
+        self.assertIsNone(args.exit)
+        self.assertEqual(args.contracts, "1")
 
     def test_build_schedule_status_reads_launchagents_and_codex_automations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
