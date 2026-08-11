@@ -55,6 +55,7 @@ STRATEGY_LAB_FILE = ROOT / "data" / "inferno_strategy_lab.json"
 EXPOSURE_ANALYTICS_FILE = ROOT / "data" / "inferno_exposure_analytics.json"
 EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
+WATCHLIST_BRIEF_FILE = ROOT / "data" / "inferno_watchlist_brief.json"
 TRACKER_TAXONOMY_FILE = ROOT / "data" / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = ROOT / "data" / "inferno_tracker_role_review.json"
@@ -777,6 +778,45 @@ def conviction_research_status(report: dict) -> tuple[bool, str]:
             }
         )
     )
+    return ok, detail
+
+
+def watchlist_brief_status(report: dict) -> tuple[bool, str]:
+    """Verify the compact watchlist view remains a fresh, authority-safe memo."""
+    if not report:
+        return False, "missing"
+
+    generated = str(report.get("generatedAt", ""))
+    fresh = recent_or_today(generated, max_age_hours=36)
+    safe = (
+        bool(report.get("researchOnly"))
+        and not bool(report.get("promotable"))
+        and not bool(report.get("authorityChanged"))
+        and not bool(report.get("brokerSubmitAllowed"))
+        and not bool(report.get("liveTradingAllowed"))
+    )
+    verdict = str(report.get("verdict") or "")
+    focus = report.get("focus") or []
+    ok = fresh and safe and verdict in {"ready", "no-current-research"}
+    if fresh:
+        focus_tickers = ", ".join(
+            str(item.get("ticker") or "")
+            for item in focus[:3]
+            if isinstance(item, dict) and item.get("ticker")
+        )
+        detail = (
+            f"{verdict} | focus={focus_tickers or 'none'} "
+            f"| research-only={safe}"
+        )
+    else:
+        detail = json.dumps(
+            {
+                "generatedAt": generated,
+                "verdict": verdict,
+                "researchOnly": report.get("researchOnly"),
+                "promotable": report.get("promotable"),
+            }
+        )
     return ok, detail
 
 
@@ -2308,6 +2348,12 @@ def main() -> int:
     conviction_ok, conviction_detail = conviction_research_status(conviction_research)
     lines.append(summarize_status("Conviction research", conviction_ok, conviction_detail))
     if not conviction_ok:
+        warnings += 1
+
+    watchlist_brief = load_json_file(WATCHLIST_BRIEF_FILE) or {}
+    watchlist_brief_ok, watchlist_brief_detail = watchlist_brief_status(watchlist_brief)
+    lines.append(summarize_status("Watchlist brief", watchlist_brief_ok, watchlist_brief_detail))
+    if not watchlist_brief_ok:
         warnings += 1
 
     tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}

@@ -932,5 +932,21 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-6a1f3824",
+    "createdAt": "2026-08-10T23:31:52.506535-06:00",
+    "updatedAt": "2026-08-10T23:41:30.953295-06:00",
+    "title": "Add compact watchlist-first research brief",
+    "body": "Build one concise read-only view from the existing tracked watchlist that separates research-now, wait, and avoid/blocked context without surfacing paper-ticket workflow. Preserve source freshness, current research gates, eligible universe, risk constants, broker submit off, and paper-evidence authority; the brief is not an order, approval, or sizing instruction.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "watchlist",
+      "usability",
+      "research-only",
+      "safety"
+    ]
   }
 ]

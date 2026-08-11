@@ -119,6 +119,7 @@ run_advisory "evidence goal loop" python3 inferno_evidence_goal_loop.py run --ma
 
 echo "10/18 Research, expected-move, and calibration cycle"
 run_advisory "research cycle" python3 inferno_research_cycle.py
+run_advisory "watchlist brief" python3 inferno_watchlist_brief.py run
 
 echo "11/18 Net-R, DTE, behavior, and process controls"
 run_advisory "expectancy ledger" python3 inferno_expectancy_ledger.py build

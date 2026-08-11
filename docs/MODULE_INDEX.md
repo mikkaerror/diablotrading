@@ -78,6 +78,7 @@ Safety            — authority, risk, secrets
 
 | Module | Purpose | Artifact |
 |---|---|---|
+| `inferno_watchlist_brief.py` | Compact research-first view of the current tracker; flags stale personal-list provenance rather than silently using it and never creates ticket, approval, sizing, or order workflow | `reports/watchlist_brief_latest.txt` |
 | `inferno_approval_cadence.py` | Decide-today batting order with urgency scoring | `reports/approval_cadence_latest.txt` |
 | `inferno_decision_brief.py` | Per-ticker context memo for each pending name | `reports/decision_briefs_latest.txt` |
 | `inferno_trade_conviction_audit.py` | **NEW** Per-ticket bull / bear / disagreement / falsification math case with peer-reviewed citations | `reports/trade_conviction_audit_latest.txt` |

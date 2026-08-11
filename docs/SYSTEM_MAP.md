@@ -69,6 +69,7 @@ Generated artifacts beat durable docs when they disagree.
 | Compact supervisor picture | `reports/model_command_center_onboard_latest.txt` |
 | Current supervisor picture | `reports/model_command_center_latest.txt` |
 | One-line desk verdict | `reports/central_command_latest.txt` |
+| Compact watchlist research priorities | `reports/watchlist_brief_latest.txt` |
 | Health check | `reports/doctor_latest.txt` |
 | Formula integrity | `reports/math_verify_latest.txt` |
 | Secret hygiene | `reports/secret_hygiene_latest.txt` |
@@ -169,6 +170,7 @@ tested subsystems instead of replacing them:
 
 - `./inferno status` — one current desk state
 - `./inferno sync` — full model/account/tracker refresh
+- `./inferno watchlist` — compact research-first view of the current tracker; it does not expose ticket, approval, or order workflow
 - `./inferno today` — one-letter operator decision screen
 - `./inferno doctor` — health check
 - `./inferno preflight` — reporting readiness check

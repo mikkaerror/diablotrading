@@ -90,6 +90,7 @@ STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
+WATCHLIST_BRIEF_FILE = DATA_DIR / "inferno_watchlist_brief.json"
 TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = DATA_DIR / "inferno_tracker_role_review.json"
@@ -119,6 +120,7 @@ WHEEL_SHADOW_FILE = DATA_DIR / "inferno_wheel_shadow.json"
 CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "./inferno status", "description": "show the latest unified desk state"},
     {"command": "./inferno sync", "description": "run the full tracker, Schwab, research, command-center, and doctor refresh"},
+    {"command": "./inferno watchlist", "description": "show compact research priorities from the current tracker"},
     {"command": "./inferno today", "description": "open the one-letter operator decision screen"},
     {"command": "./inferno paper-capture", "description": "make a read-only paperMoney fill worksheet"},
     {"command": "./inferno doctor", "description": "run the full health verdict"},
@@ -164,6 +166,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "command",
         "question": "What matters right now?",
         "artifact": "reports/model_command_center_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "watchlist",
+        "question": "Which current tracker names deserve research attention without entering a ticket workflow?",
+        "artifact": "reports/watchlist_brief_latest.txt",
         "owner": "codex",
     },
     {
@@ -1060,6 +1068,7 @@ def build_command_center() -> dict[str, Any]:
     shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
     edge = load_json_file(EDGE_RESEARCH_FILE) or {}
     conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
+    watchlist_brief = load_json_file(WATCHLIST_BRIEF_FILE) or {}
     tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
     tracker_role_review = load_json_file(TRACKER_ROLE_REVIEW_FILE) or {}
     tracker_role_policy_packet = load_json_file(TRACKER_ROLE_POLICY_PACKET_FILE) or {}
@@ -1192,6 +1201,7 @@ def build_command_center() -> dict[str, Any]:
         ),
         "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
+        "watchlistBrief": artifact_summary(WATCHLIST_BRIEF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
         "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRoleReview": artifact_summary(TRACKER_ROLE_REVIEW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
@@ -1458,6 +1468,8 @@ def build_command_center() -> dict[str, Any]:
         "shadowTracked": (shadow.get("counts") or {}).get("tracked", shadow.get("trackedCount")),
         "shadowClosed": (shadow.get("counts") or {}).get("closed", shadow.get("closedCount")),
         "edgeRanked": len(edge.get("ranked") or []),
+        "watchlistBriefVerdict": watchlist_brief.get("verdict"),
+        "watchlistBriefFocus": [item.get("ticker") for item in (watchlist_brief.get("focus") or [])[:3]],
         "convictionBehemoths": [
             item.get("ticker")
             for item in (conviction_research.get("behemoths") or [])[:5]
@@ -1537,6 +1549,7 @@ def build_command_center() -> dict[str, Any]:
             f'cd "{ROOT}"',
             "./inferno status",
             "./inferno sync",
+            "./inferno watchlist",
             "./inferno today",
             "./inferno paper-capture",
             "./inferno doctor",

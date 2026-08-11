@@ -75,6 +75,7 @@ ALL_WEEKDAY_CODES = tuple(WEEKDAY_CODE_LABELS)
 CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "status", "description": "show the latest command-center state"},
     {"command": "sync", "description": "run the full daily model refresh now"},
+    {"command": "watchlist", "description": "show a compact research-first view of the current watchlist"},
     {"command": "today", "description": "open the one-letter operator decision screen"},
     {"command": "paper-capture", "description": "make a read-only paperMoney fill worksheet"},
     {"command": "doctor", "description": "run the full health check"},
@@ -792,6 +793,7 @@ def build_central_command(
             'cd "<repo-root>"',
             f"{CONTROL_ENTRYPOINT} status",
             f"{CONTROL_ENTRYPOINT} sync",
+            f"{CONTROL_ENTRYPOINT} watchlist",
             f"{CONTROL_ENTRYPOINT} today",
             f"{CONTROL_ENTRYPOINT} paper-capture",
             f"{CONTROL_ENTRYPOINT} doctor",
@@ -919,6 +921,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sync_parser = subparsers.add_parser("sync")
     sync_parser.add_argument("--skip-tracker", action="store_true")
+
+    watchlist_parser = subparsers.add_parser("watchlist")
+    watchlist_parser.add_argument("watchlist_action", nargs="?", choices=("run", "status"), default="run")
+    watchlist_parser.add_argument("--limit", type=int, default=3)
 
     today_parser = subparsers.add_parser("today")
     today_parser.add_argument("--quiet", action="store_true")
@@ -1173,6 +1179,13 @@ def main() -> int:
         if args.quiet:
             command_args.append("--quiet")
         result = run_passthrough_command(command_args, timeout_seconds=600)
+        return int(result["returncode"])
+
+    if command == "watchlist":
+        result = run_passthrough_command(
+            ["python3", "inferno_watchlist_brief.py", args.watchlist_action, "--limit", str(args.limit)],
+            timeout_seconds=600,
+        )
         return int(result["returncode"])
 
     if command == "paper-capture":
