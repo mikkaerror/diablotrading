@@ -7,7 +7,9 @@ paper test director slate) and prints a single plain-English screen:
   - your money right now (current NLV, change from peak)
   - today's paper candidates (if any), each as one line, with a y/n/q prompt
 
-What it does on `y`: invokes the existing inferno_approval_queue to approve.
+What it does on `y`: invokes the existing inferno_approval_queue to approve a
+                     pending queue item, or records an acknowledgement for a
+                     manual paperMoney route without touching any queue.
 What it does on `n`: records the skip in data/operator_decisions.csv so we
                      keep an audit trail without nagging.
 What it does on `q`: stops the loop, prints the closing summary, exits.
@@ -278,15 +280,23 @@ def print_holdings_section(*, now: _dt.datetime | None = None) -> None:
 def candidates_today() -> list[dict]:
     """The list the operator can act on today.
 
-    Pulls auto-paper-selected candidates plus approval-only candidates from
-    the paper test director. Returns [] when nothing is approveable today.
+    Pulls pending queue candidates and explicitly operator-routable cap-fit
+    paper spreads from the paper-test director. The latter stay manual,
+    research-only paperMoney instructions; they are not approval-queue items.
     """
     director = _load_json(DIRECTOR)
     auto = director.get("autoPaperSlate") or []
     approval = director.get("approvalSlate") or []
+    operator_routable = director.get("operatorRoutableSlate") or []
     out = []
     for item in list(auto) + list(approval):
         if item.get("approvalStatus") == "pending":
+            out.append(item)
+    for item in operator_routable:
+        if (
+            item.get("operatorRoute") == "manual-paperMoney-entry"
+            and item.get("status") == "stage-in-papermoney"
+        ):
             out.append(item)
     return out
 
@@ -298,11 +308,12 @@ def _candidate_line(item: dict) -> str:
     max_profit = _max_profit_label(item.get("estimatedMaxProfit"))
     dte_earn = item.get("daysUntilEarnings")
     dte_str = f"{dte_earn}d to earnings" if dte_earn is not None else "earnings ?"
+    route_suffix = "  |  manual paperMoney route" if item.get("operatorRoute") else ""
     return (
         f"  {ticker}  {strat}  |  "
         f"risk up to {max_loss}  |  "
         f"could make up to {max_profit}  |  "
-        f"{dte_str}"
+        f"{dte_str}{route_suffix}"
     )
 
 
@@ -417,9 +428,22 @@ def run_one(item: dict) -> str:
     ticker = item.get("ticker", "")
     print(_candidate_line(item))
     t_start = _dt.datetime.now()
-    answer = _prompt("    paper-trade this? [y]es / [n]o / [s]kip / [q]uit: ")
+    if item.get("operatorRoute") == "manual-paperMoney-entry":
+        prompt = "    acknowledge manual paperMoney route? [y]es / [s]kip / [q]uit: "
+    else:
+        prompt = "    paper-trade this? [y]es / [n]o / [s]kip / [q]uit: "
+    answer = _prompt(prompt)
     elapsed = f"{(_dt.datetime.now() - t_start).total_seconds():.1f}"
     if answer in ("y", "yes"):
+        if item.get("operatorRoute") == "manual-paperMoney-entry":
+            _log_decision(
+                ticker,
+                "paper-route-confirmed",
+                "manual paperMoney route acknowledged; no queue or broker action",
+                seconds_to_decide=elapsed,
+            )
+            print(f"    -> recorded manual paperMoney route for {ticker}; no broker action was taken")
+            return "route-confirmed"
         rationale, confidence = _prompt_decision_journal()
         rc = _approve_via_queue(ticker)
         if rc == 0:

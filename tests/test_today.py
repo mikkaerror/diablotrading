@@ -134,5 +134,58 @@ class TodayFreshnessTests(unittest.TestCase):
         self.assertIn("Holdings (last known; STALE 5.0d old):", output.getvalue())
 
 
+class TodayCandidatesTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.data = Path(self._tmp.name)
+
+    def test_manual_papermoney_route_is_visible_without_queue_approval(self) -> None:
+        director = self.data / "director.json"
+        director.write_text(
+            json.dumps(
+                {
+                    "operatorRoutableSlate": [
+                        {
+                            "ticker": "IREN",
+                            "status": "stage-in-papermoney",
+                            "operatorRoute": "manual-paperMoney-entry",
+                            "strategy": "CALL_DEBIT_SPREAD",
+                            "estimatedMaxLoss": 200,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.object(today, "DIRECTOR", director):
+            candidates = today.candidates_today()
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["ticker"], "IREN")
+        self.assertIn("manual paperMoney route", today._candidate_line(candidates[0]))
+
+    def test_manual_papermoney_yes_never_calls_approval_queue(self) -> None:
+        candidate = {
+            "ticker": "IREN",
+            "operatorRoute": "manual-paperMoney-entry",
+            "status": "stage-in-papermoney",
+        }
+        output = StringIO()
+        with (
+            patch.object(today, "_prompt", return_value="y"),
+            patch.object(today, "_approve_via_queue") as approve_queue,
+            patch.object(today, "_log_decision") as log_decision,
+            redirect_stdout(output),
+        ):
+            result = today.run_one(candidate)
+
+        self.assertEqual(result, "route-confirmed")
+        approve_queue.assert_not_called()
+        log_decision.assert_called_once()
+        self.assertIn("no broker action was taken", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

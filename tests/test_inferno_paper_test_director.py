@@ -10,6 +10,7 @@ from inferno_paper_test_director import (
     build_director,
     director_text,
     load_strike_plan,
+    operator_routable_cap_fit_spreads,
     split_candidates,
 )
 
@@ -492,6 +493,127 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
         self.assertEqual(payload["pricedPaperVariantWatchlist"][0]["paperVariantFamily"], "wheel-proxy")
         self.assertEqual(payload["pricedPaperVariantWatchlist"][0]["eventId"], "USAR|2026-08-21")
         self.assertTrue(payload["pricedPaperVariantWatchlist"][0]["paperResearchSelected"])
+
+    @patch("inferno_paper_test_director.load_strike_plan")
+    @patch("inferno_paper_test_director.load_json_file")
+    def test_build_director_routes_only_clean_cap_fit_debit_spread_for_manual_papermoney(
+        self,
+        mock_load_json_file,
+        mock_load_strike_plan,
+    ) -> None:
+        snapshot = {"eligibleTickers": ["IREN"], "reviewQueueTickers": ["IREN"]}
+        approval_queue = {"items": []}
+        execution_queue = {"items": [], "updatedAt": "2026-08-11T13:59:00-06:00"}
+        sandbox = {"stageableTickets": [], "watchlistTickets": [], "blockedTickets": []}
+        authority = {"decision": {"authorityLevel": "paper-evidence-only", "warnings": [], "nextMilestones": []}}
+        performance = {"closedMetrics": {"scoredCount": 1}, "deskVerdict": {"level": "evidence-building"}}
+        clean_iren = {
+            "ticker": "IREN",
+            "status": "priced",
+            "combinedPassed": True,
+            "optimizerPassed": True,
+            "paperRiskPassed": True,
+            "capFitFallback": True,
+            "paperVariantOnly": True,
+            "paperOnly": True,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+            "expiration": "2026-08-28",
+            "sourceAlternativeScore": 74.5,
+            "candidateStrategyRank": 1,
+            "capFitFallbackOfStrategy": "LONG_STRADDLE",
+            "capFitFallbackStructure": "debit_5w",
+            "marketContextSummary": {"trend": "Uptrend"},
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "expiration": "2026-08-28",
+                "estimatedDebit": 2.0,
+                "estimatedMaxLoss": 200.0,
+                "estimatedMaxProfit": 300.0,
+                "variantFamily": "cap-fit-debit-5w",
+                "variantForStrategy": "LONG_STRADDLE",
+                "legs": [
+                    {"instruction": "BUY_TO_OPEN", "putCall": "CALL", "strike": 40.0, "expiration": "2026-08-28"},
+                    {"instruction": "SELL_TO_OPEN", "putCall": "CALL", "strike": 45.0, "expiration": "2026-08-28"},
+                ],
+            },
+            "riskVerdict": {
+                "passed": True,
+                "blocks": [],
+                "warnings": [],
+                "metrics": {
+                    "debitSpreadRewardRisk": 1.5,
+                    "schwabOptions": {
+                        "attached": True,
+                        "sourceStatus": "ok",
+                        "quoteQualityScore": 84,
+                        "quoteQualityLabel": "usable",
+                        "paperLiquidityPass": True,
+                    },
+                },
+            },
+        }
+        mock_load_strike_plan.return_value = ({"items": []}, False)
+        mock_load_json_file.side_effect = [
+            snapshot,
+            approval_queue,
+            execution_queue,
+            sandbox,
+            authority,
+            performance,
+            {"items": [clean_iren]},
+            {"items": []},
+        ]
+
+        payload = build_director()
+
+        self.assertEqual(payload["verdict"], "operator-paper-candidates")
+        self.assertTrue(payload["paperCycleHealthy"])
+        self.assertEqual(payload["counts"]["stageableNow"], 1)
+        self.assertEqual(payload["counts"]["operatorRoutablePaper"], 1)
+        self.assertEqual(payload["counts"]["capFitOperatorRoutes"], 1)
+        self.assertEqual(payload["counts"]["pricedPaperVariantWatch"], 0)
+        route = payload["operatorRoutableSlate"][0]
+        self.assertEqual(route["ticker"], "IREN")
+        self.assertEqual(route["status"], "stage-in-papermoney")
+        self.assertEqual(route["strategy"], "CALL_DEBIT_SPREAD")
+        self.assertEqual(route["estimatedMaxLoss"], 200.0)
+        self.assertEqual(route["rewardRisk"], 1.5)
+        self.assertEqual(route["quoteQualityScore"], 84)
+        self.assertFalse(route["liveTradingAllowed"])
+        self.assertFalse(route["brokerSubmitAllowed"])
+        self.assertIn("does not approve", route["nextStep"])
+        self.assertIn("BUY_TO_OPEN", director_text(payload))
+
+    def test_cap_fit_route_rejects_reward_risk_below_existing_floor(self) -> None:
+        item = {
+            "ticker": "IREN",
+            "status": "priced",
+            "combinedPassed": True,
+            "optimizerPassed": True,
+            "paperRiskPassed": True,
+            "capFitFallback": True,
+            "paperVariantOnly": True,
+            "paperOnly": True,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+            "expiration": "2026-08-28",
+            "strikePlan": {
+                "strategy": "CALL_DEBIT_SPREAD",
+                "expiration": "2026-08-28",
+                "estimatedMaxLoss": 200.0,
+                "legs": [{"instruction": "BUY_TO_OPEN"}, {"instruction": "SELL_TO_OPEN"}],
+            },
+            "riskVerdict": {
+                "passed": True,
+                "metrics": {
+                    "debitSpreadRewardRisk": 0.49,
+                    "schwabOptions": {"attached": True, "sourceStatus": "ok", "paperLiquidityPass": True},
+                },
+            },
+        }
+
+        self.assertEqual(operator_routable_cap_fit_spreads({"items": [item]}), [])
 
     @patch("inferno_paper_test_director.load_strike_plan")
     @patch("inferno_paper_test_director.load_json_file")

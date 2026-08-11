@@ -948,5 +948,22 @@
       "research-only",
       "safety"
     ]
+  },
+  {
+    "id": "mission-072bc88e",
+    "createdAt": "2026-08-11T13:57:10.396448-06:00",
+    "updatedAt": "2026-08-11T14:09:22.696582-06:00",
+    "title": "Get one candidate to stage: defined-risk spread on clean-chain liquid names",
+    "body": "Completed docs/GATE_UNLOCK_MISSION.md without changing gates, risk, universe, authority, approvals, tickets, or broker-submit/live-trading flags. Fresh Schwab pricing routed IREN 2026-08-28 40/45 CALL_DEBIT_SPREAD to the operator-facing paperMoney slate: $200 maximum loss within the $500 cap, 1.50 reward/risk against the unchanged 0.50 floor, quote quality 84/usable, and paper liquidity pass. The route is report-only: the operator keys the exact legs after visual verification; no ticket is created or submitted automatically.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "gate-unlock",
+      "generation",
+      "liquidity",
+      "research-only"
+    ]
   }
 ]

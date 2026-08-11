@@ -16,7 +16,13 @@ import json
 from collections import Counter
 from typing import Any
 
-from inferno_config import AUTO_PAPER_SELECTION_ENABLED, MAX_PAPER_TICKETS_PER_EVENT, MAX_SINGLE_TICKET_DOLLARS, local_now
+from inferno_config import (
+    AUTO_PAPER_SELECTION_ENABLED,
+    MAX_PAPER_TICKETS_PER_EVENT,
+    MAX_SINGLE_TICKET_DOLLARS,
+    MIN_DEBIT_SPREAD_REWARD_RISK,
+    local_now,
+)
 from inferno_doctor import in_current_service_cycle
 from inferno_execution_clerk import build_execution_queue
 from inferno_io import atomic_write_json, atomic_write_text
@@ -62,6 +68,7 @@ GOOD_VERDICTS = {
 }
 CONSTRUCTION_WATCH_LIMIT = 8
 PRICED_VARIANT_WATCH_LIMIT = 8
+OPERATOR_ROUTABLE_CAP_FIT_STRATEGIES = {"CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD"}
 
 
 def normalize_reason(reason: Any) -> str:
@@ -608,6 +615,128 @@ def priced_paper_variant_watchlist(
     )[:PRICED_VARIANT_WATCH_LIMIT]
 
 
+def operator_routable_cap_fit_spreads(
+    strategy_pricing: dict[str, Any],
+    ledger: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return only fully passed cap-fit debit spreads for manual paperMoney entry.
+
+    This is a reporting bridge, not a ticket promotion path.  It deliberately
+    reuses the optimizer and paper-risk verdicts produced by the pricing lane,
+    then adds only route-safety checks that are already hard constraints for
+    this mission: defined risk, the active ticket cap, a clean attached Schwab
+    chain, the debit-spread reward/risk floor, and the per-event paper limit.
+    Nothing here approves, stages, or submits an order.
+    """
+    ledger_items = list((ledger or {}).get("items") or [])
+    ticket_cap = effective_ticket_cap_dollars()
+    rows: list[dict[str, Any]] = []
+
+    for item in strategy_pricing.get("items") or []:
+        if not isinstance(item, dict) or item.get("status") != "priced":
+            continue
+        if not (
+            item.get("combinedPassed")
+            and item.get("optimizerPassed")
+            and item.get("paperRiskPassed")
+            and item.get("capFitFallback")
+            and item.get("paperVariantOnly")
+            and item.get("paperOnly")
+            and item.get("liveTradingAllowed") is False
+            and item.get("brokerSubmitAllowed") is False
+        ):
+            continue
+
+        plan = item.get("strikePlan") or {}
+        risk = item.get("riskVerdict") or {}
+        metrics = risk.get("metrics") or {}
+        chain = metrics.get("schwabOptions") or {}
+        strategy = str(plan.get("strategy") or item.get("recommendedStrategy") or "").upper()
+        max_loss = float_value(plan.get("estimatedMaxLoss"), 999999.0)
+        reward_risk = float_value(metrics.get("debitSpreadRewardRisk"), -1.0)
+
+        # Do not recalculate or relax the quality policy here.  A row must
+        # retain its existing pass verdict and its attached paper-liquidity
+        # evidence; the explicit cap and payoff checks make the route
+        # self-documenting for an operator.
+        if (
+            strategy not in OPERATOR_ROUTABLE_CAP_FIT_STRATEGIES
+            or not risk.get("passed")
+            or not plan.get("legs")
+            or max_loss <= 0
+            or max_loss > ticket_cap
+            or reward_risk < MIN_DEBIT_SPREAD_REWARD_RISK
+            or not chain.get("attached")
+            or str(chain.get("sourceStatus") or "").lower() != "ok"
+            or not chain.get("paperLiquidityPass")
+        ):
+            continue
+
+        expiration = item.get("expiration") or plan.get("expiration")
+        event_source = {**item, "strikePlan": plan, "expiration": expiration}
+        event_id = paper_event_id(event_source)
+        event_ticket_count = paper_event_ticket_count(event_id, ledger_items)
+        if event_ticket_count >= MAX_PAPER_TICKETS_PER_EVENT:
+            continue
+
+        rows.append(
+            {
+                "ticker": str(item.get("ticker", "")).upper(),
+                "status": "stage-in-papermoney",
+                "operatorRoute": "manual-paperMoney-entry",
+                "operatorActionRequired": True,
+                "approvalStatus": "operator-route-ready",
+                "intentStatus": "paper-only-research",
+                "sandboxStatus": "operator-route-ready",
+                "strategy": strategy,
+                "family": strategy_family(strategy),
+                "setupRec": strategy,
+                "expiration": expiration,
+                "eventId": event_id,
+                "eventTicketCount": event_ticket_count,
+                "maxPaperTicketsPerEvent": MAX_PAPER_TICKETS_PER_EVENT,
+                "estimatedMaxLoss": round(max_loss, 2),
+                "estimatedDebit": plan.get("estimatedDebit"),
+                "estimatedMaxProfit": plan.get("estimatedMaxProfit"),
+                "ticketCapDollars": round(ticket_cap, 2),
+                "priorityScore": round(float_value(item.get("sourceAlternativeScore")), 2),
+                "daysUntilEarnings": item.get("daysUntilEarnings"),
+                "rewardRisk": round(reward_risk, 4),
+                "minDebitSpreadRewardRisk": MIN_DEBIT_SPREAD_REWARD_RISK,
+                "quoteQualityScore": chain.get("quoteQualityScore"),
+                "quoteQualityLabel": chain.get("quoteQualityLabel"),
+                "paperLiquidityPass": True,
+                "paperFillFrictionPct": chain.get("paperFillFrictionPct"),
+                "premiumHurdlePassed": True,
+                "paperVariantOnly": True,
+                "paperVariantFamily": plan.get("variantFamily") or item.get("paperVariantFamily"),
+                "paperVariantOfStrategy": item.get("capFitFallbackOfStrategy") or plan.get("variantForStrategy"),
+                "capFitFallback": True,
+                "capFitFallbackStructure": item.get("capFitFallbackStructure"),
+                "sourceAlternativeScore": item.get("sourceAlternativeScore"),
+                "candidateStrategyRank": item.get("candidateStrategyRank"),
+                "marketContextSummary": item.get("marketContextSummary") or {},
+                "legs": plan.get("legs") or [],
+                "warnings": (risk.get("warnings") or [])[:4],
+                "liveTradingAllowed": False,
+                "brokerSubmitAllowed": False,
+                "nextStep": (
+                    "Operator may key these exact legs into thinkorswim paperMoney after visual quote verification; "
+                    "this research route does not approve, create, or submit a ticket."
+                ),
+            }
+        )
+
+    return sorted(
+        rows,
+        key=lambda item: (
+            -float_value(item.get("sourceAlternativeScore")),
+            float_value(item.get("estimatedMaxLoss"), 999999.0),
+            item.get("ticker", ""),
+        ),
+    )[:PRICED_VARIANT_WATCH_LIMIT]
+
+
 def classify_candidates(
     strike_plan: dict[str, Any],
     execution_queue: dict[str, Any],
@@ -721,13 +850,24 @@ def build_director() -> dict[str, Any]:
         candidate for candidate in stageable if not candidate.get("paperAutoSelected")
     ]
     combined_auto_paper = auto_paper_stageable + auto_paper
+    cap_fit_operator_routes = operator_routable_cap_fit_spreads(strategy_pricing, paper_ledger)
+    operator_routable = operator_routable_stageable + cap_fit_operator_routes
     priced_variant_watch = priced_paper_variant_watchlist(strategy_pricing, paper_ledger)
+    routed_variant_keys = {
+        (candidate.get("ticker"), candidate.get("strategy"), candidate.get("expiration"))
+        for candidate in cap_fit_operator_routes
+    }
+    priced_variant_watch = [
+        candidate
+        for candidate in priced_variant_watch
+        if (candidate.get("ticker"), candidate.get("strategy"), candidate.get("expiration")) not in routed_variant_keys
+    ]
     construction_watch = construction_watchlist(strategy_pricing)
     priced_variant_selected = [
         candidate for candidate in priced_variant_watch if candidate.get("paperResearchSelected")
     ]
 
-    if operator_routable_stageable:
+    if operator_routable:
         verdict = "operator-paper-candidates"
     elif combined_auto_paper:
         verdict = "auto-paper-selected"
@@ -747,9 +887,9 @@ def build_director() -> dict[str, Any]:
         verdict = "no-viable-paper-tests"
 
     next_actions: list[str] = []
-    if operator_routable_stageable:
+    if operator_routable:
         next_actions.append(
-            "Operator-routable paper candidates exist now; record them for the operator-owned paper workflow and do not stage autonomously."
+            "Operator-routable paper candidates exist now; record them for the operator-owned paper workflow, key only the listed exact legs into paperMoney after visual verification, and do not stage autonomously."
         )
     elif combined_auto_paper:
         next_actions.append(
@@ -804,11 +944,12 @@ def build_director() -> dict[str, Any]:
         "expandedUniverseUsed": source_label == "expanded-eligible-universe",
         "expandedUniverseTickers": expanded_tickers,
         "counts": {
-            "totalCandidates": len(candidates),
+            "totalCandidates": len(candidates) + len(cap_fit_operator_routes),
             # Retained for compatibility: this is the total executable
             # paper-workflow slate and includes auto-paper candidates.
-            "stageableNow": len(stageable),
-            "operatorRoutablePaper": len(operator_routable_stageable),
+            "stageableNow": len(stageable) + len(cap_fit_operator_routes),
+            "operatorRoutablePaper": len(operator_routable),
+            "capFitOperatorRoutes": len(cap_fit_operator_routes),
             "autoPaperSelected": len(combined_auto_paper),
             "eventCapped": len(event_capped),
             "distinctAutoPaperEvents": len({candidate.get("eventId") for candidate in combined_auto_paper if candidate.get("eventId")}),
@@ -829,7 +970,7 @@ def build_director() -> dict[str, Any]:
         "authorityWarnings": (authority.get("decision") or {}).get("warnings") or [],
         "blockerCounts": blocker_table(candidates),
         "stageableSlate": stageable,
-        "operatorRoutableSlate": operator_routable_stageable,
+        "operatorRoutableSlate": operator_routable,
         "autoPaperSlate": combined_auto_paper,
         "eventCappedSlate": event_capped,
         "approvalSlate": approval_only,
@@ -932,6 +1073,19 @@ def director_text(payload: dict[str, Any]) -> str:
                 f"  paper rehearsal variant: {candidate.get('paperVariantFamily')} | "
                 f"maps to {candidate.get('paperVariantOfStrategy')}"
             )
+        if candidate.get("operatorRoute") == "manual-paperMoney-entry":
+            lines.append(
+                f"  reward/risk {float_value(candidate.get('rewardRisk')):.2f} "
+                f"(floor {float_value(candidate.get('minDebitSpreadRewardRisk')):.2f}) | "
+                f"quote quality {candidate.get('quoteQualityScore')}/{candidate.get('quoteQualityLabel')} | "
+                f"paper liquidity {candidate.get('paperLiquidityPass')}"
+            )
+            for leg in candidate.get("legs") or []:
+                lines.append(
+                    f"  {leg.get('instruction')} {leg.get('putCall')} {leg.get('strike')} "
+                    f"{leg.get('expiration')} ({leg.get('symbol')})"
+                )
+            lines.append(f"  next: {candidate.get('nextStep')}")
 
     lines.extend(["", "Event-capped:"])
     event_capped = payload.get("eventCappedSlate") or []
