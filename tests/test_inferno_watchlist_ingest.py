@@ -58,6 +58,15 @@ class LoadInputTests(unittest.TestCase):
         self.assertEqual(len(tickers), ingest.MAX_TICKERS_PER_INGEST)
         self.assertTrue(any("cap is" in err.lower() for err in errors))
 
+    def test_complete_185_name_watchlist_is_one_valid_handoff(self) -> None:
+        tickers = [f"T{index}" for index in range(185)]
+        _write_input(self.input, {"tickers": tickers})
+
+        loaded, _source, errors = ingest.load_watchlist_input(self.input)
+
+        self.assertEqual(loaded, tickers)
+        self.assertEqual(errors, [])
+
 
 class DiffTests(unittest.TestCase):
     def test_diff_splits_into_new_and_known(self) -> None:

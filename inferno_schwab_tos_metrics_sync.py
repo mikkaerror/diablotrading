@@ -34,12 +34,30 @@ from inferno_tos_custom_metrics import (
     custom_metrics_text,
     save_custom_metrics,
 )
+from inferno_watchlist_ingest import WATCHLIST_INPUT_FILE, load_watchlist_input
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
 SCHWAB_TOS_METRICS_SYNC_TEXT_FILE = REPORTS_DIR / "schwab_tos_metrics_sync_latest.txt"
 SCHWAB_TOS_METRICS_SYNC_STAGE = "schwab-tos-custom-metrics-sync"
+
+
+def symbols_from_watchlist_input(
+    path: Path = WATCHLIST_INPUT_FILE,
+    *,
+    limit: int | None = None,
+) -> tuple[list[str], str, list[str]]:
+    """Load the operator's canonical watchlist for a read-only metric refresh.
+
+    This deliberately shares the watchlist-ingest validator rather than
+    re-parsing JSON here. A malformed or over-cap input must not become a
+    quiet, partial market-data pull.
+    """
+    symbols, source, errors = load_watchlist_input(path)
+    if errors:
+        return [], source, errors
+    return unique_symbols(symbols, limit=limit), source, []
 
 
 def build_sync_report(
@@ -107,6 +125,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync TOS-style custom metrics from Schwab price history.")
     parser.add_argument("symbols", nargs="*", help="Ticker symbols. Defaults to data/latest_snapshot.json.")
     parser.add_argument("--from-snapshot", action="store_true", help="Pull symbols from data/latest_snapshot.json")
+    parser.add_argument(
+        "--from-watchlist-input",
+        action="store_true",
+        help="Pull the validated operator watchlist from data/inferno_watchlist_input.json",
+    )
     parser.add_argument("--limit", type=int, help="Symbol cap for this run")
     parser.add_argument("--fixture", type=Path, help="Use Schwab price-history fixture JSON instead of live API")
     parser.add_argument("--skip-refresh", action="store_true", help="Skip OAuth refresh before live fetch")
@@ -119,21 +142,37 @@ def main() -> int:
     """CLI entry point."""
     args = parse_args()
     fixtures = load_fixture(args.fixture) if args.fixture else None
-    if fixtures and not args.symbols:
+    if args.symbols:
+        symbols = unique_symbols(args.symbols, limit=args.limit)
+    elif args.from_watchlist_input:
+        symbols, input_source, input_errors = symbols_from_watchlist_input(limit=args.limit)
+        if input_errors:
+            print(
+                "Watchlist input is not valid for a full metric refresh "
+                f"({input_source}): " + "; ".join(input_errors)
+            )
+            return 1
+    elif fixtures:
         symbols = list(fixtures.keys())
     elif args.from_snapshot or not args.symbols:
         symbols = symbols_from_snapshot(limit=args.limit)
-    else:
-        symbols = unique_symbols(args.symbols, limit=args.limit)
 
     refresh_status = None
     if fixtures is None and not args.skip_refresh:
         refresh_status = refresh_access_token_if_possible()
 
+    # The price-history adapter has a conservative twelve-symbol default for
+    # ordinary snapshot refreshes. A user-confirmed full watchlist is an
+    # explicit request for every validated member, so pass its exact size when
+    # the caller did not set a narrower cap.
+    history_symbol_limit = args.limit
+    if args.from_watchlist_input and history_symbol_limit is None:
+        history_symbol_limit = len(symbols)
+
     price_history_report = build_price_history_report(
         symbols,
         fixture_payloads=fixtures,
-        symbol_limit=args.limit,
+        symbol_limit=history_symbol_limit,
     )
     if refresh_status is not None:
         price_history_report["refreshStatus"] = refresh_status

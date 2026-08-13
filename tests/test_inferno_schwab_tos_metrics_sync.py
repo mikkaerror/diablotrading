@@ -2,12 +2,13 @@ from __future__ import annotations
 
 """Tests for Schwab-driven TOS custom metric sync."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from inferno_schwab_price_history import build_report
-from inferno_schwab_tos_metrics_sync import build_sync_report
+from inferno_schwab_tos_metrics_sync import build_sync_report, symbols_from_watchlist_input
 from inferno_tos_custom_metrics import build_custom_metrics_report, summarize_custom_metrics
 
 
@@ -30,6 +31,25 @@ def sample_history_payload(symbol: str = "TEST", days: int = 30) -> dict[str, ob
 
 
 class SchwabTosMetricsSyncTests(unittest.TestCase):
+    def test_operator_watchlist_input_is_validated_before_full_metric_sync(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "watchlist.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "source": "operator-supplied-tos-watchlist",
+                        "tickers": ["NBIS", "MRVL", "IREN"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            symbols, source, errors = symbols_from_watchlist_input(path)
+
+        self.assertEqual(symbols, ["NBIS", "MRVL", "IREN"])
+        self.assertEqual(source, "operator-supplied-tos-watchlist")
+        self.assertEqual(errors, [])
+
     def test_schwab_history_report_becomes_canonical_custom_metrics(self) -> None:
         history_report = build_report(
             ["TEST"],

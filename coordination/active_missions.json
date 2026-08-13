@@ -997,5 +997,21 @@
       "cap-fit",
       "staging"
     ]
+  },
+  {
+    "id": "mission-04b305b3",
+    "createdAt": "2026-08-13T13:39:46.191229-06:00",
+    "updatedAt": "2026-08-13T14:29:01.327591-06:00",
+    "title": "Reconcile personal semi watchlist to canonical tracker",
+    "body": "Completed the user-authorized i keep a semi reconciliation. The full source capture contains 186 symbols: 185 canonical tracker symbols plus EME:ASX explicitly retained for mapping rather than guessed. All 185 canonical symbols are now in the Google Earnings Tracker (190 total including five existing extras), including NBIS. The TOS Pulse tab has the captured momentum/pace fields (last, change, 52-week range, volume, RVOL, Pv52H, MOM, ATR%, strength, support/resistance) with source/as-of provenance; 181/185 have all six OHLCV formula mirrors and ASTK, GLDD, THR, VMW are explicit no-history exceptions. Ingestion now accepts a complete 185-name handoff, safely parses a real ticker CSV column, preserves an operator-confirmed full capture against a mismatched extractor run, and supports read-only --from-watchlist-input metric refresh. No gate, risk, authority, broker-submit, or live-trading change.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "watchlist",
+      "tracker",
+      "research-only",
+      "provenance"
+    ]
   }
 ]

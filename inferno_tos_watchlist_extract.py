@@ -71,6 +71,7 @@ MAX_TICKER_LEN = 10
 # Token shape used during accessibility scrape. We bias against things like
 # "USD", "EUR" by demanding at least one letter and disallowing all-digit blobs.
 TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+CSV_TICKER_HEADERS = frozenset({"SYMBOL", "TICKER", "UNDERLYING", "INSTRUMENT"})
 
 # Known noise tokens that match the ticker pattern but are obvious UI labels.
 # We keep this list short and conservative; the reconciler is the real safety net.
@@ -280,21 +281,36 @@ def _scan_downloads_for_csv(
         debug["error"] = f"csv read failed: {exc}"
         return [], debug
 
-    reader = csv.reader(io.StringIO(text))
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return [], debug
+
+    # A TOS watchlist export has a real ticker column. Scanning every cell
+    # turns headers and descriptions (for example "SYMBOL", "VOLUME", and a
+    # company name) into fake tickers, so select that one column before doing
+    # shape validation. If there is no recognized header, the first column is
+    # the only conservative fallback.
+    header_row = [str(cell or "").strip().upper() for cell in rows[0]]
+    ticker_column = next(
+        (index for index, header in enumerate(header_row) if header in CSV_TICKER_HEADERS),
+        0,
+    )
+    data_rows = rows[1:] if any(header in CSV_TICKER_HEADERS for header in header_row) else rows
+
     seen: set[str] = set()
-    for row in reader:
-        for cell in row:
-            token = str(cell or "").strip().upper().lstrip("$")
-            if len(token) < MIN_TICKER_LEN or len(token) > MAX_TICKER_LEN:
-                continue
-            if not TICKER_PATTERN.match(token):
-                continue
-            if token in NOISE_TOKENS or token.isdigit():
-                continue
-            if token in seen:
-                continue
-            seen.add(token)
-            tickers.append(token)
+    for row in data_rows:
+        cell = row[ticker_column] if ticker_column < len(row) else ""
+        token = str(cell or "").strip().upper().lstrip("$")
+        if len(token) < MIN_TICKER_LEN or len(token) > MAX_TICKER_LEN:
+            continue
+        if not TICKER_PATTERN.match(token):
+            continue
+        if token in NOISE_TOKENS or token.isdigit():
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tickers.append(token)
 
     return tickers, debug
 
@@ -454,6 +470,21 @@ def write_input_slot(payload: dict[str, Any]) -> Path | None:
     tickers = payload.get("tickers") or []
     if not tickers:
         return None
+    # A complete list supplied directly by the operator is stronger evidence
+    # than an extractor run against a different/default TOS panel. Leave it
+    # intact unless the observed source is explicitly for that same named
+    # watchlist. This prevents a noisy CSV fallback from silently changing
+    # membership or creating manual cleanup work.
+    if WATCHLIST_INPUT_FILE.exists():
+        try:
+            existing = json.loads(WATCHLIST_INPUT_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        if isinstance(existing, dict) and existing.get("sourceCompleteness") == "operator-confirmed-full-capture":
+            expected_name = str(existing.get("watchlistName") or "").strip()
+            observed_name = str(payload.get("watchlistName") or "").strip()
+            if expected_name and observed_name != expected_name:
+                return None
     ensure_dirs()
     slot_payload = {
         "tickers": list(tickers),

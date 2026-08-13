@@ -52,9 +52,11 @@ WATCHLIST_INGEST_FILE = DATA_DIR / "inferno_watchlist_ingest.json"
 WATCHLIST_INGEST_TEXT_FILE = REPORTS_DIR / "watchlist_ingest_latest.txt"
 WATCHLIST_INGEST_STAGE = "watchlist-ingest-research-only"
 
-# Maximum number of tickers the operator can submit per ingest.
-# Conservative cap so a typo doesn't accidentally flood the sheet.
-MAX_TICKERS_PER_INGEST = 50
+# Maximum number of tickers the operator can submit per ingest.  It must cover
+# one complete operator watchlist, otherwise a valid full-list handoff is
+# needlessly split into manual batches.  The cap still rejects accidental
+# broad-universe dumps.
+MAX_TICKERS_PER_INGEST = 250
 
 # Allowed ticker shape — uppercase letters, digits, optional dot suffix.
 TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")

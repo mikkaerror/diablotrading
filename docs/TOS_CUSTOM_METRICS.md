@@ -46,6 +46,18 @@ value export because the formulas need only high, low, close, and volume:
 ./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 12
 ```
 
+For a complete operator-confirmed watchlist, refresh the validated symbols in
+`data/inferno_watchlist_input.json` in one read-only pass:
+
+```bash
+./run_inferno_schwab_tos_metrics_sync.sh --from-watchlist-input
+```
+
+This intentionally bypasses the ordinary small snapshot cap, but only after
+the existing watchlist validator accepts the input. It still fetches market
+data only; it does not write Google Sheets, submit a broker order, alter an
+eligible universe, or change any score or risk gate.
+
 That runner:
 
 - pulls daily candles from Schwab price history

@@ -72,7 +72,11 @@ class WatchlistBriefTests(unittest.TestCase):
         self.assertEqual(report["focus"][1]["label"], "WAIT FOR EVENT")
         self.assertFalse(report["savedInputStatus"]["usableForOrdering"])
         self.assertIn("position-derived", report["savedInputStatus"]["reason"])
-        self.assertTrue(watchlist_brief_status(report)[0])
+        # The builder's fixed clock intentionally tests the stale input path;
+        # doctor freshness is a separate wall-clock concern. Pin it here so
+        # this contract test does not start failing merely as time passes.
+        with patch("inferno_doctor.recent_or_today", return_value=True):
+            self.assertTrue(watchlist_brief_status(report)[0])
 
     def test_fresh_explicit_watchlist_limits_the_rows_without_creating_a_signal(self) -> None:
         report = brief.build_watchlist_brief(

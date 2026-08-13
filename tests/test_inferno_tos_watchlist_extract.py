@@ -108,6 +108,20 @@ class CsvFallbackTests(unittest.TestCase):
         self.assertEqual(debug["csvCandidates"], 1)
         self.assertEqual(debug["method"], "downloads-csv-fallback")
 
+    def test_csv_fallback_uses_symbol_column_not_headers_or_descriptions(self) -> None:
+        self._write_csv(
+            "watchlist-export.csv",
+            [
+                ["Symbol", "Description", "Last", "Volume", "RVOL"],
+                ["NVDA", "NVIDIA CORP", "180", "1000", "1.2"],
+                ["AMD", "ADVANCED MICRO DEVICES", "150", "2000", "0.9"],
+            ],
+        )
+
+        tickers, _debug = extractor._scan_downloads_for_csv(downloads_dir=self.downloads)
+
+        self.assertEqual(tickers, ["NVDA", "AMD"])
+
     def test_skips_stale_csv(self) -> None:
         ancient = time.time() - extractor.DOWNLOADS_CSV_MAX_AGE_SECONDS - 60
         self._write_csv("watchlist-old.csv", [["NVDA"]], mtime=ancient)
@@ -203,6 +217,31 @@ class WriteInputSlotTests(unittest.TestCase):
         payload = {"tickers": [], "source": "none"}
         result = extractor.write_input_slot(payload)
         self.assertIsNone(result)
+
+    def test_preserves_named_operator_confirmed_full_capture(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            input_file = Path(tmpdir) / "watchlist.json"
+            input_file.write_text(
+                json.dumps(
+                    {
+                        "tickers": ["NBIS"],
+                        "watchlistName": "i keep a semi",
+                        "sourceCompleteness": "operator-confirmed-full-capture",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            payload = {
+                "tickers": ["NVDA"],
+                "watchlistName": "Earnings",
+                "source": "tos-csv-export",
+            }
+
+            with patch.object(extractor, "WATCHLIST_INPUT_FILE", input_file):
+                self.assertIsNone(extractor.write_input_slot(payload))
+
+            saved = json.loads(input_file.read_text(encoding="utf-8"))
+            self.assertEqual(saved["tickers"], ["NBIS"])
 
 
 if __name__ == "__main__":
