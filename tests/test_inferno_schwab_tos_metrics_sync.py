@@ -8,7 +8,11 @@ import unittest
 from pathlib import Path
 
 from inferno_schwab_price_history import build_report
-from inferno_schwab_tos_metrics_sync import build_sync_report, symbols_from_watchlist_input
+from inferno_schwab_tos_metrics_sync import (
+    build_sync_report,
+    symbols_from_existing_history,
+    symbols_from_watchlist_input,
+)
 from inferno_tos_custom_metrics import build_custom_metrics_report, summarize_custom_metrics
 
 
@@ -75,6 +79,22 @@ class SchwabTosMetricsSyncTests(unittest.TestCase):
         self.assertTrue(metrics["tos_rvol"]["hasThinkScript"])
         self.assertTrue(summary["formulaReproduced"])
         self.assertEqual(summary["sourceStatus"], "captured")
+
+    def test_existing_history_symbols_are_canonical_and_bounded(self) -> None:
+        symbols = symbols_from_existing_history(
+            {
+                "rows": [
+                    {"symbol": "mrvl"},
+                    {"symbol": "MRVL"},
+                    {"symbol": "IREN"},
+                    {"symbol": "not a ticker"},
+                    {"noSymbol": "NBIS"},
+                ]
+            },
+            limit=2,
+        )
+
+        self.assertEqual(symbols, ["MRVL", "IREN"])
 
     def test_sync_report_exposes_bridge_counts_without_authority_change(self) -> None:
         history_report = build_report(

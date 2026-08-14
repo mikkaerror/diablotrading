@@ -5,6 +5,10 @@ ROOT="${INFERNO_ROOT:-$(cd "$(dirname "$0")" && pwd)}"
 cd "$ROOT"
 
 LIMIT="${INFERNO_MODEL_REFRESH_LIMIT:-20}"
+# The operator-confirmed watchlist is the canonical source for the visible TOS
+# pulse. An optional positive cap supports a deliberately bounded diagnostic
+# run, but the scheduled default is the whole validated list.
+WATCHLIST_PULSE_LIMIT="${INFERNO_TOS_WATCHLIST_PULSE_LIMIT:-}"
 BACKTEST_ROOT="${BACKTEST_ROOT:-$HOME/PycharmProjects/Backtest3.0}"
 BACKTEST_PYTHON="${BACKTEST_PYTHON:-$BACKTEST_ROOT/venv/bin/python}"
 REFRESH_TRACKER=1
@@ -48,6 +52,11 @@ skip_schwab_step() {
   WARNING_COUNT=$((WARNING_COUNT + 1))
   echo "Advisory warning: $label skipped; Schwab OAuth reauthorization is required."
 }
+
+watchlist_pulse_limit_args=()
+if [[ "$WATCHLIST_PULSE_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+  watchlist_pulse_limit_args=(--limit "$WATCHLIST_PULSE_LIMIT")
+fi
 
 if [[ "${1:-}" == "--skip-tracker" ]]; then
   REFRESH_TRACKER=0
@@ -94,14 +103,14 @@ fi
 
 echo "5/18 Schwab price history"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
+  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet
 else
   skip_schwab_step "Schwab price history"
 fi
 
 echo "6/18 Schwab-derived TOS metrics"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet
+  run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-existing-history --skip-refresh --quiet
 else
   skip_schwab_step "Schwab-derived TOS metrics"
 fi

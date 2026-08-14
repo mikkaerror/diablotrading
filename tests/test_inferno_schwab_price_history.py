@@ -70,6 +70,24 @@ class SchwabPriceHistoryTests(unittest.TestCase):
         self.assertEqual(mirror["tos_support_resistance_state"]["label"], "Neutral")
         self.assertTrue(row["formulaReady"])
 
+    def test_watchlist_pulse_keeps_pace_and_formula_fields_observed_only(self) -> None:
+        report = schwab_history.build_report(
+            ["TEST"],
+            fixture_payloads={"TEST": sample_history_payload()},
+        )
+
+        pulse = schwab_history.build_watchlist_pulse_by_ticker(report)["TEST"]
+
+        self.assertTrue(pulse["observedOnly"])
+        self.assertEqual(pulse["source"], "schwab-price-history")
+        self.assertEqual(pulse["coverage"], "6/6 OHLCV mirrors")
+        self.assertTrue(pulse["formulaReady"])
+        self.assertEqual(pulse["last"], 30.0)
+        self.assertAlmostEqual(pulse["dailyChangePercent"], 3.4483, places=4)
+        self.assertEqual(pulse["volume"], 3000)
+        self.assertEqual(pulse["rvol"], 2.81)
+        self.assertEqual(pulse["supportResistanceState"], "Neutral")
+
     def test_symbols_from_snapshot_deduplicates_tracker_universe(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "latest_snapshot.json"

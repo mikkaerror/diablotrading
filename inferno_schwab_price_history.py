@@ -43,6 +43,7 @@ from inferno_schwab_oauth import (
     token_status,
 )
 from inferno_tos_formula_math import tos_custom_quote_snapshot_from_history
+from inferno_watchlist_ingest import WATCHLIST_INPUT_FILE, load_watchlist_input
 from server import DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
 
 
@@ -62,6 +63,14 @@ DEFAULT_PRICE_HISTORY_PARAMS: dict[str, Any] = {
 }
 
 SYMBOL_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-/]{0,14}$")
+WATCHLIST_PULSE_MIRROR_KEYS = (
+    "tos_rvol",
+    "tos_pv52h",
+    "tos_momentum",
+    "tos_atr_percent",
+    "tos_strength",
+    "tos_support_resistance_state",
+)
 
 
 def text(value: Any) -> str:
@@ -210,6 +219,18 @@ def symbols_from_snapshot(path: Path = SNAPSHOT_FILE, *, limit: int | None = Non
     return unique_symbols(symbols, limit=limit)
 
 
+def symbols_from_watchlist_input(
+    path: Path = WATCHLIST_INPUT_FILE,
+    *,
+    limit: int | None = None,
+) -> tuple[list[str], str, list[str]]:
+    """Load validated operator watchlist symbols for a read-only full refresh."""
+    symbols, source, errors = load_watchlist_input(path)
+    if errors:
+        return [], source, errors
+    return unique_symbols(symbols, limit=limit), source, []
+
+
 def build_price_history_url(
     symbol: str,
     params: dict[str, Any] | None = None,
@@ -333,6 +354,86 @@ def summarize_price_history(symbol: str, payload: dict[str, Any]) -> dict[str, A
         "formulaReady": bool(mirror) and not missing,
         "candles": history_records(history),
     }
+
+
+def _watchlist_pulse_mirror_value(mirror: dict[str, Any], key: str) -> Any:
+    """Return a normalized visible custom-metric value from a formula mirror."""
+    cell = mirror.get(key) if isinstance(mirror, dict) else None
+    if not isinstance(cell, dict):
+        return None
+    return cell.get("label") if key == "tos_support_resistance_state" else cell.get("value")
+
+
+def build_watchlist_pulse_by_ticker(price_history_report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Build source-labelled daily watchlist context without creating a score.
+
+    The pulse deliberately exposes daily pace and OHLCV-derived ThinkScript
+    mirrors as observed fields. It does not feed readiness, priority, sizing,
+    eligibility, or any risk/authority gate.
+    """
+    by_ticker: dict[str, dict[str, Any]] = {}
+    for row in price_history_report.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        ticker = normalize_symbol(row.get("symbol"))
+        if not ticker:
+            continue
+        candles = [item for item in row.get("candles") or [] if isinstance(item, dict)]
+        mirror = row.get("tosCustomFormulaMirror") or {}
+        metric_values = {
+            key: _watchlist_pulse_mirror_value(mirror, key)
+            for key in WATCHLIST_PULSE_MIRROR_KEYS
+        }
+        mirrored_count = sum(value is not None for value in metric_values.values())
+        if len(candles) < 2:
+            by_ticker[ticker] = {
+                "observedOnly": True,
+                "source": "schwab-price-history",
+                "sourceDataAsOf": row.get("latestDate"),
+                "coverage": "0/6 OHLCV mirrors — no daily history",
+                "formulaReady": False,
+                "candleCount": len(candles),
+                "status": row.get("status") or "empty-history",
+            }
+            continue
+
+        latest = candles[-1]
+        previous = candles[-2]
+        last = number(latest.get("close"))
+        previous_close = number(previous.get("close"))
+        highs = [number(item.get("high")) for item in candles]
+        lows = [number(item.get("low")) for item in candles]
+        high_52_week = max(value for value in highs if value is not None) if any(value is not None for value in highs) else None
+        low_52_week = min(value for value in lows if value is not None) if any(value is not None for value in lows) else None
+        net_change = last - previous_close if last is not None and previous_close is not None else None
+        daily_change_percent = (net_change / previous_close * 100.0) if net_change is not None and previous_close else None
+        by_ticker[ticker] = {
+            "observedOnly": True,
+            "source": "schwab-price-history",
+            "sourceDataAsOf": row.get("latestDate"),
+            "coverage": f"{mirrored_count}/6 OHLCV mirrors",
+            "formulaReady": bool(row.get("formulaReady")) and mirrored_count == len(WATCHLIST_PULSE_MIRROR_KEYS),
+            "candleCount": len(candles),
+            "status": row.get("status") or "ok",
+            "last": rounded(last),
+            "dailyChangePercent": rounded(daily_change_percent),
+            "dailyNetChange": rounded(net_change),
+            "week52High": rounded(high_52_week),
+            "week52Low": rounded(low_52_week),
+            "volume": int(number(latest.get("volume"), 0) or 0),
+            "rvol": metric_values["tos_rvol"],
+            "pv52h": metric_values["tos_pv52h"],
+            "momentum": metric_values["tos_momentum"],
+            "atrPercent": metric_values["tos_atr_percent"],
+            "strength": metric_values["tos_strength"],
+            "supportResistanceState": metric_values["tos_support_resistance_state"],
+        }
+    return by_ticker
+
+
+def load_watchlist_pulse_by_ticker(path: Path = SCHWAB_PRICE_HISTORY_FILE) -> dict[str, dict[str, Any]]:
+    """Load the canonical observed-only watchlist pulse by ticker."""
+    return build_watchlist_pulse_by_ticker(load_json_file(path) or {})
 
 
 def build_report(
@@ -475,6 +576,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read-only Schwab price-history adapter.")
     parser.add_argument("symbols", nargs="*", help="Ticker symbols. Defaults to the latest tracker snapshot.")
     parser.add_argument("--from-snapshot", action="store_true", help="Pull symbols from data/latest_snapshot.json")
+    parser.add_argument(
+        "--from-watchlist-input",
+        action="store_true",
+        help="Pull validated symbols from data/inferno_watchlist_input.json",
+    )
     parser.add_argument("--limit", type=int, help="Symbol cap for this run")
     parser.add_argument("--fixture", type=Path, help="Normalize fixture JSON instead of calling Schwab")
     parser.add_argument("--skip-refresh", action="store_true", help="Skip OAuth refresh before live fetch")
@@ -487,12 +593,20 @@ def main() -> int:
     """CLI entry point."""
     args = parse_args()
     fixtures = load_fixture(args.fixture) if args.fixture else None
-    if fixtures and not args.symbols:
+    if args.symbols:
+        symbols = unique_symbols(args.symbols, limit=args.limit)
+    elif args.from_watchlist_input:
+        symbols, input_source, input_errors = symbols_from_watchlist_input(limit=args.limit)
+        if input_errors:
+            print(
+                "Watchlist input is not valid for a full price-history refresh "
+                f"({input_source}): " + "; ".join(input_errors)
+            )
+            return 1
+    elif fixtures:
         symbols = list(fixtures.keys())
     elif args.from_snapshot or not args.symbols:
         symbols = symbols_from_snapshot(limit=args.limit)
-    else:
-        symbols = unique_symbols(args.symbols, limit=args.limit)
 
     refresh_status = None
     if fixtures is None and not args.skip_refresh:
@@ -504,7 +618,10 @@ def main() -> int:
                     "`python3 inferno_schwab_oauth.py restart` once."
                 )
             return 1
-    report = build_report(symbols, fixture_payloads=fixtures, symbol_limit=args.limit)
+    history_symbol_limit = args.limit
+    if args.from_watchlist_input and history_symbol_limit is None:
+        history_symbol_limit = len(symbols)
+    report = build_report(symbols, fixture_payloads=fixtures, symbol_limit=history_symbol_limit)
     if refresh_status is not None:
         report["refreshStatus"] = refresh_status
     save_report(report)

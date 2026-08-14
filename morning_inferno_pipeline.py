@@ -49,6 +49,7 @@ from inferno_tos_formula_math import (
     trend_tone_from_label as formula_trend_tone_from_label,
 )
 from inferno_tos_custom_metrics import load_custom_metrics_by_ticker, summarize_custom_metrics
+from inferno_schwab_price_history import load_watchlist_pulse_by_ticker
 from inferno_reporting_summary import (
     build_freshness_panel,
     build_tos_visibility_summary,
@@ -1549,6 +1550,7 @@ def read_sheet_rows_from_table(headers: list[str], raw_rows: list[list[str]]) ->
 
     index_map = {header: idx for idx, header in enumerate(headers)}
     tos_custom_metric_lookup = load_custom_metrics_by_ticker()
+    watchlist_pulse_lookup = load_watchlist_pulse_by_ticker()
 
     def read(cells: list[str], header: str) -> str:
         idx = index_map.get(header)
@@ -1595,6 +1597,7 @@ def read_sheet_rows_from_table(headers: list[str], raw_rows: list[list[str]]) ->
                 "distanceToSupportPct": number_or_none(read(cells, "% To Support")),
                 "distanceToResistancePct": number_or_none(read(cells, "% To Resistance")),
                 "tosCustomMetrics": tos_custom_metric_lookup.get(ticker, {}),
+                "watchlistPulse": watchlist_pulse_lookup.get(ticker, {}),
             }
         )
         rows.append(row)

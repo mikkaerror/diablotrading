@@ -121,6 +121,7 @@ class InfernoTosFormulaMathTests(unittest.TestCase):
                 "distanceToResistancePct": 8.25,
                 "tosCustomMetrics": {"tos_strength": {"value": 81.5}},
                 "tosCustomSignalSummary": {"sourceStatus": "captured", "strength": 81.5},
+                "watchlistPulse": {"observedOnly": True, "dailyChangePercent": 2.5},
             }
         )
 
@@ -134,6 +135,9 @@ class InfernoTosFormulaMathTests(unittest.TestCase):
         self.assertEqual(context["tosCustomMetricSourceStatus"], "captured")
         self.assertEqual(context["tosCustomMetrics"]["tos_strength"]["value"], 81.5)
         self.assertEqual(context["tosCustomSignalSummary"]["strength"], 81.5)
+        self.assertTrue(context["watchlistPulse"]["observedOnly"])
+        self.assertEqual(context["watchlistPulse"]["dailyChangePercent"], 2.5)
+        self.assertEqual(context["watchlistPulseSourceStatus"], "captured")
 
     def test_tracker_score_snapshot_mirrors_current_sheet_formula_semantics(self) -> None:
         scores = tracker_score_snapshot_from_row(

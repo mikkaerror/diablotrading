@@ -66,6 +66,16 @@ different/default extractor run. These are provenance and research-data
 improvements only; no authority, universe, gate, sizing, or live-trading state
 changed.
 
+On 2026-08-13, the complete 185-symbol price-history artifact was joined into
+the research snapshot as `watchlistPulse` and copied into its `marketContext`.
+The observed-only payload captures last, daily net and percent change, 52-week
+range, volume, RVOL, Pv52H, momentum, ATR%, strength, support/resistance,
+formula coverage, and source as-of time. The refresh measured 181 complete
+six-mirror records and the same four transparent no-history exceptions. It
+does not create a new score or feed existing readiness, priority, eligibility,
+sizing, risk, or authority formulas; duplicated TOS and OHLCV metrics are
+explicitly not double-counted.
+
 ## Falsifier
 
 This belief is false if the brief changes a score or gate, loses source

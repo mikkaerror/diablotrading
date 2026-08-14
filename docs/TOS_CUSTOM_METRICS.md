@@ -151,6 +151,48 @@ These summary bands are for visibility and research features only. They do not
 change trade gates until the ThinkScript formula and outcome calibration are
 explicitly reviewed.
 
+## Watchlist Pulse Join
+
+The validated operator watchlist also produces a separate, source-labelled
+`watchlistPulse` payload in every matching `latest_snapshot` row and in
+`marketContext.watchlistPulse`. It keeps the visible pace and range fields
+together rather than asking the model (or an operator) to reconstruct them
+from disconnected columns:
+
+```json
+{
+  "observedOnly": true,
+  "source": "schwab-price-history",
+  "sourceDataAsOf": "2026-08-12T05:00:00Z",
+  "coverage": "6/6 OHLCV mirrors",
+  "last": 259.2,
+  "dailyChangePercent": 34.1407,
+  "dailyNetChange": 65.97,
+  "week52High": 299.86,
+  "week52Low": 62.01,
+  "volume": 63538211,
+  "rvol": 2.71,
+  "pv52h": 86.4,
+  "momentum": 54.15,
+  "atrPercent": 10.7,
+  "strength": 99.4,
+  "supportResistanceState": "↗ Near High"
+}
+```
+
+`dailyChangePercent` is expressed in percentage points, not a decimal return.
+The OHLCV values are recomputed from Schwab daily candles and carry their own
+as-of time; they are not represented as live/intraday TOS values. A no-history
+symbol receives an explicit `0/6 OHLCV mirrors — no daily history` coverage
+record instead of zeros.
+
+The pulse does not calculate, replace, or increment an existing score. In
+particular, its RVOL and the six formula mirrors must not be double-counted
+alongside `tosCustomMetrics` or existing tracker formulas. It remains
+observed-only until a separately reviewed outcome calibration authorizes a
+new research feature; it never changes eligibility, priority, sizing, risk,
+or authority.
+
 ## Formula Registry
 
 Each registry item should include:

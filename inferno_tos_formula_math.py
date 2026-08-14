@@ -719,6 +719,8 @@ def build_market_context_from_row(row: dict[str, Any], *, unknown_earnings_days:
         "tosCustomMetrics": row.get("tosCustomMetrics") or {},
         "tosCustomSignalSummary": row.get("tosCustomSignalSummary") or {},
         "tosCustomMetricSourceStatus": "captured" if row.get("tosCustomMetrics") else "missing",
+        "watchlistPulse": row.get("watchlistPulse") or {},
+        "watchlistPulseSourceStatus": "captured" if row.get("watchlistPulse") else "missing",
         "alignmentScore": round(float(alignment_score), 1),
         "alignmentLabel": alignment_label,
         "sourceStatus": source_status,

@@ -220,3 +220,14 @@ test before changing the live tracker behavior.
 | Resistance | pending exact formula | `support_resistance_from_history()` |
 | Momentum Score | `MAX(0, IV Rank Change)` | `tracker_score_snapshot_from_row()` |
 | Price Momentum | pending exact formula if one exists | `momentum_snapshot()` |
+
+## Watchlist Pulse Context
+
+The visible TOS-style watchlist fields are joined into the research snapshot as
+`watchlistPulse` and `marketContext.watchlistPulse`: last, daily percentage and
+net change, 52-week high/low, volume, plus the six existing OHLCV formula
+mirrors. The payload is source-labelled to Schwab daily history and includes a
+formula coverage count and source as-of timestamp. It is a context record, not
+a formula input to tracker scores or a replacement for the captured
+`tosCustomMetrics` artifact. See `docs/TOS_CUSTOM_METRICS.md` for the
+no-double-counting contract.

@@ -163,12 +163,27 @@ class MorningInfernoMarketContextTests(unittest.TestCase):
         with patch(
             "morning_inferno_pipeline.load_custom_metrics_by_ticker",
             return_value={"NVDA": {"tos_strength": {"value": 81.5}}},
+        ), patch(
+            "morning_inferno_pipeline.load_watchlist_pulse_by_ticker",
+            return_value={
+                "NVDA": {
+                    "observedOnly": True,
+                    "source": "schwab-price-history",
+                    "dailyChangePercent": 2.5,
+                    "volume": 1_234_567,
+                    "coverage": "6/6 OHLCV mirrors",
+                }
+            },
         ):
             rows = read_sheet_rows_from_table(headers, raw_rows)
 
         self.assertEqual(rows[0]["tosCustomMetrics"]["tos_strength"]["value"], 81.5)
         self.assertEqual(rows[0]["tosCustomSignalSummary"]["strength"], 81.5)
+        self.assertEqual(rows[0]["watchlistPulse"]["dailyChangePercent"], 2.5)
+        self.assertTrue(rows[0]["watchlistPulse"]["observedOnly"])
         self.assertEqual(rows[0]["marketContext"]["tosCustomMetricSourceStatus"], "captured")
+        self.assertEqual(rows[0]["marketContext"]["watchlistPulse"]["volume"], 1_234_567)
+        self.assertEqual(rows[0]["marketContext"]["watchlistPulseSourceStatus"], "captured")
 
     def test_sync_market_context_columns_writes_data_rows_without_header_overflow(self) -> None:
         class FakeSheet:

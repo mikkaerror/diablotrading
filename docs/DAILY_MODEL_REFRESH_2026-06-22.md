@@ -60,10 +60,10 @@ but the repository timestamps are June 22 rather than June 21.
 4. **Refresh the option-chain tape.** Run
    `./run_inferno_schwab_daily_ops.sh`; require fresh source time and inspect
    spread, liquidity, Greeks, and errors.
-5. **Refresh daily candles.** Run
-   `./run_inferno_schwab_price_history.sh --from-snapshot --limit 20`.
-6. **Recompute the TOS-authored metrics from Schwab.** Run
-   `./run_inferno_schwab_tos_metrics_sync.sh --from-snapshot --limit 20`.
+5. **Refresh daily candles for the validated watchlist.** Run
+   `./run_inferno_schwab_price_history.sh --from-watchlist-input`.
+6. **Recompute the TOS-authored metrics from that saved daily history.** Run
+   `./run_inferno_schwab_tos_metrics_sync.sh --from-existing-history`.
 7. **Rebuild and reconcile the tracker snapshot.** Run the morning pipeline
    with `--skip-email`; verify the Google tracker, earnings dates, prices, and
    the 146-row universe agree.

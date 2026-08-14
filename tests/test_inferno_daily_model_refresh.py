@@ -87,7 +87,7 @@ class DailyModelRefreshTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
+            'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet',
             text,
         )
 
@@ -101,7 +101,7 @@ class DailyModelRefreshTests(unittest.TestCase):
         self.assertLess(deposit_plan, cash_attribution)
         self.assertLess(cash_attribution, growth_stack)
         self.assertIn(
-            'run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-snapshot --limit "$LIMIT" --skip-refresh --quiet',
+            'run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-existing-history --skip-refresh --quiet',
             text,
         )
 

@@ -27,6 +27,7 @@ from inferno_schwab_price_history import (
     refresh_access_token_if_possible,
     save_report as save_price_history_report,
     symbols_from_snapshot,
+    symbols_from_watchlist_input,
     unique_symbols,
 )
 from inferno_tos_custom_metrics import (
@@ -34,8 +35,7 @@ from inferno_tos_custom_metrics import (
     custom_metrics_text,
     save_custom_metrics,
 )
-from inferno_watchlist_ingest import WATCHLIST_INPUT_FILE, load_watchlist_input
-from server import DATA_DIR, REPORTS_DIR, ensure_dirs
+from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
 SCHWAB_TOS_METRICS_SYNC_FILE = DATA_DIR / "inferno_schwab_tos_metrics_sync.json"
@@ -43,21 +43,17 @@ SCHWAB_TOS_METRICS_SYNC_TEXT_FILE = REPORTS_DIR / "schwab_tos_metrics_sync_lates
 SCHWAB_TOS_METRICS_SYNC_STAGE = "schwab-tos-custom-metrics-sync"
 
 
-def symbols_from_watchlist_input(
-    path: Path = WATCHLIST_INPUT_FILE,
+def symbols_from_existing_history(
+    price_history_report: dict[str, Any] | None,
     *,
     limit: int | None = None,
-) -> tuple[list[str], str, list[str]]:
-    """Load the operator's canonical watchlist for a read-only metric refresh.
-
-    This deliberately shares the watchlist-ingest validator rather than
-    re-parsing JSON here. A malformed or over-cap input must not become a
-    quiet, partial market-data pull.
-    """
-    symbols, source, errors = load_watchlist_input(path)
-    if errors:
-        return [], source, errors
-    return unique_symbols(symbols, limit=limit), source, []
+) -> list[str]:
+    """Return canonical symbols already present in a saved price-history report."""
+    rows = (price_history_report or {}).get("rows") or []
+    return unique_symbols(
+        [row.get("symbol") for row in rows if isinstance(row, dict)],
+        limit=limit,
+    )
 
 
 def build_sync_report(
@@ -130,6 +126,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pull the validated operator watchlist from data/inferno_watchlist_input.json",
     )
+    parser.add_argument(
+        "--from-existing-history",
+        action="store_true",
+        help="Compute custom metrics from the saved read-only price-history artifact without another API pull",
+    )
     parser.add_argument("--limit", type=int, help="Symbol cap for this run")
     parser.add_argument("--fixture", type=Path, help="Use Schwab price-history fixture JSON instead of live API")
     parser.add_argument("--skip-refresh", action="store_true", help="Skip OAuth refresh before live fetch")
@@ -142,7 +143,13 @@ def main() -> int:
     """CLI entry point."""
     args = parse_args()
     fixtures = load_fixture(args.fixture) if args.fixture else None
-    if args.symbols:
+    existing_history = load_json_file(SCHWAB_PRICE_HISTORY_FILE) if args.from_existing_history else None
+    if args.from_existing_history:
+        symbols = symbols_from_existing_history(existing_history, limit=args.limit)
+        if not symbols:
+            print(f"No usable saved price history found at {SCHWAB_PRICE_HISTORY_FILE}.")
+            return 1
+    elif args.symbols:
         symbols = unique_symbols(args.symbols, limit=args.limit)
     elif args.from_watchlist_input:
         symbols, input_source, input_errors = symbols_from_watchlist_input(limit=args.limit)
@@ -158,7 +165,7 @@ def main() -> int:
         symbols = symbols_from_snapshot(limit=args.limit)
 
     refresh_status = None
-    if fixtures is None and not args.skip_refresh:
+    if existing_history is None and fixtures is None and not args.skip_refresh:
         refresh_status = refresh_access_token_if_possible()
 
     # The price-history adapter has a conservative twelve-symbol default for
@@ -169,14 +176,17 @@ def main() -> int:
     if args.from_watchlist_input and history_symbol_limit is None:
         history_symbol_limit = len(symbols)
 
-    price_history_report = build_price_history_report(
-        symbols,
-        fixture_payloads=fixtures,
-        symbol_limit=history_symbol_limit,
-    )
-    if refresh_status is not None:
-        price_history_report["refreshStatus"] = refresh_status
-    save_price_history_report(price_history_report)
+    if existing_history is not None:
+        price_history_report = existing_history
+    else:
+        price_history_report = build_price_history_report(
+            symbols,
+            fixture_payloads=fixtures,
+            symbol_limit=history_symbol_limit,
+        )
+        if refresh_status is not None:
+            price_history_report["refreshStatus"] = refresh_status
+        save_price_history_report(price_history_report)
 
     custom_metrics_report = build_custom_metrics_report(schwab_history_report=price_history_report)
     save_custom_metrics(custom_metrics_report)

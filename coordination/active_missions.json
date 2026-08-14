@@ -1013,5 +1013,21 @@
       "research-only",
       "provenance"
     ]
+  },
+  {
+    "id": "mission-5dfebe2e",
+    "createdAt": "2026-08-13T20:36:32.045728-06:00",
+    "updatedAt": "2026-08-13T20:48:57.394529-06:00",
+    "title": "Integrate full watchlist pulse into research context",
+    "body": "Joined the validated 185-symbol TOS watchlist pulse into latest_snapshot rows and marketContext with observed-only daily pace, 52-week range, volume, formula mirrors, coverage, source, and as-of fields. Refreshed the full Schwab daily-history source: 181 six-mirror records; ASTK, GLDD, THR, and VMW remain explicit no-history exceptions. No score, gate, risk, authority, eligible-universe, broker-submit, or live-trading change.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "watchlist",
+      "metrics",
+      "provenance",
+      "research-only"
+    ]
   }
 ]
