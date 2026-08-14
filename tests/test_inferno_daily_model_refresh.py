@@ -87,7 +87,7 @@ class DailyModelRefreshTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet',
+            'run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]+"${watchlist_pulse_limit_args[@]}"}" --skip-refresh --quiet',
             text,
         )
 

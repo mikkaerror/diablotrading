@@ -73,7 +73,9 @@ fi
 
 echo "2/18 Schwab price history"
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet
+  # macOS ships Bash 3.2, where expanding an empty array with `set -u` can
+  # abort the whole refresh. Keep the optional diagnostic cap truly optional.
+  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]+"${watchlist_pulse_limit_args[@]}"}" --skip-refresh --quiet
 else
   skip_schwab_step "Schwab price history"
 fi
