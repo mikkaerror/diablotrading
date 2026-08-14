@@ -71,17 +71,31 @@ else
   echo "Advisory warning: Schwab OAuth preflight failed; continuing non-Schwab refreshes."
 fi
 
-if [[ "$REFRESH_TRACKER" == "1" ]]; then
-  echo "2/18 Tracker and morning model refresh"
-  # A transient vendor failure in the read-only dawn lane must not prevent the
-  # downstream research-only reports (including the deposit growth stack) from
-  # refreshing. The warning remains visible in the final run summary.
-  run_advisory "tracker and morning model refresh" "$BACKTEST_PYTHON" inferno_dawn_pipeline.py --skip-email --refresh-prices
+echo "2/18 Schwab price history"
+if [[ "$SCHWAB_READY" == "1" ]]; then
+  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet
 else
-  echo "2/18 Tracker refresh skipped by operator"
+  skip_schwab_step "Schwab price history"
 fi
 
-echo "3/18 Schwab account truth"
+echo "3/18 Schwab-derived TOS metrics"
+if [[ "$SCHWAB_READY" == "1" ]]; then
+  run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-existing-history --skip-refresh --quiet
+else
+  skip_schwab_step "Schwab-derived TOS metrics"
+fi
+
+if [[ "$REFRESH_TRACKER" == "1" ]]; then
+  echo "4/18 Tracker and morning model refresh"
+  # The snapshot consumes the just-refreshed watchlist pulse. A transient
+  # vendor failure in this read-only dawn lane must not prevent downstream
+  # research-only reports from refreshing; the warning stays in the summary.
+  run_advisory "tracker and morning model refresh" "$BACKTEST_PYTHON" inferno_dawn_pipeline.py --skip-email --refresh-prices
+else
+  echo "4/18 Tracker refresh skipped by operator"
+fi
+
+echo "5/18 Schwab account truth"
 if [[ "$SCHWAB_READY" == "1" ]]; then
   # OAuth can be valid while an individual read-only endpoint is temporarily
   # unavailable. Record that as an advisory and continue to the final doctor
@@ -93,26 +107,12 @@ else
   skip_schwab_step "Schwab transaction ledger"
 fi
 
-echo "4/18 Schwab option-chain tape"
+echo "6/18 Schwab option-chain tape"
 if [[ "$SCHWAB_READY" == "1" ]]; then
   run_advisory "Schwab option-chain tape" python3 inferno_schwab_daily_ops.py --skip-refresh --quiet
   run_advisory "snapshot price overlay" python3 inferno_snapshot_price_overlay.py --quiet
 else
   skip_schwab_step "Schwab option-chain tape"
-fi
-
-echo "5/18 Schwab price history"
-if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_advisory "Schwab price history" python3 inferno_schwab_price_history.py --from-watchlist-input "${watchlist_pulse_limit_args[@]}" --skip-refresh --quiet
-else
-  skip_schwab_step "Schwab price history"
-fi
-
-echo "6/18 Schwab-derived TOS metrics"
-if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_advisory "Schwab-derived TOS metrics" python3 inferno_schwab_tos_metrics_sync.py --from-existing-history --skip-refresh --quiet
-else
-  skip_schwab_step "Schwab-derived TOS metrics"
 fi
 
 echo "7/18 Formula and theory audits"

@@ -54,19 +54,19 @@ but the repository timestamps are June 22 rather than June 21.
    only the newest redirect URL.
 2. **Verify token health.** Run `python3 inferno_schwab_oauth.py status`.
    Require `reauthorizationRequired: False` and a positive access-token clock.
-3. **Refresh approved-account truth.** Run
-   `./run_inferno_schwab_account_sync.sh --json`; verify suffix 8499, NLV,
-   cash, and four holdings.
-4. **Refresh the option-chain tape.** Run
-   `./run_inferno_schwab_daily_ops.sh`; require fresh source time and inspect
-   spread, liquidity, Greeks, and errors.
-5. **Refresh daily candles for the validated watchlist.** Run
+3. **Refresh daily candles for the validated watchlist.** Run
    `./run_inferno_schwab_price_history.sh --from-watchlist-input`.
-6. **Recompute the TOS-authored metrics from that saved daily history.** Run
+4. **Recompute the TOS-authored metrics from that saved daily history.** Run
    `./run_inferno_schwab_tos_metrics_sync.sh --from-existing-history`.
-7. **Rebuild and reconcile the tracker snapshot.** Run the morning pipeline
+5. **Rebuild and reconcile the tracker snapshot.** Run the morning pipeline
    with `--skip-email`; verify the Google tracker, earnings dates, prices, and
    the 146-row universe agree.
+6. **Refresh approved-account truth.** Run
+   `./run_inferno_schwab_account_sync.sh --json`; verify suffix 8499, NLV,
+   cash, and four holdings.
+7. **Refresh the option-chain tape.** Run
+   `./run_inferno_schwab_daily_ops.sh`; require fresh source time and inspect
+   spread, liquidity, Greeks, and errors.
 8. **Rerun formula and theory audits.** Confirm RVOL, Pv52H, momentum, ATR%,
    strength, and support/resistance values are current and correlated
    companions are not double-counted.

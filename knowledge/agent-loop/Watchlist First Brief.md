@@ -76,6 +76,14 @@ does not create a new score or feed existing readiness, priority, eligibility,
 sizing, risk, or authority formulas; duplicated TOS and OHLCV metrics are
 explicitly not double-counted.
 
+The daily refresh now builds Schwab price history and the formula-metric
+artifact before rebuilding the tracker snapshot. This avoids a one-run lag in
+which the snapshot could have consumed yesterday's pulse while the refreshed
+artifact was written later in the same loop. If Schwab authorization is
+unavailable, the tracker refresh continues with the prior labelled artifact
+and records the source-refresh failure as advisory rather than presenting it
+as current data.
+
 ## Falsifier
 
 This belief is false if the brief changes a score or gate, loses source

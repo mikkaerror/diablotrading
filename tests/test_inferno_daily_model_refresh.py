@@ -91,6 +91,16 @@ class DailyModelRefreshTests(unittest.TestCase):
             text,
         )
 
+    def test_tracker_consumes_the_current_watchlist_pulse(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+
+        price_history = text.index('run_advisory "Schwab price history"')
+        custom_metrics = text.index('run_advisory "Schwab-derived TOS metrics"')
+        tracker_refresh = text.index('run_advisory "tracker and morning model refresh"')
+
+        self.assertLess(price_history, custom_metrics)
+        self.assertLess(custom_metrics, tracker_refresh)
+
     def test_growth_stack_follows_fresh_cash_attribution(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
 
