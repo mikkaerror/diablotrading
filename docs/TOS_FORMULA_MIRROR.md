@@ -177,6 +177,27 @@ Strength labels:
 | `>= 45` | neutral |
 | `< 45` | lagging |
 
+## Normalized Watchlist Discovery Context
+
+The visible TOS-style values are not commensurate by themselves: raw momentum
+is price-denominated, ATR% is a range measure, and current-bar RVOL can repeat
+the same volume evidence. `watchlistPulse.technicalResearch` therefore keeps a
+separate, documented research surface:
+
+```text
+technical_discovery = 0.30 * prior_30_rvol_score
+                    + 0.40 * ATR_normalized_momentum_score
+                    + 0.30 * five_day_close_location_score
+                    - extension_penalty
+```
+
+`extension_penalty` applies only to a name both near its 52-week high and above
+the ATR% volatility context. Pv52H, ATR%, and support/resistance are otherwise
+context—not independent positive confirmations. This payload is uncalibrated,
+research-only, and excluded from the tracker, edge, conviction, strike,
+eligibility, sizing, and authority score formulas. It is shown separately so
+outcomes can be reviewed before any future feature-calibration proposal.
+
 ## Drift Audit
 
 `inferno_tos_formula_audit.py` compares the tracker snapshot against the

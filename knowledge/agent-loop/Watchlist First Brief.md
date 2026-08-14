@@ -84,6 +84,16 @@ unavailable, the tracker refresh continues with the prior labelled artifact
 and records the source-refresh failure as advisory rather than presenting it
 as current data.
 
+On 2026-08-13, a normalized `technicalResearch` companion was added to each
+usable watchlist pulse. It transforms price-scale-dependent momentum into an
+ATR-normalized input, uses prior-30 relative volume so it does not double-count
+the current bar, smooths Strength with five-day close location, and treats
+52-week proximity, ATR%, and support/resistance as extension/tactical context.
+The artifact is explicitly `researchOnly`, `gateInput: false`, and
+`calibrated: false`; it appears in separate edge/conviction discovery leader
+lists without altering their established scores, candidate lanes, gates,
+sizing, risk, or authority. Regression tests preserve that separation.
+
 ## Falsifier
 
 This belief is false if the brief changes a score or gate, loses source

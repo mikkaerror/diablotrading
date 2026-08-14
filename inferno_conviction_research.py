@@ -16,6 +16,7 @@ from typing import Any
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_tos_formula_math import watchlist_technical_research_from_pulse
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -230,6 +231,12 @@ def context(row: dict[str, Any]) -> dict[str, Any]:
     """Return normalized market context from a tracker row."""
     payload = row.get("marketContext")
     return payload if isinstance(payload, dict) else {}
+
+
+def watchlist_technical_research(row: dict[str, Any]) -> dict[str, Any]:
+    """Return normalized technical discovery context without changing conviction gates."""
+    pulse = context(row).get("watchlistPulse") or row.get("watchlistPulse")
+    return watchlist_technical_research_from_pulse(pulse)
 
 
 def trend_score(row: dict[str, Any]) -> float:
@@ -568,6 +575,7 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
     ticker = str(row.get("ticker") or "").upper()
     gut = gut_check_score(row, edge)
     long_term = long_term_score(row, edge)
+    technical = watchlist_technical_research(row)
     pillars = {
         "theme": round(theme_score(row, edge), 2),
         "timing": timing_score(row),
@@ -604,6 +612,8 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
         "trend": ((context(row).get("trend") or {}).get("label") or row.get("trend")),
         "ivRank": row.get("ivRank"),
         "atrZScore": row.get("atrZScore"),
+        "technicalResearch": technical,
+        "technicalResearchScore": technical.get("score"),
         "pillars": pillars,
         "riskFlags": flags,
         "reasonCodes": reason_codes(row, edge, pillars, flags),
@@ -701,6 +711,12 @@ def build_conviction_research(
         lambda item: item["pillars"]["options"] >= 62 and number(item["daysUntilEarnings"], 999) <= 45,
         limit=limit,
     )
+    technical_leaders = top_filter(
+        ranked,
+        lambda item: (item.get("technicalResearch") or {}).get("status") == "complete",
+        limit=limit,
+        key="technicalResearchScore",
+    )
     balanced = top_filter(
         ranked,
         lambda item: item["evidenceGrade"] in {"A", "B", "C"},
@@ -741,11 +757,13 @@ def build_conviction_research(
             "pillarBalanceScore = geometric/arithmetic mean ratio across the seven near-term pillars",
             "uncertaintyPenalty = fallback data, missing edge research, weak evidence, dead trigger, and risk-flag haircuts",
             "riskFlags = fallback data, high valuation, near resistance, far from support, weak options, weak theme, or dead trigger",
+            "technicalResearchScore = normalized watchlist RVOL, price momentum, and close-location discovery context; uncalibrated and excluded from gates",
         ],
         "behemoths": behemoths,
         "sleepers": sleepers,
         "nearTermWinners": near_term,
         "optionsWatch": options_watch,
+        "technicalDiscoveryLeaders": technical_leaders,
         "bestBalanced": balanced,
         "longTermBuyZone": long_term_buy_zone,
         "contradictions": contradictions,
@@ -773,7 +791,9 @@ def render_section(title: str, items: list[dict[str, Any]], *, score_key: str = 
             f"{index}. {item.get('ticker')} | {item.get('category')} | "
             f"{score_key} {item.get(score_key)} | adj {item.get('convictionAdjustedScore')} | "
             f"grade {item.get('evidenceGrade')} | ready {item.get('readiness')} | "
-            f"{item.get('setupRec')} | {item.get('daysUntilEarnings')}d"
+            f"{item.get('setupRec')} | {item.get('daysUntilEarnings')}d | "
+            f"technical {item.get('technicalResearchScore', 'N/A')} "
+            f"({(item.get('technicalResearch') or {}).get('posture', 'unavailable')})"
         )
         lines.append(
             f"   {item.get('thesis')} "
@@ -807,6 +827,7 @@ def conviction_research_text(report: dict[str, Any]) -> str:
     lines.extend(render_section("Sleepers to investigate", report.get("sleepers") or []))
     lines.extend(render_section("Near-term winners", report.get("nearTermWinners") or []))
     lines.extend(render_section("Options watch", report.get("optionsWatch") or []))
+    lines.extend(render_section("Technical discovery leaders (uncalibrated; no gate change)", report.get("technicalDiscoveryLeaders") or [], score_key="technicalResearchScore"))
     lines.extend(render_section("Best balanced conviction", report.get("bestBalanced") or [], score_key="convictionAdjustedScore"))
     lines.extend(render_section("Long-term buy-zone candidates", report.get("longTermBuyZone") or [], score_key="longTermConvictionScore"))
     lines.extend(render_section("Contradictions / gut checks", report.get("contradictions") or []))

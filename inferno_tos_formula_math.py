@@ -23,6 +23,7 @@ import pandas as pd
 
 
 FORMULA_VERSION = "tos-formula-mirror-v1"
+WATCHLIST_TECHNICAL_RESEARCH_VERSION = "watchlist-technical-research-v1"
 
 
 def clamp(value: float, lower: float = 0.0, upper: float = 100.0) -> float:
@@ -261,6 +262,172 @@ def tos_custom_quote_snapshot_from_history(history: pd.DataFrame) -> dict[str, A
             "thinkScript": "def nearHigh = (Highest(high, 10) - close) / Highest(high, 10) < 0.02; def nearLow = (close - Lowest(low, 10)) / Lowest(low, 10) < 0.02;",
         },
     }
+
+
+def close_location_average(history: pd.DataFrame, *, lookback: int = 5) -> float | None:
+    """Return the mean close location in each daily range over ``lookback`` bars.
+
+    This is the less-noisy companion to the visible one-bar TOS Strength
+    column. A zero-width daily range contributes no observation rather than
+    inventing a bullish or bearish signal.
+    """
+    if lookback <= 0:
+        return None
+    if not {"High", "Low", "Close"}.issubset(history.columns):
+        return None
+    frame = history[["High", "Low", "Close"]].copy()
+    frame.columns = ["high", "low", "close"]
+    frame = frame.apply(pd.to_numeric, errors="coerce").dropna()
+    if frame.empty:
+        return None
+    daily_range = frame["high"] - frame["low"]
+    close_location = ((frame["close"] - frame["low"]) / daily_range * 100.0).where(daily_range != 0)
+    recent = close_location.dropna().tail(lookback)
+    if recent.empty:
+        return None
+    return round(float(recent.mean()), 2)
+
+
+def watchlist_technical_research_from_history(history: pd.DataFrame) -> dict[str, Any]:
+    """Build a normalized, discovery-only technical lens from daily OHLCV.
+
+    The score deliberately uses one non-redundant companion per concept:
+    prior-30 RVOL for participation, ATR-normalized price momentum, and a
+    five-day close-location average. The raw TOS mirrors stay visible for
+    provenance and cross-checking, while Pv52H, ATR%, and SUP/RES constrain
+    interpretation rather than acting as extra bullish votes. This payload is
+    not a readiness, eligibility, sizing, risk, or authority gate input.
+    """
+    mirror = tos_custom_quote_snapshot_from_history(history)
+    rvol_prior_30 = relative_volume_from_history(history, lookback=30)
+    momentum = momentum_snapshot(history)
+    momentum_atr_multiple = number(momentum.get("atrMultiple"))
+    close_location_5d = close_location_average(history, lookback=5)
+    pv52h = number((mirror.get("tos_pv52h") or {}).get("value"))
+    atr_pct = number((mirror.get("tos_atr_percent") or {}).get("value"))
+    raw_momentum = number((mirror.get("tos_momentum") or {}).get("value"))
+    latest_strength = number((mirror.get("tos_strength") or {}).get("value"))
+    support_resistance = (mirror.get("tos_support_resistance_state") or {}).get("label")
+    raw_tos_rvol = number((mirror.get("tos_rvol") or {}).get("value"))
+
+    missing = [
+        key
+        for key, value in {
+            "rvolPrior30": rvol_prior_30,
+            "momentumAtrMultiple": momentum_atr_multiple,
+            "closeLocation5d": close_location_5d,
+            "pv52h": pv52h,
+            "atrPercent": atr_pct,
+            "supportResistanceState": support_resistance,
+        }.items()
+        if value is None or value == ""
+    ]
+    if missing:
+        return {
+            "version": WATCHLIST_TECHNICAL_RESEARCH_VERSION,
+            "researchOnly": True,
+            "gateInput": False,
+            "calibrated": False,
+            "status": "insufficient-history",
+            "missingInputs": missing,
+            "score": None,
+            "posture": "unavailable",
+        }
+
+    if rvol_prior_30 >= 1.5:
+        participation_score = 85.0
+    elif rvol_prior_30 >= 1.1:
+        participation_score = 70.0
+    elif rvol_prior_30 >= 0.8:
+        participation_score = 52.0
+    else:
+        participation_score = 30.0
+    momentum_score = clamp(50.0 + momentum_atr_multiple * 18.0)
+    close_location_score = clamp(close_location_5d)
+    extension_risk = pv52h >= 95.0 and atr_pct >= 4.0
+    extension_penalty = 15.0 if extension_risk else 0.0
+    score = round(
+        clamp(
+            participation_score * 0.30
+            + momentum_score * 0.40
+            + close_location_score * 0.30
+            - extension_penalty
+        ),
+        2,
+    )
+    near_low = "Near Low" in str(support_resistance)
+    near_high = "Near High" in str(support_resistance)
+    if extension_risk:
+        posture = "extension-risk"
+    elif score >= 65.0 and not near_low:
+        posture = "supports-discovery"
+    elif score <= 40.0 or near_low:
+        posture = "challenges-discovery"
+    else:
+        posture = "mixed-discovery"
+    return {
+        "version": WATCHLIST_TECHNICAL_RESEARCH_VERSION,
+        "researchOnly": True,
+        "gateInput": False,
+        "calibrated": False,
+        "status": "complete",
+        "score": score,
+        "posture": posture,
+        "inputs": {
+            "rvolPrior30": rvol_prior_30,
+            "tosRvolCrossCheck": raw_tos_rvol,
+            "pv52h": pv52h,
+            "momentumAtrMultiple": momentum_atr_multiple,
+            "momentumPct": number(momentum.get("weightedReturnPct")),
+            "rawMomentumDisplayOnly": raw_momentum,
+            "atrPercent": atr_pct,
+            "closeLocation5d": close_location_5d,
+            "latestStrengthCrossCheck": latest_strength,
+            "supportResistanceState": support_resistance,
+        },
+        "components": {
+            "participationScore": participation_score,
+            "normalizedMomentumScore": round(momentum_score, 2),
+            "closeLocationScore": round(close_location_score, 2),
+            "extensionPenalty": extension_penalty,
+        },
+        "flags": {
+            "extensionRisk": extension_risk,
+            "nearTenDayHigh": near_high,
+            "nearTenDayLow": near_low,
+        },
+        "caveats": [
+            "raw TOS Momentum is dollar-denominated and display-only",
+            "TOS RVOL is a cross-check; prior-30 RVOL is the single participation input",
+            "ATR% and Pv52H constrain extension risk, not directional conviction",
+            "latest TOS Strength is cross-checked with five-day close location",
+            "discovery score is uncalibrated and cannot change a gate, size, or authority",
+        ],
+    }
+
+
+def watchlist_technical_research_from_pulse(pulse: Any) -> dict[str, Any]:
+    """Return a validated technical-research payload from a watchlist pulse."""
+    if not isinstance(pulse, dict):
+        return {
+            "researchOnly": True,
+            "gateInput": False,
+            "calibrated": False,
+            "status": "missing-pulse",
+            "score": None,
+            "posture": "unavailable",
+        }
+    technical = pulse.get("technicalResearch")
+    if not isinstance(technical, dict):
+        return {
+            "researchOnly": True,
+            "gateInput": False,
+            "calibrated": False,
+            "status": "missing-technical-research",
+            "score": None,
+            "posture": "unavailable",
+        }
+    return technical
 
 
 def rvol_bucket(value: float | None) -> str:

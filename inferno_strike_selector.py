@@ -22,6 +22,7 @@ from inferno_options_math import (
 )
 from inferno_schwab_options import SCHWAB_OPTIONS_FILE
 from inferno_risk_policy import evaluate_strike_item
+from inferno_tos_formula_math import watchlist_technical_research_from_pulse
 from server import (
     APPROVAL_QUEUE_FILE,
     DATA_DIR,
@@ -867,6 +868,7 @@ def build_strike_plan_for_intent(
     pricing_intent = effective_intent_for_pricing(intent, schwab_options)
     market_context = pricing_intent.get("marketContext") or {}
     trend = (market_context.get("trend") or {}).get("label") or "Neutral"
+    technical_research = watchlist_technical_research_from_pulse(market_context.get("watchlistPulse"))
     base = {
         "ticker": ticker,
         "generatedAt": local_now().isoformat(),
@@ -903,6 +905,7 @@ def build_strike_plan_for_intent(
         "paperOnly": True,
         "liveTradingAllowed": False,
         "marketContext": market_context,
+        "technicalResearch": technical_research,
         "marketContextSummary": {
             "rvol": market_context.get("rvol"),
             "trend": trend,
@@ -912,6 +915,9 @@ def build_strike_plan_for_intent(
             "distanceToResistancePct": market_context.get("distanceToResistancePct"),
             "atrPercent": intent.get("atrPercent") or market_context.get("atrPercent"),
             "ivRank": intent.get("ivRank") or market_context.get("ivRank"),
+            "technicalDiscoveryScore": technical_research.get("score"),
+            "technicalDiscoveryPosture": technical_research.get("posture"),
+            "technicalDiscoveryResearchOnly": technical_research.get("researchOnly", True),
         },
         "schwabOptions": schwab_options,
     }
@@ -1215,6 +1221,12 @@ def build_text_report(plan: dict[str, Any]) -> str:
             f"  Confirmation: RVOL {context.get('rvol', 'N/A')}x | {trend} | "
             f"S {context.get('support', 'N/A')} / R {context.get('resistance', 'N/A')}"
         )
+        technical = item.get("technicalResearch") or {}
+        if technical.get("status") == "complete":
+            lines.append(
+                f"  Technical discovery (research-only; no gate change): "
+                f"{technical.get('score')} | {technical.get('posture')}"
+            )
         schwab_options = item.get("schwabOptions") or {}
         if schwab_options:
             move = schwab_options.get("atmImpliedMovePct")

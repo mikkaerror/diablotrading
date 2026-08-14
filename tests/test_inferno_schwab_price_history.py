@@ -69,6 +69,9 @@ class SchwabPriceHistoryTests(unittest.TestCase):
         self.assertEqual(mirror["tos_strength"]["value"], 50.0)
         self.assertEqual(mirror["tos_support_resistance_state"]["label"], "Neutral")
         self.assertTrue(row["formulaReady"])
+        self.assertEqual(row["technicalResearch"]["status"], "complete")
+        self.assertTrue(row["technicalResearch"]["researchOnly"])
+        self.assertFalse(row["technicalResearch"]["gateInput"])
 
     def test_watchlist_pulse_keeps_pace_and_formula_fields_observed_only(self) -> None:
         report = schwab_history.build_report(
@@ -87,6 +90,23 @@ class SchwabPriceHistoryTests(unittest.TestCase):
         self.assertEqual(pulse["volume"], 3000)
         self.assertEqual(pulse["rvol"], 2.81)
         self.assertEqual(pulse["supportResistanceState"], "Neutral")
+        self.assertEqual(pulse["technicalResearch"]["status"], "complete")
+        self.assertTrue(pulse["technicalResearch"]["researchOnly"])
+
+    def test_recompute_technical_research_preserves_market_source_timestamp(self) -> None:
+        report = schwab_history.build_report(
+            ["TEST"],
+            fixture_payloads={"TEST": sample_history_payload()},
+        )
+        source_generated_at = report["generatedAt"]
+        report["rows"][0].pop("technicalResearch")
+
+        rebuilt = schwab_history.recompute_technical_research(report)
+
+        self.assertEqual(rebuilt["generatedAt"], source_generated_at)
+        self.assertIn("technicalResearchGeneratedAt", rebuilt)
+        self.assertEqual(rebuilt["technicalResearchRows"], 1)
+        self.assertEqual(rebuilt["rows"][0]["technicalResearch"]["status"], "complete")
 
     def test_symbols_from_snapshot_deduplicates_tracker_universe(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

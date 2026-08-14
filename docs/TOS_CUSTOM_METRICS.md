@@ -186,12 +186,34 @@ as-of time; they are not represented as live/intraday TOS values. A no-history
 symbol receives an explicit `0/6 OHLCV mirrors — no daily history` coverage
 record instead of zeros.
 
-The pulse does not calculate, replace, or increment an existing score. In
-particular, its RVOL and the six formula mirrors must not be double-counted
-alongside `tosCustomMetrics` or existing tracker formulas. It remains
-observed-only until a separately reviewed outcome calibration authorizes a
-new research feature; it never changes eligibility, priority, sizing, risk,
-or authority.
+The pulse does not calculate, replace, or increment an existing **production**
+score. In particular, its RVOL and the six formula mirrors must not be
+double-counted alongside `tosCustomMetrics` or existing tracker formulas.
+It never changes eligibility, priority, sizing, risk, promotion, or authority.
+
+### Normalized Technical Discovery
+
+For each pulse with usable daily history, the system also publishes a separate
+`watchlistPulse.technicalResearch` object. This is an uncalibrated
+research-ranking surface, not a gate or trade signal. It makes the six visible
+columns useful without treating their display scales as equivalent:
+
+| Watchlist field | Research treatment | Why |
+|---|---|---|
+| RVOL | Prior-30-session relative volume | Avoids reusing the same current-bar volume in both numerator and baseline; exact TOS RVOL remains a cross-check. |
+| MOM | ATR-normalized multi-horizon price momentum | Raw dollar momentum cannot be compared across $20 and $2,000 symbols. |
+| Strength | Five-day average close location | A single-bar close location is too noisy to count as confirmation. |
+| Pv52H + ATR% | Extension-risk context | These subtract only when a high-volatility name is already extended; they are not extra bullish votes. |
+| SUP/RES | Tactical posture/context | Useful for framing, but not a directional score. |
+
+The `technicalDiscoveryScore` is intentionally labeled `researchOnly: true`,
+`gateInput: false`, and `calibrated: false`. Edge and conviction reports may
+rank it in a dedicated **Technical discovery leaders** section, and strike
+plans retain it as an explicitly research-only context field, but their
+existing edge score, conviction-adjusted score, lane classification, strike
+selection, and every quality gate remain unchanged. Raw TOS values continue to be audited as an
+independent support/challenge source; a TOS CSV is never a scheduled scoring
+dependency.
 
 ## Formula Registry
 

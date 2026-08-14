@@ -176,6 +176,34 @@ class StrikePlanScoreContextTests(unittest.TestCase):
         self.assertEqual(plan["setupFamily"], "defined-risk directional")
         self.assertEqual(plan["primaryRoute"], "CALL_DEBIT_SPREAD")
 
+    def test_failed_intent_retains_research_only_technical_context_without_changing_status(self) -> None:
+        intent = {
+            "ticker": "CTX",
+            "setupRec": "Vertical Call",
+            "price": 0,
+            "intentStatus": "blocked",
+            "marketContext": {
+                "watchlistPulse": {
+                    "technicalResearch": {
+                        "researchOnly": True,
+                        "gateInput": False,
+                        "calibrated": False,
+                        "status": "complete",
+                        "score": 81.0,
+                        "posture": "supports-discovery",
+                    }
+                }
+            },
+        }
+
+        plan = build_strike_plan_for_intent(intent, schwab_options_index={})
+
+        self.assertFalse(plan["ok"])
+        self.assertEqual(plan["reason"], "missing usable underlying price")
+        self.assertEqual(plan["technicalResearch"]["score"], 81.0)
+        self.assertTrue(plan["marketContextSummary"]["technicalDiscoveryResearchOnly"])
+        self.assertEqual(plan["marketContextSummary"]["technicalDiscoveryScore"], 81.0)
+
 
 class StrikeSelectorRedundancyTests(unittest.TestCase):
     """Verify strike-selector refresh and capped rehearsal helpers."""

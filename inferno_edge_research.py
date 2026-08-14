@@ -18,6 +18,7 @@ import pandas as pd
 import yfinance as yf
 
 from inferno_config import local_now
+from inferno_tos_formula_math import watchlist_technical_research_from_pulse
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -188,6 +189,18 @@ def market_context_row(row: dict[str, Any]) -> dict[str, Any]:
     return context if isinstance(context, dict) else {}
 
 
+def watchlist_technical_research(row: dict[str, Any]) -> dict[str, Any]:
+    """Return the canonical, discovery-only technical payload for a row.
+
+    This is intentionally separate from confirmation and edge gates. The
+    technical score is uncalibrated research context, while candidate-lane
+    thresholds remain single-sourced and unchanged.
+    """
+    context = market_context_row(row)
+    pulse = context.get("watchlistPulse") or row.get("watchlistPulse")
+    return watchlist_technical_research_from_pulse(pulse)
+
+
 def confirmation_score(row: dict[str, Any]) -> float:
     """Score whether the setup is actually being confirmed by market structure."""
     context = market_context_row(row)
@@ -245,6 +258,7 @@ def edge_score(row: dict[str, Any], metadata: dict[str, Any], category: dict[str
     confirmation = confirmation_score(row)
     quality = quality_score(metadata)
     valuation = valuation_risk_score(row, metadata)
+    technical = watchlist_technical_research(row)
     score = round(thesis * 0.26 + timing * 0.24 + confirmation * 0.16 + quality * 0.20 + valuation * 0.14, 2)
     return {
         "edgeScore": score,
@@ -253,6 +267,8 @@ def edge_score(row: dict[str, Any], metadata: dict[str, Any], category: dict[str
         "confirmationScore": confirmation,
         "qualityScore": quality,
         "valuationRiskScore": valuation,
+        "technicalResearch": technical,
+        "technicalDiscoveryScore": technical.get("score"),
     }
 
 
@@ -343,6 +359,7 @@ def build_edge_research(rows: list[dict[str, Any]] | None = None, limit: int = 4
                 "setupRec": row.get("setupRec"),
                 "signalTrigger": row.get("signalTrigger"),
                 "marketContext": market_context_row(row),
+                "technicalResearch": scores.get("technicalResearch"),
                 "sector": metadata.get("sector"),
                 "industry": metadata.get("industry"),
                 "thesis": thesis_line(row, metadata, category, lane),
@@ -350,6 +367,11 @@ def build_edge_research(rows: list[dict[str, Any]] | None = None, limit: int = 4
         )
     save_metadata_cache(cache)
     ranked = sorted(candidates, key=lambda item: item["edgeScore"], reverse=True)
+    technical_leaders = sorted(
+        [item for item in candidates if item.get("technicalResearch", {}).get("status") == "complete"],
+        key=lambda item: number(item.get("technicalResearch", {}).get("score")),
+        reverse=True,
+    )[:10]
     return {
         "generatedAt": local_now().isoformat(),
         "framework": "online-world-shovel-edge",
@@ -358,6 +380,7 @@ def build_edge_research(rows: list[dict[str, Any]] | None = None, limit: int = 4
         "topCatalystTrades": [item for item in ranked if item["lane"] == "Catalyst Trade Candidate"][:8],
         "topLongTermShovels": [item for item in ranked if item["lane"] == "Long-Term Shovel Accumulation"][:8],
         "researchWatchlist": [item for item in ranked if item["lane"] == "Research Watchlist"][:10],
+        "technicalDiscoveryLeaders": technical_leaders,
         "ranked": ranked,
         "principles": [
             "prefer tool sellers over one-hit content demand",
@@ -392,7 +415,9 @@ def edge_research_text(report: dict[str, Any]) -> str:
                 f"{item.get('lane')} | edge {item.get('edgeScore')} | "
                 f"timing {item.get('scores', {}).get('timingScore')} | "
                 f"confirm {item.get('scores', {}).get('confirmationScore')} | "
-                f"quality {item.get('scores', {}).get('qualityScore')}"
+                f"quality {item.get('scores', {}).get('qualityScore')} | "
+                f"technical {item.get('technicalResearch', {}).get('score', 'N/A')} "
+                f"({item.get('technicalResearch', {}).get('posture', 'unavailable')})"
             )
             context = item.get("marketContext") or {}
             trend = (context.get("trend") or {}).get("label") or "Neutral"
@@ -405,6 +430,7 @@ def edge_research_text(report: dict[str, Any]) -> str:
     section("Catalyst trade candidates", report.get("topCatalystTrades", []))
     section("Long-term shovel accumulation", report.get("topLongTermShovels", []))
     section("Research watchlist", report.get("researchWatchlist", []))
+    section("Technical discovery leaders (uncalibrated; no lane change)", report.get("technicalDiscoveryLeaders", []))
     return "\n".join(lines).rstrip() + "\n"
 
 

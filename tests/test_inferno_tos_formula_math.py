@@ -8,6 +8,7 @@ import pandas as pd
 
 from inferno_tos_formula_math import (
     FORMULA_VERSION,
+    WATCHLIST_TECHNICAL_RESEARCH_VERSION,
     build_market_context_from_history,
     build_market_context_from_row,
     momentum_snapshot,
@@ -17,6 +18,7 @@ from inferno_tos_formula_math import (
     tos_custom_quote_snapshot_from_history,
     tracker_score_snapshot_from_row,
     trend_descriptor_from_history,
+    watchlist_technical_research_from_history,
 )
 
 
@@ -100,6 +102,41 @@ class InfernoTosFormulaMathTests(unittest.TestCase):
         self.assertAlmostEqual(snapshot["tos_atr_percent"]["value"], 0.6, places=1)
         self.assertAlmostEqual(snapshot["tos_strength"]["value"], 50.0, places=1)
         self.assertEqual(snapshot["tos_support_resistance_state"]["label"], "\u2197 Near High")
+
+    def test_watchlist_technical_research_uses_normalized_companions_not_raw_momentum(self) -> None:
+        history = rising_history(rows=80)
+        history["Volume"] = [1_000.0 for _ in range(79)] + [3_000.0]
+
+        technical = watchlist_technical_research_from_history(history)
+
+        self.assertEqual(technical["version"], WATCHLIST_TECHNICAL_RESEARCH_VERSION)
+        self.assertTrue(technical["researchOnly"])
+        self.assertFalse(technical["gateInput"])
+        self.assertFalse(technical["calibrated"])
+        self.assertEqual(technical["status"], "complete")
+        self.assertGreater(technical["score"], 65.0)
+        self.assertEqual(technical["posture"], "supports-discovery")
+        self.assertAlmostEqual(technical["inputs"]["rvolPrior30"], 3.0, places=2)
+        self.assertGreater(technical["inputs"]["momentumAtrMultiple"], 0.0)
+        self.assertEqual(technical["inputs"]["rawMomentumDisplayOnly"], 4.5)
+        self.assertIn("raw TOS Momentum is dollar-denominated and display-only", technical["caveats"])
+
+    def test_watchlist_technical_research_flags_high_volatility_extension(self) -> None:
+        close = [100.0 + index for index in range(80)]
+        history = pd.DataFrame(
+            {
+                "Close": close,
+                "High": [value + 4.0 for value in close],
+                "Low": [value - 4.0 for value in close],
+                "Volume": [1_000.0 for _ in range(80)],
+            }
+        )
+
+        technical = watchlist_technical_research_from_history(history)
+
+        self.assertTrue(technical["flags"]["extensionRisk"])
+        self.assertEqual(technical["posture"], "extension-risk")
+        self.assertEqual(technical["components"]["extensionPenalty"], 15.0)
 
     def test_row_market_context_prefers_sheet_values_when_present(self) -> None:
         context = build_market_context_from_row(

@@ -1029,5 +1029,22 @@
       "provenance",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-9dcb8e85",
+    "createdAt": "2026-08-13T22:21:44.674900-06:00",
+    "updatedAt": "2026-08-13T22:36:08.903149-06:00",
+    "title": "Integrate normalized watchlist technical metrics into research ranking",
+    "body": "Completed Part A bounded implementation: computed-canonical normalized technicalResearch added to watchlistPulse, separate edge/conviction discovery surfaces, and strike-plan research context. Existing scores, lanes, strike selection, gates, risk, authority, broker-submit, and live trading remain unchanged; TOS remains the theory-audit cross-check. Part B awaits a stable fundamental source.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "watchlist",
+      "metrics",
+      "scoring",
+      "research-only",
+      "provenance"
+    ]
   }
 ]

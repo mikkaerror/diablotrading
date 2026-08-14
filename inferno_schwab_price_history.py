@@ -42,7 +42,10 @@ from inferno_schwab_oauth import (
     refresh_access_token,
     token_status,
 )
-from inferno_tos_formula_math import tos_custom_quote_snapshot_from_history
+from inferno_tos_formula_math import (
+    tos_custom_quote_snapshot_from_history,
+    watchlist_technical_research_from_history,
+)
 from inferno_watchlist_ingest import WATCHLIST_INPUT_FILE, load_watchlist_input
 from server import DATA_DIR, REPORTS_DIR, SNAPSHOT_FILE, ensure_dirs, load_json_file
 
@@ -336,6 +339,7 @@ def summarize_price_history(symbol: str, payload: dict[str, Any]) -> dict[str, A
     """Summarize one Schwab price-history payload for downstream joins."""
     history = normalize_candles(payload)
     mirror = tos_custom_quote_snapshot_from_history(history) if not history.empty else {}
+    technical_research = watchlist_technical_research_from_history(history) if not history.empty else {}
     latest = history.iloc[-1] if not history.empty else {}
     earliest = history.iloc[0] if not history.empty else {}
     latest_date = latest.get("Datetime") if isinstance(latest, pd.Series) else None
@@ -350,6 +354,7 @@ def summarize_price_history(symbol: str, payload: dict[str, Any]) -> dict[str, A
         "latestClose": rounded(latest.get("Close") if isinstance(latest, pd.Series) else None, 4),
         "latestVolume": int(number(latest.get("Volume") if isinstance(latest, pd.Series) else None, 0) or 0),
         "tosCustomFormulaMirror": mirror,
+        "technicalResearch": technical_research,
         "missingFormulaValues": missing,
         "formulaReady": bool(mirror) and not missing,
         "candles": history_records(history),
@@ -427,8 +432,48 @@ def build_watchlist_pulse_by_ticker(price_history_report: dict[str, Any]) -> dic
             "atrPercent": metric_values["tos_atr_percent"],
             "strength": metric_values["tos_strength"],
             "supportResistanceState": metric_values["tos_support_resistance_state"],
+            "technicalResearch": row.get("technicalResearch") or {
+                "researchOnly": True,
+                "gateInput": False,
+                "calibrated": False,
+                "status": "missing-technical-research",
+                "score": None,
+                "posture": "unavailable",
+            },
         }
     return by_ticker
+
+
+def recompute_technical_research(price_history_report: dict[str, Any]) -> dict[str, Any]:
+    """Backfill normalized technical context from an existing OHLCV artifact.
+
+    This is a local, deterministic migration path for formula additions. It
+    does not fetch market data or alter the original source timestamp; the
+    separate calculation timestamp makes that distinction explicit.
+    """
+    rows = price_history_report.get("rows")
+    if not isinstance(rows, list):
+        return price_history_report
+    refreshed = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        history = normalize_candles({"candles": row.get("candles") or []})
+        if history.empty:
+            row["technicalResearch"] = {
+                "researchOnly": True,
+                "gateInput": False,
+                "calibrated": False,
+                "status": "insufficient-history",
+                "score": None,
+                "posture": "unavailable",
+            }
+        else:
+            row["technicalResearch"] = watchlist_technical_research_from_history(history)
+            refreshed += 1
+    price_history_report["technicalResearchGeneratedAt"] = local_now().isoformat()
+    price_history_report["technicalResearchRows"] = refreshed
+    return price_history_report
 
 
 def load_watchlist_pulse_by_ticker(path: Path = SCHWAB_PRICE_HISTORY_FILE) -> dict[str, dict[str, Any]]:
@@ -584,6 +629,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, help="Symbol cap for this run")
     parser.add_argument("--fixture", type=Path, help="Normalize fixture JSON instead of calling Schwab")
     parser.add_argument("--skip-refresh", action="store_true", help="Skip OAuth refresh before live fetch")
+    parser.add_argument(
+        "--recompute-technical-research",
+        action="store_true",
+        help="Rebuild normalized technical context from saved OHLCV only; no market-data request",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON instead of text")
     parser.add_argument("--quiet", action="store_true", help="Persist artifacts without printing")
     return parser.parse_args()
@@ -592,6 +642,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """CLI entry point."""
     args = parse_args()
+    if args.recompute_technical_research:
+        report = load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {}
+        if not isinstance(report.get("rows"), list) or not report.get("rows"):
+            print(f"No usable saved price history found at {SCHWAB_PRICE_HISTORY_FILE}.")
+            return 1
+        report = recompute_technical_research(report)
+        save_report(report)
+        if not args.quiet:
+            print(json.dumps(report, indent=2) if args.json else render_report(report))
+        return 0 if report.get("status") in {"ok", "fixture", "partial-error"} else 1
     fixtures = load_fixture(args.fixture) if args.fixture else None
     if args.symbols:
         symbols = unique_symbols(args.symbols, limit=args.limit)

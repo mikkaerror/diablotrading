@@ -48,3 +48,16 @@ The six technical metrics feed candidate scoring (computed-canonical, TOS
 cross-check intact); the fundamental fields are ingested from a stable source as
 documented screening inputs; both are regression-tested; math verify, doctor, and
 diff checks pass; no gate/authority/universe changed. Commit per hygiene rules.
+
+## Implementation status — 2026-08-13
+
+Part A now has a deliberately bounded first implementation: normalized,
+computed-canonical technical context is attached to the pulse and presented as
+a transparent research-ranking surface in edge and conviction artifacts. It
+does not alter the existing scores, lanes, strike selector, gates, sizing, or
+authority until an outcome-calibration review explicitly authorizes that
+separate change. TOS values remain the independent theory-audit cross-check.
+
+Part B remains pending a stable fundamental-data source and its own source,
+freshness, and regression-test contract. A one-off TOS screenshot is not a
+substitute for that source.

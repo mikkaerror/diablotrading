@@ -156,6 +156,39 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertIn("risk-flagged", risky["reasonCodes"])
         self.assertIn(giant["evidenceGrade"], {"A", "B", "C"})
 
+    def test_technical_discovery_context_is_visible_without_changing_conviction_gates(self) -> None:
+        baseline_rows = sample_rows()
+        enriched_rows = sample_rows()
+        enriched_rows[0]["marketContext"]["watchlistPulse"] = {
+            "technicalResearch": {
+                "researchOnly": True,
+                "gateInput": False,
+                "calibrated": False,
+                "status": "complete",
+                "score": 82.5,
+                "posture": "supports-discovery",
+                "inputs": {"rvolPrior30": 1.7, "momentumAtrMultiple": 1.2},
+            }
+        }
+
+        baseline = conviction.build_conviction_research(
+            rows=baseline_rows,
+            edge_research=sample_edge_research(),
+            limit=5,
+        )
+        enriched = conviction.build_conviction_research(
+            rows=enriched_rows,
+            edge_research=sample_edge_research(),
+            limit=5,
+        )
+        baseline_nvda = next(item for item in baseline["ranked"] if item["ticker"] == "NVDA")
+        enriched_nvda = next(item for item in enriched["ranked"] if item["ticker"] == "NVDA")
+
+        self.assertEqual(enriched_nvda["technicalResearchScore"], 82.5)
+        self.assertEqual(enriched_nvda["technicalResearch"]["posture"], "supports-discovery")
+        self.assertEqual(enriched_nvda["convictionAdjustedScore"], baseline_nvda["convictionAdjustedScore"])
+        self.assertEqual(enriched["technicalDiscoveryLeaders"][0]["ticker"], "NVDA")
+
     def test_full_tracker_ranking_is_retained_beyond_report_digest_limit(self) -> None:
         rows = []
         for index in range(40):
