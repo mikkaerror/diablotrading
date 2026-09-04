@@ -22,8 +22,20 @@
 # data/nightly_optimize_run.log so you can see what worked.
 #
 # Usage:
-#   ./nightly_optimize.sh              # run all steps
+#   ./nightly_optimize.sh              # run the nightly-unique steps (default)
 #   ./nightly_optimize.sh --dry-run    # show what would run, do nothing
+#   INFERNO_NIGHTLY_RUN_SHARED=1 ./nightly_optimize.sh   # also re-run shared steps
+#
+# Reporting-noise trim (2026-09-04): run_inferno_daily_model_refresh.sh already
+# regenerates the shared research/report surfaces twice a day (06:45 and 16:20
+# MT), ending with the command center and doctor. This 18:30 MT loop used to
+# regenerate most of them a third time two hours later, so every "_latest"
+# artifact churned 3x/day with no new decision content. By default the loop now
+# runs only the steps that no other schedule owns (chain history/diff, edge
+# signals, basket refresh, post-trade learning layer, portfolio-level layer,
+# consensus, velocity/funnel, cohort evaluator, capital scaling, while-away
+# packet, NLV snapshot, housekeeping) and then rebuilds the command center so
+# they surface. Set INFERNO_NIGHTLY_RUN_SHARED=1 to restore the full loop.
 #
 
 set -uo pipefail
@@ -36,6 +48,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 PYTHON="${INFERNO_PYTHON:-python3}"
+RUN_SHARED="${INFERNO_NIGHTLY_RUN_SHARED:-0}"
 RUN_LOG="${INFERNO_NIGHTLY_LOG:-data/nightly_optimize_run.log}"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -48,6 +61,17 @@ echo "=== nightly_optimize run $TIMESTAMP ===" >> "$RUN_LOG"
 run_step() {
   local label="$1"
   shift
+  if [[ "$label" == shared:* ]]; then
+    if [[ "$RUN_SHARED" != "1" ]]; then
+      if [[ "$DRY_RUN" == "1" ]]; then
+        echo "[dry-run] skip (owned by daily model refresh) $label"
+      else
+        echo "  -- skip (owned by daily model refresh) $label" | tee -a "$RUN_LOG"
+      fi
+      return 0
+    fi
+    label="${label#shared:}"
+  fi
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "[dry-run] $label: $*"
     return 0
@@ -79,22 +103,22 @@ else
 fi
 
 if [[ "$SCHWAB_READY" == "1" ]]; then
-  run_step "schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
-  run_step "schwab transaction ledger" "$PYTHON" inferno_schwab_transaction_ledger.py build --skip-refresh --quiet
-  run_step "schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
+  run_step "shared:schwab account sync"   "$PYTHON" inferno_schwab_account_sync.py --skip-refresh --quiet
+  run_step "shared:schwab transaction ledger" "$PYTHON" inferno_schwab_transaction_ledger.py build --skip-refresh --quiet
+  run_step "shared:schwab options chain"  "$PYTHON" inferno_schwab_daily_ops.py --skip-refresh --quiet
   run_step "schwab chain history" "$PYTHON" inferno_chain_history.py run
   run_step "schwab chain diff"    "$PYTHON" inferno_chain_diff.py run
   run_step "schwab edge signals"   "$PYTHON" inferno_schwab_edge_signals.py run
-  run_step "snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
-  run_step "schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
+  run_step "shared:snapshot price overlay" "$PYTHON" inferno_snapshot_price_overlay.py --quiet
+  run_step "shared:schwab price history"  "$PYTHON" inferno_schwab_price_history.py --skip-refresh --quiet
   run_step "basket market refresh" "$PYTHON" inferno_ai_basket_refresh.py run --skip-refresh
 fi
-run_step "live account sync"     "$PYTHON" inferno_live_account_sync.py
-run_step "full tracker taxonomy" "$PYTHON" inferno_tracker_taxonomy.py run
-run_step "full tracker registry" "$PYTHON" inferno_tracker_registry.py run
-run_step "full tracker role review" "$PYTHON" inferno_tracker_role_review.py run
-run_step "full tracker blank role-policy packet" "$PYTHON" inferno_tracker_role_policy_packet.py run
-run_step "full tracker role-policy contract" "$PYTHON" inferno_tracker_role_policy.py run
+run_step "shared:live account sync"     "$PYTHON" inferno_live_account_sync.py
+run_step "shared:full tracker taxonomy" "$PYTHON" inferno_tracker_taxonomy.py run
+run_step "shared:full tracker registry" "$PYTHON" inferno_tracker_registry.py run
+run_step "shared:full tracker role review" "$PYTHON" inferno_tracker_role_review.py run
+run_step "shared:full tracker blank role-policy packet" "$PYTHON" inferno_tracker_role_policy_packet.py run
+run_step "shared:full tracker role-policy contract" "$PYTHON" inferno_tracker_role_policy.py run
 
 # 2) bounded evidence goal loop (research-only; no approval or live mutation)
 #
@@ -106,8 +130,8 @@ run_step "evidence goal loop" "$PYTHON" inferno_evidence_goal_loop.py run --max-
 
 # 3) diagnostics and recommenders (research-only)
 run_step "capital scaling"       "$PYTHON" inferno_capital_scaling.py
-run_step "performance analytics" "$PYTHON" inferno_performance_analytics.py
-run_step "strategy lab"          "$PYTHON" inferno_strategy_lab.py
+run_step "shared:performance analytics" "$PYTHON" inferno_performance_analytics.py
+run_step "shared:strategy lab"          "$PYTHON" inferno_strategy_lab.py
 run_step "outcome attribution"   "$PYTHON" inferno_outcome_attribution.py run
 run_step "rule edge decay"       "$PYTHON" inferno_rule_edge_decay.py run
 run_step "slippage estimator"    "$PYTHON" inferno_slippage_estimator.py run
@@ -116,22 +140,22 @@ run_step "drawdown protocol"     "$PYTHON" inferno_drawdown_protocol.py run
 if [[ "$SCHWAB_READY" == "1" ]]; then
   run_step "consensus monitor"    "$PYTHON" inferno_consensus_monitor.py run
 fi
-run_step "account optimization"  "$PYTHON" inferno_account_optimization.py
-run_step "deposit plan"          "$PYTHON" inferno_deposit_plan.py run
-run_step "cash attribution"      "$PYTHON" inferno_cash_attribution.py run
-run_step "growth stack"          "$PYTHON" inferno_growth_stack.py run
+run_step "shared:account optimization"  "$PYTHON" inferno_account_optimization.py
+run_step "shared:deposit plan"          "$PYTHON" inferno_deposit_plan.py run
+run_step "shared:cash attribution"      "$PYTHON" inferno_cash_attribution.py run
+run_step "shared:growth stack"          "$PYTHON" inferno_growth_stack.py run
 run_step "paper velocity"        "$PYTHON" inferno_paper_velocity.py
-run_step "trade management"      "$PYTHON" inferno_trade_management.py
-run_step "process compliance"    "$PYTHON" inferno_process_compliance.py build
-run_step "net-R expectancy"      "$PYTHON" inferno_expectancy_ledger.py build
-run_step "DTE policy analysis"   "$PYTHON" inferno_dte_policy_analysis.py build
-run_step "behavior audit"        "$PYTHON" inferno_trading_behavior_audit.py build
-run_step "portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
-run_step "wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
+run_step "shared:trade management"      "$PYTHON" inferno_trade_management.py
+run_step "shared:process compliance"    "$PYTHON" inferno_process_compliance.py build
+run_step "shared:net-R expectancy"      "$PYTHON" inferno_expectancy_ledger.py build
+run_step "shared:DTE policy analysis"   "$PYTHON" inferno_dte_policy_analysis.py build
+run_step "shared:behavior audit"        "$PYTHON" inferno_trading_behavior_audit.py build
+run_step "shared:portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
+run_step "shared:wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
-run_step "short premium study"   "$PYTHON" inferno_short_premium_study.py run
-run_step "market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
-run_step "score threshold audit" "$PYTHON" inferno_score_threshold_audit.py run
+run_step "shared:short premium study"   "$PYTHON" inferno_short_premium_study.py run
+run_step "shared:market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
+run_step "shared:score threshold audit" "$PYTHON" inferno_score_threshold_audit.py run
 run_step "basket data contract"  "$PYTHON" inferno_ai_basket_data_contract.py run
 run_step "tech cohort evaluator" "$PYTHON" inferno_tech_cohort_evaluator.py run
 

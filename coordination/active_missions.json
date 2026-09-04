@@ -1046,5 +1046,68 @@
       "research-only",
       "provenance"
     ]
+  },
+  {
+    "id": "mission-2559af9a",
+    "createdAt": "2026-08-27T09:12:50.733147-06:00",
+    "updatedAt": "2026-08-27T09:12:50.733147-06:00",
+    "title": "Classify blocked reporting recovery safely",
+    "body": "Add a read-only preflight recovery plan that classifies human-owned Schwab reauthorization, defers dependent tape refreshes, and keeps TOS attach-only. No credential mutation, ticket action, risk change, broker submit, or authority change.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "reporting-preflight",
+      "oauth-recovery",
+      "research-only",
+      "safety"
+    ]
+  },
+  {
+    "id": "mission-e4aade3a",
+    "createdAt": "2026-09-01T12:14:15.463591-06:00",
+    "updatedAt": "2026-09-01T12:19:26.488135-06:00",
+    "title": "Refresh paper MTM OAuth token",
+    "body": "Completed: independent paper mark-to-market now renews an expiring valid read-only Schwab access token before fetching a chain and fails closed if renewal is unavailable. DELL monitoring verified healthy. No ticket, approval, risk, universe, broker-submit, or live-trading authority was changed.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "paper-evidence",
+      "schwab",
+      "oauth",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-85dbfbe7",
+    "createdAt": "2026-09-03T21:03:47.029705-06:00",
+    "updatedAt": "2026-09-03T21:09:01.867378-06:00",
+    "title": "Reduce operator-report noise",
+    "body": "Default status is decision-first; schedule no longer repeats the command catalog; usage shows common routes only; the report map separates concise command status from deep catalog. Verified by 43 focused tests and git diff --check. Research-only; no authority or risk changes.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "normal",
+    "tags": [
+      "reporting",
+      "operator-experience",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-39ca4632",
+    "createdAt": "2026-09-03T21:09:25.709916-06:00",
+    "updatedAt": "2026-09-03T21:09:25.709916-06:00",
+    "title": "Reporting noise: label stale command-center inputs, fix FOCUS-name technical/market-context coverage",
+    "body": "Follow-ups from the 2026-09-04 trim (Codex lane: command-center hygiene). (a) deploy_preflight_latest (2026-05-21) and capital_scenario_matrix_latest (2026-06-17) render in 'System status' as if current; label by age or drop from the panel. (b) edge/conviction research shows 'technical None (unavailable)' for DELL/CRWV/AEHR and 'market context fallback' for every FOCUS name; fix coverage upstream so the caveat stops repeating on every report line. (c) Consider giving the doctor a 'deployed nightly_optimize copy drift' line if it lacks one. Research-only; no authority, gate, risk, or universe change.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "normal",
+    "tags": [
+      "reporting",
+      "command-center",
+      "noise",
+      "research-only"
+    ]
   }
 ]
