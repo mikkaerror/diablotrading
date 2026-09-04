@@ -15,6 +15,13 @@ import inferno_model_command_center as command_center
 class InfernoModelCommandCenterTests(unittest.TestCase):
     """Protect the shared model brain from drifting or losing queue state."""
 
+    def test_reporting_map_separates_compact_command_from_deep_report_map(self) -> None:
+        compact = next(item for item in command_center.REPORTING_MAP if item["lane"] == "command")
+        deep_map = next(item for item in command_center.REPORTING_MAP if item["lane"] == "report-map")
+
+        self.assertEqual(compact["artifact"], "reports/central_command_latest.txt")
+        self.assertEqual(deep_map["artifact"], "reports/model_command_center_latest.txt")
+
     def test_fast_paper_next_actions_rewrites_stale_open_count(self) -> None:
         actions = [
             "Close and score the 5 fast-paper simulations at the first eligible later-session quote, then open the next diversified cohort.",

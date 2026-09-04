@@ -133,25 +133,29 @@ class InfernoCentralCommandTests(unittest.TestCase):
             self.assertIn("./inferno approvals", saved["shortcutCommands"])
             report_text = report_text_file.read_text(encoding="utf-8")
             self.assertIn("Supervisor verdict: healthy", report_text)
-            self.assertIn("Unified entrypoint: ./inferno", report_text)
+            self.assertIn("Decision snapshot:", report_text)
+            self.assertIn("Research focus (not tickets): none", report_text)
+            self.assertNotIn("Unified commands:", report_text)
+            self.assertNotIn("Automation schedule:", report_text)
+            detail_text = central_command.render_central_command_text(payload, full=True)
             self.assertIn(
                 "Schedule hygiene (read-only): daily loop custom-cadence | same-minute observations 1",
-                report_text,
+                detail_text,
             )
             self.assertIn(
                 "Deposit plan: $250.00 every 14 day(s) | next 2026-05-15 | 30d $500.00 planned | broker cash $0.00",
-                report_text,
+                detail_text,
             )
             self.assertIn(
                 "Cash attribution: attribution-incomplete | latest delta -$250.00 | cash-decrease-unattributed-without-transaction-ledger",
-                report_text,
+                detail_text,
             )
             self.assertIn(
                 "Ticket cap policy: active | construction $250.00-$500.00 | paper cap $500.00 | live cap $0.00 | call posture aggressive-defined-risk",
-                report_text,
+                detail_text,
             )
-            self.assertIn("Paper construction-watch: 2", report_text)
-            self.assertIn("Fast-paper backlog: 8", report_text)
+            self.assertIn("Paper construction-watch: 2", detail_text)
+            self.assertIn("Fast-paper backlog: 8", detail_text)
 
     def test_record_fill_parser_accepts_the_operator_fast_path(self) -> None:
         args = central_command.build_parser().parse_args(
@@ -163,6 +167,12 @@ class InfernoCentralCommandTests(unittest.TestCase):
         self.assertEqual(args.entry, "2.10")
         self.assertIsNone(args.exit)
         self.assertEqual(args.contracts, "1")
+
+    def test_status_parser_accepts_full_diagnostics_flag(self) -> None:
+        args = central_command.build_parser().parse_args(["status", "--full"])
+
+        self.assertEqual(args.command, "status")
+        self.assertTrue(args.full)
 
     def test_build_schedule_status_reads_launchagents_and_codex_automations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -297,6 +307,8 @@ class InfernoCentralCommandTests(unittest.TestCase):
         self.assertIn("daily-loop cadence: custom-cadence", rendered)
         self.assertIn("same-minute calendar collisions: 1", rendered)
         self.assertIn("Timing observations do not prove duplicate work", rendered)
+        self.assertNotIn("Unified commands:", rendered)
+        self.assertIn("command help: ./inferno --help", rendered)
 
     def test_schedule_hygiene_excludes_interval_jobs_from_clock_collisions(self) -> None:
         hygiene = central_command._schedule_hygiene(

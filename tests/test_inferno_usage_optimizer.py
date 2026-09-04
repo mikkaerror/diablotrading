@@ -95,6 +95,7 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             self.assertEqual(payload["oneCommands"][0]["command"], "./inferno status")
             one_commands = {item["command"] for item in payload["oneCommands"]}
             self.assertIn("./inferno sync", one_commands)
+            self.assertIn("./inferno watchlist", one_commands)
             self.assertIn("./inferno paper-capture", one_commands)
             self.assertIn("./inferno preflight", one_commands)
             self.assertIn("./inferno usage", one_commands)
@@ -120,6 +121,11 @@ class InfernoUsageOptimizerTests(unittest.TestCase):
             )
             self.assertTrue(payload["readIfNeeded"])
             self.assertTrue((reports_dir / "usage_optimizer_latest.txt").exists())
+            rendered = optimizer.render_usage_optimizer(payload)
+            self.assertIn("Common operator routes:", rendered)
+            self.assertIn("./inferno watchlist", rendered)
+            self.assertNotIn("One-command replacements:", rendered)
+            self.assertIn("./inferno --help", rendered)
 
 
 if __name__ == "__main__":

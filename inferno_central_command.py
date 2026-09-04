@@ -530,11 +530,7 @@ def render_schedule_status(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Unified commands:",
-            *[
-                f"- {CONTROL_ENTRYPOINT} {item['command']} - {item['description']}"
-                for item in CONTROL_COMMANDS
-            ],
+            f"Desk state: {CONTROL_ENTRYPOINT} status | command help: {CONTROL_ENTRYPOINT} --help",
         ]
     )
     return "\n".join(lines).rstrip() + "\n"
@@ -624,8 +620,8 @@ def money_metric(value: Any) -> str:
         return text if text.startswith("$") else f"${text}" if text else "-"
 
 
-def render_central_command_text(payload: dict[str, Any]) -> str:
-    """Render the central supervisor payload into a compact briefing."""
+def render_central_command_text(payload: dict[str, Any], *, full: bool = False) -> str:
+    """Render a decision-first desk briefing, with detail on explicit request."""
     maintenance = payload.get("opsMaintenance") or {}
     command_center = payload.get("modelCommandCenter") or {}
     doctor = payload.get("doctor") or {}
@@ -635,25 +631,68 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
     daily_loop_cadence = schedule_hygiene.get("dailyLoopCadence") or {}
     same_minute_collisions = schedule_hygiene.get("sameMinuteCollisions") or []
     metrics = (command_center.get("headlineMetrics") or {})
+    watchlist_focus = ", ".join(str(item) for item in metrics.get("watchlistBriefFocus") or []) or "none"
     lines = [
         "Inferno Central Command",
         "",
         f"Generated: {payload.get('generatedAt')}",
         f"Supervisor verdict: {payload.get('verdict')}",
-        f"Unified entrypoint: {control.get('entrypoint', CONTROL_ENTRYPOINT)}",
         "",
-        "Core lanes:",
-        f"- Ops maintenance: {maintenance.get('status')}",
-        f"- Model command center: {command_center.get('status')} | missions {command_center.get('missionCount', 0)} | notes {command_center.get('noteCount', 0)}",
-        f"- Doctor: {doctor.get('verdict')}",
+        "Decision snapshot:",
+        (
+            f"- Authority: paper-evidence-only | live max-loss cap "
+            f"{money_metric(metrics.get('ticketCapLiveHardCap'))} | auto-live "
+            f"{display_metric(metrics.get('autoLiveAllowed'))}"
+        ),
+        (
+            f"- Gates: {display_metric(metrics.get('riskGateVerdict'))} | "
+            f"hard fails {display_metric(metrics.get('riskGateHardFails'))} | "
+            f"capital {display_metric(metrics.get('capitalDeploymentVerdict'))}"
+        ),
+        (
+            f"- Paper tickets: {display_metric(metrics.get('paperMtmOpenPositions'))} open | "
+            f"{display_metric(metrics.get('paperStageable'))} operator-routable | "
+            f"{display_metric(metrics.get('paperResearchSelected'))} research-selected | "
+            f"promotion gap {display_metric(metrics.get('paperRemainingForPromotion'))}"
+        ),
+        (
+            f"- Fast simulations (separate from fill-backed tickets): {display_metric(metrics.get('fastPaperOpen'))} open | "
+            f"promotion eligible {display_metric(metrics.get('fastPaperPromotionEligible'))}"
+        ),
+        f"- Research focus (not tickets): {watchlist_focus}",
+        (
+            f"- Read-only broker review: {display_metric(metrics.get('liveSupported'))} supported | "
+            f"{display_metric(metrics.get('liveFragile'))} fragile"
+        ),
         "",
-        "Unified commands:",
-        *[
-            f"- {control.get('entrypoint', CONTROL_ENTRYPOINT)} {item.get('command')} - {item.get('description')}"
-            for item in control.get("commands", [])
-        ],
+        "Use the smallest relevant view:",
+        f"- Candidate research: {CONTROL_ENTRYPOINT} watchlist",
+        f"- Paper workflow: {CONTROL_ENTRYPOINT} paper-capture",
+        f"- Health queue: {CONTROL_ENTRYPOINT} doctor",
+        f"- Automation details: {CONTROL_ENTRYPOINT} schedule",
+        f"- Command reference: {CONTROL_ENTRYPOINT} --help",
         "",
-        "Automation schedule:",
+        "Recommended next move:",
+        f"- {payload.get('recommendedNextMove')}",
+    ]
+    if not full:
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.extend(
+        [
+            "",
+            "Detailed diagnostics:",
+            f"- Ops maintenance: {maintenance.get('status')}",
+            f"- Model command center: {command_center.get('status')} | missions {command_center.get('missionCount', 0)} | notes {command_center.get('noteCount', 0)}",
+            f"- Doctor: {doctor.get('verdict')}",
+            "",
+            "Unified commands:",
+            *[
+                f"- {control.get('entrypoint', CONTROL_ENTRYPOINT)} {item.get('command')} - {item.get('description')}"
+                for item in control.get("commands", [])
+            ],
+            "",
+            "Automation schedule:",
         *[
             (
                 f"- {item.get('purpose')}: {item.get('status')} | {item.get('schedule')}"
@@ -728,10 +767,8 @@ def render_central_command_text(payload: dict[str, Any]) -> str:
         f"- {MODEL_COMMAND_CENTER_FILE}",
         f"- {ACTIVE_MISSIONS_FILE}",
         f"- {MODEL_NOTES_FILE}",
-        "",
-        "Recommended next move:",
-        f"- {payload.get('recommendedNextMove')}",
-    ]
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -833,6 +870,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("run")
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--refresh", action="store_true")
+    status_parser.add_argument("--full", action="store_true", help="include command, schedule, and metric diagnostics")
     subparsers.add_parser("onboard")
     subparsers.add_parser("doctor")
     preflight_parser = subparsers.add_parser("preflight")
@@ -996,7 +1034,7 @@ def main() -> int:
             force_email=args.force_email,
             refresh_lanes=args.refresh,
         )
-        print(render_central_command_text(payload))
+        print(render_central_command_text(payload, full=args.full))
         return 0
 
     if command == "onboard":

@@ -164,7 +164,13 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
     },
     {
         "lane": "command",
-        "question": "What matters right now?",
+        "question": "What matters right now, without the deep-report catalog?",
+        "artifact": "reports/central_command_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "report-map",
+        "question": "Where is the canonical catalog for a deep report investigation?",
         "artifact": "reports/model_command_center_latest.txt",
         "owner": "codex",
     },

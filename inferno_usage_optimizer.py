@@ -110,6 +110,10 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "purpose": "run the full tracker, Schwab, research, command-center, and doctor refresh",
     },
     {
+        "command": "./inferno watchlist",
+        "purpose": "show the compact research inventory without creating a ticket workflow",
+    },
+    {
         "command": "./inferno today",
         "purpose": "open the one-letter operator decision screen",
     },
@@ -205,6 +209,18 @@ ONE_COMMANDS: tuple[dict[str, str], ...] = (
         "command": "python3 inferno_math_verify.py && python3 inferno_secret_hygiene.py",
         "purpose": "formula and secret hygiene check before commits",
     },
+)
+
+COMMON_OPERATOR_COMMANDS: tuple[str, ...] = (
+    "./inferno status",
+    "./inferno today",
+    "./inferno watchlist",
+    "./inferno paper-capture",
+    "./inferno sync",
+    "./inferno preflight",
+    "./inferno doctor",
+    "./inferno schedule",
+    "./inferno usage",
 )
 
 
@@ -364,9 +380,16 @@ def render_usage_optimizer(payload: dict[str, Any]) -> str:
     for item in payload.get("doNotPaste") or []:
         lines.append(f"- {item}")
 
-    lines.extend(["", "One-command replacements:"])
-    for item in payload.get("oneCommands") or []:
-        lines.append(f"- `{item.get('command')}` - {item.get('purpose')}")
+    command_by_name = {
+        str(item.get("command")): item
+        for item in payload.get("oneCommands") or []
+    }
+    lines.extend(["", "Common operator routes:"])
+    for command in COMMON_OPERATOR_COMMANDS:
+        item = command_by_name.get(command)
+        if item:
+            lines.append(f"- `{command}` - {item.get('purpose')}")
+    lines.append("- Specialized diagnostics: `./inferno --help`")
 
     lines.extend(["", "Top next actions from command center:"])
     actions = payload.get("nextActions") or []
