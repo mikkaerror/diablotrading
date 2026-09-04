@@ -25,6 +25,10 @@ Operator flow:
 - Open thinkorswim manually only when a fresh broker capture is needed.
 - If TOS is already open, reveal that existing window. Do not open another instance.
 - Run reporting preflight before trusting or forcing a brief.
+- When preflight is blocked, read its `Recovery plan` in order. A
+  `human-reauthorization-required` verdict means the account owner must finish
+  the Schwab consent flow before any ordinary read-only option refresh is
+  retried; do not force a stale tape or use TOS as a workaround.
 - Read the morning/open/pre-close emails in three sections: `What changed`, `What matters today`, and `What action is allowed`.
 - Any real-money order still requires explicit human confirmation before final submission.
 
@@ -342,6 +346,9 @@ python3 inferno_schwab_oauth.py restart
 Complete Schwab consent once and paste only the newest full redirect URL. A
 full restart is a broker authorization boundary; the desk can make it a
 single clear step but cannot automate around Schwab's required re-consent.
+`./inferno preflight` renders the same boundary as an ordered recovery plan:
+complete reauthorization first, then refresh the read-only tape, then rerun
+preflight. It never runs any of these actions itself.
 The doctor begins warning at consent-grant age five days so this can be done
 proactively rather than after a morning data failure. That threshold is a desk
 lead-time policy because Schwab does not report refresh-token expiry in the

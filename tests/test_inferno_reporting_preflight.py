@@ -41,9 +41,47 @@ class InfernoReportingPreflightTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["verdict"], "ready")
             self.assertEqual(payload["warningCount"], 1)
+            self.assertTrue(payload["diagnosticOnly"])
+            self.assertTrue(payload["researchOnly"])
+            self.assertFalse(payload["promotable"])
+            self.assertFalse(payload["authorityChanged"])
             self.assertTrue(data_file.exists())
             self.assertIn("Warnings: 1", text_file.read_text(encoding="utf-8"))
+            self.assertIn("Recovery plan:", text_file.read_text(encoding="utf-8"))
             self.assertIn("ticket cap policy", [call.args[0] for call in artifact_check.call_args_list])
+
+    def test_recovery_plan_requires_human_reauthorization_before_stale_tape_refresh(self) -> None:
+        checks = [
+            {
+                "name": "schwab token",
+                "severity": "fail",
+                "detail": {"reauthorizationRequired": True},
+            },
+            {"name": "Schwab options tape", "severity": "fail", "detail": "stale"},
+            {"name": "Schwab daily ops", "severity": "fail", "detail": "stale"},
+            {"name": "tos attach-only", "severity": "fail", "detail": "unknown"},
+        ]
+
+        plan = preflight.build_recovery_plan(checks)
+        steps = {step["id"]: step for step in plan["steps"]}
+
+        self.assertEqual(plan["verdict"], "human-reauthorization-required")
+        self.assertTrue(plan["humanActionRequired"])
+        self.assertFalse(plan["authorityChanged"])
+        self.assertFalse(plan["brokerSubmitAllowed"])
+        self.assertEqual(steps["schwab-reauthorization"]["kind"], "human-required")
+        self.assertIn("oauth restart", steps["schwab-reauthorization"]["action"])
+        self.assertEqual(steps["deferred-schwab-options-tape"]["status"], "waiting-on-reauthorization")
+        self.assertIn("Do not launch a new thinkorswim window", steps["tos-attach-only"]["action"])
+
+    def test_recovery_plan_is_empty_when_no_checks_fail(self) -> None:
+        plan = preflight.build_recovery_plan([{"name": "tracker snapshot", "severity": "pass"}])
+
+        self.assertEqual(plan["verdict"], "no-recovery-needed")
+        self.assertFalse(plan["humanActionRequired"])
+        self.assertFalse(plan["authorityChanged"])
+        self.assertFalse(plan["brokerSubmitAllowed"])
+        self.assertEqual(plan["steps"], [])
 
     def test_tos_and_live_sync_are_not_required_when_schwab_account_truth_is_fresh(self) -> None:
         with patch.object(preflight, "_account_api_source_ready", return_value=True), \

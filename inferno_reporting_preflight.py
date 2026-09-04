@@ -5,7 +5,9 @@ from __future__ import annotations
 The preflight answers one boring question before the desk sends or trusts a
 brief: are the reporting inputs fresh enough, are SMTP/Schwab configured, is
 TOS in an attach-only safe state, and did the doctor recently report healthy or
-only advisory attention items?
+only advisory attention items? When it is blocked, it also produces an ordered
+recovery plan that separates a human-only broker reauthorization from the
+read-only refreshes that must wait for it.
 
 It does not launch thinkorswim, send email, refresh the tracker, place orders,
 or mutate any authority flags. It only writes its own JSON/text artifact.
@@ -238,6 +240,125 @@ def _live_account_sync_check() -> dict[str, Any]:
     return _artifact_check("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8)
 
 
+def build_recovery_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Classify failed preflight checks without attempting any remediation.
+
+    The plan intentionally never invokes OAuth, opens thinkorswim, refreshes
+    data, stages paper tickets, or changes authority. Its job is to prevent a
+    stale quote tape from looking like a reason to bypass the human-owned OAuth
+    step that safely unlocks the ordinary read-only refresh path.
+    """
+    failed = [check for check in checks if check.get("severity") == "fail"]
+    by_name = {str(check.get("name")): check for check in failed}
+    token_detail = (by_name.get("schwab token") or {}).get("detail")
+    reauthorization_required = isinstance(token_detail, dict) and bool(
+        token_detail.get("reauthorizationRequired")
+    )
+    steps: list[dict[str, Any]] = []
+
+    if reauthorization_required:
+        steps.append(
+            {
+                "id": "schwab-reauthorization",
+                "kind": "human-required",
+                "status": "blocked",
+                "action": (
+                    "Account owner: run ./inferno oauth restart and complete the broker authorization flow. "
+                    "Do not submit orders or change authority."
+                ),
+                "reason": "The configured Schwab refresh token can no longer refresh the read-only tape.",
+                "verify": "After the owner completes reauthorization, run ./inferno daily-ops, then ./inferno preflight.",
+            }
+        )
+    elif "schwab token" in by_name:
+        steps.append(
+            {
+                "id": "schwab-oauth-configuration",
+                "kind": "human-required",
+                "status": "blocked",
+                "action": "Account owner: inspect the local Schwab OAuth configuration without exposing or replacing secrets.",
+                "reason": "The read-only Schwab OAuth prerequisites are incomplete or invalid.",
+                "verify": "Run ./inferno oauth status, then ./inferno preflight after the configuration is repaired.",
+            }
+        )
+
+    deferred_artifacts = {
+        "Schwab options tape",
+        "Schwab daily ops",
+        "Schwab account sync",
+        "live account sync",
+    }
+    for name in sorted(deferred_artifacts.intersection(by_name)):
+        if reauthorization_required:
+            steps.append(
+                {
+                    "id": f"deferred-{name.lower().replace(' ', '-')}",
+                    "kind": "deferred-read-only",
+                    "status": "waiting-on-reauthorization",
+                    "action": f"Do not force-refresh {name}; resume its normal read-only refresh only after Schwab reauthorization succeeds.",
+                    "reason": "Refreshing now would repeat the known authentication failure and cannot improve evidence freshness.",
+                    "verify": "Confirm the artifact is fresh in ./inferno preflight.",
+                }
+            )
+        else:
+            steps.append(
+                {
+                    "id": f"refresh-{name.lower().replace(' ', '-')}",
+                    "kind": "read-only-follow-up",
+                    "status": "ready-after-prerequisites",
+                    "action": f"Run the normal read-only refresh that produces {name}.",
+                    "reason": "The artifact is absent or stale after its prerequisites passed.",
+                    "verify": "Confirm the artifact is fresh in ./inferno preflight.",
+                }
+            )
+
+    tos_check = by_name.get("tos attach-only")
+    if tos_check:
+        steps.append(
+            {
+                "id": "tos-attach-only",
+                "kind": "supervised-desktop-only",
+                "status": "blocked",
+                "action": (
+                    "Do not launch a new thinkorswim window. If TOS evidence is truly needed, use only the already-open "
+                    "window in a supervised session and then rerun ./inferno preflight."
+                ),
+                "reason": str(tos_check.get("detail") or "The attach-only TOS check did not pass."),
+                "verify": "The preflight must report an attach-only-safe TOS state; no ticket or broker action is implied.",
+            }
+        )
+
+    handled = {"schwab token", *deferred_artifacts, "tos attach-only"}
+    for name in sorted(set(by_name).difference(handled)):
+        check = by_name[name]
+        steps.append(
+            {
+                "id": f"inspect-{name.lower().replace(' ', '-')}",
+                "kind": "inspect",
+                "status": "blocked",
+                "action": f"Inspect the failed {name} check before changing any configuration or workflow.",
+                "reason": str(check.get("detail") or "The preflight check failed."),
+                "verify": "Rerun ./inferno preflight and confirm this check passes.",
+            }
+        )
+
+    if not steps:
+        return {
+            "verdict": "no-recovery-needed",
+            "humanActionRequired": False,
+            "authorityChanged": False,
+            "brokerSubmitAllowed": False,
+            "steps": [],
+        }
+    return {
+        "verdict": "human-reauthorization-required" if reauthorization_required else "recovery-actions-required",
+        "humanActionRequired": any(step["kind"] == "human-required" for step in steps),
+        "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "steps": steps,
+    }
+
+
 def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
     """Build the read-only reporting preflight artifact."""
     ensure_dirs()
@@ -263,6 +384,10 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
     payload = {
         "generatedAt": local_now().isoformat(),
         "stage": "reporting-preflight",
+        "diagnosticOnly": True,
+        "researchOnly": True,
+        "promotable": False,
+        "authorityChanged": False,
         "ok": not hard_failures,
         "verdict": "ready" if not hard_failures else "blocked",
         "hardFailureCount": len(hard_failures),
@@ -272,6 +397,7 @@ def build_reporting_preflight(*, max_age_hours: float = 24.0) -> dict[str, Any]:
         "tosVisibility": build_tos_visibility_summary(),
         "nextActions": [],
     }
+    payload["recoveryPlan"] = build_recovery_plan(checks)
     if hard_failures:
         payload["nextActions"].append("Fix failed preflight checks before trusting or sending next-week reports.")
     if warnings:
@@ -301,6 +427,25 @@ def render_reporting_preflight(payload: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in render_freshness_lines(payload.get("freshnessPanel") or {}))
     lines.extend(["", "Next actions:"])
     lines.extend(f"- {item}" for item in payload.get("nextActions") or [])
+    recovery = payload.get("recoveryPlan") or {}
+    lines.extend(
+        [
+            "",
+            "Recovery plan:",
+            f"- Verdict: {recovery.get('verdict', 'unavailable')}",
+            "- Safety: diagnostic only; this plan never refreshes credentials, launches TOS, stages tickets, or submits orders.",
+        ]
+    )
+    if not recovery.get("steps"):
+        lines.append("- No failed check requires a recovery action.")
+    for step in recovery.get("steps") or []:
+        lines.extend(
+            [
+                f"- [{step.get('kind')}] {step.get('action')}",
+                f"  Reason: {step.get('reason')}",
+                f"  Verify: {step.get('verify')}",
+            ]
+        )
     return "\n".join(lines).rstrip() + "\n"
 
 
