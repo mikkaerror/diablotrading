@@ -50,7 +50,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from inferno_schwab_oauth import ENV_FILE, parse_env_file
+from inferno_schwab_oauth import (
+    ENV_FILE,
+    load_config,
+    parse_env_file,
+    refresh_access_token,
+    token_status,
+)
 
 
 def load_schwab_env(path: Path = ENV_FILE) -> dict[str, str]:
@@ -136,6 +142,44 @@ def _unique_underlyings(tickets: list[dict[str, Any]]) -> list[str]:
         if ticker and ticker not in seen:
             seen[ticker] = None
     return list(seen.keys())
+
+
+def _load_fresh_schwab_access_token(
+    *,
+    fixture_payloads: dict[str, dict[str, Any]] | None,
+    token_override: str | None,
+) -> str | None:
+    """Return a current market-data token without widening desk authority.
+
+    The normal daily-ops path refreshes a near-expiry Schwab access token
+    before fetching chains. Mark-to-market must do the same because it can run
+    independently after an operator records a paperMoney fill. A refresh only
+    touches the ignored local OAuth token vault; it does not call broker,
+    account, preview, or order endpoints.
+
+    Fixtures and explicit test overrides intentionally make no OAuth request.
+    If a renewal cannot succeed, return no token and let the existing
+    fail-closed chain-unavailable path render a diagnostic instead of polling
+    with a known-expired bearer token.
+    """
+    if token_override is not None:
+        return token_override
+    if fixture_payloads is not None or not SCHWAB_OPTIONS_ENABLED:
+        return load_schwab_access_token()
+
+    try:
+        config = load_config()
+        status = token_status(config)
+        if status.get("reauthorizationRequired"):
+            return None
+        if status.get("accessTokenNeedsRefresh"):
+            if not status.get("refreshTokenPresent"):
+                return None
+            refresh_access_token(config)
+    except Exception:  # noqa: BLE001 - preserve MTM's diagnostic fail-closed path.
+        return None
+
+    return load_schwab_access_token()
 
 
 def _fetch_chains(
@@ -299,7 +343,11 @@ def mark_to_market_one_ticket(
             }
         )
 
-    entry_limit = _safe_float(ticket.get("entryLimit"))
+    staged_entry_limit = _safe_float(ticket.get("entryLimit"))
+    paper_execution = ticket.get("paperExecution") or {}
+    executed_entry_price = _safe_float(paper_execution.get("entryPrice"))
+    entry_limit = executed_entry_price if executed_entry_price is not None else staged_entry_limit
+    entry_price_source = "paper-fill" if executed_entry_price is not None else "staged-limit"
     entry_cost_type = str(ticket.get("entryCostType") or "").lower()
     max_loss = _safe_float(ticket.get("estimatedMaxLoss"))
     max_profit_raw = ticket.get("estimatedMaxProfit")
@@ -309,6 +357,22 @@ def mark_to_market_one_ticket(
         else None
     )
     max_profit_uncapped = isinstance(max_profit_raw, str) and max_profit_raw == "uncapped"
+
+    # A staged limit is a planning estimate, but imported paperMoney fills are
+    # the evidence source for an open ticket's P/L.  For a defined-risk debit
+    # position, a better entry reduces maximum loss and increases the remaining
+    # maximum profit by the same dollar amount.  Do not reinterpret uncapped or
+    # credit structures here.
+    if (
+        executed_entry_price is not None
+        and entry_cost_type != "credit"
+        and staged_entry_limit is not None
+        and entry_limit is not None
+    ):
+        entry_delta_dollars = (staged_entry_limit - entry_limit) * contract_multiplier * contracts_quantity
+        max_loss = entry_limit * contract_multiplier * contracts_quantity
+        if max_profit is not None:
+            max_profit = max_profit + entry_delta_dollars
 
     # Unrealized PnL per share (long the position):
     #   For any structure, signed_mid_now − signed_mid_at_entry captures the
@@ -393,6 +457,8 @@ def mark_to_market_one_ticket(
         "entrySignedMid": round(entry_signed_mid, 4) if entry_signed_mid is not None else None,
         "currentSignedMid": round(current_signed_mid, 4) if current_signed_mid is not None else None,
         "entryLimit": entry_limit,
+        "stagedEntryLimit": staged_entry_limit,
+        "entryPriceSource": entry_price_source,
         "estimatedMaxLoss": max_loss,
         "estimatedMaxProfit": max_profit,
         "estimatedMaxProfitUncapped": max_profit_uncapped,
@@ -424,7 +490,10 @@ def build_paper_mark_to_market(
     open_tickets = _open_paper_tickets(ledger)
     underlyings = _unique_underlyings(open_tickets)
 
-    token = token_override if token_override is not None else load_schwab_access_token()
+    token = _load_fresh_schwab_access_token(
+        fixture_payloads=fixture_payloads,
+        token_override=token_override,
+    )
     contracts_by_underlying, errors, fetch_status = _fetch_chains(
         underlyings, fixture_payloads=fixture_payloads, token=token
     )

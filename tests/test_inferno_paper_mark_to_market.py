@@ -131,6 +131,27 @@ class SingleTicketMTMTests(unittest.TestCase):
         self.assertAlmostEqual(out["unrealizedPnlPctOfEntryLimit"], 1.0, places=3)
         self.assertAlmostEqual(out["playbookPctOfDebit"], 1.0, places=3)
 
+    def test_imported_fill_overrides_staged_limit_for_debit_pnl(self) -> None:
+        """Open-ticket P/L must use the actual paperMoney debit, not a plan."""
+        ticket = _ticket(entry_limit=3.50, max_loss=350.0, max_profit=650.0)
+        ticket["paperExecution"] = {"entryPrice": 1.80, "contracts": 1, "status": "open"}
+        contracts = _chain_contracts({
+            "MOD260618C00290000": 10.00,
+            "MOD260618C00300000": 8.50,
+        })
+
+        out = mtm.mark_to_market_one_ticket(
+            ticket, contracts=contracts, underlying_price=300.0, now=NOW
+        )
+
+        self.assertEqual(out["entryPriceSource"], "paper-fill")
+        self.assertEqual(out["entryLimit"], 1.80)
+        self.assertEqual(out["stagedEntryLimit"], 3.50)
+        self.assertEqual(out["unrealizedPnlDollars"], -30.0)
+        self.assertAlmostEqual(out["playbookPctOfDebit"], -0.1667, places=3)
+        self.assertEqual(out["estimatedMaxLoss"], 180.0)
+        self.assertEqual(out["estimatedMaxProfit"], 820.0)
+
     def test_chain_unavailable_returns_blocked_status(self) -> None:
         ticket = _ticket()
         out = mtm.mark_to_market_one_ticket(
@@ -344,6 +365,40 @@ class BuildIntegrationTests(unittest.TestCase):
         # per_share PnL vs entryLimit 3.50 = 1.80 - 3.50 = -1.70 -> $-170
         self.assertAlmostEqual(m["currentSignedMid"], 1.80, places=2)
         self.assertEqual(m["unrealizedPnlDollars"], -170.0)
+
+    def test_live_chain_fetch_refreshes_expiring_read_only_token(self) -> None:
+        """Independent MTM runs must not poll Schwab with a known-stale token."""
+        ledger = {"items": [_ticket()]}
+        fake_chain = {
+            "callExpDateMap": {
+                "2026-06-18:23": {
+                    "290.0": [{"symbol": "MOD260618C00290000", "bid": 9.8, "ask": 10.6}],
+                    "300.0": [{"symbol": "MOD260618C00300000", "bid": 8.1, "ask": 8.7}],
+                }
+            }
+        }
+        oauth_status = {
+            "accessTokenNeedsRefresh": True,
+            "refreshTokenPresent": True,
+            "reauthorizationRequired": False,
+        }
+        with (
+            patch.object(mtm, "SCHWAB_OPTIONS_ENABLED", True),
+            patch.object(mtm, "load_config", return_value={"token_file": "ignored"}) as load_config,
+            patch.object(mtm, "token_status", return_value=oauth_status),
+            patch.object(mtm, "refresh_access_token") as refresh,
+            patch.object(mtm, "load_schwab_access_token", return_value="fresh-token"),
+            patch.object(mtm, "fetch_option_chain", return_value=fake_chain) as fetch,
+        ):
+            payload = mtm.build_paper_mark_to_market(
+                now=NOW,
+                ledger_override=ledger,
+            )
+
+        load_config.assert_called_once_with()
+        refresh.assert_called_once_with({"token_file": "ignored"})
+        fetch.assert_called_once_with("MOD", access_token="fresh-token")
+        self.assertEqual(payload["fetchStatus"], "ok")
 
 
 # ───────────────────── render smoke test ──────────────────────────────
