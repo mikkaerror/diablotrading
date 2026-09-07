@@ -38,7 +38,7 @@ selector_status=$?
 set -e
 
 python3 inferno_downloads_manager.py scan
-python3 inferno_tos_fill_ingest.py ingest
+python3 inferno_tos_fill_ingest.py preview
 python3 inferno_shadow_evidence.py build
 python3 inferno_performance_analytics.py build
 python3 inferno_expectancy_ledger.py build

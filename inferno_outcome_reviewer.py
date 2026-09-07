@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Outcome reviewer for paper execution tickets.
 
-Signals are cheap. Evidence is expensive. This module closes eligible paper
-tickets after expiration and estimates P/L so the desk can measure expectancy
-before any broker adapter earns more authority.
+Read-only operator review queue. Expiration never authorizes a ticket closure.
+Payoff helpers remain available to isolated shadow research, but this module
+never writes the paper ledger or substitutes a current quote for execution.
 """
 
 import argparse
@@ -15,7 +15,7 @@ import pandas as pd
 import yfinance as yf
 
 from inferno_config import local_now
-from inferno_paper_execution import load_ledger, save_ledger
+from inferno_paper_execution import load_ledger
 from server import REPORTS_DIR, ensure_dirs
 
 
@@ -101,70 +101,45 @@ def ticket_ready_for_review(ticket: dict[str, Any], today: date | None = None) -
     expiration = parse_date(ticket.get("expiration"))
     if not expiration:
         return False, "expiration missing"
-    if expiration > today:
-        return False, f"expiration has not arrived ({expiration.isoformat()})"
+    if expiration >= today:
+        return False, f"expiration session has not finished ({expiration.isoformat()})"
     return True, "ready"
 
 
 def review_ticket(ticket: dict[str, Any]) -> tuple[dict[str, Any], bool, str]:
-    """Review one paper ticket and return the updated ticket."""
+    """Compatibility entrypoint: identify review work without modifying a ticket."""
     ready, reason = ticket_ready_for_review(ticket)
-    if not ready:
-        return ticket, False, reason
-
-    ticker = str(ticket.get("ticker", "")).upper()
-    underlying_price = latest_underlying_price(ticker)
-    if underlying_price is None:
-        outcome = {
-            **(ticket.get("outcome") or {}),
-            "status": "review-pending",
-            "reviewedAt": local_now().isoformat(),
-            "notes": "could not fetch latest underlying price",
-        }
-        return {**ticket, "outcome": outcome}, True, "price unavailable"
-
-    estimated_pnl = estimate_expiration_pnl(ticket, underlying_price)
-    outcome = {
-        **(ticket.get("outcome") or {}),
-        "status": "closed",
-        "reviewedAt": local_now().isoformat(),
-        "exitUnderlyingPrice": underlying_price,
-        "estimatedPnl": estimated_pnl,
-        "notes": "estimated from expiration intrinsic value",
-    }
-    return {**ticket, "outcome": outcome}, True, "closed"
+    if ready:
+        reason = "operator fill/settlement evidence required; automatic closure disabled"
+    return ticket, False, reason
 
 
 def review_ledger() -> dict[str, Any]:
-    """Review all eligible paper tickets and persist the updated ledger."""
+    """Write only a review queue; historical and open paper records stay intact."""
     ledger = load_ledger()
-    reviewed = 0
-    closed = 0
-    updated_items: list[dict[str, Any]] = []
-    notes: list[str] = []
-
+    pending = []
     for ticket in ledger.get("items", []):
-        updated, changed, note = review_ticket(ticket)
-        updated_items.append(updated)
-        if changed:
-            reviewed += 1
-            if (updated.get("outcome") or {}).get("status") == "closed":
-                closed += 1
-            notes.append(f"{ticket.get('ticker')}: {note}")
-
-    updated_ledger = {
-        **ledger,
-        "updatedAt": local_now().isoformat(),
-        "items": updated_items,
-        "count": len(updated_items),
-    }
-    save_ledger(updated_ledger)
+        ready, _reason = ticket_ready_for_review(ticket)
+        if ready:
+            pending.append({
+                "ticketId": ticket.get("ticketId"),
+                "ticker": ticket.get("ticker"),
+                "expiration": ticket.get("expiration"),
+                "reason": "operator fill/settlement evidence required",
+            })
     report = {
-        "reviewed": reviewed,
-        "closed": closed,
-        "open": sum(1 for item in updated_items if (item.get("outcome") or {}).get("status") == "open"),
-        "notes": notes,
-        "ledger": updated_ledger,
+        "researchOnly": True,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
+        "authorityChanged": False,
+        "ticketMutations": 0,
+        "reviewed": 0,
+        "closed": 0,
+        "pendingOperatorReview": pending,
+        "open": sum((item.get("outcome") or {}).get("status") == "open"
+                    for item in ledger.get("items", [])),
+        "notes": [f"{item['ticker']}: {item['reason']}" for item in pending],
+        "ledger": ledger,
     }
     save_outcome_report(report)
     return report
@@ -173,10 +148,12 @@ def review_ledger() -> dict[str, Any]:
 def outcome_report_text(report: dict[str, Any]) -> str:
     """Render an operator-friendly outcome review report."""
     lines = [
-        "Inferno Paper Outcome Review",
+        "Inferno Paper Outcome Review Queue",
+        "Read-only: expiration does not close tickets; operator evidence required.",
         "",
         f"Reviewed: {report.get('reviewed', 0)}",
-        f"Closed: {report.get('closed', 0)}",
+        f"Closed by this review: {report.get('closed', 0)}",
+        f"Awaiting operator review: {len(report.get('pendingOperatorReview') or [])}",
         f"Still open: {report.get('open', 0)}",
         "",
     ]

@@ -89,7 +89,7 @@ class PaperScoringLoopTests(unittest.TestCase):
              patch.object(fi, "load_ledger", return_value={"items": [dict(STAGED_CHKP)]}), \
              patch.object(fi, "save_ledger", lambda *a, **k: None), \
              patch.object(fi, "save_ingest_report", lambda *a, **k: None):
-            score_report = fi.ingest_fill_log()
+            score_report = fi.ingest_fill_log(operator_requested=True)
 
         # The far end: one closed, scored outcome, nothing rejected.
         self.assertEqual(score_report["closedRows"], 1, score_report.get("notes"))
@@ -159,7 +159,7 @@ class PaperScoringLoopTests(unittest.TestCase):
              patch.object(fi, "load_ledger", return_value={"items": [dict(STAGED_CHKP)]}), \
              patch.object(fi, "save_ledger", lambda *a, **k: None), \
              patch.object(fi, "save_ingest_report", lambda *a, **k: None):
-            score_report = fi.ingest_fill_log()
+            score_report = fi.ingest_fill_log(operator_requested=True)
 
         # No scored outcome: this is exactly why the template exists.
         self.assertEqual(score_report["closedRows"], 0)

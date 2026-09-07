@@ -141,3 +141,19 @@ Sources inspected: `reports/model_command_center_latest.txt`,
 `reports/universe_cap_fit_latest.txt`, installed schedule output, the paper
 ledger, and the specific source functions cited above. Counts and schedule
 observations are point-in-time, not promises about future runs.
+
+## Follow-up: first boundary repair, 2026-09-07
+
+The expiration reviewer now writes a read-only operator queue; it cannot close
+or rewrite paper records and no longer fetches a latest price for this purpose.
+The fill importer defaults to preview even for legacy scheduled `ingest` calls.
+Dedicated operator entrypoints explicitly apply reviewed fills. Historical
+outcome qualification is the next repair and remains unresolved here.
+
+Correction: `inferno_tos_sandbox.seed_fill_log_from_stageable` seeds blank
+planning rows and preserves their notes after fills are entered. Therefore
+DELL's seeded note establishes template origin, not synthetic fill prices.
+Its execution remains independently unverified from the inspected evidence;
+it must not be rejected as fabricated solely on that note.
+
+See [[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].

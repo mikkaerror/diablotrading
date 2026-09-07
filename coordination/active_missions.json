@@ -1303,11 +1303,11 @@
   {
     "id": "mission-7b1e58f8",
     "createdAt": "2026-09-07T13:37:26.952659-06:00",
-    "updatedAt": "2026-09-07T13:37:26.952659-06:00",
+    "updatedAt": "2026-09-07T13:47:47.271951-06:00",
     "title": "Separate verified operator outcomes from proxy and seeded paper records",
-    "body": "Top-to-bottom process audit found all 3 strategy-lab counted rows need provenance review: MOD and IREN are intrinsic-value estimates without recorded fills; DELL notes explicitly say seeded by inferno_tos_sandbox. Current lineage qualification mirrors lab numeric/status criteria, not independent execution verification. Build a non-mutating provenance audit and remove the unattended outcome_reviewer review call path that can close operator-paper records using latest underlying price on/after expiration. Preserve historical tickets; do not alter risk constants, sample threshold, universe or live/broker authority. Acceptance: no unattended operator-ticket closure path; seeded/proxy rows cannot masquerade as verified executions; independent source fixtures demonstrate the distinction.",
+    "body": "First boundary repair complete: reviewer is a read-only operator queue; default and legacy CLI fill ingests preview only, preserving ledger/CSV/last actual ingest report; explicit operator wrapper applies and record-fill scopes import to selected ticket. 83 focused and 2033 full tests pass, math/secret/diff clean, Doctor11 attention. Real-file smoke check preserved all three evidence file hashes with zero ticket writes. Remaining: independent outcome provenance and historical qualification. Correction: DELL sandbox-seeded note is blank template origin and survives fills; it is not proof of synthetic prices. Do not reject it solely on that note. No risk constants, universe or broker/live authority changes.",
     "owner": "codex",
-    "status": "open",
+    "status": "in-progress",
     "priority": "high",
     "tags": [
       "process-audit",

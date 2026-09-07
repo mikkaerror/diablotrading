@@ -72,6 +72,14 @@ without substituting a current mark. This is an intrinsic proxy, not a fill or
 broker settlement. See [[MODEL_CALIBRATION_REVIEW_2026-09-06]] for evidence,
 remaining limitations, and predeclared challenger experiments.
 
+Paper outcome review is now a read-only operator queue. Expiration never
+closes a paper ticket. Fill ingestion defaults to a non-mutating preview,
+including legacy scheduled `ingest` calls and missing-report status fallbacks.
+Only the dedicated operator fill wrapper (or `record-fill`, scoped to its
+selected ticket) opts into applying fills. Preview runs preserve the last
+actual ingest report and all ledger lifecycle timestamps. See
+[[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].
+
 ## Canonical Truth
 
 Generated artifacts beat durable docs when they disagree.

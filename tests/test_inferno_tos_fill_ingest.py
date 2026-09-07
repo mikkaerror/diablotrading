@@ -175,7 +175,7 @@ class InfernoTosFillIngestTests(unittest.TestCase):
                 patch.object(ingest, "save_ledger", side_effect=saved_ledgers.append),
                 patch.object(ingest, "save_ingest_report", return_value=None),
             ):
-                report = ingest.ingest_fill_log()
+                report = ingest.ingest_fill_log(operator_requested=True)
 
         self.assertEqual(report["importedRows"], 0)
         self.assertEqual(report["closedRows"], 0)
@@ -199,7 +199,7 @@ class InfernoTosFillIngestTests(unittest.TestCase):
                 patch.object(ingest, "save_ledger", side_effect=saved_ledgers.append),
                 patch.object(ingest, "save_ingest_report", return_value=None),
             ):
-                report = ingest.ingest_fill_log()
+                report = ingest.ingest_fill_log(operator_requested=True)
 
         self.assertEqual(report["importedRows"], 1)
         self.assertEqual(report["closedRows"], 1)
@@ -227,7 +227,7 @@ class InfernoTosFillIngestTests(unittest.TestCase):
                 patch.object(ingest, "save_ledger", return_value=None),
                 patch.object(ingest, "save_ingest_report", return_value=None),
             ):
-                report = ingest.ingest_fill_log()
+                report = ingest.ingest_fill_log(operator_requested=True)
 
         self.assertEqual(report["importedRows"], 0)
         self.assertEqual(report["outcome"], "no-progress-planned-or-ignored")
@@ -249,7 +249,7 @@ class InfernoTosFillIngestTests(unittest.TestCase):
                 patch.object(ingest, "save_ledger", side_effect=saved_ledgers.append),
                 patch.object(ingest, "save_ingest_report", return_value=None),
             ):
-                report = ingest.ingest_fill_log()
+                report = ingest.ingest_fill_log(operator_requested=True)
 
         self.assertEqual(report["importedRows"], 0)
         self.assertEqual(report["closedRows"], 0)
@@ -273,7 +273,7 @@ class InfernoTosFillIngestTests(unittest.TestCase):
                 patch.object(ingest, "save_ledger", side_effect=saved_ledgers.append),
                 patch.object(ingest, "save_ingest_report", return_value=None),
             ):
-                report = ingest.ingest_fill_log()
+                report = ingest.ingest_fill_log(operator_requested=True)
 
         self.assertEqual(report["importedRows"], 0)
         self.assertEqual(report["rejectedRows"], 1)

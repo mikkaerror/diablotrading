@@ -85,7 +85,7 @@ PAPER_EVIDENCE_HARVEST_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("python3", "inferno_paper_mark_to_market.py", "run"),
     ),
     ("scenario evidence", ("python3", "inferno_scenario_evidence.py", "build")),
-    ("outcome review", ("python3", "inferno_outcome_reviewer.py", "review")),
+    ("operator outcome review queue", ("python3", "inferno_outcome_reviewer.py", "review")),
     (
         "paper evidence loop",
         ("python3", "inferno_paper_evidence_loop.py", "build"),

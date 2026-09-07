@@ -146,9 +146,12 @@ def closed_fill_ticket_identity_gaps(ticket: dict[str, Any], row: dict[str, Any]
     return [field for field, supplied, expected in comparisons if supplied != expected]
 
 
-def load_fill_rows() -> list[dict[str, Any]]:
+def load_fill_rows(*, read_only: bool = False) -> list[dict[str, Any]]:
     """Load the paperMoney fill log after ensuring the latest schema exists."""
-    write_fill_log_template()
+    if not read_only:
+        write_fill_log_template()
+    if not TOS_FILL_LOG_WORK_FILE.exists():
+        return []
     with TOS_FILL_LOG_WORK_FILE.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         return list(reader)
@@ -280,11 +283,13 @@ def apply_fill_row(ticket: dict[str, Any], row: dict[str, Any]) -> tuple[dict[st
     return updated_ticket, True, status
 
 
-def ingest_fill_log() -> dict[str, Any]:
-    """Import the current paperMoney fill log into the ledger and persist a report."""
+def ingest_fill_log(*, operator_requested: bool = False, ticket_id: str | None = None) -> dict[str, Any]:
+    """Preview by default; only explicit operator entrypoints may persist fills."""
     ensure_dirs()
     ledger = load_ledger()
-    rows = load_fill_rows()
+    rows = load_fill_rows(read_only=not operator_requested)
+    if ticket_id is not None:
+        rows = [row for row in rows if text(row.get("ticketId")) == ticket_id]
     updated_items = list(ledger.get("items") or [])
     by_ticket_id = {text(item.get("ticketId")): index for index, item in enumerate(updated_items)}
 
@@ -352,6 +357,32 @@ def ingest_fill_log() -> dict[str, Any]:
             closed += 1
         notes.append(f"{text(updated_ticket.get('ticker')).upper()}: imported {result} fill")
 
+    if not operator_requested:
+        # Never advance lifecycle timestamps, rewrite the fill log, or overwrite
+        # the last actual ingest report for observational background work.
+        return {
+            "generatedAt": local_now().isoformat(),
+            "researchOnly": True,
+            "liveTradingAllowed": False,
+            "brokerSubmitAllowed": False,
+            "authorityChanged": False,
+            "mode": "preview",
+            "processedRows": len(rows),
+            "importedRows": 0,
+            "openedRows": 0,
+            "closedRows": 0,
+            "acceptedProgressUnits": 0,
+            "proposedImportedRows": imported,
+            "proposedOpenedRows": opened,
+            "proposedClosedRows": closed,
+            "rejectedRows": rejected,
+            "ignoredRows": ignored,
+            "unmatchedRows": unmatched,
+            "notes": ["Preview only; no ticket or fill-log changes."],
+            "outcome": "operator-ingest-required" if imported else "no-progress-preview",
+            "outcomeReason": "Only explicit operator fill commands may apply these rows.",
+        }
+
     updated_ledger = successful_lifecycle(
         {
             **ledger,
@@ -413,6 +444,7 @@ def ingest_report_text(report: dict[str, Any]) -> str:
         f"Fill log: {report.get('fillLogPath')}",
         f"Processed rows: {report.get('processedRows', 0)}",
         f"Imported rows: {report.get('importedRows', 0)}",
+        f"Proposed imports (unapplied): {report.get('proposedImportedRows', 0)}",
         f"Opened rows: {report.get('openedRows', 0)}",
         f"Closed rows: {report.get('closedRows', 0)}",
         f"Ignored rows: {report.get('ignoredRows', 0)}",
@@ -446,7 +478,9 @@ def save_ingest_report(report: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for fill ingestion."""
     parser = argparse.ArgumentParser(description="Import thinkorswim paperMoney fills into the Inferno paper ledger.")
-    parser.add_argument("command", nargs="?", default="ingest", choices=["ingest", "status"])
+    parser.add_argument("command", nargs="?", default="ingest", choices=["ingest", "preview", "status"])
+    parser.add_argument("--operator-requested", action="store_true",
+                        help="Apply reviewed fills; reserved for the operator, never scheduled jobs.")
     return parser.parse_args()
 
 
@@ -456,7 +490,7 @@ def main() -> int:
     if args.command == "status" and TOS_FILL_INGEST_TEXT_FILE.exists():
         print(TOS_FILL_INGEST_TEXT_FILE.read_text(encoding="utf-8"))
         return 0
-    report = ingest_fill_log()
+    report = ingest_fill_log(operator_requested=args.command == "ingest" and args.operator_requested)
     print(ingest_report_text(report))
     return 0
 

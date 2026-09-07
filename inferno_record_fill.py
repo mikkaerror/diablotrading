@@ -196,7 +196,7 @@ def record_fill(
     before_analytics = build_performance_analytics(ledger_before)
     rows[row_index] = updated
     save_fill_log_rows(rows)
-    ingest_report = fill_ingest.ingest_fill_log()
+    ingest_report = fill_ingest.ingest_fill_log(operator_requested=True, ticket_id=_text(ticket.get("ticketId")))
     analytics = build_performance_analytics(load_ledger())
     save_performance_analytics(analytics)
     return {

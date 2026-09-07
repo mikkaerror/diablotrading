@@ -37,3 +37,15 @@ are point-in-time, and this review changes no schedules or strategy thresholds.
 See [[PROCESS_REVIEW_2026-09-07]] and [[Entry Exit Economics Contract]].
 This is a manual review with zero accepted promotion progress. The source
 findings support a repair backlog, not a validated trading improvement.
+
+## First repair and corrected belief
+
+The reviewer no longer mutates tickets. Fill ingest defaults to preview;
+explicit operator routes apply records, and record-fill scopes its import to
+the selected ticket. Historical provenance qualification remains open.
+
+A sandbox-seeded note is template provenance, not proof of synthetic prices:
+the builder leaves entry/exit prices blank and retains that note on subsequent
+updates. Never classify a filled record as synthetic from this note alone.
+Require independent source reconciliation; preserve uncertainty until then.
+See [[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].
