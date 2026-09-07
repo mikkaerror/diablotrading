@@ -157,3 +157,89 @@ behind. Reproduced this session; cleaned by renaming the files into
 Rule for linked Claude sessions: after any git command, check for
 `.git/*.lock` and `.git/objects/**/tmp_obj_*` and move them aside. Codex
 sessions on the Mac are unaffected.
+
+---
+
+# Part 2 — thresholds vs. the universe we actually trade (same session)
+
+Operator question: "we trade semis, construction, big movers, big players;
+options are pricier because of the upside — are we accounting for this?"
+Short answer before this pass: no. Detail below.
+
+## 10. FIXED (descriptive rebase) — the premium hurdle judged event moves against a *daily* range
+
+`inferno_expected_move_ledger.premium_hurdle` divided the event-implied move
+by trailing daily ATR% and called ≤1.25× "reasonable", >3.0× "extreme"
+(−20 rank points). An earnings gap is normally a multiple of a daily range,
+so the ladder demoted the desk's own universe by construction: ORCL at
+11.97% implied / 3.9% ATR = 3.05× → "extreme", score 64.4 → 44.4.
+
+Evidence (new `inferno_event_move_calibration.py`, from the local Schwab
+price-history tape, 20 names / 68 volume-confirmed large-move days):
+
+| | p25 | median | p75 | p90 |
+|---|---|---|---|---|
+| realized 1-day move | 9.3% | 14.2% | 17.7% | 24.7% |
+| move ÷ daily ATR | 1.64× | 2.13× | 3.00× | 4.09× |
+
+82% of those days exceed the old "reasonable" ceiling; 25% exceed "extreme".
+
+Codex review caveat, accepted: this sample is outcome-selected (largest
+moves of the year, some non-earnings) and one-day horizon versus a
+days-to-expiration implied move, so it overstates typical event moves and
+inflates implied/realized ratios. Therefore:
+
+- The ATR ladder is rebased to **2.0 / 3.0 / 4.0** (reasonable / stretch /
+  hard; extreme above) — at or below the tail-selected quantiles — and
+  labelled a descriptive rebase, not a fitted calibration. Legacy label is
+  reported alongside (`legacyPremiumHurdleLabel`).
+- A per-name historical basis (`implied ÷ name's median realized earnings
+  move`, ladder 1.0 / 1.3 / 1.6) is used **only** when the row comes from a
+  curated earnings backfill (`inferno_earnings_history_import.py`). Inferred
+  tail history is shown as `descriptiveTailMedianMovePct` and never sets the
+  label.
+- ORCL today: "hard" (−12) instead of "extreme" (−20); pressure 52.4.
+
+The calibration artifact is refreshed nightly (`nightly_optimize.sh`,
+nightly-unique step), read by doctor and the command center, and carries a
+`biasDisclosure` block. Filling `data/earnings_history_template.csv` with
+real earnings dates and pre-print implied moves is the single highest-value
+data task for the hurdle; the importer already exists.
+
+## 11. OBSERVED — the same tape says long premium into these prints has not paid
+
+The ledger's 11 closed long-straddle shadow records beat the breakeven move
+9.1% of the time (edge −9.7%, mean R −0.36). Fixing the hurdle removes an
+unfair demotion of high-beta names; it does not mean paying the straddle is
+right. The defined-risk and `SHORT_PREMIUM_DEFINED` arms exist for exactly
+this, and the richness signal (`inferno_earnings_richness_signal.py`) is
+empty until §10's backfill lands.
+
+## 12. FIXED (label) / OPERATOR (fix) — the chain strike window stops short of the expected move
+
+`SCHWAB_OPTIONS_STRIKE_COUNT=24` (env-overridable) fetches ±12 strikes.
+ORCL 2026-09-04: window ±10.6% of spot on the weekly vs 11.7% implied;
+on $750+ names with $5 strikes the window is ~±7% against 13–19% realized
+moves. Strike selection cannot see the strikes the event calls for. The
+tape now reports `chainStrikeWindowPct` / `strikeWindowCoversImpliedMove`
+and flags `strike-window-below-implied-move`. Fix is operator config:
+`SCHWAB_OPTIONS_STRIKE_COUNT=64` in `.env.inferno` (payload ~2.5×; a
+`fromDate`/`toDate` bound to 0–75 DTE in the adapter would pay for it —
+Codex lane, mission filed).
+
+## 13. QUEUED (Codex) — cap-fit widths are absolute dollars
+
+`CAP_FIT_DEBIT_MAX_WIDTH = 5.0`, `CAP_FIT_CREDIT_MAX_WIDTH = 1.0` in
+`inferno_strategy_alternative_pricing.py`. On STX ($849) a $5-wide spread is
+0.6% of spot against a 13–19% event move; on CCOI ($10) it is 50%. Widths
+should be expressed in expected-move units (e.g. ≤ 0.5 × implied move $)
+and then capped by the ticket band. Related: `MAX_SINGLE_TICKET_DOLLARS=500`
+is operator-owned; on big players it forces structures that are too narrow
+to express the thesis. If the cap stays, the honest research answer is fewer
+names, not narrower spreads — a recommender, not a constant edit.
+
+## 14. OBSERVED — bucket labels are tuned for a calmer universe
+
+`expected_move_bucket`: quiet <3%, normal <6%, hot <10%, "inferno" ≥10%.
+The universe median realized move is ~14%, so most names read "inferno"
+by construction; today that only produces a warning. Cosmetic, left alone.

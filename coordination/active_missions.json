@@ -1189,5 +1189,67 @@
       "paper-evidence",
       "shared-lane"
     ]
+  },
+  {
+    "id": "mission-ec0dc193",
+    "createdAt": "2026-09-06T20:44:50.845393-06:00",
+    "updatedAt": "2026-09-06T20:44:50.845393-06:00",
+    "title": "Audit premium thresholds against the tracked high-mover universe",
+    "body": "User requested audit of upper limits, premiums and thresholds for semiconductors, construction and large movers. Add source-backed cohort/price-filter counterfactuals, separate construction/paper/live caps, and diagnose option tenor versus daily-ATR and bullish spread upside caps. Improve research assumption/reporting semantics without changing risk constants, eligible universe, approvals, ticket states, broker or authority.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "thresholds",
+      "premium",
+      "universe-fit",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-138c6372",
+    "createdAt": "2026-09-07T02:55:57.790967+00:00",
+    "updatedAt": "2026-09-07T02:55:57.790967+00:00",
+    "title": "Bound Schwab chain fetch to 0-75 DTE and widen strike window for big movers",
+    "body": "Tape flags strike-window-below-implied-move (ORCL +/-10.6% vs 11.7% implied). Recommend fromDate/toDate bound in inferno_schwab_options fetch so SCHWAB_OPTIONS_STRIKE_COUNT can rise (64) without payload blowup. Operator can set the env var today. Audit \u00a712.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "medium",
+    "tags": [
+      "schwab",
+      "strike-window",
+      "codex-lane"
+    ]
+  },
+  {
+    "id": "mission-0a3edd7a",
+    "createdAt": "2026-09-07T02:56:00.006379+00:00",
+    "updatedAt": "2026-09-07T02:56:00.006379+00:00",
+    "title": "Express cap-fit spread widths in expected-move units, then cap by ticket band",
+    "body": "CAP_FIT_DEBIT_MAX_WIDTH=5.0 / CREDIT=1.0 are absolute dollars: 0.6% of spot on STX vs 13-19% moves, 50% on CCOI. Use width <= k x implied move dollars, then the ticket band. Audit \u00a713.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "medium",
+    "tags": [
+      "cap-fit",
+      "strategy-pricing",
+      "codex-lane"
+    ]
+  },
+  {
+    "id": "mission-73fa22eb",
+    "createdAt": "2026-09-07T02:56:02.426331+00:00",
+    "updatedAt": "2026-09-07T02:56:02.426331+00:00",
+    "title": "Curate the earnings-history backfill so the premium hurdle can use real per-name event moves",
+    "body": "data/earnings_history_template.csv -> inferno_earnings_history_import.py. Real earnings dates + pre-print implied moves for the tracker names unlock the curated-earnings-history hurdle basis and the richness signal. Highest-value data task for hurdle honesty. Audit \u00a710.",
+    "owner": "shared",
+    "status": "open",
+    "priority": "high",
+    "tags": [
+      "earnings-history",
+      "calibration",
+      "shared-lane",
+      "data"
+    ]
   }
 ]

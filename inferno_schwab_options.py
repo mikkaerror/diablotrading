@@ -454,6 +454,35 @@ def classify_quote_session(epoch_ms: int | float | None) -> str:
     return QUOTE_SESSION_OFF_HOURS
 
 
+def strike_window_metrics(
+    contracts: list[dict[str, Any]],
+    underlying_price: float | None,
+    atm_expiration: str | None,
+    implied_move_pct: float | None,
+) -> dict[str, Any]:
+    """Report whether the fetched strike window reaches the implied move.
+
+    Schwab chains are pulled with a fixed ``strikeCount``. On high-priced or
+    high-beta names that window can stop short of the expected-move strikes
+    (ORCL 2026-09-04: +/-10.6% window vs 11.7% implied), so strike selection
+    cannot even see the structures the event calls for. This only labels the
+    coverage; the fetch parameters are operator-configured.
+    """
+    if underlying_price is None or not atm_expiration:
+        return {"chainStrikeWindowPct": None, "strikeWindowCoversImpliedMove": None}
+    strikes = [
+        number(contract.get("strikePrice"))
+        for contract in contracts
+        if contract.get("expirationDate") == atm_expiration and number(contract.get("strikePrice"))
+    ]
+    if len(set(strikes)) < 3:
+        # One or two strikes is a fixture, not a window; do not judge coverage.
+        return {"chainStrikeWindowPct": None, "strikeWindowCoversImpliedMove": None}
+    window = min(underlying_price - min(strikes), max(strikes) - underlying_price) / underlying_price
+    covers = None if implied_move_pct is None else window >= implied_move_pct
+    return {"chainStrikeWindowPct": pct(window), "strikeWindowCoversImpliedMove": covers}
+
+
 def quote_session_metrics(contracts: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize when the chain's quotes were last updated and in which session.
 
@@ -854,6 +883,8 @@ def chain_quality_flags(
         flags.append("incomplete-greeks")
     if atm.get("atmSeriesFallback"):
         flags.append("atm-series-fallback-sub-min-dte")
+    if atm.get("strikeWindowCoversImpliedMove") is False:
+        flags.append("strike-window-below-implied-move")
     session = atm.get("quoteSession")
     if session in (QUOTE_SESSION_LATE_CLOSE, QUOTE_SESSION_OFF_HOURS):
         flags.append(f"{session}-quote-snapshot")
@@ -877,6 +908,7 @@ def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     liquid_avg_spread_pct = mean_number([contract.get("spreadPct") for contract in liquid_contracts])
     atm = atm_metrics(atm_pair, underlying_price, contracts)
     atm.update(quote_session_metrics(contracts))
+    atm.update(strike_window_metrics(contracts, underlying_price, atm.get("atmExpiration"), atm.get("atmImpliedMovePct")))
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),
@@ -1004,6 +1036,12 @@ def render_report(report: dict[str, Any]) -> str:
             )
             if row.get("qualityFlags"):
                 lines.append(f"  flags: {', '.join(row.get('qualityFlags') or [])}")
+            if row.get("chainStrikeWindowPct") is not None:
+                covers = row.get("strikeWindowCoversImpliedMove")
+                lines.append(
+                    f"  strike window: +/-{round(row['chainStrikeWindowPct'] * 100, 1)}% of spot on {row.get('atmExpiration')}"
+                    f" | covers implied move: {'yes' if covers else 'NO' if covers is False else 'n/a'}"
+                )
             if row.get("quoteSession"):
                 lines.append(
                     f"  quotes: {row.get('quoteSession')} session as of {row.get('quoteAsOf')}"
@@ -1053,6 +1091,7 @@ def regrade_row(row: dict[str, Any]) -> dict[str, Any]:
     greeks_completeness_pct = pct(len(greek_complete) / len(contracts))
     atm = atm_metrics(atm_pair, underlying_price, contracts)
     atm.update(quote_session_metrics(contracts))
+    atm.update(strike_window_metrics(contracts, underlying_price, atm.get("atmExpiration"), atm.get("atmImpliedMovePct")))
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),

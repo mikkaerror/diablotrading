@@ -39,9 +39,30 @@ CHRONOLOGICAL_COHORT_COUNT = 4
 EVENT_DATE_CLUSTER_DAYS = 3
 IMPLAUSIBLE_EARNINGS_MOVE_PCT = 40.0
 
-HURDLE_REASONABLE_ATR_MULTIPLE = 1.25
-HURDLE_STRETCH_ATR_MULTIPLE = 2.0
-HURDLE_HARD_ATR_MULTIPLE = 3.0
+# ATR-basis hurdle multiples (used unless a name has a *curated* earnings
+# history). Rebased 2026-09-07 against the desk's own large-move history
+# (inferno_event_move_calibration: 68 events / 20 names; move-to-daily-ATR
+# p25 1.64, median 2.13, p75 3.00, p90 4.09). That sample is outcome-selected
+# tail evidence with a one-day horizon, so it overstates typical event moves;
+# the ladder is therefore placed at or below its quantiles (2.0 < median).
+# The legacy 1.25/2.0/3.0 ladder was a daily-range yardstick applied to event
+# moves and labelled 82% of the universe's realized events as past
+# "reasonable"; it is kept as legacyLabel for comparison. Descriptive rebase,
+# not a fitted calibration.
+HURDLE_REASONABLE_ATR_MULTIPLE = 2.0
+HURDLE_STRETCH_ATR_MULTIPLE = 3.0
+HURDLE_HARD_ATR_MULTIPLE = 4.0
+LEGACY_HURDLE_REASONABLE_ATR_MULTIPLE = 1.25
+LEGACY_HURDLE_STRETCH_ATR_MULTIPLE = 2.0
+LEGACY_HURDLE_HARD_ATR_MULTIPLE = 3.0
+# Historical-basis hurdle: implied move / the name's own median realized event move.
+HURDLE_BENCHMARK_REASONABLE_RATIO = 1.0
+HURDLE_BENCHMARK_STRETCH_RATIO = 1.3
+HURDLE_BENCHMARK_HARD_RATIO = 1.6
+HURDLE_BASIS_HISTORICAL = "curated-earnings-history"
+HURDLE_BASIS_ATR = "daily-atr-ladder"
+CURATED_EVENT_SOURCE = "curated-earnings-history-backfill"
+EVENT_MOVE_CALIBRATION_FILE = DATA_DIR / "inferno_event_move_calibration.json"
 HURDLE_PENALTIES = {
     "reasonable": 0.0,
     "stretch": 6.0,
@@ -328,61 +349,162 @@ def atr_percent(entry: dict[str, Any], baseline: float | None = None) -> float |
     return None
 
 
+def hurdle_label_for_multiple(multiple: float, reasonable: float, stretch: float, hard: float) -> str:
+    """Map a hurdle multiple onto the four-step ladder."""
+    if multiple <= reasonable:
+        return "reasonable"
+    if multiple <= stretch:
+        return "stretch"
+    if multiple <= hard:
+        return "hard"
+    return "extreme"
+
+
+HURDLE_ACTIONS = {
+    "reasonable": "no premium demotion from the event-move hurdle",
+    "stretch": "require catalyst and IV-expansion confirmation before favoring long vol",
+    "hard": "demote long vol unless alternatives have worse defined-risk math",
+    "extreme": "prefer a defined-risk alternative unless the catalyst is exceptional",
+}
+
+
+def load_event_move_benchmarks() -> dict[str, dict[str, Any]]:
+    """Return benchmark-ready per-symbol event-move summaries from the calibration artifact."""
+    payload = load_json_file(EVENT_MOVE_CALIBRATION_FILE) or {}
+    result: dict[str, dict[str, Any]] = {}
+    for item in payload.get("symbols") or []:
+        if item.get("benchmarkReady") and item.get("symbol") and number(item.get("medianRealizedAbsMovePct")):
+            result[str(item["symbol"]).upper()] = item
+    return result
+
+
 def premium_hurdle(
     *,
     entry: dict[str, Any],
     implied_pct: float | None,
     baseline: float | None,
+    benchmark: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Classify the premium hurdle relative to ATR for diagnostic ranking pressure."""
+    """Classify the premium hurdle for diagnostic ranking pressure.
+
+    Basis order: the name's own median realized earnings move when a
+    benchmark-ready *curated* calibration row exists
+    (``curated-earnings-history``), otherwise the daily-ATR ladder with
+    event-rebased multiples (``daily-atr-ladder``). Inferred large-move
+    history is reported as descriptive context (``descriptiveTailMedianMovePct``)
+    but never sets the label, because it is outcome-selected and one-day
+    horizon. The legacy daily-ATR label is reported alongside so the rebase
+    delta stays visible; it carries no penalty.
+    """
     scenario_score = number(entry.get("scenarioScore"))
+    atr = atr_percent(entry, baseline)
+    curated = bool(benchmark) and str((benchmark or {}).get("eventSource") or "") == CURATED_EVENT_SOURCE
+    base = {
+        "atrPercent": round(atr, 4) if atr else atr,
+        "requiredMoveAtrMultiple": None,
+        "hurdleBasis": None,
+        "benchmarkMedianRealizedMovePct": number((benchmark or {}).get("medianRealizedAbsMovePct")) if curated else None,
+        "benchmarkEventCount": (benchmark or {}).get("eventCount") if curated else None,
+        "descriptiveTailMedianMovePct": None if curated else number((benchmark or {}).get("medianRealizedAbsMovePct")),
+        "descriptiveTailEventCount": None if curated else (benchmark or {}).get("eventCount"),
+        "impliedToHistoricalRatio": None,
+        "legacyLabel": None,
+    }
     if implied_pct is None:
         label = "unpriced"
-        penalty = HURDLE_PENALTIES[label]
         return {
+            **base,
             "label": label,
-            "atrPercent": atr_percent(entry, baseline),
-            "requiredMoveAtrMultiple": None,
-            "rankPenalty": penalty,
+            "rankPenalty": HURDLE_PENALTIES[label],
             "rankPressureScore": scenario_score,
             "action": "cannot evaluate premium hurdle until the candidate has a priced move",
         }
 
-    atr = atr_percent(entry, baseline)
-    if atr is None or atr <= 0:
-        label = "unknown"
-        penalty = HURDLE_PENALTIES[label]
-        return {
-            "label": label,
-            "atrPercent": atr,
-            "requiredMoveAtrMultiple": None,
-            "rankPenalty": penalty,
-            "rankPressureScore": scenario_score,
-            "action": "missing ATR context; do not reward the long-vol structure for price alone",
-        }
-
-    multiple = round(implied_pct / atr, 4)
-    if multiple <= HURDLE_REASONABLE_ATR_MULTIPLE:
-        label = "reasonable"
-        action = "no premium demotion from ATR hurdle"
-    elif multiple <= HURDLE_STRETCH_ATR_MULTIPLE:
-        label = "stretch"
-        action = "require catalyst and IV-expansion confirmation before favoring long vol"
-    elif multiple <= HURDLE_HARD_ATR_MULTIPLE:
-        label = "hard"
-        action = "demote long vol unless alternatives have worse defined-risk math"
+    atr_multiple = round(implied_pct / atr, 4) if atr and atr > 0 else None
+    legacy_label = (
+        hurdle_label_for_multiple(
+            atr_multiple,
+            LEGACY_HURDLE_REASONABLE_ATR_MULTIPLE,
+            LEGACY_HURDLE_STRETCH_ATR_MULTIPLE,
+            LEGACY_HURDLE_HARD_ATR_MULTIPLE,
+        )
+        if atr_multiple is not None
+        else None
+    )
+    benchmark_move = base["benchmarkMedianRealizedMovePct"]
+    if benchmark_move and benchmark_move > 0:
+        ratio = round(implied_pct / benchmark_move, 4)
+        label = hurdle_label_for_multiple(
+            ratio,
+            HURDLE_BENCHMARK_REASONABLE_RATIO,
+            HURDLE_BENCHMARK_STRETCH_RATIO,
+            HURDLE_BENCHMARK_HARD_RATIO,
+        )
+        basis = HURDLE_BASIS_HISTORICAL
+    elif atr_multiple is not None:
+        ratio = None
+        label = hurdle_label_for_multiple(
+            atr_multiple,
+            HURDLE_REASONABLE_ATR_MULTIPLE,
+            HURDLE_STRETCH_ATR_MULTIPLE,
+            HURDLE_HARD_ATR_MULTIPLE,
+        )
+        basis = HURDLE_BASIS_ATR
     else:
-        label = "extreme"
-        action = "prefer a defined-risk alternative unless the catalyst is exceptional"
+        label = "unknown"
+        return {
+            **base,
+            "label": label,
+            "rankPenalty": HURDLE_PENALTIES[label],
+            "rankPressureScore": scenario_score,
+            "action": "missing ATR and event-move context; do not reward the long-vol structure for price alone",
+        }
     penalty = HURDLE_PENALTIES[label]
     adjusted = round(max(0.0, scenario_score - penalty), 4) if scenario_score is not None else None
     return {
+        **base,
+        "requiredMoveAtrMultiple": atr_multiple,
+        "impliedToHistoricalRatio": ratio,
+        "hurdleBasis": basis,
+        "legacyLabel": legacy_label,
         "label": label,
-        "atrPercent": round(atr, 4),
-        "requiredMoveAtrMultiple": multiple,
         "rankPenalty": penalty,
         "rankPressureScore": adjusted,
-        "action": action,
+        "action": HURDLE_ACTIONS[label],
+    }
+
+
+def premium_comparability(entry: dict[str, Any], *, source_as_of: Any = None) -> dict[str, Any]:
+    """Expose missing tenor matching without changing a premium hurdle.
+
+    Do not invent an option tenor from days-to-earnings or convert ATR to a
+    standard deviation. This metadata does not change any rank penalty; it
+    supplies provenance for a future matched-horizon evaluator.
+    """
+    plan = entry.get("strikePlan") or {}
+    expiration = parse_date(entry.get("expiration") or plan.get("expiration"))
+    reference_time = entry.get("sourceStrikePlanGeneratedAt") or source_as_of or entry.get("tradeDate") or entry.get("createdAt")
+    as_of = parse_date(reference_time)
+    days = (expiration - as_of).days if expiration and as_of else None
+    if expiration is None:
+        status = "missing-option-expiration"
+    elif as_of is None:
+        status = "missing-source-as-of"
+    elif days <= 0:
+        status = "nonpositive-option-tenor"
+    else:
+        status = "unmatched-option-horizon"
+    return {
+        "status": status,
+        "expiration": expiration.isoformat() if expiration else None,
+        "sourceAsOf": str(reference_time) if as_of else None,
+        "calendarDaysToExpiration": days,
+        "daysUntilEarnings": number(entry.get("daysUntilEarnings")),
+        "atrBasis": "daily-average-true-range; not standard deviation",
+        "sameHorizonComparison": False,
+        "fairValueConclusionAllowed": False,
+        "thresholdsChanged": False,
+        "interpretation": "Daily ATR and selected historical move summaries are not matched option-horizon fair-value estimates. Verify event coverage, selection bias and IV term structure. High premium alone does not establish overvaluation.",
     }
 
 
@@ -659,7 +781,12 @@ def closed_expected_move_records(
     return records
 
 
-def current_long_vol_candidate(entry: dict[str, Any]) -> dict[str, Any] | None:
+def current_long_vol_candidate(
+    entry: dict[str, Any],
+    *,
+    source_as_of: Any = None,
+    benchmarks: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     """Summarize a current slate long-vol candidate without pretending it is evidence."""
     strategy = entry.get("strategy") or entry.get("setupRec")
     if not is_long_vol_strategy(strategy):
@@ -678,12 +805,13 @@ def current_long_vol_candidate(entry: dict[str, Any]) -> dict[str, Any] | None:
         "shadowOnly": bool(entry.get("shadowOnly")),
         "brokerSubmitAllowed": bool(entry.get("brokerSubmitAllowed")),
         "liveTradingAllowed": bool(entry.get("liveTradingAllowed")),
+        "premiumComparability": premium_comparability(entry, source_as_of=source_as_of),
     }
     if baseline is None or baseline <= 0:
         candidate["status"] = "missing-underlying-price"
         candidate["impliedMovePct"] = None
         candidate["impliedMoveSource"] = None
-        hurdle = premium_hurdle(entry=entry, implied_pct=None, baseline=baseline)
+        hurdle = premium_hurdle(entry=entry, implied_pct=None, baseline=baseline, benchmark=(benchmarks or {}).get(candidate["ticker"]))
         candidate.update(
             {
                 "atrPercent": hurdle["atrPercent"],
@@ -699,12 +827,19 @@ def current_long_vol_candidate(entry: dict[str, Any]) -> dict[str, Any] | None:
     candidate["impliedMovePct"] = implied
     candidate["impliedMoveSource"] = implied_source
     candidate["status"] = "priced" if implied is not None else implied_source
-    hurdle = premium_hurdle(entry=entry, implied_pct=implied, baseline=baseline)
+    hurdle = premium_hurdle(entry=entry, implied_pct=implied, baseline=baseline, benchmark=(benchmarks or {}).get(candidate["ticker"]))
     candidate.update(
         {
             "atrPercent": hurdle["atrPercent"],
             "requiredMoveAtrMultiple": hurdle["requiredMoveAtrMultiple"],
             "premiumHurdleLabel": hurdle["label"],
+            "premiumHurdleBasis": hurdle["hurdleBasis"],
+            "legacyPremiumHurdleLabel": hurdle["legacyLabel"],
+            "impliedToHistoricalRatio": hurdle["impliedToHistoricalRatio"],
+            "benchmarkMedianRealizedMovePct": hurdle["benchmarkMedianRealizedMovePct"],
+            "benchmarkEventCount": hurdle["benchmarkEventCount"],
+            "descriptiveTailMedianMovePct": hurdle["descriptiveTailMedianMovePct"],
+            "descriptiveTailEventCount": hurdle["descriptiveTailEventCount"],
             "rankPenalty": hurdle["rankPenalty"],
             "rankPressureScore": hurdle["rankPressureScore"],
             "hurdleAction": hurdle["action"],
@@ -715,12 +850,15 @@ def current_long_vol_candidate(entry: dict[str, Any]) -> dict[str, Any] | None:
 
 def current_long_vol_candidates(
     paper_reducer: dict[str, Any] | None = None,
+    *,
+    benchmarks: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return current reducer long-vol candidates for operator visibility."""
     reducer = paper_reducer if paper_reducer is not None else (load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {})
+    marks = benchmarks if benchmarks is not None else load_event_move_benchmarks()
     rows: list[dict[str, Any]] = []
     for item in reducer.get("scenarioSlate") or []:
-        candidate = current_long_vol_candidate(item)
+        candidate = current_long_vol_candidate(item, source_as_of=reducer.get("generatedAt"), benchmarks=marks)
         if candidate:
             rows.append(candidate)
     return rows
@@ -1008,8 +1146,9 @@ def regime_diagnostics(records: list[dict[str, Any]]) -> dict[str, Any]:
         "causalClaimAllowed": False,
         "promotionEvidenceEligible": False,
         "policyInference": (
-            "Keep long-vol above a 20% implied move shadow-only until fresh risk-passed "
-            "evidence overturns the negative recent and leave-out priors."
+            "Historical rows are descriptive. The enforced long-vol implied-move guards "
+            "remain unchanged; these samples do not validate a universal percentage cutoff "
+            "across tickers, sectors, option tenors or catalyst windows."
         ),
     }
 
@@ -1237,7 +1376,25 @@ def expected_move_ledger_text(payload: dict[str, Any]) -> str:
             f"pressureScore={fmt(item.get('rankPressureScore'))} | "
             f"paperAutoSelected={item.get('paperAutoSelected')}"
         )
+        if item.get("premiumHurdleBasis"):
+            basis_bits = [f"basis={item.get('premiumHurdleBasis')}"]
+            if item.get("benchmarkMedianRealizedMovePct") is not None:
+                basis_bits.append(
+                    f"curated median earnings move={fmt(item.get('benchmarkMedianRealizedMovePct'), suffix='%')} "
+                    f"over {item.get('benchmarkEventCount')} events | implied/historical={fmt(item.get('impliedToHistoricalRatio'))}"
+                )
+            elif item.get("descriptiveTailMedianMovePct") is not None:
+                basis_bits.append(
+                    f"descriptive only: tail-selected 1-day median move={fmt(item.get('descriptiveTailMedianMovePct'), suffix='%')} "
+                    f"over {item.get('descriptiveTailEventCount')} large-move days (not a label input)"
+                )
+            if item.get("legacyPremiumHurdleLabel") and item.get("legacyPremiumHurdleLabel") != item.get("premiumHurdleLabel"):
+                basis_bits.append(f"legacy daily-ATR label={item.get('legacyPremiumHurdleLabel')}")
+            lines.append("  " + " | ".join(basis_bits))
         action = text(item.get("hurdleAction"))
+        comparison = item.get("premiumComparability") or {}
+        if comparison:
+            lines.append(f"  comparability: {comparison.get('status')} | expiration={comparison.get('expiration')} | days at source={comparison.get('calendarDaysToExpiration')} | matched-horizon fair value unavailable")
         if action:
             lines.append(f"  hurdle action: {action}")
     lines.extend(["", "Recent closed records:"])

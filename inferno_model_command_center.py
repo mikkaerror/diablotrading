@@ -76,6 +76,7 @@ SCENARIO_BACKTEST_FILE = DATA_DIR / "inferno_scenario_backtest.json"
 SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
 SCORE_THRESHOLD_AUDIT_FILE = DATA_DIR / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
+EVENT_MOVE_CALIBRATION_FILE = DATA_DIR / "inferno_event_move_calibration.json"
 SHORT_PREMIUM_STUDY_FILE = DATA_DIR / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
@@ -376,6 +377,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "expected-move",
         "question": "Did long-vol realised moves clear their debit-implied hurdle?",
         "artifact": "reports/expected_move_ledger_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "event-move-calibration",
+        "question": "What do our names actually move on event days, and is the premium hurdle judged against that?",
+        "artifact": "reports/event_move_calibration_latest.txt",
         "owner": "shared",
     },
     {
@@ -1181,6 +1188,7 @@ def build_command_center() -> dict[str, Any]:
         "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "scoreThresholdAudit": artifact_summary(SCORE_THRESHOLD_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "eventMoveCalibration": artifact_summary(EVENT_MOVE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
         "shortPremiumStudy": artifact_summary(SHORT_PREMIUM_STUDY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "usableBackwardRecords")),
         "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "strategyQuoteCoverage": artifact_summary(STRATEGY_QUOTE_COVERAGE_FILE, keys=("stage", "status", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),

@@ -424,3 +424,18 @@ class RegradeTests(unittest.TestCase):
         self.assertIn("regradedAt", out)
         self.assertIn("read-only", out["reminders"])
         self.assertTrue(any("regraded offline" in r for r in out["reminders"]))
+
+
+class StrikeWindowTests(unittest.TestCase):
+    def test_window_short_of_implied_move_is_flagged(self) -> None:
+        chain = AtmSeriesAndQuoteSessionTests()._chain()  # strikes 155-165 on 158.78 => ~2.4% window, straddle ~11%
+        summary = schwab.summarize_chain("ORCL", chain)
+        self.assertIsNotNone(summary["chainStrikeWindowPct"])
+        self.assertFalse(summary["strikeWindowCoversImpliedMove"])
+        self.assertIn("strike-window-below-implied-move", summary["qualityFlags"])
+
+    def test_wide_window_covers(self) -> None:
+        contracts = [{"expirationDate": "2026-09-11", "strikePrice": k} for k in (100.0, 158.0, 220.0)]
+        out = schwab.strike_window_metrics(contracts, 158.78, "2026-09-11", 0.117)
+        self.assertTrue(out["strikeWindowCoversImpliedMove"])
+        self.assertIsNone(schwab.strike_window_metrics([], 158.78, "2026-09-11", 0.1)["strikeWindowCoversImpliedMove"])

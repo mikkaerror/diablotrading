@@ -75,6 +75,7 @@ SLIPPAGE_ESTIMATOR_FILE = ROOT / "data" / "inferno_slippage_estimator.json"
 SCORE_CALIBRATION_FILE = ROOT / "data" / "inferno_score_calibration.json"
 SCORE_THRESHOLD_AUDIT_FILE = ROOT / "data" / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
+EVENT_MOVE_CALIBRATION_FILE = ROOT / "data" / "inferno_event_move_calibration.json"
 SHORT_PREMIUM_STUDY_FILE = ROOT / "data" / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
@@ -1164,6 +1165,11 @@ def score_threshold_audit_status(report: dict) -> tuple[bool, str]:
         report,
         ok_verdicts={"calibrate-scores-do-not-loosen-gates"},
     )
+
+
+def event_move_calibration_status(report: dict) -> tuple[bool, str]:
+    """Research-only event-move calibration: fresh, non-promotable, calibrated or honestly thin."""
+    return _research_module_status(report, ok_verdicts={"descriptive", "insufficient-data"})
 
 
 def expected_move_ledger_status(report: dict) -> tuple[bool, str]:
@@ -2469,6 +2475,12 @@ def main() -> int:
     expected_move_ok, expected_move_detail = expected_move_ledger_status(expected_move)
     lines.append(summarize_status("Expected move ledger", expected_move_ok, expected_move_detail))
     if not expected_move_ok:
+        warnings += 1
+
+    event_move_calibration = load_json_file(EVENT_MOVE_CALIBRATION_FILE) or {}
+    event_move_ok, event_move_detail = event_move_calibration_status(event_move_calibration)
+    lines.append(summarize_status("Event move calibration", event_move_ok, event_move_detail))
+    if not event_move_ok:
         warnings += 1
 
     short_premium = load_json_file(SHORT_PREMIUM_STUDY_FILE) or {}

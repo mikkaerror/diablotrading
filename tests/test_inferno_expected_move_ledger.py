@@ -249,3 +249,72 @@ class ExpectedMoveLedgerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PremiumHurdleRebaseTests(unittest.TestCase):
+    """Event-move hurdle: per-name history first, event-rebased ATR multiples as fallback."""
+
+    def _entry(self, score: float = 64.0, atr_pct: float = 4.0) -> dict:
+        return {"ticker": "ORCL", "scenarioScore": score, "atrPercent": atr_pct}
+
+    def test_three_x_atr_is_no_longer_extreme_on_the_atr_fallback(self) -> None:
+        hurdle = ledger.premium_hurdle(entry=self._entry(), implied_pct=12.2, baseline=158.0)
+        self.assertEqual(hurdle["hurdleBasis"], ledger.HURDLE_BASIS_ATR)
+        self.assertEqual(hurdle["requiredMoveAtrMultiple"], 3.05)
+        self.assertEqual(hurdle["label"], "hard")
+        self.assertEqual(hurdle["legacyLabel"], "extreme")
+        self.assertEqual(hurdle["rankPenalty"], 12.0)
+        softer = ledger.premium_hurdle(entry=self._entry(), implied_pct=11.0, baseline=158.0)
+        self.assertEqual(softer["label"], "stretch")
+        self.assertEqual(softer["legacyLabel"], "hard")
+
+    def test_atr_fallback_ladder_edges(self) -> None:
+        for implied, expected in ((7.9, "reasonable"), (8.0, "reasonable"), (12.0, "stretch"), (16.0, "hard"), (16.4, "extreme")):
+            hurdle = ledger.premium_hurdle(entry=self._entry(), implied_pct=implied, baseline=100.0)
+            self.assertEqual(hurdle["label"], expected, implied)
+
+    def test_curated_name_history_outranks_atr(self) -> None:
+        benchmark = {"medianRealizedAbsMovePct": 11.75, "eventCount": 2, "eventSource": ledger.CURATED_EVENT_SOURCE}
+        hurdle = ledger.premium_hurdle(entry=self._entry(), implied_pct=12.2, baseline=158.0, benchmark=benchmark)
+        self.assertEqual(hurdle["hurdleBasis"], ledger.HURDLE_BASIS_HISTORICAL)
+        self.assertAlmostEqual(hurdle["impliedToHistoricalRatio"], 1.0383, places=3)
+        self.assertEqual(hurdle["label"], "stretch")
+        self.assertEqual(hurdle["legacyLabel"], "extreme")
+        rich = ledger.premium_hurdle(entry=self._entry(), implied_pct=20.0, baseline=158.0, benchmark=benchmark)
+        self.assertEqual(rich["label"], "extreme")
+        cheap = ledger.premium_hurdle(entry=self._entry(), implied_pct=10.0, baseline=158.0, benchmark=benchmark)
+        self.assertEqual(cheap["label"], "reasonable")
+        self.assertEqual(cheap["rankPenalty"], 0.0)
+
+    def test_inferred_tail_history_is_descriptive_only(self) -> None:
+        inferred = {"medianRealizedAbsMovePct": 11.75, "eventCount": 2, "eventSource": "inferred-large-move-volume-surge"}
+        hurdle = ledger.premium_hurdle(entry=self._entry(), implied_pct=12.2, baseline=158.0, benchmark=inferred)
+        self.assertEqual(hurdle["hurdleBasis"], ledger.HURDLE_BASIS_ATR)
+        self.assertIsNone(hurdle["impliedToHistoricalRatio"])
+        self.assertIsNone(hurdle["benchmarkMedianRealizedMovePct"])
+        self.assertEqual(hurdle["descriptiveTailMedianMovePct"], 11.75)
+        self.assertEqual(hurdle["label"], "hard")
+
+    def test_unpriced_and_unknown_stay_penalty_free(self) -> None:
+        unpriced = ledger.premium_hurdle(entry=self._entry(), implied_pct=None, baseline=158.0)
+        self.assertEqual(unpriced["label"], "unpriced")
+        self.assertEqual(unpriced["rankPenalty"], 0.0)
+        unknown = ledger.premium_hurdle(entry={"ticker": "ZZZ", "scenarioScore": 50.0}, implied_pct=10.0, baseline=None)
+        self.assertEqual(unknown["label"], "unknown")
+        self.assertIsNone(unknown["hurdleBasis"])
+
+    def test_candidates_carry_basis_and_use_explicit_benchmarks(self) -> None:
+        reducer_payload = {
+            "generatedAt": "2026-09-04T16:00:00-06:00",
+            "scenarioSlate": [
+                {"ticker": "ORCL", "strategy": "LONG_STRADDLE", "scenarioScore": 64.0, "atrPercent": 4.0, "underlyingPrice": 158.0, "lowerBreakEven": 139.0, "upperBreakEven": 177.0}
+            ],
+        }
+        rows = ledger.current_long_vol_candidates(reducer_payload, benchmarks={"ORCL": {"medianRealizedAbsMovePct": 11.75, "eventCount": 2, "eventSource": ledger.CURATED_EVENT_SOURCE}})
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["premiumHurdleBasis"], ledger.HURDLE_BASIS_HISTORICAL)
+        self.assertEqual(row["benchmarkEventCount"], 2)
+        self.assertIn(row["premiumHurdleLabel"], {"reasonable", "stretch", "hard", "extreme"})
+        rows_no_history = ledger.current_long_vol_candidates(reducer_payload, benchmarks={})
+        self.assertEqual(rows_no_history[0]["premiumHurdleBasis"], ledger.HURDLE_BASIS_ATR)
