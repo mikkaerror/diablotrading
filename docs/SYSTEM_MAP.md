@@ -59,6 +59,19 @@ it cannot advance the last successful evidence timestamp or make an old source
 look current. The first producers on this contract are the paper-execution and
 shadow-evidence ledgers; command-center summaries expose their lifecycle data.
 
+Score calibration is an archive diagnostic, not a fitted probability model.
+New paper, shadow, and scenario entries preserve an immutable
+`entryScoreSnapshot`; refreshes may update display ranks but cannot replace
+the captured prediction or manufacture a missing legacy snapshot. Calibration
+separates paper and shadow rows, reports repeated ticker/expiration exposure
+and premature shadow reviews, and uses native-rank quartiles for priority.
+Legacy rows remain unverified for model fitting. Future shadow expiration
+reviews wait until the following day and require the exact expiration-day
+equity close from a later Schwab daily-history snapshot; missing history waits
+without substituting a current mark. This is an intrinsic proxy, not a fill or
+broker settlement. See [[MODEL_CALIBRATION_REVIEW_2026-09-06]] for evidence,
+remaining limitations, and predeclared challenger experiments.
+
 ## Canonical Truth
 
 Generated artifacts beat durable docs when they disagree.

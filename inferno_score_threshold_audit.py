@@ -350,6 +350,16 @@ def finding(
 def calibration_findings(score_calibration: dict[str, Any]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     counts = score_calibration.get("counts") or {}
+    integrity = score_calibration.get("evidenceDiagnostics") or {}
+    if integrity and not integrity.get("modelFitAllowed"):
+        findings.append(finding(
+            "P1", "Calibration archive is not admissible for model fitting",
+            f"Sources={integrity.get('sourceRows')}; score provenance={integrity.get('scoreProvenanceRows')}; "
+            f"shadow timing={integrity.get('shadowTimingRows')}; repeated exposure rows={integrity.get('repeatedExposureRows')}.",
+            "Raw row counts and refreshed rank values cannot establish independent predictive evidence.",
+            "Capture immutable entry scores, reconcile timestamped settlement prices, and validate by held-out time and event before fitting a challenger.",
+            source="reports/score_calibration_latest.txt",
+        ))
     scenario = {
         item.get("field"): item
         for item in score_calibration.get("scenarioCalibration") or []
@@ -518,14 +528,13 @@ def pricing_findings(strategy_pricing: dict[str, Any], scanner: dict[str, Any]) 
         findings.append(
             finding(
                 "P2",
-                "Paper variant backfill is creating measurable paper chances",
+                "Paper variant backfill is creating measurable paper chances" if risk_passed else "Variant pricing has not produced a passing paper candidate",
                 (
                     f"Scanner produced {scanner_candidates} pricing candidates; pricing checked "
                     f"{scanner_priced} and {risk_passed} passed combined gates."
                 ),
                 (
-                    "This is the right kind of pressure relief: discovery widened, while pricing and risk "
-                    "gates still rejected weak rows."
+                    "Pricing activity is not accepted evidence progress; count passing candidates and later scored outcomes separately."
                 ),
                 "Keep scanner output paper-only and add outcome tracking before changing its thresholds.",
                 source="reports/paper_variant_scanner_latest.txt",
@@ -556,30 +565,59 @@ def dte_findings(dte_policy: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
-def assumption_checks() -> list[dict[str, Any]]:
+def assumption_checks(
+    artifacts: dict[str, dict[str, Any]] | None = None,
+    production_sensitivity: dict[str, Any] | None = None,
+    shadow_sensitivity: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Recompute beliefs from supplied evidence, never from canned historical claims."""
+    artifacts = artifacts or {}
+    calibration = artifacts.get("scoreCalibration") or {}
+    counts = calibration.get("counts") or {}
+    integrity = calibration.get("evidenceDiagnostics") or {}
+    production = production_sensitivity or {}
+    shadow = shadow_sensitivity or {}
+    sensitivity_known = "promotedAnyUnder" in production and "promotedAnyUnder" in shadow
+    promoted = bool(production.get("promotedAnyUnder") or shadow.get("promotedAnyUnder"))
+    pricing = artifacts.get("strategyAlternativePricing") or {}
+    pricing_counts = pricing.get("counts") or {}
+    dte = artifacts.get("dtePolicyAnalysis") or {}
+    comparison = dte.get("observational21DteComparison") or dte.get("observationalExitComparison") or {}
+    above = (comparison.get("closedAtOrAbove21Dte") or {}).get("scoredCount")
+    below = (comparison.get("closedBelow21Dte") or {}).get("scoredCount")
     return [
         {
             "assumption": "Scores are rank surfaces, not calibrated probabilities.",
-            "status": "supported",
-            "evidence": "Score calibration reports monotonic violations and no closed score-bearing option outcomes yet.",
-            "falsifier": "Closed option records with score fields show monotonic, stable bucket-level R outcomes.",
+            "status": "uncalibrated" if calibration else "unknown",
+            "evidence": f"Closed option score rows={counts.get('optionScoreRows', 'unknown')}; "
+                        f"source counts={integrity.get('sourceRows', 'unknown')}; "
+                        f"entry provenance={integrity.get('scoreProvenanceRows', 'unknown')}.",
+            "sourceGeneratedAt": calibration.get("generatedAt"),
+            "falsifier": "A separately fitted probability model passes predeclared calibration and net-R evaluation on untouched later events with frozen entry features.",
         },
         {
             "assumption": "Promotion gates should stay conservative.",
-            "status": "supported",
-            "evidence": "Production and shadow sensitivity sweeps promote no strategy under looser profiles.",
+            "status": "unknown" if not sensitivity_known else "requires-review" if promoted else "supported",
+            "evidence": f"Production promoted profiles={production.get('promotedAnyUnder', 'unknown')}; "
+                        f"shadow promoted profiles={shadow.get('promotedAnyUnder', 'unknown')}. Sensitivity is descriptive and grants no authority.",
+            "sourceGeneratedAt": {"production": production.get("sourceLabGeneratedAt"), "shadow": shadow.get("sourceLabGeneratedAt")},
             "falsifier": "A future sensitivity run shows positive expectancy and controlled drawdown with adequate paper evidence.",
         },
         {
             "assumption": "Risk gates should remain downstream authority.",
-            "status": "supported",
-            "evidence": "Scanner discovery created paper chances, while pricing/risk gates still blocked IREN.",
+            "status": "policy-boundary",
+            "evidence": f"Current pricing requested={pricing_counts.get('requested', 'unknown')}; "
+                        f"passed={pricing_counts.get('riskPassed', 'unknown')}; blocked={pricing_counts.get('riskBlocked', 'unknown')}. "
+                        "This policy is not validated by candidate volume.",
+            "sourceGeneratedAt": pricing.get("generatedAt"),
             "falsifier": "Scanner candidates consistently pass pricing but fail for avoidable unit mismatches rather than real risk.",
         },
         {
             "assumption": "DTE rules are hypotheses, not causal rules.",
-            "status": "supported",
-            "evidence": "DTE analysis has no closed-at-or-above-21-DTE scored cohort for comparison.",
+            "status": "unknown" if above is None or below is None else "observational-only" if above and below else "insufficient-comparison",
+            "evidence": f"Closed-at-or-above-21-DTE scored={above if above is not None else 'unknown'}; "
+                        f"closed-below-21-DTE scored={below if below is not None else 'unknown'}. Cohort availability alone does not establish causality.",
+            "sourceGeneratedAt": dte.get("generatedAt"),
             "falsifier": "Matched paper cohorts across DTE bands show stable net-R and drawdown differences.",
         },
     ]
@@ -853,9 +891,9 @@ def build_score_threshold_audit(
     production_sensitivity: dict[str, Any] | None = None,
     shadow_sensitivity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    artifacts = artifacts or artifact_inputs()
-    production_sensitivity = production_sensitivity or build_sensitivity(source="production")
-    shadow_sensitivity = shadow_sensitivity or build_sensitivity(source="shadow-replay")
+    artifacts = artifacts if artifacts is not None else artifact_inputs()
+    production_sensitivity = production_sensitivity if production_sensitivity is not None else build_sensitivity(source="production")
+    shadow_sensitivity = shadow_sensitivity if shadow_sensitivity is not None else build_sensitivity(source="shadow-replay")
 
     findings: list[dict[str, Any]] = []
     findings.extend(calibration_findings(artifacts.get("scoreCalibration") or {}))
@@ -888,7 +926,7 @@ def build_score_threshold_audit(
         },
         "thresholdCatalog": catalog,
         "findings": findings,
-        "assumptionChecks": assumption_checks(),
+        "assumptionChecks": assumption_checks(artifacts, production_sensitivity, shadow_sensitivity),
         "sensitivitySummary": {
             "productionPromotedAnyUnder": production_sensitivity.get("promotedAnyUnder") or [],
             "shadowPromotedAnyUnder": shadow_sensitivity.get("promotedAnyUnder") or [],

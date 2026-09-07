@@ -3,6 +3,7 @@ from __future__ import annotations
 """Tests for the research-only score calibration lab."""
 
 import unittest
+from copy import deepcopy
 
 import inferno_score_calibration as calibration
 
@@ -93,6 +94,76 @@ def shadow_ledger() -> dict:
 
 class ScoreCalibrationTests(unittest.TestCase):
     """Calibration output should stay descriptive and authority-safe."""
+
+    def test_frozen_entry_scores_outrank_refreshed_and_missing_is_not_backfilled(self) -> None:
+        ledger = shadow_ledger()
+        ledger["items"][0].update({
+            "readiness": 99, "priorityScore": 9,
+            "entryScoreSnapshotVersion": 1,
+            "entryScoreSnapshot": {"readiness": 62, "priorityScore": None},
+        })
+        original = deepcopy(ledger)
+        rows = calibration.option_score_rows(paper_ledger={}, shadow_ledger=ledger)
+        self.assertEqual(rows[0]["readiness"], 62)
+        self.assertNotIn("priorityScore", rows[0])
+        self.assertEqual(rows[0]["scoreProvenance"], "entry-frozen")
+        self.assertEqual(ledger, original)
+
+    def test_priority_native_rank_quartiles_keep_ties_and_out_of_range_values(self) -> None:
+        rows = [{"priorityScore": value, "resultClass": "neutral", "r": 0}
+                for value in [-5, -5, 2, 2, 7, 7, 140, 140]]
+        table = calibration.calibration_table(rows, "priorityScore", lane="shadow-options")
+        self.assertEqual(table["bucketCount"], 4)
+        self.assertEqual([b["sampleCount"] for b in table["buckets"]], [2, 2, 2, 2])
+        self.assertEqual(table["buckets"][-1]["scoreMean"], 140)
+        tied = calibration.calibration_table([rows[0]] * 40, "priorityScore", lane="shadow-options")
+        self.assertEqual(tied["bucketCount"], 1)
+        self.assertEqual(tied["verdict"], "single-bucket-watch")
+
+    def test_rank_verdict_does_not_compare_score_to_win_probability(self) -> None:
+        rows = [{"readiness": score, "resultClass": "unfavorable", "r": -0.1}
+                for score in [85] * 20 + [95] * 20]
+        table = calibration.calibration_table(rows, "readiness", lane="paper-options")
+        self.assertEqual(table["verdict"], "calibration-building")
+        self.assertIsNone(table["weightedAbsCalibrationGap"])
+        self.assertTrue(all(b["favorableGapVsScoreMidpoint"] is None for b in table["buckets"]))
+
+    def test_option_rank_inversion_uses_payoff_not_hit_rate(self) -> None:
+        rows = ([{"readiness": 85, "resultClass": "favorable", "r": 2}] * 20
+                + [{"readiness": 95, "resultClass": "favorable", "r": 0.1}] * 20)
+        table = calibration.calibration_table(rows, "readiness", lane="paper-options")
+        self.assertEqual(table["verdict"], "calibration-watch")
+        self.assertEqual(table["monotonicViolations"][0]["metric"], "meanR")
+
+    def test_nonfinite_and_boolean_values_cannot_become_scores_or_outcomes(self) -> None:
+        for value in [float("nan"), float("inf"), "-inf", "nan", True, False]:
+            self.assertIsNone(calibration.score_value(value, "readiness"))
+            self.assertIsNone(calibration.score_value(value, "priorityScore"))
+            self.assertIsNone(calibration.option_r({"outcome": {"estimatedReturnOnRisk": value}}))
+
+    def test_sources_and_repeated_exposures_do_not_become_independent_evidence(self) -> None:
+        item = {"ticker": "AAA", "expiration": "2026-06-19", "readiness": 88,
+                "outcome": {"status": "closed", "estimatedReturnOnRisk": -1,
+                            "reviewedAt": "2026-06-19T08:00:00+00:00"}}
+        payload = calibration.build_score_calibration(
+            scenario_evidence={}, paper_ledger={"items": [item]},
+            shadow_ledger={"items": [item] * 40},
+        )
+        source_tables = {t["lane"]: t for t in payload["optionCalibrationBySource"] if t["field"] == "readiness"}
+        self.assertEqual(source_tables["paper-options"]["sampleCount"], 1)
+        self.assertEqual(source_tables["paper-options"]["verdict"], "insufficient-data")
+        diagnostics = payload["evidenceDiagnostics"]
+        self.assertEqual(diagnostics["exposureGroups"], 2)
+        self.assertEqual(diagnostics["repeatedExposureRows"], 39)
+        self.assertEqual(diagnostics["shadowTimingRows"]["closed-before-expiration-session"], 40)
+        self.assertFalse(diagnostics["modelFitAllowed"])
+
+    def test_shadow_timing_does_not_invent_verified_settlement(self) -> None:
+        base = {"source": "shadow", "expiration": "2026-06-19"}
+        for timestamp in ["2026-06-19T09:29:59-04:00", "2026-06-18T23:59:00-04:00"]:
+            self.assertEqual(calibration.shadow_timing_status({**base, "reviewedAt": timestamp}), "closed-before-expiration-session")
+        for timestamp in ["2026-06-19T09:30:00-04:00", "2026-06-20T17:00:00-04:00", "2026-06-19T01:00:00", "bad"]:
+            self.assertEqual(calibration.shadow_timing_status({**base, "reviewedAt": timestamp}), "unverified-settlement-time")
 
     def test_build_score_calibration_buckets_closed_observations(self) -> None:
         payload = calibration.build_score_calibration(

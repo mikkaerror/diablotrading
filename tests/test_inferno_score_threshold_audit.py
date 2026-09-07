@@ -74,6 +74,25 @@ def sensitivity_fixture() -> dict:
 class ScoreThresholdAuditTests(unittest.TestCase):
     """The audit must be research-only and should not advise gate loosening."""
 
+    def test_assumptions_follow_changed_evidence_not_historical_prose(self) -> None:
+        artifacts = artifact_fixture()
+        artifacts["scoreCalibration"]["counts"]["optionScoreRows"] = 725
+        artifacts["dtePolicyAnalysis"]["observational21DteComparison"]["closedAtOrAbove21Dte"]["scoredCount"] = 12
+        checks = audit.assumption_checks(artifacts, {"promotedAnyUnder": ["exploratory"]}, sensitivity_fixture())
+        self.assertIn("725", checks[0]["evidence"])
+        self.assertNotIn("no closed", checks[0]["evidence"])
+        self.assertEqual(checks[1]["status"], "requires-review")
+        self.assertEqual(checks[3]["status"], "observational-only")
+        self.assertIn("12", checks[3]["evidence"])
+
+    def test_missing_evidence_is_unknown_not_a_supported_assumption(self) -> None:
+        checks = audit.assumption_checks({}, {}, {})
+        self.assertEqual([c["status"] for c in checks], ["unknown", "unknown", "policy-boundary", "unknown"])
+
+    def test_zero_passing_candidates_is_not_described_as_progress(self) -> None:
+        findings = audit.pricing_findings({"counts": {"scannerCandidates": 40, "riskPassed": 0}}, {"counts": {"pricingCandidates": 40}})
+        self.assertIn("has not produced", findings[0]["title"])
+
     def setUp(self) -> None:
         fixed_now = datetime(2026, 6, 25, 12, 0, tzinfo=timezone.utc)
         self.time_patch = patch("inferno_score_threshold_audit.local_now", return_value=fixed_now)

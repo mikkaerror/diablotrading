@@ -201,6 +201,11 @@ def build_observation_from_scenario(
         "daysUntilEarnings": scenario.get("daysUntilEarnings"),
         "scenarioScore": scenario.get("scenarioScore"),
         "readiness": scenario.get("readiness"),
+        "entryScoreSnapshot": {
+            field: scenario.get(field)
+            for field in ("scenarioScore", "readiness", "priorityScore")
+        },
+        "entryScoreSnapshotVersion": 1,
         "confidence": scenario.get("confidence"),
         "baselineUnderlyingPrice": baseline_price,
         "baselinePriceSource": baseline_source,
@@ -223,7 +228,11 @@ def build_observation_from_scenario(
 
 
 def merge_observation(existing: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
-    """Refresh scenario metadata while preserving baseline and outcome history."""
+    """Refresh display metadata; the entry snapshot remains immutable.
+
+    Legacy records retain their unknown entry-score provenance. Never synthesize
+    an entry snapshot from a later refresh, including after an outcome closes.
+    """
     return {
         **existing,
         "rank": scenario.get("rank", existing.get("rank")),

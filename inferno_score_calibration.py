@@ -15,8 +15,12 @@ Strict contract:
 
 import argparse
 import json
-from collections import defaultdict
+import math
+from bisect import bisect_left
+from collections import Counter, defaultdict
+from datetime import date, datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
@@ -43,13 +47,16 @@ def text(value: Any) -> str:
 
 def number(value: Any, default: float | None = None) -> float | None:
     """Coerce strings/numbers from artifacts without trusting formatting."""
+    if isinstance(value, bool):
+        return default
     if isinstance(value, (int, float)):
-        return float(value)
+        return float(value) if math.isfinite(value) else default
     raw = text(value).replace("$", "").replace(",", "").replace("%", "")
     if not raw:
         return default
     try:
-        return float(raw)
+        parsed = float(raw)
+        return parsed if math.isfinite(parsed) else default
     except ValueError:
         return default
 
@@ -60,6 +67,26 @@ def clamp_score(value: Any) -> float | None:
     if parsed is None:
         return None
     return max(0.0, min(100.0, parsed))
+
+
+def score_value(value: Any, field: str) -> float | None:
+    """Priority is a native rank, not a bounded percentage."""
+    return number(value) if field == "priorityScore" else clamp_score(value)
+
+
+def entry_scores(item: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Prefer immutable captured scores; never backfill missing captured values."""
+    snapshot = item.get("entryScoreSnapshot")
+    if item.get("entryScoreSnapshotVersion") == 1 and isinstance(snapshot, dict):
+        return snapshot, "entry-frozen"
+    return item, "legacy-entry-unverified"
+
+
+def evidence_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    """Keep timing and group provenance beside raw descriptive rows."""
+    return {key: item.get(key) for key in (
+        "createdAt", "tradeDate", "expiration", "eventId", "reviewHorizonDays",
+    )}
 
 
 def score_bucket(value: Any) -> dict[str, Any] | None:
@@ -125,6 +152,7 @@ def scenario_observation_rows(
         observation_score = number(outcome.get("observationScore"), 0.0) or 0.0
         underlying_return = number(outcome.get("underlyingReturnPct"), 0.0) or 0.0
         row = {
+            **evidence_metadata(item),
             "source": "scenario-observation",
             "ticker": text(item.get("ticker")).upper(),
             "strategy": text(item.get("strategy") or item.get("setupRec")),
@@ -138,8 +166,9 @@ def scenario_observation_rows(
             "reviewedAt": outcome.get("reviewedAt"),
             "observationId": item.get("observationId"),
         }
+        scores, row["scoreProvenance"] = entry_scores(item)
         for field in SCORE_FIELDS:
-            score = clamp_score(item.get(field))
+            score = score_value(scores.get(field), field)
             if score is not None:
                 row[field] = score
         rows.append(row)
@@ -192,6 +221,7 @@ def option_score_rows(
                 continue
             result = "favorable" if r_value > 0 else "unfavorable" if r_value < 0 else "neutral"
             row = {
+                **evidence_metadata(item),
                 "source": source,
                 "ticker": text(item.get("ticker")).upper(),
                 "strategy": text(item.get("strategy") or item.get("setupRec")),
@@ -199,9 +229,11 @@ def option_score_rows(
                 "r": r_value,
                 "reviewedAt": outcome.get("reviewedAt"),
                 "ticketId": item.get("ticketId"),
+                "expirationPriceEvidence": outcome.get("expirationPriceEvidence"),
             }
+            scores, row["scoreProvenance"] = entry_scores(item)
             for field in SCORE_FIELDS:
-                score = clamp_score(item.get(field))
+                score = score_value(scores.get(field), field)
                 if score is not None:
                     row[field] = score
             rows.append(row)
@@ -210,7 +242,8 @@ def option_score_rows(
 
 def has_entry_score(item: dict[str, Any]) -> bool:
     """Return True when a paper/shadow entry carries any rank score."""
-    return any(clamp_score(item.get(field)) is not None for field in SCORE_FIELDS)
+    scores, _ = entry_scores(item)
+    return any(score_value(scores.get(field), field) is not None for field in SCORE_FIELDS)
 
 
 def option_entry_score_coverage(
@@ -258,8 +291,16 @@ def bucket_summary(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any
     """Summarize observed outcomes by score bucket for one field."""
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     bucket_meta: dict[str, dict[str, Any]] = {}
+    # Empirical rank groups retain native priority units and never split ties.
+    values = sorted(score_value(row.get(field), field) for row in rows
+                    if score_value(row.get(field), field) is not None)
     for row in rows:
-        bucket = score_bucket(row.get(field))
+        value = score_value(row.get(field), field)
+        if field == "priorityScore" and value is not None:
+            order = min(3, 4 * bisect_left(values, value) // len(values))
+            bucket = {"bucket": f"rank-Q{order + 1}", "order": order, "scoreMidpoint": None}
+        else:
+            bucket = score_bucket(row.get(field))
         if not bucket:
             continue
         groups[bucket["bucket"]].append(row)
@@ -290,11 +331,8 @@ def bucket_summary(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any
         r_values = [number(row.get("r")) for row in bucket_rows if number(row.get("r")) is not None]
         midpoint = bucket_meta[label]["scoreMidpoint"]
         favorable_rate = rate(favorable, total)
-        gap = (
-            round(favorable_rate - (midpoint / 100.0), 4)
-            if favorable_rate is not None
-            else None
-        )
+        # Retain legacy keys as null for consumers, without implying probability calibration.
+        gap = None
         summaries.append(
             {
                 "bucket": label,
@@ -302,6 +340,8 @@ def bucket_summary(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any
                 "scoreMidpoint": midpoint,
                 "sampleCount": total,
                 "scoreMean": mean(scores),
+                "scoreMin": min(scores),
+                "scoreMax": max(scores),
                 "favorableCount": favorable,
                 "neutralCount": neutral,
                 "unfavorableCount": unfavorable,
@@ -319,24 +359,27 @@ def bucket_summary(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any
     return sorted(summaries, key=lambda item: item["order"])
 
 
-def monotonic_violations(buckets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Find adjacent bucket pairs where higher scores produced lower hit rate."""
+def monotonic_violations(buckets: list[dict[str, Any]], *, metric: str = "favorableRate") -> list[dict[str, Any]]:
+    """Find descriptive rank inversions; these are not significance tests."""
     useful = [
         item
         for item in buckets
         if item.get("sampleCount", 0) >= MIN_MONOTONIC_BUCKET_SAMPLE
-        and item.get("favorableRate") is not None
+        and item.get(metric) is not None
     ]
     violations: list[dict[str, Any]] = []
     for lower, higher in zip(useful, useful[1:]):
-        if higher["favorableRate"] < lower["favorableRate"]:
+        if higher[metric] < lower[metric]:
             violations.append(
                 {
                     "lowerBucket": lower["bucket"],
                     "higherBucket": higher["bucket"],
                     "lowerFavorableRate": lower["favorableRate"],
                     "higherFavorableRate": higher["favorableRate"],
-                    "gap": round(lower["favorableRate"] - higher["favorableRate"], 4),
+                    "metric": metric,
+                    "lowerValue": lower[metric],
+                    "higherValue": higher[metric],
+                    "gap": round(lower[metric] - higher[metric], 4),
                 }
             )
     return violations
@@ -344,34 +387,26 @@ def monotonic_violations(buckets: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def calibration_table(rows: list[dict[str, Any]], field: str, *, lane: str) -> dict[str, Any]:
     """Build one calibration table for a score field."""
-    score_rows = [row for row in rows if clamp_score(row.get(field)) is not None]
+    score_rows = [row for row in rows if score_value(row.get(field), field) is not None]
     buckets = bucket_summary(score_rows, field)
     total = len(score_rows)
     weighted_gap = None
-    if total:
-        weighted_gap = round(
-            sum(
-                abs(item["favorableGapVsScoreMidpoint"]) * item["sampleCount"]
-                for item in buckets
-                if item.get("favorableGapVsScoreMidpoint") is not None
-            )
-            / total,
-            4,
-        )
-    violations = monotonic_violations(buckets)
+    metric = "meanR" if any(row.get("r") is not None for row in score_rows) else "favorableRate"
+    violations = monotonic_violations(buckets, metric=metric)
     if total < MIN_CALIBRATION_SAMPLE:
         verdict = "insufficient-data"
     elif len(buckets) < 2:
         verdict = "single-bucket-watch"
     elif violations:
         verdict = "calibration-watch"
-    elif weighted_gap is not None and weighted_gap > 0.30:
-        verdict = "calibration-watch"
     else:
         verdict = "calibration-building"
     return {
         "lane": lane,
         "field": field,
+        "interpretation": "descriptive-rank-diagnostic-not-probability-calibration",
+        "bucketMethod": "empirical-rank-quartiles-ties-preserved" if field == "priorityScore" else "fixed-score-bands",
+        "outcomeMetric": metric,
         "sampleCount": total,
         "bucketCount": len(buckets),
         "weightedAbsCalibrationGap": weighted_gap,
@@ -386,10 +421,69 @@ def overall_verdict(tables: list[dict[str, Any]]) -> str:
     useful = [table for table in tables if table.get("sampleCount", 0) >= MIN_CALIBRATION_SAMPLE]
     if not useful:
         return "insufficient-data"
-    scenario_score = next((table for table in useful if table.get("field") == "scenarioScore"), useful[0])
-    if scenario_score.get("verdict") in {"calibration-watch", "single-bucket-watch"}:
+    if any(table.get("verdict") in {"calibration-watch", "single-bucket-watch"} for table in useful):
         return "calibration-watch"
     return "calibration-building"
+
+
+def shadow_timing_status(row: dict[str, Any]) -> str:
+    """Flag definitely premature intrinsic outcomes, without guessing a close.
+
+    A review before expiration-day regular open cannot observe that session's
+    expiration payoff. Later reviews remain unverified without a timestamped
+    settlement price. This deliberately avoids holiday/early-close assumptions.
+    """
+    if row.get("source") != "shadow":
+        return "not-shadow"
+    try:
+        expiration = date.fromisoformat(text(row.get("expiration")))
+        reviewed = datetime.fromisoformat(text(row.get("reviewedAt")).replace("Z", "+00:00"))
+        if reviewed.tzinfo is None:
+            return "unverified-settlement-time"
+        eastern = reviewed.astimezone(ZoneInfo("America/New_York"))
+        if eastern.date() < expiration or (eastern.date() == expiration and eastern.time() < time(9, 30)):
+            return "closed-before-expiration-session"
+        proof = row.get("expirationPriceEvidence") or {}
+        captured = datetime.fromisoformat(text(proof.get("sourceGeneratedAt")).replace("Z", "+00:00"))
+        if (proof.get("source") == "schwab-daily-expiration-close-intrinsic-proxy"
+                and proof.get("priceDate") == expiration.isoformat()
+                and (number(proof.get("price")) or 0) > 0
+                and captured.tzinfo is not None
+                and captured <= reviewed
+                and captured.astimezone(ZoneInfo("America/New_York")).date() > expiration):
+            return "expiration-close-proxy-recorded"
+    except (TypeError, ValueError):
+        pass
+    return "unverified-settlement-time"
+
+
+def evidence_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Expose source, score provenance and repeated exposure denominators.
+
+    Ticker/expiration is an exposure proxy, not an independent earnings event.
+    No statistical confidence or model-fit eligibility is inferred from it.
+    """
+    groups: Counter[tuple[str, str, str]] = Counter()
+    missing = 0
+    for row in rows:
+        ticker = text(row.get("ticker"))
+        boundary = text(row.get("expiration"))
+        if ticker and boundary:
+            groups[(text(row.get("source")), ticker, boundary)] += 1
+        else:
+            missing += 1
+    return {
+        "sourceRows": dict(sorted(Counter(text(row.get("source")) for row in rows).items())),
+        "scoreProvenanceRows": dict(sorted(Counter(text(row.get("scoreProvenance")) for row in rows).items())),
+        "shadowTimingRows": dict(sorted(Counter(shadow_timing_status(row) for row in rows if row.get("source") == "shadow").items())),
+        "exposureGroupKey": "source+ticker+expiration; proxy only, not independent events",
+        "exposureGroups": len(groups),
+        "repeatedExposureRows": sum(count - 1 for count in groups.values()),
+        "rowsWithoutExposureKey": missing,
+        "largestExposureGroup": max(groups.values(), default=0),
+        "modelFitAllowed": False,
+        "reason": "Descriptive archive only: legacy score provenance, settlement-price lineage and independent temporal validation remain unresolved.",
+    }
 
 
 def build_score_calibration(
@@ -400,6 +494,10 @@ def build_score_calibration(
 ) -> dict[str, Any]:
     """Build the research-only score calibration payload."""
     ensure_dirs()
+    # Read each input once so counts and tables refer to the same evidence snapshot.
+    scenario_evidence = scenario_evidence if scenario_evidence is not None else (load_json_file(SCENARIO_EVIDENCE_FILE) or {})
+    paper_ledger = paper_ledger if paper_ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
+    shadow_ledger = shadow_ledger if shadow_ledger is not None else (load_json_file(SHADOW_EVIDENCE_FILE) or {})
     scenario_rows = scenario_observation_rows(scenario_evidence)
     option_rows = option_score_rows(paper_ledger=paper_ledger, shadow_ledger=shadow_ledger)
     entry_coverage = option_entry_score_coverage(paper_ledger=paper_ledger, shadow_ledger=shadow_ledger)
@@ -411,14 +509,21 @@ def build_score_calibration(
         calibration_table(option_rows, field, lane="paper-shadow-options")
         for field in SCORE_FIELDS
     ]
+    source_tables = [
+        calibration_table([row for row in option_rows if row["source"] == source], field, lane=f"{source}-options")
+        for source in ("paper", "shadow") for field in SCORE_FIELDS
+    ]
+    diagnostics = evidence_diagnostics(option_rows)
+    scenario_provenance = Counter(row["scoreProvenance"] for row in scenario_rows)
     tables = scenario_tables + option_tables
     return {
         "generatedAt": local_now().isoformat(),
         "stage": SCORE_CALIBRATION_STAGE,
-        "verdict": overall_verdict(scenario_tables),
+        "verdict": overall_verdict(scenario_tables + source_tables),
         "researchOnly": True,
         "diagnosticOnly": True,
         "promotable": False,
+        "authorityChanged": False,
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "counts": {
@@ -432,13 +537,25 @@ def build_score_calibration(
                 if any(row.get(field) is not None for field in SCORE_FIELDS)
             ),
             **entry_coverage,
-            "tables": len(tables),
+            "tables": len(tables) + len(source_tables),
         },
         "scenarioCalibration": scenario_tables,
         "optionCalibration": option_tables,
+        "optionCalibrationBySource": source_tables,
+        "evidenceDiagnostics": diagnostics,
+        "scenarioScoreProvenance": dict(sorted(scenario_provenance.items())),
+        "sourceGeneratedAt": {
+            "scenario": scenario_evidence.get("updatedAt") or scenario_evidence.get("generatedAt"),
+            "paper": paper_ledger.get("updatedAt") or paper_ledger.get("generatedAt"),
+            "shadow": shadow_ledger.get("updatedAt") or shadow_ledger.get("generatedAt"),
+        },
         "reminders": [
             "Scores are ranking surfaces, not posterior probabilities.",
-            "Bucket gaps compare observed favorable rates to score midpoints only as a diagnostic.",
+            "No probability-gap metric is computed; priorityScore uses native-value rank quartiles with ties preserved.",
+            "Pooled option tables are legacy archive views. Paper and shadow source tables must be read separately.",
+            "Counts are rows, not independent events; ticker/expiration groups describe repeated exposure only.",
+            "Entry-frozen scores prevent refresh leakage going forward; legacy scores remain unverified.",
+            "Shadow payoff timing and settlement-price lineage must be repaired before fitting a challenger model.",
             "This artifact cannot promote strategies, create orders, or relax live-trading gates.",
         ],
     }
@@ -488,8 +605,7 @@ def score_calibration_text(payload: dict[str, Any]) -> str:
     for table in payload.get("scenarioCalibration") or []:
         lines.append(
             f"- {table.get('field')}: {table.get('verdict')} | "
-            f"n={table.get('sampleCount')} | buckets={table.get('bucketCount')} | "
-            f"weighted gap={fmt(table.get('weightedAbsCalibrationGap'))}"
+            f"n={table.get('sampleCount')} | buckets={table.get('bucketCount')}"
         )
         if table.get("monotonicViolations"):
             lines.append(f"  monotonic violations: {len(table.get('monotonicViolations') or [])}")
@@ -504,12 +620,12 @@ def score_calibration_text(payload: dict[str, Any]) -> str:
                 f"mean abs move={fmt(bucket.get('meanAbsUnderlyingMovePct'))}% | "
                 f"tickers={', '.join(bucket.get('tickers') or []) or 'none'}"
             )
-    lines.extend(["", "Paper/shadow option score calibration:"])
-    for table in payload.get("optionCalibration") or []:
+    lines.extend(["", "Paper/shadow option score calibration (separate sources; raw archive rows):"])
+    for table in payload.get("optionCalibrationBySource") or payload.get("optionCalibration") or []:
         if not table.get("sampleCount"):
             continue
         lines.append(
-            f"- {table.get('field')}: {table.get('verdict')} | "
+            f"- {table.get('lane')} / {table.get('field')}: {table.get('verdict')} | "
             f"n={table.get('sampleCount')} | buckets={table.get('bucketCount')}"
         )
         for bucket in table.get("buckets") or []:
@@ -520,6 +636,16 @@ def score_calibration_text(payload: dict[str, Any]) -> str:
             )
     if not any(table.get("sampleCount") for table in payload.get("optionCalibration") or []):
         lines.append("- no closed option records currently carry score fields")
+    diagnostics = payload.get("evidenceDiagnostics") or {}
+    lines.extend([
+        "", "Evidence integrity (required before model fitting):",
+        f"- option sources: {json.dumps(diagnostics.get('sourceRows', {}), sort_keys=True)}",
+        f"- option score provenance: {json.dumps(diagnostics.get('scoreProvenanceRows', {}), sort_keys=True)}",
+        f"- scenario score provenance: {json.dumps(payload.get('scenarioScoreProvenance', {}), sort_keys=True)}",
+        f"- shadow timing: {json.dumps(diagnostics.get('shadowTimingRows', {}), sort_keys=True)}",
+        f"- source/ticker/expiration exposure groups: {diagnostics.get('exposureGroups', 0)}; repeated rows: {diagnostics.get('repeatedExposureRows', 0)}; missing keys: {diagnostics.get('rowsWithoutExposureKey', 0)}",
+        f"- model fitting allowed: {diagnostics.get('modelFitAllowed', False)}; {diagnostics.get('reason', 'unverified')}",
+    ])
     lines.extend(["", "Reminders:"])
     for reminder in payload.get("reminders") or []:
         lines.append(f"- {reminder}")

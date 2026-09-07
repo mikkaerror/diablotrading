@@ -368,6 +368,10 @@ def merge_refreshed_entry(existing: dict[str, Any], refreshed: dict[str, Any]) -
         "refreshedAt": refreshed.get("createdAt"),
         "mergedDuplicateTicketIds": sorted(set(duplicate_ids)),
         "outcome": existing.get("outcome") or refreshed.get("outcome"),
+        # A refreshed rank must never masquerade as the original prediction.
+        # Missing legacy snapshots stay missing; a refresh cannot backfill them.
+        "entryScoreSnapshot": existing.get("entryScoreSnapshot"),
+        "entryScoreSnapshotVersion": existing.get("entryScoreSnapshotVersion", 0),
     }
 
 
@@ -424,7 +428,7 @@ def first_present(*values: Any) -> Any:
 def entry_score_context(item: dict[str, Any]) -> dict[str, Any]:
     """Normalize entry-time ranking/provenance fields for paper/shadow records."""
     strike_plan = item.get("strikePlan") or {}
-    return {
+    context = {
         "rank": first_present(item.get("rank"), strike_plan.get("rank")),
         "readiness": first_present(item.get("readiness"), strike_plan.get("readiness")),
         "confidence": first_present(item.get("confidence"), strike_plan.get("confidence")),
@@ -475,6 +479,11 @@ def entry_score_context(item: dict[str, Any]) -> dict[str, Any]:
         ),
         "currentSetupRec": first_present(item.get("currentSetupRec"), strike_plan.get("currentSetupRec")),
     }
+    context["entryScoreSnapshot"] = {
+        field: context.get(field) for field in ("scenarioScore", "readiness", "priorityScore")
+    }
+    context["entryScoreSnapshotVersion"] = 1
+    return context
 
 
 def size_cap_only_primary_blocks(item: dict[str, Any]) -> bool:

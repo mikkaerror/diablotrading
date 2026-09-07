@@ -44,6 +44,20 @@ def sample_reducer() -> dict:
 
 
 class ScenarioEvidenceTests(unittest.TestCase):
+    def test_refresh_keeps_entry_snapshot_separate_from_latest_rank(self) -> None:
+        scenario = sample_reducer()["scenarioSlate"][0]
+        entry = evidence.build_observation_from_scenario(scenario, price_lookup=lambda _: 100, now=fixed_now(19))
+        entry["outcome"] = {"status": "closed", "observationScore": 3}
+        updated = evidence.merge_observation(entry, {**scenario, "scenarioScore": 10, "readiness": 99})
+        self.assertEqual(updated["scenarioScore"], 10)
+        self.assertEqual(updated["entryScoreSnapshot"]["scenarioScore"], 92)
+        self.assertIsNone(updated["entryScoreSnapshot"]["readiness"])
+        self.assertEqual(updated["outcome"], entry["outcome"])
+
+    def test_legacy_refresh_cannot_backfill_entry_snapshot(self) -> None:
+        updated = evidence.merge_observation({"scenarioScore": 30}, {"scenarioScore": 99})
+        self.assertNotIn("entryScoreSnapshot", updated)
+
     def test_build_records_research_only_observations(self) -> None:
         prices = {"MRVL": 50.0, "NVDA": 101.0}
         payload = evidence.build_scenario_evidence(

@@ -1109,5 +1109,22 @@
       "noise",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-d0ff267e",
+    "createdAt": "2026-09-06T20:19:27.684301-06:00",
+    "updatedAt": "2026-09-06T20:33:12.719559-06:00",
+    "title": "Repair model calibration evidence and refresh assumptions",
+    "body": "Completed immutable entry-score capture in paper, shadow and scenario lanes; source-separated native-rank calibration and provenance diagnostics; source-driven assumption checks; exact expiration-date Schwab close requirement for future shadow reviews. Read-only audit found 713/904 finite-R shadow rows reviewed before expiration-session open and 771 repeated exposure rows among 907 option rows. 63 focused and 1974 full-suite tests passed, math/secret hygiene/diff checks passed. Historical ledgers intact; no ticket action, risk, universe, authority, or broker change. Archived training-data reconciliation remains explicit future research.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "research-only",
+      "calibration",
+      "assumptions",
+      "evidence",
+      "shared-lane"
+    ]
   }
 ]

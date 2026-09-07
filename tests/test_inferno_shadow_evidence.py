@@ -8,12 +8,15 @@ math before the module is wired into daily automation.
 """
 
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 from inferno_shadow_evidence import (
     build_shadow_entry,
     build_shadow_evidence,
     load_strike_plan,
+    expiration_price_evidence,
+    merge_shadow_entry,
     review_shadow_ticket,
     shadow_ticket_ready_for_review,
 )
@@ -81,6 +84,12 @@ class ShadowEvidenceTests(unittest.TestCase):
         self.assertEqual(entry["sourceRecommendedStrategy"], "PAPER_VARIANT_SCANNER")
         self.assertEqual(entry["sourceAlternativeScore"], 73.0)
         self.assertFalse(entry["brokerSubmitAllowed"])
+        refreshed = build_shadow_entry({**item, "readiness": 99}, "2026-04-14T07:45:00-06:00", {"items": []})
+        merged = merge_shadow_entry(entry, refreshed)
+        self.assertEqual(merged["entryScoreSnapshot"]["readiness"], 89)
+        self.assertEqual(merged["readiness"], 99)
+        legacy = {k: v for k, v in entry.items() if not k.startswith("entryScoreSnapshot")}
+        self.assertIsNone(merge_shadow_entry(legacy, refreshed)["entryScoreSnapshot"])
 
     def test_build_shadow_evidence_dedupes_same_candidate(self) -> None:
         """Repeated runs refresh the same semantic ticket instead of duplicating."""
@@ -153,7 +162,8 @@ class ShadowEvidenceTests(unittest.TestCase):
         load_json_file_mock.side_effect = [stale_plan, {}, {"items": []}]
         build_strike_plan_mock.return_value = fresh_plan
 
-        ledger = build_shadow_evidence()
+        with patch("inferno_shadow_evidence.expiration_price_evidence", return_value=None):
+            ledger = build_shadow_evidence()
 
         self.assertTrue(ledger["sourceStrikePlanRefreshed"])
         self.assertEqual(ledger["sourceStrikePlanGeneratedAt"], fresh_plan["generatedAt"])
@@ -190,7 +200,37 @@ class ShadowEvidenceTests(unittest.TestCase):
         self.assertFalse(ready)
         self.assertIn("expiration has not arrived", reason)
 
-    @patch("inferno_shadow_evidence.latest_underlying_price", return_value=12.0)
+    def test_expiration_day_must_finish_before_review(self) -> None:
+        ticket = {"status": "shadow-open", "outcome": {"status": "open"}, "expiration": "2026-09-04"}
+        self.assertFalse(shadow_ticket_ready_for_review(ticket, today=date(2026, 9, 4))[0])
+        self.assertTrue(shadow_ticket_ready_for_review(ticket, today=date(2026, 9, 5))[0])
+
+    @patch("inferno_shadow_evidence.load_json_file")
+    def test_expiration_price_requires_exact_day_and_later_capture(self, load) -> None:
+        payload = {"generatedAt": "2026-09-05T09:00:00-04:00", "rows": [{
+            "symbol": "TEST", "status": "ok", "candles": [
+                {"datetime": "2026-09-03T05:00:00+00:00", "close": 10},
+                {"datetime": "2026-09-04T05:00:00+00:00", "close": 12},
+                {"datetime": "2026-09-07T05:00:00+00:00", "close": 99},
+            ]}]}
+        load.return_value = payload
+        result = expiration_price_evidence("TEST", date(2026, 9, 4))
+        self.assertEqual(result["price"], 12)
+        self.assertEqual(result["priceDate"], "2026-09-04")
+        self.assertIsNone(expiration_price_evidence("TEST", date(2026, 9, 2)))
+        self.assertIsNone(expiration_price_evidence("MISSING", date(2026, 9, 4)))
+        for captured in ["2026-09-04T10:00:00-04:00", "2026-09-05T01:00:00+00:00", "2026-09-05", "bad"]:
+            payload["generatedAt"] = captured
+            self.assertIsNone(expiration_price_evidence("TEST", date(2026, 9, 4)))
+
+    @patch("inferno_shadow_evidence.expiration_price_evidence", return_value=None)
+    def test_missing_expiration_price_waits_without_inventing_pnl(self, lookup) -> None:
+        entry = build_shadow_entry(strike_item(), "2026-04-13T07:45:00-06:00", {"items": []})
+        updated, _, _ = review_shadow_ticket(entry)
+        self.assertEqual(updated["outcome"]["status"], "review-pending")
+        self.assertIsNone(updated["outcome"]["estimatedPnl"])
+
+    @patch("inferno_shadow_evidence.expiration_price_evidence", return_value={"price": 12.0, "priceDate": "2026-04-20"})
     def test_review_closes_expired_ticket_with_research_pnl(self, _price_mock) -> None:
         """Expired shadow tickets are scored using the shared option payoff math."""
         entry = build_shadow_entry(strike_item(), "2026-04-13T07:45:00-06:00", {"items": []})

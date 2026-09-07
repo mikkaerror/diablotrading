@@ -14,16 +14,18 @@ authority or submit trades; it is a microscope, not a trigger.
 """
 
 import argparse
+import math
 import sys
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from inferno_artifact_lifecycle import failed_lifecycle, successful_lifecycle
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_doctor import in_current_service_cycle
-from inferno_outcome_reviewer import estimate_expiration_pnl, latest_underlying_price, parse_date
+from inferno_outcome_reviewer import estimate_expiration_pnl, parse_date
 from inferno_paper_execution import entry_score_context, ledger_leg_symbols, strategy_cost, ticket_hash
 from inferno_risk_policy import evaluate_strike_item
 from inferno_strike_selector import STRIKE_PLAN_FILE, build_strike_plan, save_strike_plan
@@ -32,6 +34,7 @@ from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 SHADOW_EVIDENCE_FILE = DATA_DIR / "inferno_shadow_evidence.json"
 SHADOW_EVIDENCE_TEXT_FILE = REPORTS_DIR / "shadow_evidence_latest.txt"
+SHADOW_SETTLEMENT_HISTORY_FILE = DATA_DIR / "inferno_schwab_price_history.json"
 PAPER_REHEARSAL_STRIKE_PLAN_FILE = DATA_DIR / "inferno_paper_rehearsal_strike_plan.json"
 
 SHADOW_EVIDENCE_VERSION = 1
@@ -137,6 +140,8 @@ def merge_shadow_entry(existing: dict[str, Any], refreshed: dict[str, Any]) -> d
         "refreshedAt": refreshed.get("createdAt"),
         "mergedDuplicateTicketIds": sorted(set(duplicate_ids)),
         "outcome": existing.get("outcome") or refreshed.get("outcome"),
+        "entryScoreSnapshot": existing.get("entryScoreSnapshot"),
+        "entryScoreSnapshotVersion": existing.get("entryScoreSnapshotVersion", 0),
     }
 
 
@@ -308,9 +313,49 @@ def shadow_ticket_ready_for_review(ticket: dict[str, Any], today: date | None = 
     expiration = parse_date(ticket.get("expiration"))
     if not expiration:
         return False, "expiration missing"
-    if expiration > today:
+    if expiration >= today:
         return False, f"expiration has not arrived ({expiration.isoformat()})"
     return True, "ready"
+
+
+def expiration_price_evidence(ticker: str, expiration: date) -> dict[str, Any] | None:
+    """Read an exact expiration-day close from a later Schwab daily snapshot.
+
+    Never substitute today's mark or a neighboring date. Waiting until the next
+    calendar day avoids treating an unfinished daily candle as an expiration
+    payoff, including on early-close days. Missing/non-session dates fail closed.
+    This is an equity-close intrinsic proxy, not a broker settlement or fill.
+    """
+    payload = load_json_file(SHADOW_SETTLEMENT_HISTORY_FILE) or {}
+    try:
+        captured = datetime.fromisoformat(str(payload.get("generatedAt", "")).replace("Z", "+00:00"))
+        if captured.tzinfo is None or captured.astimezone(ZoneInfo("America/New_York")).date() <= expiration:
+            return None
+    except (TypeError, ValueError):
+        return None
+    prices = []
+    for row in payload.get("rows") or []:
+        if str(row.get("symbol", "")).upper() != ticker or row.get("status") != "ok":
+            continue
+        for candle in row.get("candles") or []:
+            raw_date = candle.get("datetime") or candle.get("date")
+            try:
+                if isinstance(raw_date, (int, float)):
+                    candle_day = datetime.fromtimestamp(raw_date / 1000, timezone.utc).date()
+                else:
+                    candle_day = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00")).date()
+                close = float(candle.get("close"))
+            except (TypeError, ValueError, OverflowError, OSError):
+                continue
+            if candle_day == expiration and math.isfinite(close) and close > 0:
+                prices.append(close)
+    if not prices or len(set(prices)) != 1:
+        return None
+    return {
+        "price": prices[0], "priceDate": expiration.isoformat(),
+        "source": "schwab-daily-expiration-close-intrinsic-proxy",
+        "sourceGeneratedAt": payload.get("generatedAt"),
+    }
 
 
 def review_shadow_ticket(ticket: dict[str, Any]) -> tuple[dict[str, Any], bool, str]:
@@ -320,16 +365,17 @@ def review_shadow_ticket(ticket: dict[str, Any]) -> tuple[dict[str, Any], bool, 
         return ticket, False, reason
 
     ticker = str(ticket.get("ticker", "")).upper()
-    underlying_price = latest_underlying_price(ticker)
-    if underlying_price is None:
+    price_evidence = expiration_price_evidence(ticker, parse_date(ticket.get("expiration")))
+    if price_evidence is None:
         outcome = {
             **(ticket.get("outcome") or {}),
             "status": "review-pending",
             "reviewedAt": local_now().isoformat(),
-            "notes": "could not fetch latest underlying price for shadow review",
+            "notes": "exact expiration-day close unavailable in a later Schwab history snapshot",
         }
         return {**ticket, "outcome": outcome}, True, "price unavailable"
 
+    underlying_price = price_evidence["price"]
     estimated_pnl = estimate_expiration_pnl(ticket, underlying_price)
     max_loss_value = number(ticket.get("estimatedMaxLoss"))
     estimated_return = round(estimated_pnl / max_loss_value, 6) if max_loss_value > 0 else None
@@ -338,9 +384,10 @@ def review_shadow_ticket(ticket: dict[str, Any]) -> tuple[dict[str, Any], bool, 
         "status": "closed",
         "reviewedAt": local_now().isoformat(),
         "exitUnderlyingPrice": underlying_price,
+        "expirationPriceEvidence": price_evidence,
         "estimatedPnl": estimated_pnl,
         "estimatedReturnOnRisk": estimated_return,
-        "notes": "shadow-only estimate from expiration intrinsic value",
+        "notes": "shadow-only intrinsic proxy from exact expiration-day equity close; not a broker settlement or fill",
     }
     return {**ticket, "outcome": outcome}, True, "closed"
 

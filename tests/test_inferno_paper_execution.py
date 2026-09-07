@@ -361,6 +361,12 @@ class InfernoPaperExecutionVariantTests(unittest.TestCase):
         self.assertEqual(entry["sourceAlternativeScore"], 74.5)
         self.assertFalse(entry["liveTradingAllowed"])
         self.assertEqual(entry["eventId"], "SMR|2026-08-21")
+        refreshed = {**entry, **paper_execution.entry_score_context({"readiness": 99})}
+        merged = paper_execution.merge_refreshed_entry(entry, refreshed)
+        self.assertEqual(merged["readiness"], 99)
+        self.assertEqual(merged["entryScoreSnapshot"]["readiness"], 91)
+        legacy = {k: v for k, v in entry.items() if not k.startswith("entryScoreSnapshot")}
+        self.assertIsNone(paper_execution.merge_refreshed_entry(legacy, refreshed)["entryScoreSnapshot"])
 
     def test_event_ticket_count_counts_open_and_scored_staged_tickets(self) -> None:
         ledger_items = [

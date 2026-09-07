@@ -106,10 +106,11 @@ pattern) that the operator opts into via an ack file.
 
 ## 3. The 30-outcome promotion gate
 
-The desk has been at 0/30 closed scored paper outcomes for weeks. This
-is the binding constraint on the entire system. Everything else — math
-audits, position sizing research, trade-management playbooks — is
-preparation. The only thing that moves the gate is closed paper outcomes.
+Read the current scored count and distinct-event count from
+`reports/strategy_lab_latest.txt`; do not carry a historical 0/30 claim into
+new sessions. The sample minimum is only one gate: expectancy, payoff quality,
+drawdown, and source admissibility must also pass. Shadow rows and scenario
+observations do not become counted paper outcomes through volume alone.
 
 If a user asks "can we go live?" the answer is: not until 30 outcomes
 accrue and the authority controller's evidence checks all pass. You
