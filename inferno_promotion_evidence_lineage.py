@@ -15,11 +15,13 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_execution import PAPER_EXECUTION_LEDGER_FILE, paper_event_id
+from inferno_paper_provenance import load_fill_source, outcome_provenance
 from inferno_performance_analytics import outcome_status, strategy_key
 from inferno_strategy_lab import (
     MIN_SCORED_TRADES_FOR_PROMOTION,
     STRATEGY_LAB_FILE,
     closed_trade_records,
+    reported_closed_trade_records,
 )
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
@@ -47,7 +49,7 @@ def _ticket_id(item: dict[str, Any], source: str, index: int) -> str:
     return value or f"{source}:{index}"
 
 
-def _paper_record(item: dict[str, Any], index: int) -> dict[str, Any]:
+def _paper_record(item: dict[str, Any], index: int, source: dict[str, Any], counted_ids: set[str]) -> dict[str, Any]:
     """Classify one operator-paper-ledger row against the actual lab rule.
 
     ``closed_trade_records`` is the strategy lab's source of truth.  Keeping
@@ -57,8 +59,8 @@ def _paper_record(item: dict[str, Any], index: int) -> dict[str, Any]:
     """
     status = _text(item.get("status")).lower() or "missing"
     outcome = outcome_status(item) or "missing"
-    strategy_records = closed_trade_records([item])
-    counted_by_strategy_lab = bool(strategy_records)
+    provenance = outcome_provenance(item, source)
+    counted_by_strategy_lab = item.get("ticketId") in counted_ids
     staged = status == "paper-staged"
 
     if counted_by_strategy_lab and staged:
@@ -75,7 +77,7 @@ def _paper_record(item: dict[str, Any], index: int) -> dict[str, Any]:
         reason = f"paper-outcome-{outcome}"
     else:
         promotion_state = "excluded"
-        reason = "closed-paper-row-missing-usable-pnl-or-risk"
+        reason = "; ".join(provenance["issues"]) or "duplicate-ticket-identity"
 
     return {
         "source": PAPER_SOURCE,
@@ -89,6 +91,8 @@ def _paper_record(item: dict[str, Any], index: int) -> dict[str, Any]:
         "promotionEligible": promotion_state == "promotion-qualified",
         "countedByStrategyLab": counted_by_strategy_lab,
         "exclusionReason": reason,
+        "provenance": provenance,
+        "reportedScorable": bool(reported_closed_trade_records([item])),
     }
 
 
@@ -138,6 +142,7 @@ def build_promotion_evidence_lineage(
     fast_ledger: dict[str, Any] | None = None,
     shadow_evidence: dict[str, Any] | None = None,
     strategy_lab: dict[str, Any] | None = None,
+    source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a source-labelled, read-only promotion-evidence reconciliation."""
     paper_ledger = paper_ledger if paper_ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
@@ -145,8 +150,10 @@ def build_promotion_evidence_lineage(
     shadow_evidence = shadow_evidence if shadow_evidence is not None else (load_json_file(SHADOW_EVIDENCE_FILE) or {})
     strategy_lab = strategy_lab if strategy_lab is not None else (load_json_file(STRATEGY_LAB_FILE) or {})
 
+    source = load_fill_source() if source is None else source
+    counted_ids = {row["ticketId"] for row in closed_trade_records(_items(paper_ledger), source)}
     records = [
-        _paper_record(item, index)
+        _paper_record(item, index, source, counted_ids)
         for index, item in enumerate(_items(paper_ledger), start=1)
     ]
     records.extend(
@@ -178,8 +185,11 @@ def build_promotion_evidence_lineage(
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "promotionTarget": MIN_SCORED_TRADES_FOR_PROMOTION,
+        "fillSource": {key: value for key, value in source.items() if key != "rows"},
         "promotion": {
             "qualifiedPaperOutcomes": qualified,
+            "independentlyVerifiedOutcomes": 0,
+            "reportedScorableOutcomes": sum(bool(row.get("reportedScorable")) for row in records),
             "remainingForPromotion": remaining,
             "strategyLabScoredOutcomes": lab_scored,
             "strategyLabCountedRecords": counted,
@@ -191,7 +201,7 @@ def build_promotion_evidence_lineage(
         "integrityAttention": integrity_attention,
         "records": records,
         "reminders": [
-            "only promotion-qualified operator paper rows count toward the 30-trade target",
+            "source-reconciled operator fill records count toward the paper sample; broker history and costs remain unverified",
             "isolated fast simulations and shadow observations remain useful research but never earn promotion credit",
             "this diagnostic does not mutate tickets, approvals, thresholds, broker state, or authority",
         ],
@@ -219,11 +229,12 @@ def promotion_evidence_lineage_text(payload: dict[str, Any]) -> str:
         "Authority: research-only; broker submit OFF; live trading OFF",
         "",
         "Promotion truth:",
-        f"- qualified operator-paper outcomes: {promotion.get('qualifiedPaperOutcomes', 0)}/{payload.get('promotionTarget', 0)}",
+        f"- source-reconciled operator-paper outcomes: {promotion.get('qualifiedPaperOutcomes', 0)}/{payload.get('promotionTarget', 0)}",
+        "- source match proves recorded-fill consistency, not independent broker verification",
         f"- remaining for promotion: {promotion.get('remainingForPromotion', 0)}",
         f"- strategy-lab scored outcomes: {promotion.get('strategyLabScoredOutcomes', 0)}",
         f"- strategy-lab / lineage count match: {promotion.get('strategyLabCountMatchesLineage')}",
-        f"- stricter staged-paper policy / lab match: {promotion.get('strictPolicyMatchesStrategyLab')}",
+        f"- source-qualified paper policy / lab match: {promotion.get('strictPolicyMatchesStrategyLab')}",
         f"- integrity attention rows: {promotion.get('integrityAttentionCount', 0)}",
         "",
         "Source boundaries:",

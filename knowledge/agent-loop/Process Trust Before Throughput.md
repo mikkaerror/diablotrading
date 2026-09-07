@@ -49,3 +49,20 @@ the builder leaves entry/exit prices blank and retains that note on subsequent
 updates. Never classify a filled record as synthetic from this note alone.
 Require independent source reconciliation; preserve uncertainty until then.
 See [[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].
+
+## Source qualification implemented
+
+The same-input audit now finds 3 reported numeric outcomes but only 1 saved-log
+reconciled paper fill: DELL. MOD/IREN remain intrinsic estimates with no fill
+source. DELL's actual debit risk is $180, versus $320 planned, so its reported
+$30 return is 0.166667 R with costs unverified. No historical ticket changed.
+The lab, lineage, completeness, velocity, gap and progress evaluator respect
+this distinction. Independent broker verification remains unestablished.
+
+Updated belief: source reconciliation is necessary but cannot authenticate an
+operator-reported CSV or prove fee completeness. Falsifier for a record's
+qualification: a missing source, conflicting close, identity/price/count/time
+mismatch or import-fingerprint mismatch. Any of those must withhold sample
+credit. Test a template-seeded real fill as well as explicit synthetic evidence;
+a seed note alone must never become a rejection rule.
+See [[PAPER_OUTCOME_QUALIFICATION_2026-09-07]].

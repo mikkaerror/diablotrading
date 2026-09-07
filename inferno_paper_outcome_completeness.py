@@ -2,10 +2,9 @@ from __future__ import annotations
 
 """Audit whether closed staged paper outcomes have fill-backed provenance.
 
-The strategy lab deliberately has a minimal scoring predicate: a closed outcome
-with usable P/L and max loss.  This diagnostic does not alter that predicate.
-It adds a second, stricter measure for whether the result contains enough
-immutable execution facts to be audit-complete and reproducible.
+The strategy lab scores source-reconciled recorded paper fills. This audit
+keeps unverified numeric outcomes visible without granting them sample credit.
+A source match is not independent verification against broker history.
 """
 
 import argparse
@@ -16,7 +15,8 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_execution import PAPER_EXECUTION_LEDGER_FILE, paper_event_id
-from inferno_strategy_lab import closed_trade_records
+from inferno_strategy_lab import closed_trade_records, reported_closed_trade_records
+from inferno_paper_provenance import load_fill_source, outcome_provenance
 from inferno_tos_fill_ingest import (
     TOS_FILL_INGEST_FILE,
     closed_fill_evidence_gaps,
@@ -206,7 +206,7 @@ def operator_work_items(audits: list[dict[str, Any]], intake: dict[str, Any]) ->
     """Name the minimum evidence work without generating or importing a fill."""
     items: list[dict[str, Any]] = []
     for audit in audits:
-        if audit.get("state") != "lab-scorable-provenance-debt":
+        if audit.get("state") != "reported-outcome-provenance-debt":
             continue
         items.append(
             {
@@ -214,6 +214,7 @@ def operator_work_items(audits: list[dict[str, Any]], intake: dict[str, Any]) ->
                 "ticketId": audit.get("ticketId"),
                 "ticker": audit.get("ticker"),
                 "missingFields": audit.get("missingFields") or [],
+                "provenanceIssues": audit.get("provenanceIssues") or [],
                 "instruction": "Use actual paperMoney order/fill history only; do not infer or backfill missing execution facts.",
             }
         )
@@ -236,13 +237,17 @@ def operator_work_items(audits: list[dict[str, Any]], intake: dict[str, Any]) ->
     return items
 
 
-def audit_closed_staged_ticket(ticket: dict[str, Any]) -> dict[str, Any]:
+def audit_closed_staged_ticket(ticket: dict[str, Any], source: dict[str, Any] | None = None, counted_ids: set[str] | None = None) -> dict[str, Any]:
     """Evaluate one closed staged row without mutating it or its outcome."""
     paper_execution = ticket.get("paperExecution") or {}
     outcome = ticket.get("outcome") or {}
     metrics = (ticket.get("riskVerdict") or {}).get("metrics") or {}
     max_loss = metrics.get("maxLossDollars", ticket.get("estimatedMaxLoss"))
-    lab_scorable = bool(closed_trade_records([ticket]))
+    source = load_fill_source() if source is None else source
+    provenance = outcome_provenance(ticket, source)
+    lab_scorable = (ticket.get("ticketId") in counted_ids if counted_ids is not None
+                    else bool(closed_trade_records([ticket], source)))
+    reported_scorable = bool(reported_closed_trade_records([ticket]))
     missing: list[str] = []
 
     for field, value in (
@@ -271,11 +276,12 @@ def audit_closed_staged_ticket(ticket: dict[str, Any]) -> dict[str, Any]:
     if _present(paper_execution.get("source")) and _text(paper_execution.get("source")) != "paper-fill-log":
         provenance_issues.append("paperExecution.source is not paper-fill-log")
 
+    provenance_issues.extend(provenance["issues"])
     audit_complete = lab_scorable and not missing and not provenance_issues
     if audit_complete:
         state = "audit-complete"
-    elif lab_scorable:
-        state = "lab-scorable-provenance-debt"
+    elif reported_scorable:
+        state = "reported-outcome-provenance-debt"
     else:
         state = "closed-unscorable"
 
@@ -287,6 +293,8 @@ def audit_closed_staged_ticket(ticket: dict[str, Any]) -> dict[str, Any]:
         "status": _text(ticket.get("status")) or None,
         "outcomeStatus": _text(outcome.get("status")) or None,
         "labScorable": lab_scorable,
+        "reportedScorable": reported_scorable,
+        "provenance": provenance,
         "auditComplete": audit_complete,
         "state": state,
         "missingFields": missing,
@@ -295,7 +303,7 @@ def audit_closed_staged_ticket(ticket: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None, source: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build a strictly read-only completeness report for closed staged tickets."""
     ledger = ledger if ledger is not None else (load_json_file(PAPER_EXECUTION_LEDGER_FILE) or {})
     items = [item for item in ledger.get("items", []) if isinstance(item, dict)]
@@ -305,7 +313,9 @@ def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None) -> di
         if _text(item.get("status")) == "paper-staged"
         and _text((item.get("outcome") or {}).get("status")) == "closed"
     ]
-    audits = [audit_closed_staged_ticket(ticket) for ticket in closed_staged]
+    source = load_fill_source() if source is None else source
+    counted_ids = {row["ticketId"] for row in closed_trade_records(items, source)}
+    audits = [audit_closed_staged_ticket(ticket, source, counted_ids) for ticket in closed_staged]
     state_counts = Counter(audit.get("state") or "unknown" for audit in audits)
     missing_counts = Counter(
         field
@@ -329,12 +339,16 @@ def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None) -> di
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "sourceLedgerUpdatedAt": ledger.get("updatedAt"),
+        "fillSource": {key: value for key, value in source.items() if key != "rows"},
         "counts": {
             "ledgerRows": len(items),
             "closedStagedRows": len(audits),
             "labScorableRows": lab_scorable,
             "auditCompleteRows": audit_complete,
             "labScorableWithProvenanceDebt": lab_scorable - audit_complete,
+            "reportedScorableRows": sum(bool(row["reportedScorable"]) for row in audits),
+            "reportedRowsWithProvenanceDebt": sum(bool(row["reportedScorable"]) and not row["auditComplete"] for row in audits),
+            "independentlyVerifiedRows": 0,
         },
         "stateCounts": dict(sorted(state_counts.items())),
         "missingFieldCounts": dict(sorted(missing_counts.items())),
@@ -349,7 +363,7 @@ def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None) -> di
         "operatorWorkItems": operator_work_items(audits, intake),
         "reminders": [
             "strategy-lab scoring eligibility is unchanged by this diagnostic",
-            "audit-complete is a stricter provenance quality label, not an authority or promotion action",
+            "audit-complete means source-reconciled fields; it is not independent broker verification or a promotion action",
             "the diagnostic never changes ticket, outcome, fill-log, approval, risk, or authority data",
             "fill-log readiness is observational; this audit never runs the fill importer",
         ],
@@ -371,8 +385,9 @@ def paper_outcome_completeness_text(payload: dict[str, Any]) -> str:
         "Scoring versus provenance:",
         f"- closed staged rows: {counts.get('closedStagedRows', 0)}",
         f"- strategy-lab scorable: {counts.get('labScorableRows', 0)}",
-        f"- audit-complete fill-backed outcomes: {counts.get('auditCompleteRows', 0)}",
-        f"- scorable rows with provenance debt: {counts.get('labScorableWithProvenanceDebt', 0)}",
+        f"- audit-complete source-reconciled outcomes: {counts.get('auditCompleteRows', 0)}",
+        f"- reported numeric rows with provenance debt: {counts.get('reportedRowsWithProvenanceDebt', 0)}",
+        "- independent broker execution and costs verification: not established",
         "",
         "Missing field counts:",
     ]

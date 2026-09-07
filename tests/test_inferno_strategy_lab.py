@@ -8,6 +8,7 @@ deterministic, and unwilling to promote tiny samples.
 """
 
 import unittest
+from tests.paper_source_fixtures import add_recorded_fill, source_for
 
 from inferno_math_config import MIN_WILSON_LOWER_FOR_EDGE
 from inferno_strategy_lab import (
@@ -21,7 +22,7 @@ from inferno_strategy_lab import (
 
 def closed_ticket(index: int, pnl: float, strategy: str = "TEST_EDGE") -> dict[str, object]:
     """Build a minimal closed paper ticket for strategy-lab tests."""
-    return {
+    return add_recorded_fill({
         "ticketId": f"ticket-{index}",
         "ticker": f"T{index}",
         "eventId": f"T{index}|2026-07-01",
@@ -33,7 +34,7 @@ def closed_ticket(index: int, pnl: float, strategy: str = "TEST_EDGE") -> dict[s
             "reviewedAt": "2026-04-27T09:00:00-06:00",
             "estimatedPnl": pnl,
         },
-    }
+    }, risk=10.0)
 
 
 class StrategyLabTests(unittest.TestCase):
@@ -51,7 +52,7 @@ class StrategyLabTests(unittest.TestCase):
 
     def test_empty_strategy_is_insufficient_data(self) -> None:
         """No closed trades means no promotion and no risk cap."""
-        summary = summarize_strategy("EMPTY", [])
+        summary = summarize_strategy("EMPTY", [], source_for([]))
         verdict = summary["verdict"]
         self.assertEqual(verdict["level"], "insufficient-data")
         self.assertEqual(summary["riskUnitCap"], 0.0)
@@ -59,7 +60,7 @@ class StrategyLabTests(unittest.TestCase):
     def test_positive_tiny_sample_stays_evidence_building(self) -> None:
         """Positive early outcomes still need sample depth."""
         tickets = [closed_ticket(index, 10.0) for index in range(5)]
-        summary = summarize_strategy("SMALL_EDGE", tickets)
+        summary = summarize_strategy("SMALL_EDGE", tickets, source_for(tickets))
         self.assertEqual(summary["verdict"]["level"], "evidence-building")
         self.assertFalse(summary["verdict"]["promotable"])
 
@@ -74,7 +75,7 @@ class StrategyLabTests(unittest.TestCase):
             {
                 "updatedAt": "2026-04-27T09:00:00-06:00",
                 "items": tickets,
-            }
+            }, source=source_for(tickets)
         )
         self.assertIn("PROMOTABLE_EDGE", lab["promotionCandidates"])
         self.assertEqual(lab["deskVerdict"]["level"], "review-for-promotion")
@@ -91,7 +92,7 @@ class StrategyLabTests(unittest.TestCase):
             ticket["eventId"] = "ONE|2026-07-01"
             tickets.append(ticket)
 
-        summary = summarize_strategy("CORRELATED_EDGE", tickets)
+        summary = summarize_strategy("CORRELATED_EDGE", tickets, source_for(tickets))
 
         self.assertEqual(summary["scoredCount"], 35)
         self.assertEqual(summary["distinctEventCount"], 1)
@@ -116,7 +117,7 @@ class StrategyLabTests(unittest.TestCase):
             tickets.append(closed_ticket(idx, -10.0, strategy="CONVEX_EDGE"))
             idx += 1
 
-        summary = summarize_strategy("CONVEX_EDGE", tickets)
+        summary = summarize_strategy("CONVEX_EDGE", tickets, source_for(tickets))
 
         self.assertEqual(summary["scoredCount"], 60)
         self.assertEqual(summary["distinctEventCount"], 60)
@@ -156,7 +157,7 @@ class StrategyLabTests(unittest.TestCase):
     def test_drawdown_forces_cooldown(self) -> None:
         """A severe losing run should force cooldown regardless of sample count."""
         tickets = [closed_ticket(index, -10.0, strategy="BROKEN_EDGE") for index in range(31)]
-        summary = summarize_strategy("BROKEN_EDGE", tickets)
+        summary = summarize_strategy("BROKEN_EDGE", tickets, source_for(tickets))
         self.assertEqual(summary["verdict"]["level"], "cooldown")
         self.assertEqual(summary["riskUnitCap"], 0.0)
 

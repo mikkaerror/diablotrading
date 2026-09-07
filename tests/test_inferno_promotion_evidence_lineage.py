@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from tests.paper_source_fixtures import add_recorded_fill, source_for
 
 import inferno_promotion_evidence_lineage as lineage
 
@@ -13,7 +14,7 @@ def paper_ticket(
     estimated_pnl: float | None = 25.0,
     max_loss: float = 100.0,
 ) -> dict:
-    return {
+    return add_recorded_fill({
         "ticketId": ticket_id,
         "ticker": "TEST",
         "strategy": "CALL_DEBIT_SPREAD",
@@ -21,7 +22,7 @@ def paper_ticket(
         "status": status,
         "estimatedMaxLoss": max_loss,
         "outcome": {"status": outcome_status, "estimatedPnl": estimated_pnl},
-    }
+    }, risk=max_loss)
 
 
 class PromotionEvidenceLineageTests(unittest.TestCase):
@@ -38,6 +39,7 @@ class PromotionEvidenceLineageTests(unittest.TestCase):
             fast_ledger={"items": []},
             shadow_evidence={"items": []},
             strategy_lab={"overall": {"scoredCount": 1}},
+            source=source_for([paper_ticket("paper-01"), paper_ticket("paper-04", estimated_pnl=None)]),
         )
 
         promotion = payload["promotion"]
@@ -48,7 +50,7 @@ class PromotionEvidenceLineageTests(unittest.TestCase):
         self.assertTrue(promotion["strictPolicyMatchesStrategyLab"])
         self.assertEqual(paper["exclusionReasons"]["paper-status-paper-blocked"], 1)
         self.assertEqual(paper["exclusionReasons"]["paper-outcome-open"], 1)
-        self.assertEqual(paper["exclusionReasons"]["closed-paper-row-missing-usable-pnl-or-risk"], 1)
+        self.assertTrue(any("source-mismatch-outcomePnl" in reason for reason in paper["exclusionReasons"]))
 
     def test_fast_and_shadow_closed_outcomes_remain_quarantined(self) -> None:
         payload = lineage.build_promotion_evidence_lineage(
@@ -56,6 +58,7 @@ class PromotionEvidenceLineageTests(unittest.TestCase):
             fast_ledger={"items": [paper_ticket("fast-01")]},
             shadow_evidence={"items": [paper_ticket("shadow-01")]},
             strategy_lab={"overall": {"scoredCount": 0}},
+            source=source_for([]),
         )
 
         self.assertEqual(payload["promotion"]["qualifiedPaperOutcomes"], 0)
@@ -77,11 +80,11 @@ class PromotionEvidenceLineageTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["promotion"]["qualifiedPaperOutcomes"], 0)
-        self.assertEqual(payload["promotion"]["integrityAttentionCount"], 1)
-        self.assertFalse(payload["promotion"]["strictPolicyMatchesStrategyLab"])
+        self.assertEqual(payload["promotion"]["integrityAttentionCount"], 0)
+        self.assertFalse(payload["promotion"]["strategyLabCountMatchesLineage"])
         self.assertEqual(
-            payload["integrityAttention"][0]["exclusionReason"],
-            "strategy-lab-counts-nonstaged-paper-row",
+            payload["records"][0]["exclusionReason"],
+            "paper-status-paper-blocked",
         )
 
 

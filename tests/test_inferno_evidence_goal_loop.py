@@ -76,6 +76,7 @@ def safe_artifacts() -> dict:
         },
         "strategyLab": {
             "generatedAt": generated,
+            "overall": {"scoredCount": 1},
             "deskVerdict": {"level": "evidence-building"},
         },
         "paperVelocity": {
@@ -295,7 +296,7 @@ class EvidenceGoalLoopTests(unittest.TestCase):
     def test_goal_loop_marks_verified_evidence_gain_productive(self) -> None:
         baseline = safe_artifacts()
         improved = safe_artifacts()
-        improved["performance"]["closedMetrics"]["scoredCount"] = 2
+        improved["strategyLab"]["overall"]["scoredCount"] = 2
         improved["paperEvidenceLoop"]["counts"]["remainingForPromotion"] = 28
         loads = iter([baseline, improved])
 

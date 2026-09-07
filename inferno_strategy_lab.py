@@ -22,6 +22,8 @@ from inferno_math_config import (
     cluster_bootstrap_mean_ci,
 )
 from inferno_paper_execution import load_ledger, paper_event_id
+from inferno_paper_provenance import finite, load_fill_source, outcome_provenance
+from inferno_tos_fill_ingest import parse_execution_timestamp
 from inferno_performance_analytics import (
     estimated_pnl,
     max_loss,
@@ -225,16 +227,16 @@ def false_positive_rate(tickets: list[dict[str, Any]]) -> float | None:
     return round(failed / len(tickets), 4)
 
 
-def closed_trade_records(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Extract closed, scored paper-trade records with normalized risk metrics."""
+def reported_closed_trade_records(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep historical numeric outcomes visible; these are not sample admission."""
     records: list[dict[str, Any]] = []
     for ticket in tickets:
         if outcome_status(ticket) != "closed":
             continue
-        pnl = estimated_pnl(ticket)
+        pnl = finite((ticket.get("outcome") or {}).get("estimatedPnl"))
         risk = max_loss(ticket)
         risk_return = return_on_risk(ticket)
-        if pnl is None or risk_return is None:
+        if finite(pnl) is None or finite(risk_return) is None or finite(risk) is None:
             continue
         outcome = ticket.get("outcome") or {}
         records.append(
@@ -251,6 +253,29 @@ def closed_trade_records(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return records
+
+
+def closed_trade_records(tickets: list[dict[str, Any]], source: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Extract only source-reconciled paper fills, using the actual entry risk."""
+    source = load_fill_source() if source is None else source
+    counts = Counter(ticket.get("ticketId") for ticket in tickets)
+    records = []
+    for ticket in tickets:
+        provenance = outcome_provenance(ticket, source)
+        if not provenance["sourceReconciled"] or counts[ticket.get("ticketId")] != 1 or ticket.get("ticketId") in source.get("duplicateTicketIds", []):
+            continue
+        outcome = ticket.get("outcome") or {}
+        risk = provenance["fillAdjustedMaxLoss"]
+        pnl = float(outcome["estimatedPnl"])
+        records.append({
+            "ticketId": ticket.get("ticketId"), "ticker": ticket.get("ticker"),
+            "eventId": paper_event_id(ticket), "strategy": strategy_key(ticket),
+            "createdAt": ticket.get("createdAt"),
+            "reviewedAt": (ticket.get("paperExecution") or {}).get("closedAt"),
+            "estimatedPnl": round(pnl, 2), "maxLoss": round(risk, 2),
+            "returnOnRisk": round(pnl / risk, 6), "provenance": provenance,
+        })
+    return sorted(records, key=lambda record: parse_execution_timestamp(record["reviewedAt"]))
 
 
 def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
@@ -322,9 +347,9 @@ def verdict_for_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_strategy(name: str, tickets: list[dict[str, Any]], source: dict[str, Any] | None = None) -> dict[str, Any]:
     """Summarize evidence for one strategy family."""
-    records = closed_trade_records(tickets)
+    records = closed_trade_records(tickets, source)
     returns = [record["returnOnRisk"] for record in records]
     distinct_events = len({record.get("eventId") for record in records if record.get("eventId")})
     wins = [value for value in returns if value > 0]
@@ -338,6 +363,8 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, An
         "strategy": name,
         "ticketCount": len(tickets),
         "scoredCount": len(returns),
+        "reportedScorableCount": len(reported_closed_trade_records(tickets)),
+        "evidenceBasis": "source-reconciled operator fill log; not independently broker-verified",
         "distinctEventCount": distinct_events,
         "distinctEventTarget": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
         "distinctEventGap": max(0, MIN_DISTINCT_EVENTS_FOR_PROMOTION - distinct_events),
@@ -362,16 +389,19 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]]) -> dict[str, An
     return metrics
 
 
-def build_strategy_lab(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_strategy_lab(ledger: dict[str, Any] | None = None, source: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the full strategy lab artifact from the paper ledger."""
-    ledger = ledger or load_ledger()
+    ledger = load_ledger() if ledger is None else ledger
+    source = load_fill_source() if source is None else source
     tickets = ledger.get("items", [])
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    duplicate_ids = {key for key, count in Counter(ticket.get("ticketId") for ticket in tickets).items() if count > 1}
     for ticket in tickets:
         grouped[strategy_key(ticket)].append(ticket)
+    source = {**source, "duplicateTicketIds": list(duplicate_ids)}
 
-    strategies = [summarize_strategy(name, items) for name, items in sorted(grouped.items())]
-    overall = summarize_strategy("ALL_STRATEGIES", tickets)
+    strategies = [summarize_strategy(name, items, source) for name, items in sorted(grouped.items())]
+    overall = summarize_strategy("ALL_STRATEGIES", tickets, source)
     promotion_candidates = [
         item for item in strategies if (item.get("verdict") or {}).get("promotable")
     ]
@@ -387,6 +417,8 @@ def build_strategy_lab(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "generatedAt": local_now().isoformat(),
         "sourceLedgerUpdatedAt": ledger.get("updatedAt"),
+        "fillSource": {key: value for key, value in source.items() if key != "rows"},
+        "sourceVerification": "saved operator fill log; no independent broker verification",
         "stage": "strategy-evidence-lab",
         "thresholds": {
             "minScoredTradesForPromotion": MIN_SCORED_TRADES_FOR_PROMOTION,
@@ -426,7 +458,9 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         f"Desk verdict: {verdict.get('level')} - {verdict.get('message')}",
         "",
         "Overall evidence:",
-        f"- scored trades: {overall.get('scoredCount', 0)}",
+        f"- source-reconciled scored trades: {overall.get('scoredCount', 0)}",
+        f"- reported numeric outcomes (includes unverified estimates): {overall.get('reportedScorableCount', 0)}",
+        f"- evidence basis: {overall.get('evidenceBasis')}",
         f"- distinct events: {overall.get('distinctEventCount', 0)}/{overall.get('distinctEventTarget')}",
         f"- win rate: {overall.get('winRate')} | Wilson lower: {overall.get('winRateLowerBound')} "
         f"| target: {overall.get('winRateLowerBoundTarget')} ({overall.get('winRateLowerBoundTargetSource')})",

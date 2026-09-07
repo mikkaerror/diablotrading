@@ -157,3 +157,12 @@ Its execution remains independently unverified from the inspected evidence;
 it must not be rejected as fabricated solely on that note.
 
 See [[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].
+
+## Follow-up: source qualification repaired
+
+See [[PAPER_OUTCOME_QUALIFICATION_2026-09-07]]. The unchanged historical ledger
+now yields 3 reported numeric outcomes and 1 source-reconciled recorded fill,
+with 29 remaining to the unchanged lab sample target. MOD/IREN intrinsic
+estimates no longer count there. DELL reconciles to the saved CSV; neither its
+seed note nor source agreement establishes independent broker verification.
+Its reported $30 return now uses $180 actual debit risk instead of $320 planned.

@@ -227,7 +227,7 @@ class BuildAndRenderTests(unittest.TestCase):
         text = paper_velocity_text(payload)
         self.assertIn("Inferno Paper Evidence Velocity", text)
         self.assertIn("Verdict:", text)
-        self.assertIn("Closed-outcome velocity:", text)
+        self.assertIn("Source-reconciled closed-outcome velocity:", text)
         self.assertIn("Operator approval alerts:", text)
         self.assertIn("Historical quarantine (not actionable):", text)
         self.assertIn("Reminders:", text)

@@ -80,6 +80,14 @@ selected ticket) opts into applying fills. Preview runs preserve the last
 actual ingest report and all ledger lifecycle timestamps. See
 [[OPERATOR_OUTCOME_BOUNDARY_REPAIR_2026-09-07]].
 
+The strategy lab admits only closed paper fills reconciled to the saved fill
+CSV and imported fingerprint, with matched identity, execution facts and
+fill-adjusted risk. Intrinsic estimates remain visible as reported outcomes
+without sample credit. Lab/lineage/completeness, the paper gap, velocity and
+loop progress use this distinction. Saved-log consistency does not establish
+independent broker execution or costs. See
+[[PAPER_OUTCOME_QUALIFICATION_2026-09-07]].
+
 ## Canonical Truth
 
 Generated artifacts beat durable docs when they disagree.

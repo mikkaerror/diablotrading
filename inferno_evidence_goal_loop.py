@@ -484,7 +484,7 @@ def progress_snapshot(
     )
     return {
         "scoredPaperTickets": int(
-            ((performance.get("closedMetrics") or {}).get("scoredCount")) or 0
+            ((strategy_lab.get("overall") or {}).get("scoredCount")) or 0
         ),
         "remainingForPromotion": int(
             ((paper_loop.get("counts") or {}).get("remainingForPromotion")) or 0

@@ -29,6 +29,7 @@ from collections import Counter
 from datetime import datetime, timedelta, date
 from typing import Any
 
+from inferno_strategy_lab import closed_trade_records
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
@@ -179,7 +180,7 @@ def _closed_outcome_velocity(items: list[dict[str, Any]], *, today: date) -> dic
         if outcome.get("status") != "closed":
             continue
         reviewed = _parse_iso_date(outcome.get("reviewedAt"))
-        if reviewed is not None:
+        if reviewed is not None and reviewed <= today:
             closed_dates.append(reviewed)
     total_closed = len(closed_dates)
     last_7 = sum(1 for d in closed_dates if (today - d).days <= 7)
@@ -233,7 +234,10 @@ def build_paper_velocity(*, now: datetime | None = None) -> dict[str, Any]:
     outcome_dist = _outcome_distribution(items)
     auto_block_reasons = _auto_block_reason_distribution(items)
     aging = _approval_aging_alert(items, today=today, window_days=AGING_OUT_WINDOW_DAYS)
-    velocity = _closed_outcome_velocity(items, today=today)
+    reconciled = closed_trade_records(items)
+    velocity_items = [{"outcome": {"status": "closed", "reviewedAt": row["reviewedAt"]}} for row in reconciled]
+    velocity = _closed_outcome_velocity(velocity_items, today=today)
+    velocity["evidenceBasis"] = "source-reconciled operator fill log; sample threshold only, not promotion approval"
     verdict = _verdict(velocity)
 
     return {
@@ -285,7 +289,7 @@ def paper_velocity_text(payload: dict[str, Any]) -> str:
     for outcome, count in sorted((payload.get("outcomeDistribution") or {}).items()):
         lines.append(f"  {outcome}: {count}")
     lines.append("")
-    lines.append("Closed-outcome velocity:")
+    lines.append("Source-reconciled closed-outcome velocity:")
     lines.append(f"  Total closed: {velocity.get('totalClosed')}")
     lines.append(f"  Closed last 7d / 30d / 90d: "
                  f"{velocity.get('closedLast7Days')} / "

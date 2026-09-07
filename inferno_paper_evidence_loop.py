@@ -175,7 +175,7 @@ def build_audit() -> dict[str, Any]:
     fill_rows = load_fill_rows()
     open_tickets = paper_open_tickets(ledger)
     review_ready_shadows = shadow_ready_for_review(shadow)
-    scored = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
+    scored = int(((strategy_lab.get("overall") or {}).get("scoredCount")) or 0)
     remaining = max(0, PROMOTION_TARGET - scored)
     director_counts = paper_director.get("counts") or {}
     operator_routable_slate = list(paper_director.get("operatorRoutableSlate") or [])

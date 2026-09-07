@@ -4,11 +4,10 @@ from __future__ import annotations
 
 Purpose
 -------
-The paper ledger has 0 closed scored tickets, so the strategy lab is stuck at
-``insufficient-data``. The shadow ledger has ~10 closed hypothetical outcomes.
-This module re-runs the *exact same* lab logic against those shadow outcomes
-to answer the operator question: "If shadow evidence were promoted to scored
-paper evidence, what would the lab say?"
+Replay shadow records against the lab, including its source-admissibility
+checks. Numeric shadow observations remain descriptive research and cannot
+become paper fills by changing a status label. The nested lab now excludes
+those observations from its source-reconciled sample.
 
 Hard contract
 -------------
@@ -26,7 +25,7 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_shadow_evidence import SHADOW_EVIDENCE_FILE
-from inferno_strategy_lab import build_strategy_lab
+from inferno_strategy_lab import build_strategy_lab, reported_closed_trade_records
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -36,19 +35,9 @@ REPLAY_STAGE = "shadow-replay-research-only"
 
 
 def normalize_shadow_item(item: dict[str, Any]) -> dict[str, Any]:
-    """Reshape a shadow ledger item into the shape ``summarize_strategy`` expects.
-
-    Specifically: the lab filters on ``outcome.status == "closed"`` and reads
-    ``riskVerdict.metrics.maxLossDollars`` plus ``outcome.estimatedPnl`` to
-    compute return-on-risk. Both fields are already present on shadow items,
-    so this is a thin copy that re-tags the top-level ``status`` to a
-    lab-compatible value without mutating the original.
-    """
+    """Label a copy as shadow replay; never manufacture paper-fill provenance."""
     copy = dict(item)
-    # The lab uses status purely for funnel diagnostics (paper-blocked vs
-    # paper-staged). We re-tag closed shadow items as 'paper-staged-replay'
-    # so the false-positive math reflects accurately and so anyone reading
-    # the artifact can tell these came from replay, not real paper fills.
+    # This distinct status remains excluded by paper-source qualification.
     outcome = item.get("outcome") or {}
     if outcome.get("status") == "closed":
         copy["status"] = "paper-staged-replay"
@@ -66,7 +55,8 @@ def build_replay(shadow: dict[str, Any] | None = None) -> dict[str, Any]:
         "updatedAt": shadow.get("updatedAt"),
         "items": normalized,
     }
-    lab = build_strategy_lab(pseudo_ledger)
+    lab = build_strategy_lab(pseudo_ledger, source={"status": "not-paper-source", "rows": []})
+    reported = reported_closed_trade_records(normalized)
     closed_count = sum(
         1 for item in normalized if (item.get("outcome") or {}).get("status") == "closed"
     )
@@ -78,12 +68,14 @@ def build_replay(shadow: dict[str, Any] | None = None) -> dict[str, Any]:
         "sourceShadowUpdatedAt": shadow.get("updatedAt"),
         "shadowItemCount": len(items),
         "closedShadowCount": closed_count,
+        "reportedShadowScorableCount": len(reported),
+        "reportedShadowMeanR": sum(row["returnOnRisk"] for row in reported) / len(reported) if reported else None,
         "lab": lab,
         "deskVerdictReplay": (lab.get("deskVerdict") or {}),
         "promotionCandidatesReplay": list(lab.get("promotionCandidates") or []),
         "researchNotes": [
             "shadow-replay only; cannot promote broker authority",
-            "informational read of strategy gates against hypothetical outcomes",
+            "shadow numeric outcomes stay descriptive; the paper source-admissibility gate excludes them",
         ],
     }
 
@@ -107,7 +99,8 @@ def replay_text(replay: dict[str, Any]) -> str:
         f"Replay promotion candidates: "
         + (", ".join(replay.get("promotionCandidatesReplay") or []) or "none"),
         "",
-        "Replay overall metrics:",
+        f"Descriptive shadow numeric outcomes: {replay.get('reportedShadowScorableCount', 0)} | mean R {replay.get('reportedShadowMeanR')}",
+        "Replay overall metrics (source gate excludes shadow fills):",
         f"- scored: {overall.get('scoredCount', 0)}",
         f"- win rate: {overall.get('winRate')}",
         f"- win rate lower bound: {overall.get('winRateLowerBound')}",

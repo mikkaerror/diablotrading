@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import inferno_paper_outcome_completeness as completeness
+from tests.paper_source_fixtures import add_recorded_fill, source_for
 
 
 def closed_staged_ticket(**overrides) -> dict:
@@ -35,6 +36,7 @@ def closed_staged_ticket(**overrides) -> dict:
             "realizedPnl": 25.0,
         },
     }
+    add_recorded_fill(ticket, risk=100.0)
     ticket.update(overrides)
     return ticket
 
@@ -42,7 +44,7 @@ def closed_staged_ticket(**overrides) -> dict:
 class PaperOutcomeCompletenessTests(unittest.TestCase):
     def test_fill_backed_closed_staged_ticket_is_audit_complete(self) -> None:
         payload = completeness.build_paper_outcome_completeness(
-            {"items": [closed_staged_ticket()]}
+            {"items": [closed_staged_ticket()]}, source=source_for([closed_staged_ticket()])
         )
 
         self.assertEqual(payload["counts"]["labScorableRows"], 1)
@@ -50,7 +52,7 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
         self.assertEqual(payload["outcomes"][0]["state"], "audit-complete")
         self.assertEqual(payload["outcomes"][0]["missingFields"], [])
 
-    def test_estimated_closed_outcome_remains_lab_scorable_but_has_provenance_debt(self) -> None:
+    def test_estimated_closed_outcome_is_excluded_with_reported_provenance_debt(self) -> None:
         ticket = closed_staged_ticket(
             paperExecution=None,
             outcome={
@@ -60,18 +62,18 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
                 "notes": "estimated from expiration intrinsic value",
             },
         )
-        payload = completeness.build_paper_outcome_completeness({"items": [ticket]})
+        payload = completeness.build_paper_outcome_completeness({"items": [ticket]}, source=source_for([]))
 
-        self.assertEqual(payload["counts"]["labScorableRows"], 1)
+        self.assertEqual(payload["counts"]["labScorableRows"], 0)
         self.assertEqual(payload["counts"]["auditCompleteRows"], 0)
-        self.assertEqual(payload["counts"]["labScorableWithProvenanceDebt"], 1)
+        self.assertEqual(payload["counts"]["reportedRowsWithProvenanceDebt"], 1)
         outcome = payload["outcomes"][0]
-        self.assertEqual(outcome["state"], "lab-scorable-provenance-debt")
+        self.assertEqual(outcome["state"], "reported-outcome-provenance-debt")
         self.assertIn("paperExecution.source", outcome["missingFields"])
 
     def test_closed_staged_ticket_without_usable_pnl_is_not_lab_scorable(self) -> None:
         ticket = closed_staged_ticket(outcome={"status": "closed", "reviewedAt": "2026-08-02"})
-        payload = completeness.build_paper_outcome_completeness({"items": [ticket]})
+        payload = completeness.build_paper_outcome_completeness({"items": [ticket]}, source=source_for([]))
 
         self.assertEqual(payload["counts"]["labScorableRows"], 0)
         self.assertEqual(payload["outcomes"][0]["state"], "closed-unscorable")
@@ -160,7 +162,7 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
         self.assertEqual(intake["lastIngest"]["rejectedRows"], 1)
         self.assertEqual(intake["closedMissingFieldCounts"]["exitPrice"], 1)
         work_items = payload["operatorWorkItems"]
-        self.assertEqual(work_items[0]["kind"], "complete-paper-fill-stubs-after-actual-execution")
+        self.assertIn("complete-paper-fill-stubs-after-actual-execution", [row["kind"] for row in work_items])
 
     def test_format_complete_closed_row_is_not_ready_without_exact_staged_ticket(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -184,7 +186,7 @@ class PaperOutcomeCompletenessTests(unittest.TestCase):
                 )
             with patch.object(completeness, "TOS_FILL_LOG_WORK_FILE", fill_log):
                 payload = completeness.build_paper_outcome_completeness(
-                    {"items": [closed_staged_ticket()]}
+                    {"items": [closed_staged_ticket()]}, source=source_for([closed_staged_ticket()])
                 )
 
         intake = payload["fillIntake"]
