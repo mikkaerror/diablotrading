@@ -1299,5 +1299,21 @@
       "tick-bound",
       "codex-lane"
     ]
+  },
+  {
+    "id": "mission-7b1e58f8",
+    "createdAt": "2026-09-07T13:37:26.952659-06:00",
+    "updatedAt": "2026-09-07T13:37:26.952659-06:00",
+    "title": "Separate verified operator outcomes from proxy and seeded paper records",
+    "body": "Top-to-bottom process audit found all 3 strategy-lab counted rows need provenance review: MOD and IREN are intrinsic-value estimates without recorded fills; DELL notes explicitly say seeded by inferno_tos_sandbox. Current lineage qualification mirrors lab numeric/status criteria, not independent execution verification. Build a non-mutating provenance audit and remove the unattended outcome_reviewer review call path that can close operator-paper records using latest underlying price on/after expiration. Preserve historical tickets; do not alter risk constants, sample threshold, universe or live/broker authority. Acceptance: no unattended operator-ticket closure path; seeded/proxy rows cannot masquerade as verified executions; independent source fixtures demonstrate the distinction.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "high",
+    "tags": [
+      "process-audit",
+      "evidence-provenance",
+      "operator-boundary",
+      "high-priority"
+    ]
   }
 ]
