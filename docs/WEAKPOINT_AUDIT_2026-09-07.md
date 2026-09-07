@@ -142,3 +142,18 @@ lineage ledger keeps them separate today and nothing here changes that.
   `reports/schwab_options_latest.txt`, `data/inferno_schwab_daily_ops.json`,
   `reports/schwab_daily_ops_latest.txt`, `reports/paper_test_director_latest.txt`.
   The strike plan was restored to its 09-04 state after a failed refresh.
+
+## 9. ROOT CAUSE FOUND — the recurring zero-byte `.git/index.lock`
+
+The 2026-08-15 lock that jammed commits for three weeks was not a crash. A
+Claude session linked through the desktop app runs in a Linux VM with the
+repo mounted, and that mount cannot unlink files. Git creates `index.lock`
+(and `HEAD.lock`, `objects/maintenance.lock`, `tmp_obj_*`) and then fails to
+remove them — even a plain `git status` leaves a zero-byte `index.lock`
+behind. Reproduced this session; cleaned by renaming the files into
+`_to_delete/` (rename is allowed, unlink is not). `_to_delete/` is in
+`.git/info/exclude`; the operator can delete it.
+
+Rule for linked Claude sessions: after any git command, check for
+`.git/*.lock` and `.git/objects/**/tmp_obj_*` and move them aside. Codex
+sessions on the Mac are unaffected.

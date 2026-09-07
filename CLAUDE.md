@@ -237,6 +237,13 @@ that costs money or moves discipline.
   without surfacing the lane-cross to the user first.
 - **Don't** approve, reject, or close any paper ticket on the user's
   behalf. Surface decisions; the operator clicks the buttons.
+- **Don't** leave git locks behind. A desktop-linked Claude session runs in
+  a VM that cannot unlink files, so every git command (even `git status`)
+  can strand a zero-byte `.git/index.lock` / `HEAD.lock` / `tmp_obj_*` —
+  this was the 2026-08-15 three-week jam. After each git call, `mv` any
+  such file into `_to_delete/`. Also: never run a data refresh from that VM
+  that needs the Schwab token or yfinance; both are absent there and the
+  modules overwrite good artifacts with failed ones (audit 2026-09-07 §4).
 
 ---
 
