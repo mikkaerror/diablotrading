@@ -16,7 +16,7 @@ from inferno_tos_fill_ingest import (
     TOS_FILL_LOG_WORK_FILE,
     closed_fill_evidence_gaps,
     closed_fill_ticket_identity_gaps,
-    derived_realized_pnl,
+    fill_pnl_reconciliation,
     normalized_status,
     parse_execution_timestamp,
     row_fingerprint,
@@ -98,6 +98,7 @@ def outcome_provenance(ticket: dict[str, Any], source: dict[str, Any]) -> dict[s
     elif len(unique) > 1:
         issues.append("conflicting-closed-source-rows")
     fingerprint = None
+    pnl_audit = None
     if row is not None:
         issues.extend(f"source-invalid-{field}" for field in closed_fill_evidence_gaps(row))
         issues.extend(f"source-identity-{field}" for field in closed_fill_ticket_identity_gaps(ticket, row))
@@ -119,7 +120,17 @@ def outcome_provenance(ticket: dict[str, Any], source: dict[str, Any]) -> dict[s
                 issues.append(f"source-future-{field}")
             if value is None or value != parse_execution_timestamp(execution.get(field)):
                 issues.append(f"source-mismatch-{field}")
-        source_pnl = finite(derived_realized_pnl(ticket, row))
+        pnl_audit = fill_pnl_reconciliation(ticket, row)
+        issues.extend(f"source-economics-{issue}" for issue in pnl_audit["issues"])
+        for field in ("totalFees", "realizedPnlBasis"):
+            source_value, recorded_value = row.get(field), execution.get(field)
+            if field == "totalFees":
+                match = finite(source_value) == finite(recorded_value)
+            else:
+                match = str(source_value or "").strip().lower() == str(recorded_value or "").strip().lower()
+            if not match:
+                issues.append(f"source-mismatch-{field}")
+        source_pnl = finite(pnl_audit["reportedOrDerivedPnl"])
         for field, raw_value in (("realizedPnl", execution.get("realizedPnl")),
                                  ("outcomePnl", outcome.get("estimatedPnl"))):
             value = finite(raw_value)
@@ -140,5 +151,7 @@ def outcome_provenance(ticket: dict[str, Any], source: dict[str, Any]) -> dict[s
         "verificationBasis": "saved operator fill log; broker execution and costs not independently verified",
         "issues": sorted(set(issues)), "sourceRowFingerprint": fingerprint,
         "fillAdjustedMaxLoss": risk,
-        "pnlBasis": "reported paper P/L; costs unverified",
+        "pnlBasis": (pnl_audit or {}).get("pnlBasis", "unverified P/L"),
+        "pnlReconciliation": pnl_audit,
+        "scoringPnl": (pnl_audit or {}).get("scoringPnl"),
     }

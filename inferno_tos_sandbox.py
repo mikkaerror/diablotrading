@@ -50,11 +50,17 @@ FILL_LOG_COLUMNS = [
     "entryPrice",
     "exitPrice",
     "realizedPnl",
+    "realizedPnlBasis",
+    "totalFees",
     "status",
     "openedAt",
     "closedAt",
     "notes",
 ]
+
+
+OPTIONAL_FILL_COLUMNS = {"realizedPnlBasis", "totalFees"}
+REQUIRED_FILL_COLUMNS = [column for column in FILL_LOG_COLUMNS if column not in OPTIONAL_FILL_COLUMNS]
 
 
 def text(value: Any) -> str:
@@ -451,6 +457,8 @@ def seed_fill_log_from_stageable(stageable: list[dict[str, Any]], session_date: 
             "entryPrice": existing.get("entryPrice") or "",
             "exitPrice": existing.get("exitPrice") or "",
             "realizedPnl": existing.get("realizedPnl") or "",
+            "realizedPnlBasis": existing.get("realizedPnlBasis") or "",
+            "totalFees": existing.get("totalFees", ""),
             "status": existing.get("status") or "planned",
             "openedAt": existing.get("openedAt") or "",
             "closedAt": existing.get("closedAt") or "",

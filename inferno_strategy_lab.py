@@ -266,7 +266,7 @@ def closed_trade_records(tickets: list[dict[str, Any]], source: dict[str, Any] |
             continue
         outcome = ticket.get("outcome") or {}
         risk = provenance["fillAdjustedMaxLoss"]
-        pnl = float(outcome["estimatedPnl"])
+        pnl = provenance["scoringPnl"]
         records.append({
             "ticketId": ticket.get("ticketId"), "ticker": ticket.get("ticker"),
             "eventId": paper_event_id(ticket), "strategy": strategy_key(ticket),
@@ -364,6 +364,8 @@ def summarize_strategy(name: str, tickets: list[dict[str, Any]], source: dict[st
         "ticketCount": len(tickets),
         "scoredCount": len(returns),
         "reportedScorableCount": len(reported_closed_trade_records(tickets)),
+        "netOfReportedFeesCount": sum((record["provenance"].get("pnlReconciliation") or {}).get("costStatus") == "operator-reported-costs" for record in records),
+        "unknownFeesCount": sum((record["provenance"].get("pnlReconciliation") or {}).get("costStatus") != "operator-reported-costs" for record in records),
         "evidenceBasis": "source-reconciled operator fill log; not independently broker-verified",
         "distinctEventCount": distinct_events,
         "distinctEventTarget": MIN_DISTINCT_EVENTS_FOR_PROMOTION,
@@ -461,6 +463,8 @@ def strategy_lab_text(lab: dict[str, Any]) -> str:
         f"- source-reconciled scored trades: {overall.get('scoredCount', 0)}",
         f"- reported numeric outcomes (includes unverified estimates): {overall.get('reportedScorableCount', 0)}",
         f"- evidence basis: {overall.get('evidenceBasis')}",
+        f"- net of reported fees: {overall.get('netOfReportedFeesCount', 0)} | fees unknown: {overall.get('unknownFeesCount', 0)}",
+        "- unknown-fee returns remain gross; these are not verified net trading results",
         f"- distinct events: {overall.get('distinctEventCount', 0)}/{overall.get('distinctEventTarget')}",
         f"- win rate: {overall.get('winRate')} | Wilson lower: {overall.get('winRateLowerBound')} "
         f"| target: {overall.get('winRateLowerBoundTarget')} ({overall.get('winRateLowerBoundTargetSource')})",

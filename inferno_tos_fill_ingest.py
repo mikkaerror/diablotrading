@@ -12,6 +12,8 @@ import argparse
 import csv
 import hashlib
 import math
+import json
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime
 from typing import Any
 
@@ -88,6 +90,11 @@ def row_fingerprint(row: dict[str, Any]) -> str:
             text(row.get("notes")),
         ]
     )
+    # Preserve legacy keys when optional economics metadata is absent. Once
+    # supplied, costs and basis must participate in idempotency/provenance.
+    if any(text(row.get(field)) for field in ("totalFees", "realizedPnlBasis")):
+        raw += "|economics-v1|" + json.dumps({field: text(row.get(field)) for field in
+                 ("totalFees", "realizedPnlBasis", "contracts", "environment", "expiration")}, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -192,19 +199,80 @@ def candidate_tickets(ledger: dict[str, Any], row: dict[str, Any]) -> list[dict[
     return candidates
 
 
+def fill_pnl_reconciliation(ticket: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    """Reconcile a complete standard-multiplier position in USD.
+
+    Entry/exit are net premium per position unit; quantity is the number of
+    identical positions, not a sum of legs. totalFees is the total round-trip
+    commissions plus fees for all units and legs. Missing costs remain unknown.
+    This is arithmetic reconciliation of operator data, never broker proof.
+    """
+    issues = []
+
+    def amount(field: str, *, required: bool = False) -> Decimal | None:
+        value = row.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            if required:
+                issues.append(f"missing-{field}")
+            return None
+        try:
+            parsed = Decimal(str(value))
+            if isinstance(value, bool) or not parsed.is_finite() or not math.isfinite(float(parsed)):
+                raise InvalidOperation
+            return parsed
+        except (InvalidOperation, ValueError, OverflowError):
+            issues.append(f"invalid-{field}")
+            return None
+
+    entry, exit_price = amount("entryPrice", required=True), amount("exitPrice", required=True)
+    quantity = amount("contracts", required=True)
+    supplied = amount("realizedPnl")
+    fees = amount("totalFees")
+    basis = text(row.get("realizedPnlBasis")).lower()
+    if basis not in {"", "gross", "net"}:
+        issues.append("unsupported-pnl-basis")
+    if fees is not None and fees < 0:
+        issues.append("negative-totalFees")
+    if fees is not None and not basis:
+        issues.append("pnl-basis-required-with-fees")
+    if basis == "net" and fees is None:
+        issues.append("net-pnl-requires-totalFees")
+    cost_type = text(ticket.get("entryCostType")).lower()
+    if cost_type not in {"debit", "credit"}:
+        issues.append("unsupported-entry-cost-type")
+    for field, value in (("entryPrice", entry), ("exitPrice", exit_price)):
+        if value is not None and value < 0:
+            issues.append(f"negative-{field}")
+    if quantity is not None and (quantity <= 0 or quantity != quantity.to_integral_value()):
+        issues.append("invalid-contracts")
+    gross = net = expected = None
+    if not issues:
+        try:
+            change = entry - exit_price if cost_type == "credit" else exit_price - entry
+            gross = (change * CONTRACT_MULTIPLIER * quantity).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            net = (gross-fees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if fees is not None else None
+            expected = net if basis == "net" else gross
+            if supplied is not None and supplied.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) != expected:
+                issues.append("reported-pnl-does-not-reconcile")
+        except (InvalidOperation, OverflowError):
+            issues.append("invalid-pnl-arithmetic")
+    valid = not issues
+    return {"arithmeticReconciled": valid, "issues": sorted(set(issues)),
+            "grossPnl": float(gross) if gross is not None else None,
+            "netPnl": float(net) if valid and net is not None else None,
+            "totalFees": float(fees) if fees is not None and fees >= 0 else None,
+            "reportedBasis": basis or "legacy-gross-assumption",
+            "reportedOrDerivedPnl": float(expected) if valid else None,
+            "scoringPnl": float(net if net is not None else gross) if valid else None,
+            "costStatus": "operator-reported-costs" if valid and fees is not None else "unknown",
+            "pnlBasis": "net of operator-reported fees" if valid and fees is not None else "gross; fees unknown",
+            "independentlyVerified": False,
+            "contractMultiplier": CONTRACT_MULTIPLIER}
+
+
 def derived_realized_pnl(ticket: dict[str, Any], row: dict[str, Any]) -> float | None:
-    """Estimate realized P/L from entry and exit prices when CSV omits dollars."""
-    explicit = number(row.get("realizedPnl"))
-    if explicit is not None and math.isfinite(explicit):
-        return round(explicit, 2)
-    exit_price = number(row.get("exitPrice"))
-    if exit_price is None:
-        return None
-    entry_price = number(row.get("entryPrice"), number(ticket.get("entryLimit"), 0.0))
-    contracts = contracts_for_row(row)
-    if ticket.get("entryCostType") == "credit":
-        return round(((entry_price or 0.0) - exit_price) * CONTRACT_MULTIPLIER * contracts, 2)
-    return round((exit_price - (entry_price or 0.0)) * CONTRACT_MULTIPLIER * contracts, 2)
+    """Return reconciled closed P/L; never trust a contradictory supplied value."""
+    return fill_pnl_reconciliation(ticket, row)["reportedOrDerivedPnl"]
 
 
 def merge_notes(*parts: Any) -> str | None:
@@ -233,6 +301,10 @@ def apply_fill_row(ticket: dict[str, Any], row: dict[str, Any]) -> tuple[dict[st
         if identity_gaps:
             return ticket, False, "closed fill rejected: immutable identity does not match ticket: " + ", ".join(identity_gaps)
 
+        reconciliation = fill_pnl_reconciliation(ticket, row)
+        if not reconciliation["arithmeticReconciled"]:
+            return ticket, False, "closed fill rejected: P/L evidence invalid: " + ", ".join(reconciliation["issues"])
+
     paper_execution = {
         **(ticket.get("paperExecution") or {}),
         "environment": text(row.get("environment")) or "thinkorswim-paperMoney",
@@ -243,6 +315,8 @@ def apply_fill_row(ticket: dict[str, Any], row: dict[str, Any]) -> tuple[dict[st
         "entryPrice": number(row.get("entryPrice"), number(ticket.get("entryLimit"), 0.0)),
         "exitPrice": number(row.get("exitPrice")),
         "realizedPnl": derived_realized_pnl(ticket, row),
+        "totalFees": number(row.get("totalFees")),
+        "realizedPnlBasis": text(row.get("realizedPnlBasis")) or None,
         "openedAt": text(row.get("openedAt")) or text((ticket.get("paperExecution") or {}).get("openedAt")),
         "closedAt": text(row.get("closedAt")) or text((ticket.get("paperExecution") or {}).get("closedAt")),
         "status": status,
@@ -378,7 +452,7 @@ def ingest_fill_log(*, operator_requested: bool = False, ticket_id: str | None =
             "rejectedRows": rejected,
             "ignoredRows": ignored,
             "unmatchedRows": unmatched,
-            "notes": ["Preview only; no ticket or fill-log changes."],
+            "notes": ["Preview only; no ticket or fill-log changes.", *notes],
             "outcome": "operator-ingest-required" if imported else "no-progress-preview",
             "outcomeReason": "Only explicit operator fill commands may apply these rows.",
         }

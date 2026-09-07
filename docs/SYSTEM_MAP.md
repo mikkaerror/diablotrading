@@ -93,7 +93,10 @@ fill-adjusted risk. Intrinsic estimates remain visible as reported outcomes
 without sample credit. Lab/lineage/completeness, the paper gap, velocity and
 loop progress use this distinction. Saved-log consistency does not establish
 independent broker execution or costs. See
-[[PAPER_OUTCOME_QUALIFICATION_2026-09-07]].
+[[PAPER_OUTCOME_QUALIFICATION_2026-09-07]]. The same qualifier now reconciles
+P/L against entry/exit/quantity and explicit gross/net fee basis. Unknown fees
+stay unknown; supplied costs affect scoring only when source and execution
+metadata agree. See [[PAPER_FILL_ECONOMICS_2026-09-07]].
 
 ## Canonical Truth
 

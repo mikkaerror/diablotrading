@@ -19,7 +19,7 @@ from typing import Any
 
 from inferno_config import DOWNLOADS_LOOKBACK_HOURS, DOWNLOADS_SCAN_DIR, local_now
 from inferno_tos_fill_ingest import row_fingerprint, text
-from inferno_tos_sandbox import FILL_LOG_COLUMNS, TOS_FILL_LOG_WORK_FILE, write_fill_log_template
+from inferno_tos_sandbox import FILL_LOG_COLUMNS, REQUIRED_FILL_COLUMNS, TOS_FILL_LOG_WORK_FILE, ensure_fill_log_schema
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
 
@@ -117,7 +117,7 @@ def inferno_fill_log_schema(headers: list[str]) -> bool:
     """Return True when a CSV already matches the canonical fill-log schema."""
     normalized = {normalize_header(header) for header in headers}
     required = {normalize_header(column) for column in ("ticker", "status")}
-    return required.issubset(normalized) and {normalize_header(column) for column in FILL_LOG_COLUMNS}.issubset(normalized)
+    return required.issubset(normalized) and {normalize_header(column) for column in REQUIRED_FILL_COLUMNS}.issubset(normalized)
 
 
 def header_map(headers: list[str]) -> dict[str, str]:
@@ -192,7 +192,7 @@ def canonicalize_generic_row(row: dict[str, Any], mapped: dict[str, str], path: 
 
 def load_existing_fill_log() -> tuple[list[dict[str, str]], set[str]]:
     """Load the canonical fill log and return rows plus row fingerprints."""
-    write_fill_log_template()
+    ensure_fill_log_schema(TOS_FILL_LOG_WORK_FILE)
     with TOS_FILL_LOG_WORK_FILE.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         rows = [{column: text(row.get(column)) for column in FILL_LOG_COLUMNS} for row in reader]
@@ -202,7 +202,7 @@ def load_existing_fill_log() -> tuple[list[dict[str, str]], set[str]]:
 
 def save_fill_log(rows: list[dict[str, str]]) -> None:
     """Persist the canonical fill log with the latest normalized rows."""
-    write_fill_log_template()
+    ensure_fill_log_schema(TOS_FILL_LOG_WORK_FILE)
     with TOS_FILL_LOG_WORK_FILE.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FILL_LOG_COLUMNS)
         writer.writeheader()

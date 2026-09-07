@@ -152,12 +152,13 @@ class InfernoTosFillIngestTests(unittest.TestCase):
         self.assertFalse(changed)
         self.assertIn("not paper-staged", result)
 
-    def test_closed_fill_ignores_nonfinite_supplied_pnl_and_derives_from_execution_facts(self) -> None:
-        updated, changed, result = ingest.apply_fill_row(_ticket(), _row(realizedPnl="nan"))
+    def test_closed_fill_rejects_nonfinite_supplied_pnl_without_silent_repair(self) -> None:
+        ticket = _ticket()
+        updated, changed, result = ingest.apply_fill_row(ticket, _row(realizedPnl="nan"))
 
-        self.assertTrue(changed)
-        self.assertEqual(result, "closed")
-        self.assertAlmostEqual(updated["paperExecution"]["realizedPnl"], 70.0)
+        self.assertFalse(changed)
+        self.assertEqual(updated, ticket)
+        self.assertIn("invalid-realizedPnl", result)
 
     def test_ingest_nonfinal_row_requires_one_matching_paper_staged_ticket(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

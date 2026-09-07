@@ -2284,7 +2284,9 @@ def main() -> int:
     strategy_lab_ok = strategy_lab_today and (strategy_lab.get("deskVerdict") or {}).get("level") is not None
     strategy_lab_detail = (
         f"{(strategy_lab.get('deskVerdict') or {}).get('level')} | "
-        f"{(strategy_lab.get('overall') or {}).get('scoredCount', 0)} scored"
+        f"{(strategy_lab.get('overall') or {}).get('scoredCount', 0)} scored | "
+        f"fees unknown {(strategy_lab.get('overall') or {}).get('unknownFeesCount', 'unmeasured')} | "
+        f"net of reported fees {(strategy_lab.get('overall') or {}).get('netOfReportedFeesCount', 'unmeasured')}"
         if strategy_lab_ok
         else json.dumps(
             {

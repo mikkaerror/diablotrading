@@ -41,7 +41,7 @@ STAGED_CHKP = {
     "strategy": "CALL_DEBIT_SPREAD",
     "status": "paper-staged",
     "expiration": FUTURE_EXPIRATION,
-    "entryCostType": "NET_DEBIT_LIMIT",
+    "entryCostType": "debit",
 }
 
 

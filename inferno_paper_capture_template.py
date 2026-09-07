@@ -51,7 +51,7 @@ except Exception:  # pragma: no cover - defensive fallback if sandbox import shi
     FILL_LOG_COLUMNS = [
         "sessionDate", "ticketId", "ticker", "strategy", "expiration", "environment",
         "paperAccount", "routeFamily", "orderType", "contracts", "entryPrice", "exitPrice",
-        "realizedPnl", "status", "openedAt", "closedAt", "notes",
+        "realizedPnl", "realizedPnlBasis", "totalFees", "status", "openedAt", "closedAt", "notes",
     ]
 
 EXECUTION_LEDGER_FILE = DATA_DIR / "inferno_paper_execution_ledger.json"
@@ -66,7 +66,7 @@ PAPER_MONEY_ENVIRONMENT = "thinkorswim-paperMoney"
 
 # Fields the operator must supply from their actual paperMoney fills. Left
 # blank on purpose so the template can never masquerade as an executed order.
-OPERATOR_SUPPLIED_FIELDS = ("entryPrice", "exitPrice", "realizedPnl", "status", "openedAt", "closedAt")
+OPERATOR_SUPPLIED_FIELDS = ("entryPrice", "exitPrice", "realizedPnl", "realizedPnlBasis", "totalFees", "status", "openedAt", "closedAt")
 
 
 def text(value: Any) -> str:
@@ -221,7 +221,10 @@ def template_text(payload: dict[str, Any]) -> str:
         "You fill only these fields, from your paperMoney fills:",
         "  entryPrice   net debit/credit you were filled at on entry (e.g. 2.30)",
         "  exitPrice    net price you were filled at on exit         (e.g. 4.10)",
-        "  realizedPnl  realized dollar P/L for the closed spread    (e.g. 180)",
+        "  realizedPnl  optional dollar P/L; must reconcile with fills and declared basis",
+        "  realizedPnlBasis  gross or net; required when supplying totalFees",
+        "  totalFees    total USD commissions + fees, all legs/units, entry + exit",
+        "               Blank means unknown; enter 0 only if actually confirmed zero.",
         "  status       closed-win  or  closed-loss",
         "  openedAt     entry fill time, timezone-aware ISO 8601",
         "  closedAt     exit fill time, timezone-aware ISO 8601 (>= openedAt)",

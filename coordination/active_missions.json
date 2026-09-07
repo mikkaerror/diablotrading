@@ -1331,5 +1331,20 @@
       "delegation-takeover",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-2342409f",
+    "createdAt": "2026-09-07T16:09:30.888929-06:00",
+    "updatedAt": "2026-09-07T16:23:01.451690-06:00",
+    "title": "Reconcile paper fill P/L and make fees explicit",
+    "body": "Implemented arithmetic reconciliation of standard-position paper P/L, optional gross/net basis and total round-trip fees, source/import metadata matching, net scoring when costs are explicit, unknown-fee reporting and operator work items. Preview explains rejected arithmetic without writes. Added legacy CSV compatibility and fixed Downloads global-schema initialization leak exposed by tests. 89 focused and 2083 full tests pass; guarded full suite zero global fill-schema initialization attempts. Math12/hygiene/diff clean; Doctor11 existing attention. DELL remains30 gross, fees/net unknown; source count1, no promotion progress. Paper ledger, ingest and risk/config hashes unchanged; all original fill CSV cells identical with two empty optional columns. No tickets, authority or schedules changed. Immutable source and independent execution/cost proof remain next.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "paper-economics",
+      "provenance",
+      "research-only"
+    ]
   }
 ]

@@ -22,8 +22,9 @@ from inferno_tos_fill_ingest import (
     closed_fill_evidence_gaps,
     closed_fill_ticket_identity_gaps,
     normalized_status,
+    fill_pnl_reconciliation,
 )
-from inferno_tos_sandbox import FILL_LOG_COLUMNS, TOS_FILL_LOG_WORK_FILE
+from inferno_tos_sandbox import FILL_LOG_COLUMNS, OPTIONAL_FILL_COLUMNS, TOS_FILL_LOG_WORK_FILE
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -66,7 +67,7 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
         "path": str(TOS_FILL_LOG_WORK_FILE),
         "exists": TOS_FILL_LOG_WORK_FILE.exists(),
         "schemaValid": False,
-        "schemaMissingColumns": list(FILL_LOG_COLUMNS),
+        "schemaMissingColumns": [c for c in FILL_LOG_COLUMNS if c not in OPTIONAL_FILL_COLUMNS],
         "schemaUnexpectedColumns": [],
         "readError": None,
         "rowCount": 0,
@@ -82,6 +83,7 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
         "closedRowsUnmatchedTicket": 0,
         "closedRowsAmbiguousTicket": 0,
         "closedRowsIdentityMismatch": 0,
+        "closedRowsEconomicsMismatch": 0,
         "closedMissingFieldCounts": {},
         "closedIdentityMismatchCounts": {},
         "ignoredRows": 0,
@@ -119,7 +121,7 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
             fields = reader.fieldnames or []
             field_set = set(fields)
             expected_set = set(FILL_LOG_COLUMNS)
-            report["schemaMissingColumns"] = [column for column in FILL_LOG_COLUMNS if column not in field_set]
+            report["schemaMissingColumns"] = [column for column in FILL_LOG_COLUMNS if column not in field_set and column not in OPTIONAL_FILL_COLUMNS]
             report["schemaUnexpectedColumns"] = [column for column in fields if column not in expected_set]
             report["schemaValid"] = not report["schemaMissingColumns"] and not report["schemaUnexpectedColumns"]
             rows = list(reader)
@@ -164,6 +166,9 @@ def fill_intake_readiness(ledger: dict[str, Any] | None = None) -> dict[str, Any
                 report["closedRowsIdentityMismatch"] += 1
                 identity_counts.update(identity_gaps)
                 continue
+            if not fill_pnl_reconciliation(candidates[0], row)["arithmeticReconciled"]:
+                report["closedRowsEconomicsMismatch"] += 1
+                continue
             report["closeReadyRows"] += 1
         elif status == "ignored":
             report["ignoredRows"] += 1
@@ -191,6 +196,8 @@ def fill_intake_verdict(intake: dict[str, Any]) -> str:
         for field in ("closedRowsUnmatchedTicket", "closedRowsAmbiguousTicket", "closedRowsIdentityMismatch")
     ):
         return "closed-fill-ticket-unmatched"
+    if intake.get("closedRowsEconomicsMismatch", 0):
+        return "closed-fill-economics-mismatch"
     if intake.get("closedRowsMissingEvidence", 0):
         return "closed-fill-provenance-incomplete"
     if intake.get("openRows", 0):
@@ -206,6 +213,10 @@ def operator_work_items(audits: list[dict[str, Any]], intake: dict[str, Any]) ->
     """Name the minimum evidence work without generating or importing a fill."""
     items: list[dict[str, Any]] = []
     for audit in audits:
+        if audit.get("labScorable") and (audit.get("provenance", {}).get("pnlReconciliation") or {}).get("costStatus") == "unknown":
+            items.append({"kind": "recover-actual-round-trip-fees", "ticketId": audit.get("ticketId"),
+                          "ticker": audit.get("ticker"),
+                          "instruction": "Recover total commissions and fees for all entry/exit legs from actual paperMoney records; leave unknown rather than assume zero. Independent execution proof remains separate."})
         if audit.get("state") != "reported-outcome-provenance-debt":
             continue
         items.append(
@@ -349,6 +360,8 @@ def build_paper_outcome_completeness(ledger: dict[str, Any] | None = None, sourc
             "reportedScorableRows": sum(bool(row["reportedScorable"]) for row in audits),
             "reportedRowsWithProvenanceDebt": sum(bool(row["reportedScorable"]) and not row["auditComplete"] for row in audits),
             "independentlyVerifiedRows": 0,
+            "scorableNetOfReportedFeesRows": sum(row["labScorable"] and (row["provenance"].get("pnlReconciliation") or {}).get("costStatus") == "operator-reported-costs" for row in audits),
+            "scorableUnknownFeesRows": sum(row["labScorable"] and (row["provenance"].get("pnlReconciliation") or {}).get("costStatus") == "unknown" for row in audits),
         },
         "stateCounts": dict(sorted(state_counts.items())),
         "missingFieldCounts": dict(sorted(missing_counts.items())),
@@ -388,6 +401,8 @@ def paper_outcome_completeness_text(payload: dict[str, Any]) -> str:
         f"- audit-complete source-reconciled outcomes: {counts.get('auditCompleteRows', 0)}",
         f"- reported numeric rows with provenance debt: {counts.get('reportedRowsWithProvenanceDebt', 0)}",
         "- independent broker execution and costs verification: not established",
+        f"- scorable net of reported fees: {counts.get('scorableNetOfReportedFeesRows', 0)} | fees unknown: {counts.get('scorableUnknownFeesRows', 0)}",
+        f"- closed intake rows with P/L arithmetic mismatch: {intake.get('closedRowsEconomicsMismatch', 0)}",
         "",
         "Missing field counts:",
     ]
