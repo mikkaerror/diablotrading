@@ -243,3 +243,21 @@ names, not narrower spreads — a recommender, not a constant edit.
 `expected_move_bucket`: quiet <3%, normal <6%, hot <10%, "inferno" ≥10%.
 The universe median realized move is ~14%, so most names read "inferno"
 by construction; today that only produces a warning. Cosmetic, left alone.
+
+## 15. FIXED — real earnings dates now fetch themselves (nothing needed from the operator)
+
+Operator asked why we were not pulling real earnings dates from Schwab or
+thinkorswim. Schwab's Trader API has no earnings-calendar endpoint and the
+TOS window only shows the *next* date. But `morning_inferno_pipeline` has
+been calling `yfinance.get_earnings_dates(limit=12)` for every tracker name
+all along — and discarding the past dates. New
+`inferno_earnings_history_fetch.py` keeps them, pairs each with the realized
+move (T-1 close → T+1 close, the ledger's own convention; Schwab closes win
+where we hold them), and imports the rows through
+`inferno_earnings_history_import.py` (now accepts realized-only rows).
+Nightly order: fetch → calibration → expected-move ledger. Fail-soft: an
+empty provider result leaves the previous backfill untouched. It has to run
+where yfinance has network — the Mac nightly loop, or
+`python3 inferno_earnings_history_fetch.py run` once by hand. Historical
+pre-print implied moves are not available from this provider; the Schwab
+chain history accumulates them for future events.

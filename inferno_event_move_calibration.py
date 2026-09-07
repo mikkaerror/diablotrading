@@ -162,7 +162,7 @@ def infer_events(candles: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def curated_events(backfill: dict[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
     """Group curated earnings-history rows by ticker when a backfill exists."""
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for item in (backfill or {}).get("events") or (backfill or {}).get("items") or []:
+    for item in (backfill or {}).get("records") or (backfill or {}).get("events") or (backfill or {}).get("items") or []:
         ticker = str(item.get("ticker") or "").upper().strip()
         realized = number(item.get("realizedAbsMovePct"))
         if not ticker or realized is None:
@@ -175,6 +175,8 @@ def curated_events(backfill: dict[str, Any] | None) -> dict[str, list[dict[str, 
                 "atrPercent": number(item.get("atrPercent")),
                 "moveAtrMultiple": None,
                 "eventSource": CURATED_SOURCE,
+                "dateSource": str(item.get("source") or "manual-earnings-history-import"),
+                "realizedMoveWindow": item.get("realizedMoveWindow"),
             }
         )
     return grouped

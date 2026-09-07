@@ -120,8 +120,10 @@ run_step "shared:full tracker role review" "$PYTHON" inferno_tracker_role_review
 run_step "shared:full tracker blank role-policy packet" "$PYTHON" inferno_tracker_role_policy_packet.py run
 run_step "shared:full tracker role-policy contract" "$PYTHON" inferno_tracker_role_policy.py run
 
-# 1b) event-move calibration from the local price-history tape (no network;
-#     feeds the expected-move premium hurdle's per-name benchmark)
+# 1b) real past earnings dates + realized moves (yfinance; fail-soft, never
+#     clobbers the previous backfill), then the event-move calibration that
+#     feeds the expected-move premium hurdle's per-name benchmark
+run_step "earnings history fetch" "$PYTHON" inferno_earnings_history_fetch.py run
 run_step "event move calibration" "$PYTHON" inferno_event_move_calibration.py run
 
 # 2) bounded evidence goal loop (research-only; no approval or live mutation)

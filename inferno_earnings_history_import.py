@@ -72,7 +72,10 @@ def parse_rows(rows: list[dict]) -> tuple[list[dict], list[str]]:
         if earnings_date is None:
             warnings.append(f"row {i} ({tkr} {raw_date}): bad earningsDate - skipped")
             continue
-        if implied is None or implied <= 0:
+        implied_blank = str(row.get("impliedMovePct") or "").strip() == ""
+        if implied_blank:
+            implied = None  # realized-only row: usable for event-move benchmarks, not for richness
+        elif implied is None or implied <= 0:
             warnings.append(f"row {i} ({tkr} {earnings_date}): bad impliedMovePct - skipped")
             continue
         if realized is None or realized < 0:
@@ -94,9 +97,10 @@ def parse_rows(rows: list[dict]) -> tuple[list[dict], list[str]]:
             "reviewedAt": f"{earnings_date}T16:00:00-06:00",
             "impliedMovePct": implied,
             "realizedAbsMovePct": realized,
-            "moveRatio": round(realized / implied, 4),
+            "moveRatio": round(realized / implied, 4) if implied else None,
             "family": "LONG_STRADDLE",
-            "source": "manual-earnings-history-import",
+            "source": (row.get("source") or "").strip() or "manual-earnings-history-import",
+            "realizedMoveWindow": (row.get("realizedMoveWindow") or "").strip() or None,
         }
     records = sorted(seen.values(), key=lambda r: (r["ticker"], r["earningsDate"]))
     return records, warnings
