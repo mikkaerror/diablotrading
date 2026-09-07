@@ -1,0 +1,9 @@
+Run the Inferno market-open research refresh in /Users/mikkasida/Documents/New project.
+
+Read CLAUDE.md, docs/SYSTEM_MAP.md, and reports/model_command_center_onboard_latest.txt for the current rails. Run python3 inferno_refresh_handoff.py run. This bounded runner owns OAuth, primary and supplemental chain refresh, variant pricing, shadow comparison, paper research and blockers, scenario observations/backtest and score archival. Do not replace it with a hand-written command sequence or bypass its completion checks.
+
+Inspect data/inferno_market_open_handoff.json and reports/market_open_handoff_latest.txt. A complete receipt means the required artifacts were rebuilt; it does not establish current executable quotes or trading edge. If the runner returns a failure or blocked receipt, stop and report the named blocker. On a closed-market skip, report the skip without refreshing or briefing. Suppress duplicate work when the runner reports an already complete fresh receipt.
+
+On completion run python3 inferno_model_command_center.py, ./inferno usage, and ./inferno doctor. Summarize the receipt status, source timestamps, pricing and paper research blockers, and doctor warnings. Report elapsed seconds as duration; monetary cost is unmeasured and a refresh earns no paper promotion credit. Do not change source code, evaluators, thresholds or schedules during this scheduled run.
+
+Research only. Never approve, reject, close, promote or stage a paper ticket. Never submit broker/live orders, call order/preview/replace/cancel endpoints, or enable liveTradingAllowed, brokerSubmitAllowed or submit_live_order. Do not change risk constants, the eligible universe, operator authority or capital-scaling acknowledgments. Do not open thinkorswim or broker UI windows. Do not send email; Morning Conviction Brief retains its existing delivery responsibility.

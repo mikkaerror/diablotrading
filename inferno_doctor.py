@@ -25,6 +25,7 @@ from inferno_config import (
     WAKE_HOUR,
     WAKE_MINUTE,
 )
+from inferno_refresh_handoff import RECEIPT_FILE, refresh_handoff_status
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_market_calendar import is_market_session, previous_market_session
 from inferno_reporting_summary import build_tos_visibility_summary, render_tos_visibility_line
@@ -3011,6 +3012,11 @@ def main() -> int:
     research_cycle_ok, research_cycle_detail = research_cycle_status(research_cycle)
     lines.append(summarize_status("Research cycle", research_cycle_ok, research_cycle_detail))
     if not research_cycle_ok:
+        warnings += 1
+
+    handoff_ok, handoff_detail = refresh_handoff_status(load_json_file(RECEIPT_FILE) or {}, now)
+    lines.append(summarize_status("Market-open refresh handoff", handoff_ok, handoff_detail))
+    if not handoff_ok:
         warnings += 1
 
     fill_ingest = load_json_file(TOS_FILL_INGEST_FILE) or {}

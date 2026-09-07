@@ -127,12 +127,13 @@ CODEX_AUTOMATION_PROMPT_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "./run_inferno_paper_bottleneck_reducer.sh",
     ),
     "inferno-market-open-options-research-refresh": (
-        "./inferno daily-ops --quiet",
-        "./run_inferno_strategy_alternative_pricing.sh --limit 6 --variants-per-ticker 3",
-        "./run_inferno_strategy_shadow_comparison.sh",
-        "inferno_paper_test_director.py",
-        "inferno_paper_blocker_swarm.py",
-        "inferno_paper_bottleneck_reducer.py",
+        "python3 inferno_refresh_handoff.py run",
+        "data/inferno_market_open_handoff.json",
+    ),
+    "morning-conviction-brief": (
+        "--require-market-open-refresh",
+        "--skip-updates",
+        "Do not retry without the guard",
     ),
 }
 

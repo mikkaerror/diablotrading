@@ -37,6 +37,7 @@ from inferno_config import (
     in_time_window,
     local_now,
 )
+from inferno_refresh_handoff import brief_readiness
 from inferno_execution_clerk import build_execution_queue, save_execution_queue
 from inferno_heartbeat import record_heartbeat
 from inferno_io import append_text, atomic_write_json, atomic_write_text
@@ -2657,6 +2658,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Refresh valid tracker Price cells from the latest available vendor close instead of only repairing blanks/errors.",
     )
+    parser.add_argument("--require-market-open-refresh", action="store_true",
+                        help="Require a verified same-session refresh before building and delivering this brief; requires --skip-updates.")
     parser.add_argument("--skip-email", action="store_true", help="Build the snapshot but do not send email")
     parser.add_argument(
         "--automation",
@@ -2676,6 +2679,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     load_env_file(ROOT / ".env.smtp")
     args = parse_args()
+    if args.require_market_open_refresh:
+        if not args.skip_updates:
+            print('Guarded briefing requires --skip-updates; refresh belongs to the upstream job.')
+            return 2
+        readiness = brief_readiness()
+        if not readiness['ready']:
+            print(json.dumps(readiness, indent=2))
+            return 2
     backtest_root = Path(args.backtest_root).expanduser().resolve()
     python_bin = Path(args.python_bin).expanduser().resolve() if args.python_bin else backtest_root / "venv" / "bin" / "python"
     use_internal_updates = args.cloud_native or args.internal_updates
@@ -2977,6 +2988,14 @@ def main() -> int:
 
             payload["brief"] += build_risk_desk_addendum(payload)
             payload["brief"] += approval_reply_section(approval_queue)
+            if args.require_market_open_refresh:
+                readiness = brief_readiness()
+                if not readiness['ready']:
+                    print(json.dumps(readiness, indent=2))
+                    return 2
+                payload['refreshHandoff'] = readiness
+                payload['brief'] += ("\nResearch refresh completed: " + readiness['completedAt'] +
+                                     "\nIndividual quote quality and trade gates remain separate.\n")
             write_payload(payload)
 
             email_sent = False

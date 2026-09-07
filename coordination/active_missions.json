@@ -1315,5 +1315,21 @@
       "operator-boundary",
       "high-priority"
     ]
+  },
+  {
+    "id": "mission-46159892",
+    "createdAt": "2026-09-07T14:34:02.421548-06:00",
+    "updatedAt": "2026-09-07T14:48:35.914167-06:00",
+    "title": "Repair refresh-to-brief handoff and deploy reviewed schedule code",
+    "body": "Codex took over the reserved scheduling lane at operator request because Claude was unavailable. Implemented bounded refresh receipt, source timestamps/hashes, pipeline guard before work and delivery, digest source labels, doctor and command-center visibility. Deployed four reviewed service copies; plist/wrapper hashes preserved. Existing Codex refresh remains 07:35 and guarded morning moves to 07:50 Mountain; model/project/effort/status preserved through app tool. 43 focused and 2066 full tests pass, math12 clean, secret hygiene healthy, Doctor11 existing attention. Closed-day smoke blocks before email/provider work. Six protected hashes unchanged; paper/live authority intact. Next-session operational observation remains pending; no paper evidence progress claimed.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "scheduling",
+      "handoff",
+      "delegation-takeover",
+      "research-only"
+    ]
   }
 ]

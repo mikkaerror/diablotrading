@@ -51,6 +51,13 @@ overlapping scheduled start sees either the previous complete executable or the
 new complete executable. Its checksum is audited in `./inferno schedule`; a
 drift verdict means the job is not yet using the reviewed source.
 
+The 07:35 Mountain options refresh writes a verified completion receipt through
+`inferno_refresh_handoff.py`. The 07:50 morning brief requires its same-session
+source timestamps and unchanged hashes before work and before delivery; an
+unguarded fallback is prohibited. The 07:30/17:10 diagnostic digest preserves
+its cadence and labels source build times. Doctor and command center expose
+the handoff. See [[REFRESH_BRIEF_HANDOFF_2026-09-07]].
+
 Mutable evidence ledgers retain a compatibility `generatedAt` creation stamp,
 but lifecycle freshness is explicit: `createdAt`, `updatedAt`,
 `lastSuccessfulAt`, `lastAttemptAt`, `sourceDataAsOf`, and

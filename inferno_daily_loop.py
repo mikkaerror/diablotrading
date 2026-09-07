@@ -35,6 +35,7 @@ from typing import Any, Callable
 
 from inferno_approval_cadence import build_cadence, save_cadence
 from inferno_brain_cycle_journal import save_journal_memo, snapshot_cycle
+from inferno_refresh_handoff import source_basis
 from inferno_config import local_now
 from inferno_counterfactual import build_counterfactual, save_counterfactual
 from inferno_devils_advocate import (
@@ -676,6 +677,7 @@ def build_daily_loop() -> dict[str, Any]:
         "generatedAt": local_now().isoformat(),
         "stage": DAILY_LOOP_STAGE,
         "diagnosticOnly": True,
+        "sourceBasis": source_basis(),
         "deskVerdict": success_verdict,
         "decideTodayTickers": decide_today,
         "narrative": narrative,
@@ -920,6 +922,13 @@ def daily_loop_text(payload: dict[str, Any]) -> str:
         f"Desk verdict: {(payload.get('deskVerdict') or '').upper()}",
         f"Steps ok / total: {payload.get('okCount')}/{payload.get('stepCount')}",
     ]
+    basis = payload.get("sourceBasis") or {}
+    if basis:
+        lines.extend([f"Source phase: {basis.get('phase')}",
+                      f"Refresh handoff: {(basis.get('handoff') or {}).get('status')}",
+                      str(basis.get('note') or '')])
+        for name, stamp in (basis.get('sourceGeneratedAt') or {}).items():
+            lines.append(f"- {name} built: {stamp}")
     narrative = payload.get("narrative")
     if narrative:
         lines.extend(["", "Narrative:", narrative])

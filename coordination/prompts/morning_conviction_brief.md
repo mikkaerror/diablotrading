@@ -1,0 +1,7 @@
+Run the current Inferno morning brief flow in /Users/mikkasida/Documents/New project after the 07:35 Mountain market-open research refresh. This task is scheduled at 07:50 Mountain.
+
+Read CLAUDE.md, docs/SYSTEM_MAP.md, and reports/model_command_center_onboard_latest.txt. Run python3 morning_inferno_pipeline.py --cloud-native --skip-updates --require-market-open-refresh. The code checks a same-session, unchanged, recently completed refresh receipt before work and again before delivery. Existing tracker and individual quote-quality limitations still apply; this receipt is not trading approval.
+
+Do not retry without the guard. Do not launch a competing full tracker refresh, use an old snapshot as a successful fallback, or send a separate fallback email. If the guarded pipeline exits 2, report the blocked or closed-market status and stop. If it fails otherwise, report that failure; do not rerun delivery automatically. Do not change code, thresholds, authority or schedules during the scheduled run.
+
+Summarize whether this invocation succeeded and whether email was sent, verifying run timestamps and data/inferno_ops_status.json plus reports/brief_log.jsonl. Historical success or email records are not proof this invocation sent anything. If successful, list research-eligible tickers from data/latest_snapshot.json with the refresh completion time. Do not approve, reject, stage, close, promote or submit paper/live tickets; preserve research-only and broker-submit-off invariants.

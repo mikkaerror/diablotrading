@@ -62,6 +62,7 @@ SCHWAB_TRANSACTION_LEDGER_FILE = DATA_DIR / "inferno_schwab_transaction_ledger.j
 TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 ACCOUNT_OPTIMIZATION_FILE = DATA_DIR / "inferno_account_optimization.json"
 RISK_GATE_AUDIT_FILE = DATA_DIR / "inferno_risk_gate_audit.json"
+REFRESH_HANDOFF_FILE = DATA_DIR / "inferno_market_open_handoff.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_CAPTURE_TEMPLATE_FILE = DATA_DIR / "inferno_paper_capture_template.json"
 PAPER_BLOCKER_SWARM_FILE = DATA_DIR / "inferno_paper_blocker_swarm.json"
@@ -163,6 +164,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "Is the desk broken?",
         "artifact": "reports/doctor_latest.txt",
         "owner": "operator",
+    },
+    {
+        "lane": "market-open-refresh-handoff",
+        "question": "Did this session's bounded research refresh complete before briefing?",
+        "artifact": "reports/market_open_handoff_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "command",
@@ -1157,6 +1164,7 @@ def build_command_center() -> dict[str, Any]:
         "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
         "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
+        "refreshHandoff": artifact_summary(REFRESH_HANDOFF_FILE, keys=("status", "generatedAt", "completedAt", "issues", "researchOnly", "promotable")),
         "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
         "paperCaptureTemplate": artifact_summary(
             PAPER_CAPTURE_TEMPLATE_FILE,
