@@ -77,6 +77,7 @@ SCORE_CALIBRATION_FILE = DATA_DIR / "inferno_score_calibration.json"
 SCORE_THRESHOLD_AUDIT_FILE = DATA_DIR / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = DATA_DIR / "inferno_expected_move_ledger.json"
 EVENT_MOVE_CALIBRATION_FILE = DATA_DIR / "inferno_event_move_calibration.json"
+EVIDENCE_CAPACITY_FILE = DATA_DIR / "inferno_evidence_capacity_plan.json"
 SHORT_PREMIUM_STUDY_FILE = DATA_DIR / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = DATA_DIR / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
@@ -377,6 +378,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "expected-move",
         "question": "Did long-vol realised moves clear their debit-implied hurdle?",
         "artifact": "reports/expected_move_ledger_latest.txt",
+        "owner": "shared",
+    },
+    {
+        "lane": "evidence-capacity",
+        "question": "When does the universe actually report, and which desk cap binds when it does?",
+        "artifact": "reports/evidence_capacity_plan_latest.txt",
         "owner": "shared",
     },
     {
@@ -1188,6 +1195,7 @@ def build_command_center() -> dict[str, Any]:
         "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "scoreThresholdAudit": artifact_summary(SCORE_THRESHOLD_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
         "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "evidenceCapacityPlan": artifact_summary(EVIDENCE_CAPACITY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
         "eventMoveCalibration": artifact_summary(EVENT_MOVE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
         "shortPremiumStudy": artifact_summary(SHORT_PREMIUM_STUDY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "usableBackwardRecords")),
         "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),

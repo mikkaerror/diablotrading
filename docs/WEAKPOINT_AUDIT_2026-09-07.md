@@ -261,3 +261,80 @@ where yfinance has network — the Mac nightly loop, or
 `python3 inferno_earnings_history_fetch.py run` once by hand. Historical
 pre-print implied moves are not available from this provider; the Schwab
 chain history accumulates them for future events.
+
+---
+
+# Part 3 — limits that bind the universe we trade (same session, afternoon)
+
+## 16. FIXED (measured) — "100% of the universe fits the cap" was a tautology
+
+`inferno_universe_cap_fit` reported every name fitting the $500 cap because
+a $5-wide debit spread always costs < $500. It now also prices a vertical
+whose **width spans the event move** (Schwab ATM implied where held, curated
+earnings history where available, else ATR × 2.13 — the descriptive
+universe median, labelled as a proxy) at ~42% of width, plus a half-move
+variant at ~47%:
+
+- Expected-move-width debit fits the cap: **104/183 (57%)**
+- Half-move-width debit: 135/183 (74%)
+- Verdict: `cap-stretched-for-expected-move-structures`
+
+The names that cannot express the move under $500 are exactly the "big
+players": FIX ($6.9k full / $3.8k half), LITE, STX, ASML, MPWR, GEV, EQIX,
+DELL, FN, STRL. A $5-wide spread on STX covers 0.6% of spot against a 12%
+move — it is a lottery ticket on strike placement, not the thesis. The cap
+is operator-owned and unchanged; the honest options are a higher *paper*
+research budget for those names (paper capital is simulated), or accepting
+that big players are stock/LEAPS-accumulation names on this desk, not
+event-spread names. Fewer names, not narrower spreads.
+
+## 17. FIXED (label) — the spread gate is tick-bound on low-priced names
+
+On the 09-04 tape TE, HIVE, IREN, CLSK and AAPL all quote **1.3–1.6 ticks
+wide** — equally tight markets — yet TE (37%) and HIVE (48%) fail the
+percentage gate while IREN passes at 3%. On sub-$0.50 options the
+percentage measures option price, not liquidity. The friction is still
+economically real against the premium at risk, so the gate's *verdict*
+stands, but the *reason* was wrong: the blocker swarm filed them as
+"liquidity". The tape now carries `atmWindowSpreadTicks`, `spreadTickBound`,
+and flags `tick-bound-spread-small-premium` when the pct gate fails on a
+≤2-tick market. The genuinely wide names are ACM/ACMR/ACN at 15–28 ticks.
+Codex follow-up: route the tick-bound flag to a "structure/premium-too-small"
+lane rather than "liquidity" in the blocker swarm.
+
+## 18. NEW — the funnel is calendar-starved, and the 30-outcome projection is a straight line through a burst
+
+Only **4 of 183 names report inside the 21-day candidate window today**
+(AVAV, ORCL, SNX, UEC — all confidence 1 or Avoid/Watchlist), while **115
+report in weeks 7–8** (Oct 19–Nov 1), 67 of them passing the
+confidence/setup screens. The paper-velocity projection ("~58 weeks")
+extrapolates 0.47 fills/week linearly through that.
+
+New `inferno_evidence_capacity_plan.py` lays the tracker's next-earnings
+dates out by week, applies the front-of-funnel screens, and pushes the flow
+through the desk's own caps:
+
+| cap | scored outcomes / week it allows (3-day hold) |
+|---|---|
+| `EXECUTION_QUEUE_LIMIT=5` (intents priced per cycle) | 25 |
+| `MAX_ACTIVE_EXECUTION_INTENTS=3` | **5.0 ← binding** |
+| `MAX_OPEN_PAPER_TICKETS=5` | 8.3 |
+| `PAPER_DAILY_BUDGET=$1,500` / `$500` ticket | 15 |
+
+At capacity the desk clears 30 in **week 10 (mid-November)**; at the
+historical fill rate it does not clear within 20 weeks (7.7 cumulative).
+In weeks 7–8 the caps discard ~85% of eligible names. Two conclusions the
+straight line hid: (a) the true ceiling is the operator-fill step, not the
+gates — every capacity slot needs a recorded paperMoney fill; (b) if fills
+keep up, `MAX_ACTIVE_EXECUTION_INTENTS=3` is the in-season bottleneck. Both
+are operator decisions; the plan only measures. Nightly step; doctor and
+command-center wired. Verdict today: `calendar-starved-now`.
+
+## 19. OBSERVED — long-vol guard is name-blind
+
+`inferno_trade_evidence`: implied move > 20% → shadow-only for straddles /
+strangles; 10–20% band inside 7 days. Given the desk's 9% beat rate on long
+vol the strictness is defensible, but a fixed 20% means "never" for
+AXTI/AEHR/CCOI (median realized 25–29%) and "generous" for a 5% name. Once
+the curated earnings history has accumulated (§15), the guard can be
+expressed relative to the name's own median realized move. Not changed.

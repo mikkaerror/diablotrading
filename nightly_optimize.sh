@@ -159,6 +159,7 @@ run_step "shared:behavior audit"        "$PYTHON" inferno_trading_behavior_audit
 run_step "shared:portfolio heat"        "$PYTHON" inferno_portfolio_heat.py build
 run_step "shared:wheel shadow"          "$PYTHON" inferno_wheel_shadow.py build
 run_step "funnel diagnostic"     "$PYTHON" inferno_funnel_diagnostic.py run
+run_step "evidence capacity plan" "$PYTHON" inferno_evidence_capacity_plan.py run
 run_step "shared:short premium study"   "$PYTHON" inferno_short_premium_study.py run
 run_step "shared:market mastery plan"   "$PYTHON" inferno_market_mastery_plan.py --quiet
 run_step "shared:score threshold audit" "$PYTHON" inferno_score_threshold_audit.py run

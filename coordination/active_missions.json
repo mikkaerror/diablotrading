@@ -1268,5 +1268,36 @@
       "assumptions",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-7613c4ad",
+    "createdAt": "2026-09-07T13:17:21.500846-06:00",
+    "updatedAt": "2026-09-07T13:17:21.500846-06:00",
+    "title": "Consolidate entry economics and preserve rejected-mark provenance",
+    "body": "Continue authorized cleanup. Give MTM and exit diagnostics one pure entry-cost/quantity calculation, preserve unknown economics instead of finite-looking defaults, reconcile displayed fill basis, and retain blocked-mark reasons. No risk constants, thresholds, universe, ticket actions or broker authority changes.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "cleanup",
+      "entry-economics",
+      "provenance",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-146313c3",
+    "createdAt": "2026-09-07T19:24:36.932947+00:00",
+    "updatedAt": "2026-09-07T19:24:36.932947+00:00",
+    "title": "Blocker swarm: route tick-bound-spread-small-premium to a premium/structure lane, not liquidity",
+    "body": "Schwab tape now flags tick-bound-spread-small-premium (pct gate fails on a <=2-tick market). TE/HIVE are liquid; their premium is too small for options friction. Classify as structure/premium, not liquidity, so the swarm's dominant-lane read is honest. Audit \u00a717.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "medium",
+    "tags": [
+      "blocker-swarm",
+      "tick-bound",
+      "codex-lane"
+    ]
   }
 ]

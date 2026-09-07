@@ -53,6 +53,56 @@ OUTPUT_JSON = DATA / "inferno_universe_cap_fit.json"
 OUTPUT_TEXT = REPORTS / "universe_cap_fit_latest.txt"
 
 STAGE = "universe-cap-fit-research-only"
+SCHWAB_OPTIONS_FILE = DATA / "inferno_schwab_options.json"
+EVENT_MOVE_CALIBRATION_FILE = DATA / "inferno_event_move_calibration.json"
+# Event-move proxy when neither a Schwab implied move nor curated history
+# exists: universe median of realized-move / daily-ATR from the descriptive
+# calibration (2026-09-07: 2.13). Labelled as a proxy on every row.
+EVENT_MOVE_ATR_MULTIPLE_PROXY = 2.13
+# An ATM-to-1-expected-move vertical costs roughly 40-45% of its width; a
+# half-expected-move vertical (short strike closer) costs closer to 45-50%.
+EXPECTED_MOVE_DEBIT_COST_RATIO = 0.42
+HALF_MOVE_DEBIT_COST_RATIO = 0.47
+
+
+def _event_move_sources() -> tuple[dict[str, float], dict[str, float]]:
+    """Return ({symbol: implied move pct from the Schwab tape}, {symbol: curated median realized move pct})."""
+    implied: dict[str, float] = {}
+    for row in (_load_json(SCHWAB_OPTIONS_FILE).get("rows") or []):
+        move = row.get("atmImpliedMovePct")
+        symbol = str(row.get("symbol") or "").upper()
+        if symbol and isinstance(move, (int, float)) and move > 0 and not row.get("atmSeriesFallback"):
+            implied[symbol] = float(move) * 100.0
+    curated: dict[str, float] = {}
+    for item in (_load_json(EVENT_MOVE_CALIBRATION_FILE).get("symbols") or []):
+        symbol = str(item.get("symbol") or "").upper()
+        move = item.get("medianRealizedAbsMovePct")
+        if symbol and item.get("benchmarkReady") and str(item.get("eventSource") or "").startswith("curated") and isinstance(move, (int, float)):
+            curated[symbol] = float(move)
+    return implied, curated
+
+
+def _event_move_pct(ticker: str, atr_pct: float | None, implied: dict[str, float], curated: dict[str, float]) -> tuple[float | None, str]:
+    """Pick the best available event-move estimate for a name, with its source."""
+    if ticker in implied:
+        return implied[ticker], "schwab-atm-implied"
+    if ticker in curated:
+        return curated[ticker], "curated-earnings-history-median"
+    if isinstance(atr_pct, (int, float)) and atr_pct > 0:
+        return round(atr_pct * EVENT_MOVE_ATR_MULTIPLE_PROXY, 4), "atr-x-universe-median-proxy"
+    return None, "unavailable"
+
+
+def _thesis_structure_costs(price: float, event_move_pct: float | None) -> dict[str, float | None]:
+    """Dollar cost of verticals whose width actually spans the event move."""
+    if not isinstance(price, (int, float)) or price <= 0 or not event_move_pct:
+        return {"debit_expected_move": None, "debit_half_move": None, "expectedMoveDollars": None}
+    move_dollars = price * event_move_pct / 100.0
+    return {
+        "expectedMoveDollars": round(move_dollars, 2),
+        "debit_expected_move": round(move_dollars * 100.0 * EXPECTED_MOVE_DEBIT_COST_RATIO, 2),
+        "debit_half_move": round(move_dollars * 0.5 * 100.0 * HALF_MOVE_DEBIT_COST_RATIO, 2),
+    }
 
 
 def _load_json(path: Path) -> dict:
@@ -142,7 +192,14 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
         "debit5wFits": 0,
         "credit1wFits": 0,
         "missingPrice": 0,
+        "debitExpectedMoveFits": 0,
+        "debitHalfMoveFits": 0,
+        "eventMoveFromSchwab": 0,
+        "eventMoveFromCurated": 0,
+        "eventMoveFromProxy": 0,
+        "eventMoveUnavailable": 0,
     }
+    implied_moves, curated_moves = _event_move_sources()
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -168,6 +225,19 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
         costs = _estimate_structure_costs(float(price), atr_pct, iv_rank)
         fits = {k: _fits(v, cap) for k, v in costs.items()}
         any_fits = any(fits.values())
+        event_move_pct, event_move_source = _event_move_pct(ticker, atr_pct, implied_moves, curated_moves)
+        thesis = _thesis_structure_costs(float(price), event_move_pct)
+        thesis_fits = {
+            "debit_expected_move": _fits(thesis["debit_expected_move"], cap),
+            "debit_half_move": _fits(thesis["debit_half_move"], cap),
+        }
+        counts["debitExpectedMoveFits"] += int(thesis_fits["debit_expected_move"])
+        counts["debitHalfMoveFits"] += int(thesis_fits["debit_half_move"])
+        counts[{
+            "schwab-atm-implied": "eventMoveFromSchwab",
+            "curated-earnings-history-median": "eventMoveFromCurated",
+            "atr-x-universe-median-proxy": "eventMoveFromProxy",
+        }.get(event_move_source, "eventMoveUnavailable")] += 1
         if any_fits:
             counts["anyFits"] += 1
         else:
@@ -190,7 +260,16 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
                 "daysUntilEarnings": dte_earn,
                 "structures": costs,
                 "fits": fits,
+                "eventMovePct": event_move_pct,
+                "eventMoveSource": event_move_source,
+                "thesisStructures": thesis,
+                "thesisFits": thesis_fits,
                 "verdict": "any-fits" if any_fits else "none-fits",
+                "thesisVerdict": (
+                    "expected-move-fits" if thesis_fits["debit_expected_move"]
+                    else "half-move-fits" if thesis_fits["debit_half_move"]
+                    else "thesis-does-not-fit" if event_move_pct else "event-move-unavailable"
+                ),
             }
         )
 
@@ -205,7 +284,20 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
     else:
         verdict = "universe-well-suited-to-cap"
 
+    priced = counts["total"] - counts["missingPrice"] - counts["eventMoveUnavailable"]
+    thesis_fit_rate = (counts["debitExpectedMoveFits"] / priced) if priced else 0.0
+    half_fit_rate = (counts["debitHalfMoveFits"] / priced) if priced else 0.0
+    if thesis_fit_rate < 0.30:
+        thesis_verdict = "cap-too-small-for-expected-move-structures"
+    elif thesis_fit_rate < 0.60:
+        thesis_verdict = "cap-stretched-for-expected-move-structures"
+    else:
+        thesis_verdict = "cap-fits-expected-move-structures"
+
     payload = {
+        "thesisFitRate": round(thesis_fit_rate, 4),
+        "halfMoveFitRate": round(half_fit_rate, 4),
+        "thesisVerdict": thesis_verdict,
         "generatedAt": __import__("datetime").datetime.now(
             __import__("datetime").timezone.utc
         ).isoformat(),
@@ -225,6 +317,7 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
         "citations": [
             "Brenner & Subrahmanyam (1988) — simple ATM straddle formula",
             "Estimates are order-of-magnitude; not pricing-grade",
+            "Expected-move width uses Schwab ATM implied move where held, curated earnings history where available, else ATR x 2.13 (descriptive universe median, inferno_event_move_calibration 2026-09-07)",
         ],
         "reminders": [
             "this module estimates from snapshot; not pricing-grade",
@@ -254,7 +347,25 @@ def render_text(payload: dict) -> str:
         f"  $1-wide credit spread:     {counts.get('credit1wFits',0)}/{counts.get('total',0)}",
         f"  Missing price:             {counts.get('missingPrice',0)}/{counts.get('total',0)}",
         "",
+        "Thesis fit (does a vertical that spans the EVENT MOVE fit the cap?):",
+        f"  Verdict:                    {payload.get('thesisVerdict','?')}",
+        f"  Expected-move-width debit:  {counts.get('debitExpectedMoveFits',0)}/{counts.get('total',0)}  ({payload.get('thesisFitRate',0)*100:.1f}% of priced names)",
+        f"  Half-move-width debit:      {counts.get('debitHalfMoveFits',0)}/{counts.get('total',0)}  ({payload.get('halfMoveFitRate',0)*100:.1f}%)",
+        f"  Event-move source: schwab implied {counts.get('eventMoveFromSchwab',0)} | curated history {counts.get('eventMoveFromCurated',0)} | ATR proxy {counts.get('eventMoveFromProxy',0)} | unavailable {counts.get('eventMoveUnavailable',0)}",
+        "  Note: the $5-wide / $1-wide rows above always fit by construction; they say nothing about whether the structure can express the move.",
+        "",
     ]
+    thesis_miss = [r for r in payload.get("perTicker", []) if r.get("thesisVerdict") == "thesis-does-not-fit"]
+    if thesis_miss:
+        thesis_miss.sort(key=lambda r: -((r.get("thesisStructures") or {}).get("debit_expected_move") or 0))
+        lines.append("Top 10 names whose expected-move vertical does not fit the cap (by cost):")
+        for r in thesis_miss[:10]:
+            t = r.get("thesisStructures") or {}
+            lines.append(
+                f"  {r['ticker']:<6} ${r.get('price',0):>8.2f}  move≈{r.get('eventMovePct',0):.1f}% (${t.get('expectedMoveDollars','?')})  "
+                f"full-width≈${t.get('debit_expected_move','?')}  half-width≈${t.get('debit_half_move','?')}  src={r.get('eventMoveSource')}"
+            )
+        lines.append("")
     # Top-5 most-expensive that don't fit
     no_fit = [r for r in payload.get("perTicker", []) if r.get("verdict") == "none-fits"]
     if no_fit:

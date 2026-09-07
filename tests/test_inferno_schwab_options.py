@@ -439,3 +439,34 @@ class StrikeWindowTests(unittest.TestCase):
         out = schwab.strike_window_metrics(contracts, 158.78, "2026-09-11", 0.117)
         self.assertTrue(out["strikeWindowCoversImpliedMove"])
         self.assertIsNone(schwab.strike_window_metrics([], 158.78, "2026-09-11", 0.1)["strikeWindowCoversImpliedMove"])
+
+
+class SpreadTickTests(unittest.TestCase):
+    def test_one_tick_market_on_cheap_option_is_tick_bound_not_wide(self) -> None:
+        contracts = []
+        for k in (4.0, 4.5, 5.0):
+            for side in ("CALL", "PUT"):
+                contracts.append({"putCall": side, "expirationDate": "2026-09-11", "strikePrice": k, "bid": 0.20, "ask": 0.25, "mid": 0.225})
+        out = schwab.spread_tick_metrics(contracts, 4.6, "2026-09-11")
+        self.assertAlmostEqual(out["atmWindowMedianSpreadDollars"], 0.05, places=3)
+        self.assertEqual(out["atmWindowMedianTickSize"], 0.05)
+        self.assertEqual(out["atmWindowSpreadTicks"], 1.0)
+        self.assertTrue(out["spreadTickBound"])
+
+    def test_many_tick_market_is_not_tick_bound(self) -> None:
+        contracts = [{"putCall": s, "expirationDate": "2026-09-11", "strikePrice": 75.0, "bid": 2.0, "ask": 3.4, "mid": 2.7} for s in ("CALL", "PUT")]
+        out = schwab.spread_tick_metrics(contracts, 74.4, "2026-09-11")
+        self.assertEqual(out["atmWindowSpreadTicks"], 28.0)
+        self.assertFalse(out["spreadTickBound"])
+
+    def test_tick_bound_flag_only_when_pct_gate_fails(self) -> None:
+        chain = AtmSeriesAndQuoteSessionTests()._chain()
+        summary = schwab.summarize_chain("ORCL", chain)  # tight pct, passes gate
+        self.assertNotIn("tick-bound-spread-small-premium", summary["qualityFlags"])
+        cheap = {"symbol": "TE", "underlyingPrice": 4.6,
+                 "callExpDateMap": {"2026-09-11:7": {str(k): [{"symbol": f"C{k}", "putCall": "CALL", "expirationDate": "2026-09-11", "daysToExpiration": 7, "strikePrice": k, "bid": 0.20, "ask": 0.27, "openInterest": 3000, "totalVolume": 500, "delta": 0.5, "gamma": 0.1, "theta": -0.01, "vega": 0.01, "volatility": 90.0}] for k in (4.0, 4.5, 5.0)}},
+                 "putExpDateMap": {"2026-09-11:7": {str(k): [{"symbol": f"P{k}", "putCall": "PUT", "expirationDate": "2026-09-11", "daysToExpiration": 7, "strikePrice": k, "bid": 0.20, "ask": 0.27, "openInterest": 3000, "totalVolume": 500, "delta": -0.5, "gamma": 0.1, "theta": -0.01, "vega": 0.01, "volatility": 90.0}] for k in (4.0, 4.5, 5.0)}}}
+        out = schwab.summarize_chain("TE", cheap)
+        self.assertFalse(out["paperLiquidityPass"])
+        self.assertTrue(out["spreadTickBound"])
+        self.assertIn("tick-bound-spread-small-premium", out["qualityFlags"])

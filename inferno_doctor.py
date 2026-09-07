@@ -76,6 +76,7 @@ SCORE_CALIBRATION_FILE = ROOT / "data" / "inferno_score_calibration.json"
 SCORE_THRESHOLD_AUDIT_FILE = ROOT / "data" / "inferno_score_threshold_audit.json"
 EXPECTED_MOVE_LEDGER_FILE = ROOT / "data" / "inferno_expected_move_ledger.json"
 EVENT_MOVE_CALIBRATION_FILE = ROOT / "data" / "inferno_event_move_calibration.json"
+EVIDENCE_CAPACITY_FILE = ROOT / "data" / "inferno_evidence_capacity_plan.json"
 SHORT_PREMIUM_STUDY_FILE = ROOT / "data" / "inferno_short_premium_study.json"
 STRATEGY_ALTERNATIVE_SCORER_FILE = ROOT / "data" / "inferno_strategy_alternative_scorer.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = ROOT / "data" / "inferno_strategy_alternative_pricing.json"
@@ -1165,6 +1166,11 @@ def score_threshold_audit_status(report: dict) -> tuple[bool, str]:
         report,
         ok_verdicts={"calibrate-scores-do-not-loosen-gates"},
     )
+
+
+def evidence_capacity_status(report: dict) -> tuple[bool, str]:
+    """Research-only capacity plan: fresh and non-promotable with a known verdict."""
+    return _research_module_status(report, ok_verdicts={"calendar-starved-now", "capacity-bound", "insufficient-flow"})
 
 
 def event_move_calibration_status(report: dict) -> tuple[bool, str]:
@@ -2475,6 +2481,12 @@ def main() -> int:
     expected_move_ok, expected_move_detail = expected_move_ledger_status(expected_move)
     lines.append(summarize_status("Expected move ledger", expected_move_ok, expected_move_detail))
     if not expected_move_ok:
+        warnings += 1
+
+    evidence_capacity = load_json_file(EVIDENCE_CAPACITY_FILE) or {}
+    evidence_capacity_ok, evidence_capacity_detail = evidence_capacity_status(evidence_capacity)
+    lines.append(summarize_status("Evidence capacity plan", evidence_capacity_ok, evidence_capacity_detail))
+    if not evidence_capacity_ok:
         warnings += 1
 
     event_move_calibration = load_json_file(EVENT_MOVE_CALIBRATION_FILE) or {}

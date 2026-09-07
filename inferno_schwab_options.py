@@ -454,6 +454,55 @@ def classify_quote_session(epoch_ms: int | float | None) -> str:
     return QUOTE_SESSION_OFF_HOURS
 
 
+def option_tick_size(mid: float | None) -> float:
+    """Minimum quote increment for a listed equity option: $0.05 under $3, else $0.10 (penny-pilot names quote finer)."""
+    if mid is None:
+        return 0.10
+    return 0.05 if mid < 3.0 else 0.10
+
+
+def spread_tick_metrics(
+    contracts: list[dict[str, Any]],
+    underlying_price: float | None,
+    atm_expiration: str | None,
+    *,
+    window_per_side: int = 3,
+    tick_bound_max_ticks: float = 2.0,
+) -> dict[str, Any]:
+    """Measure the ATM window's dollar spread in ticks.
+
+    The percentage gate divides spread by mid, so a one-tick market on a
+    $0.25 option reads 20-40% "wide" while the same one-tick market on a
+    $2 option reads 3%. Reporting ticks separates *tick-bound* names (liquid,
+    but the premium is too small for options friction to be efficient) from
+    genuinely wide markets. This labels; it does not pass the gate — the
+    percentage friction is still what a fill pays.
+    """
+    if underlying_price is None or not atm_expiration:
+        return {"atmWindowMedianSpreadDollars": None, "atmWindowMedianTickSize": None, "atmWindowSpreadTicks": None, "spreadTickBound": None}
+    considered: list[dict[str, Any]] = []
+    for side in ("CALL", "PUT"):
+        side_contracts = [
+            c for c in contracts
+            if c.get("putCall") == side and c.get("expirationDate") == atm_expiration and c.get("mid")
+            and number(c.get("bid")) is not None and number(c.get("ask")) is not None
+        ]
+        considered.extend(sorted(side_contracts, key=lambda c: abs((c.get("strikePrice") or 0) - underlying_price))[:window_per_side])
+    if not considered:
+        return {"atmWindowMedianSpreadDollars": None, "atmWindowMedianTickSize": None, "atmWindowSpreadTicks": None, "spreadTickBound": None}
+    spreads = [max(0.0, float(c["ask"]) - float(c["bid"])) for c in considered]
+    ticks = [option_tick_size(number(c.get("mid"))) for c in considered]
+    spread_dollars = median_number(spreads)
+    tick = median_number(ticks) or 0.10
+    spread_ticks = round(spread_dollars / tick, 2) if spread_dollars is not None and tick else None
+    return {
+        "atmWindowMedianSpreadDollars": rounded(spread_dollars),
+        "atmWindowMedianTickSize": tick,
+        "atmWindowSpreadTicks": spread_ticks,
+        "spreadTickBound": bool(spread_ticks is not None and spread_ticks <= tick_bound_max_ticks),
+    }
+
+
 def strike_window_metrics(
     contracts: list[dict[str, Any]],
     underlying_price: float | None,
@@ -885,6 +934,8 @@ def chain_quality_flags(
         flags.append("atm-series-fallback-sub-min-dte")
     if atm.get("strikeWindowCoversImpliedMove") is False:
         flags.append("strike-window-below-implied-move")
+    if atm.get("spreadTickBound") and not paper_gate["passed"]:
+        flags.append("tick-bound-spread-small-premium")
     session = atm.get("quoteSession")
     if session in (QUOTE_SESSION_LATE_CLOSE, QUOTE_SESSION_OFF_HOURS):
         flags.append(f"{session}-quote-snapshot")
@@ -909,6 +960,7 @@ def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     atm = atm_metrics(atm_pair, underlying_price, contracts)
     atm.update(quote_session_metrics(contracts))
     atm.update(strike_window_metrics(contracts, underlying_price, atm.get("atmExpiration"), atm.get("atmImpliedMovePct")))
+    atm.update(spread_tick_metrics(contracts, underlying_price, atm.get("atmExpiration")))
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),
@@ -1036,6 +1088,11 @@ def render_report(report: dict[str, Any]) -> str:
             )
             if row.get("qualityFlags"):
                 lines.append(f"  flags: {', '.join(row.get('qualityFlags') or [])}")
+            if row.get("atmWindowSpreadTicks") is not None:
+                lines.append(
+                    f"  ATM spread: ${row.get('atmWindowMedianSpreadDollars')} = {row.get('atmWindowSpreadTicks')} ticks"
+                    f"{' | tick-bound (liquid market, small premium)' if row.get('spreadTickBound') and not row.get('paperLiquidityPass') else ''}"
+                )
             if row.get("chainStrikeWindowPct") is not None:
                 covers = row.get("strikeWindowCoversImpliedMove")
                 lines.append(
@@ -1092,6 +1149,7 @@ def regrade_row(row: dict[str, Any]) -> dict[str, Any]:
     atm = atm_metrics(atm_pair, underlying_price, contracts)
     atm.update(quote_session_metrics(contracts))
     atm.update(strike_window_metrics(contracts, underlying_price, atm.get("atmExpiration"), atm.get("atmImpliedMovePct")))
+    atm.update(spread_tick_metrics(contracts, underlying_price, atm.get("atmExpiration")))
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),

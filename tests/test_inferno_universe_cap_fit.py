@@ -96,3 +96,38 @@ class InvariantTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThesisFitTests(unittest.TestCase):
+    """Verticals must span the event move to count as a thesis fit."""
+
+    def test_thesis_costs_scale_with_price_and_move(self) -> None:
+        small = ucf._thesis_structure_costs(20.0, 10.0)   # $2 move -> $84 full width
+        big = ucf._thesis_structure_costs(850.0, 13.0)    # $110.5 move -> $4641
+        self.assertAlmostEqual(small["debit_expected_move"], 84.0, places=1)
+        self.assertGreater(big["debit_expected_move"], 4000)
+        self.assertIsNone(ucf._thesis_structure_costs(850.0, None)["debit_expected_move"])
+
+    def test_event_move_source_precedence(self) -> None:
+        implied = {"AAA": 12.0}
+        curated = {"AAA": 9.0, "BBB": 15.0}
+        self.assertEqual(ucf._event_move_pct("AAA", 3.0, implied, curated), (12.0, "schwab-atm-implied"))
+        self.assertEqual(ucf._event_move_pct("BBB", 3.0, implied, curated), (15.0, "curated-earnings-history-median"))
+        move, source = ucf._event_move_pct("CCC", 4.0, implied, curated)
+        self.assertEqual(source, "atr-x-universe-median-proxy")
+        self.assertAlmostEqual(move, 4.0 * ucf.EVENT_MOVE_ATR_MULTIPLE_PROXY, places=3)
+        self.assertEqual(ucf._event_move_pct("DDD", None, implied, curated), (None, "unavailable"))
+
+    def test_audit_reports_thesis_fit_separately_from_fixed_width_fit(self) -> None:
+        snapshot = {"rows": [
+            {"ticker": "CHEAP", "price": 20.0, "atrPercent": 4.0, "ivRank": 50},
+            {"ticker": "PRICEY", "price": 850.0, "atrPercent": 6.0, "ivRank": 50},
+        ]}
+        payload = ucf.build_audit(snapshot=snapshot, cap_dollars=500.0)
+        by = {r["ticker"]: r for r in payload["perTicker"]}
+        self.assertTrue(by["CHEAP"]["fits"]["debit_5w"] and by["PRICEY"]["fits"]["debit_5w"])  # fixed width always fits
+        self.assertEqual(by["CHEAP"]["thesisVerdict"], "expected-move-fits")
+        self.assertEqual(by["PRICEY"]["thesisVerdict"], "thesis-does-not-fit")
+        self.assertEqual(payload["thesisFitRate"], 0.5)
+        self.assertIn("Thesis fit", ucf.render_text(payload))
+        self.assertTrue(payload["researchOnly"])
