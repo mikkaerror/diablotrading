@@ -47,3 +47,28 @@ artifacts pass invariants; secret hygiene and diff checks are clean. No ledger
 writer was invoked. Research-only and broker-submit-off invariants remain
 verified. This manual engineering audit earns zero promotion or paper-progress
 points; provider cost telemetry is unavailable, not zero.
+
+## 2026-09-07 cleanup
+
+The prior repairs still duplicated entry arithmetic in MTM and exit reports.
+The common pure `inferno_trade_evidence.entry_economics` helper now supplies
+both, including quantity provenance, known fill costs without a planning price,
+unknown payoff bounds and invalid-data reasons. A present but invalid fill
+never falls back to its planned price. Invalid quantities cannot leave finite
+target or maximum-risk estimates behind.
+
+New invariant: the mark is not an authority on entry economics. If populated
+mark fields disagree with the current ticket's entry price, quantity, cost
+type or payoff denominators, price-based advice waits for a rebuilt mark.
+Fetch status and timestamp survive rejection. This check detects known basis
+mismatches; it does not certify quote freshness or fill quality when metadata
+is absent. Calendar rules retain their existing behavior.
+
+Cross-report regression cases exercise valid, missing, nonfinite and fractional
+inputs, plus corrected fills with old marks. No threshold tuning or ticket
+action is part of this cleanup; accepted promotion progress remains zero.
+
+Cleanup validation: 91 focused and 2,023 full-suite tests pass; 12 math
+artifacts, hygiene and diff checks are clean. Old/new pure helpers on identical
+September 7 pricing inputs agree on target/stop/risk amounts for all 12 priced
+structures. Corrections affect malformed or inconsistent-input cases.

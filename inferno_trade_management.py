@@ -41,6 +41,7 @@ from typing import Any
 
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_trade_evidence import entry_economics
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -396,28 +397,12 @@ def exit_economics(ticket: dict[str, Any], mark: dict[str, Any] | None = None) -
     """
     plan = _strategy_plan(ticket)
     lane = _strategy_lane(ticket.get("strategy") or plan.get("strategy"))
-    execution = ticket.get("paperExecution") or {}
-    cost_type = ticket.get("entryCostType") or ("credit" if "estimatedCredit" in plan else "debit" if "estimatedDebit" in plan else None)
-    price = _safe_float(execution.get("entryPrice") if "entryPrice" in execution else ticket.get("entryLimit", plan.get("estimatedCredit") if cost_type == "credit" else plan.get("estimatedDebit")))
-    quantity = _safe_float(execution.get("contracts", ticket.get("contracts", 1)))
-    quantity = int(quantity) if quantity is not None and quantity > 0 and quantity.is_integer() else None
-    dollars = price * 100 * quantity if price is not None and price > 0 and quantity else None
-    loss = _safe_float((mark or {}).get("estimatedMaxLoss") if mark else ticket.get("estimatedMaxLoss", plan.get("estimatedMaxLoss")))
-    profit = _safe_float((mark or {}).get("estimatedMaxProfit") if mark else ticket.get("estimatedMaxProfit", plan.get("estimatedMaxProfit")))
-    # Without a reconciled MTM, supplied estimates describe one planned unit.
-    if not mark and quantity:
-        staged_price = _safe_float(ticket.get("entryLimit", plan.get("estimatedCredit") if cost_type == "credit" else plan.get("estimatedDebit")))
-        if "entryPrice" in execution:
-            if price is None or price <= 0:
-                loss = profit = None
-            elif cost_type == "credit":
-                profit = price * 100
-                loss = loss + (staged_price - price) * 100 if loss is not None and staged_price is not None else None
-            elif cost_type == "debit":
-                loss = price * 100
-                profit = profit + (staged_price - price) * 100 if profit is not None and staged_price is not None else None
-        loss = loss * quantity if loss is not None else None
-        profit = profit * quantity if profit is not None else None
+    # Entry economics come from the ticket/fill, never from a potentially
+    # stale mark artifact. Keep the mark argument for caller compatibility.
+    entry = entry_economics(ticket)
+    quantity = entry["contracts"]
+    dollars = entry["entryPremiumDollars"]
+    loss, profit = entry["estimatedMaxLoss"], entry["estimatedMaxProfit"]
     if lane == "lane-a":
         target_base, stop_base = dollars, dollars
         target_fraction, stop_fraction = LANE_A_TAKE_PROFIT_1_PCT_OF_DEBIT, abs(LANE_A_STOP_LOSS_PCT_OF_DEBIT)
@@ -459,6 +444,7 @@ def exit_economics(ticket: dict[str, Any], mark: dict[str, Any] | None = None) -
             })
     return {
         "lane": lane, "targetBasis": basis, "entryPremiumDollars": dollars,
+        "entryEconomics": entry,
         "firstTargetProfitDollars": round(target, 4) if target is not None else None,
         "firstTargetReturnOnMaxRisk": round(target / loss, 6) if target is not None and loss is not None and loss > 0 else None,
         "plannedStopLossDollars": round(stop, 4) if stop is not None else None,
@@ -490,29 +476,41 @@ def assess_ticket(
     today: date,
 ) -> dict[str, Any]:
     """Return the verdict and rationale for one open ticket."""
+    entry = entry_economics(ticket)
+    mark_status = (mark or {}).get("fetchStatus")
+    mark_as_of = (mark or {}).get("asOf")
+    blocked_reasons = []
     # Known incomplete/error valuations cannot fire a price trigger even if
     # a legacy artifact accidentally carries numeric remnants.
     if mark and mark.get("fetchStatus") in {"partial", "chain-unavailable", "error", "not-configured", "disabled"}:
+        blocked_reasons.append(f"mark-fetch-{mark_status}")
+    # A matching ticket ID alone does not prove the mark used the latest fill.
+    if mark:
+        for field, expected in (("entryLimit", entry["entryPrice"]), ("contracts", entry["contracts"]),
+                                ("estimatedMaxLoss", entry["estimatedMaxLoss"]),
+                                ("estimatedMaxProfit", entry["estimatedMaxProfit"])):
+            if field not in mark:
+                continue
+            actual = _safe_float(mark[field])
+            matches = (actual is None and expected is None) or (
+                actual is not None and expected is not None
+                and math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-8)
+            )
+            if not matches:
+                blocked_reasons.append(f"mark-entry-basis-mismatch:{field}")
+        if "entryCostType" in mark and mark["entryCostType"] != entry["entryCostType"]:
+            blocked_reasons.append("mark-entry-basis-mismatch:entryCostType")
+    if not entry["valuationBasisValid"]:
+        blocked_reasons.extend(entry["issues"])
+    if blocked_reasons:
         mark = None
-    lane = _strategy_lane(ticket.get("strategy"))
+    lane = _strategy_lane(ticket.get("strategy") or _strategy_plan(ticket).get("strategy"))
     dte = _days_to_expiration(ticket, today)
     timing = event_timing(ticket, today)
     dte_earnings = timing["daysUntilEarnings"]
-    plan = _strategy_plan(ticket)
-    estimated_credit = _safe_float(
-        plan.get("estimatedCredit") if plan else ticket.get("estimatedCredit")
-    )
-    # The credit stop is on total entry credit, including executed quantity.
-    # The rule helper converts this per-share equivalent to dollars once.
-    execution = ticket.get("paperExecution") or {}
-    if lane == "lane-b-credit" and (mark or {}).get("entryCostType") == "credit":
-        entry_credit = _safe_float(mark.get("entryLimit"))
-        quantity = _safe_float(mark.get("contracts", 1))
-        estimated_credit = entry_credit * quantity if entry_credit is not None and quantity is not None and quantity > 0 else None
-    elif lane == "lane-b-credit" and ticket.get("entryCostType") == "credit":
-        entry_credit = _safe_float(execution.get("entryPrice") if "entryPrice" in execution else ticket.get("entryLimit"))
-        quantity = _safe_float(execution.get("contracts", 1))
-        estimated_credit = entry_credit * quantity if entry_credit is not None and quantity is not None and quantity > 0 else None
+    # Helper converts this per-share equivalent into total dollars once.
+    credit_dollars = entry["entryPremiumDollars"] if entry["entryCostType"] == "credit" else None
+    estimated_credit = credit_dollars / 100 if credit_dollars is not None else None
 
     if lane == "lane-a":
         verdict, rationale = _verdict_lane_a(
@@ -544,12 +542,16 @@ def assess_ticket(
         "daysUntilEarnings": dte_earnings,
         "eventTiming": timing,
         "exitEconomics": exit_economics(ticket, mark),
-        "entryLimit": _safe_float(ticket.get("entryLimit")),
-        "estimatedMaxLoss": _safe_float(ticket.get("estimatedMaxLoss")),
-        "estimatedMaxProfit": ticket.get("estimatedMaxProfit"),
+        "entryLimit": entry["entryPrice"],
+        "stagedEntryLimit": entry["stagedEntryLimit"],
+        "entryPriceSource": entry["entryPriceSource"],
+        "estimatedMaxLoss": entry["estimatedMaxLoss"],
+        "estimatedMaxProfit": entry["estimatedMaxProfit"],
         "verdict": verdict,
         "rationale": rationale,
-        "markFetchStatus": (mark or {}).get("fetchStatus"),
+        "markFetchStatus": mark_status,
+        "markAsOf": mark_as_of,
+        "priceRulesBlockedReasons": blocked_reasons,
         "unrealizedPnlDollars": _safe_float((mark or {}).get("unrealizedPnlDollars")),
         "playbookPctOfDebit": _safe_float((mark or {}).get("playbookPctOfDebit")),
         "unrealizedPnlPctOfMaxProfit": _safe_float(
@@ -704,6 +706,8 @@ def trade_management_text(payload: dict[str, Any]) -> str:
                 lines.append(f"       unrealized PnL: ${pnl:+.2f}")
             for r in a.get("rationale") or []:
                 lines.append(f"       - {r}")
+            for reason in a.get("priceRulesBlockedReasons") or []:
+                lines.append(f"       price rules blocked: {reason}")
             economics = a.get("exitEconomics") or {}
             lines.append(f"       first target basis: {economics.get('targetBasis')}; profit=${economics.get('firstTargetProfitDollars')}; planned stop loss=${economics.get('plannedStopLossDollars')}")
             if economics.get("wholeContractScaleOutPossible") is False:

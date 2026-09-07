@@ -9,6 +9,7 @@ outcomes.
 """
 
 from datetime import date, datetime
+import math
 from typing import Any
 
 
@@ -46,6 +47,89 @@ def parse_date(value: Any) -> date | None:
         return date.fromisoformat(raw[:10])
     except ValueError:
         return None
+
+
+def entry_economics(ticket: dict[str, Any]) -> dict[str, Any]:
+    """Resolve gross entry economics once for valuation and exit reporting.
+
+    Planning estimates describe one standard strategy unit. A recorded fill
+    takes precedence even when invalid; it cannot fall back to a planning
+    price. This pure helper never consumes marks, changes limits or writes.
+    """
+    def finite(value: Any) -> float | None:
+        if isinstance(value, bool):
+            return None
+        try:
+            parsed = float(value)
+            return parsed if math.isfinite(parsed) else None
+        except (TypeError, ValueError):
+            return None
+
+    plan = ticket.get("strikePlan") or {}
+    execution = ticket.get("paperExecution") or {}
+    cost_type = str(ticket.get("entryCostType") or "").strip().lower()
+    if not cost_type:
+        has_debit = plan.get("estimatedDebit") is not None
+        has_credit = plan.get("estimatedCredit") is not None
+        if has_debit != has_credit:
+            cost_type = "debit" if has_debit else "credit"
+    plan_price = plan.get("estimatedCredit") if cost_type == "credit" else plan.get("estimatedDebit")
+    staged = finite(ticket.get("entryLimit", plan_price))
+    has_fill = "entryPrice" in execution
+    price = finite(execution.get("entryPrice")) if has_fill else staged
+    quantity_raw = execution.get("contracts", ticket.get("contracts", 1))
+    quantity_number = finite(quantity_raw)
+    quantity = int(quantity_number) if quantity_number is not None and quantity_number > 0 and quantity_number.is_integer() else None
+    quantity_source = "paper-fill" if "contracts" in execution else "ticket" if "contracts" in ticket else "single-unit-convention"
+    loss = finite(ticket.get("estimatedMaxLoss", plan.get("estimatedMaxLoss")))
+    profit_raw = ticket.get("estimatedMaxProfit", plan.get("estimatedMaxProfit"))
+    uncapped = isinstance(profit_raw, str) and profit_raw.lower() == "uncapped"
+    profit = finite(profit_raw)
+    issues = []
+    if cost_type not in {"debit", "credit"}:
+        issues.append("missing-or-ambiguous-cost-type")
+    if price is None or price <= 0:
+        issues.append("invalid-fill-price" if has_fill else "invalid-planning-price")
+    if quantity is None:
+        issues.append("invalid-contract-quantity")
+    valid = not issues
+    premium = None
+    if valid:
+        premium = price * CONTRACT_MULTIPLIER * quantity
+        if has_fill:
+            if cost_type == "debit":
+                loss = price * CONTRACT_MULTIPLIER
+                profit = profit + (staged - price) * CONTRACT_MULTIPLIER if profit is not None and staged is not None and staged > 0 else None
+            else:
+                profit = price * CONTRACT_MULTIPLIER
+                loss = loss + (staged - price) * CONTRACT_MULTIPLIER if loss is not None and staged is not None and staged > 0 else None
+        loss = loss * quantity if loss is not None else None
+        profit = profit * quantity if profit is not None else None
+        for name, value in (("max-loss", loss), ("max-profit", profit)):
+            if value is not None and (value < 0 or not math.isfinite(value)):
+                issues.append(f"invalid-{name}-estimate")
+        if loss is not None and (loss < 0 or not math.isfinite(loss)):
+            loss = None
+        if profit is not None and (profit < 0 or not math.isfinite(profit)):
+            profit = None
+        if not math.isfinite(premium):
+            issues.append("nonfinite-entry-premium")
+            premium = loss = profit = None
+            valid = False
+    else:
+        loss = profit = None
+    return {
+        "entryCostType": cost_type or None,
+        "entryPrice": price if price is not None and price > 0 else None,
+        "stagedEntryLimit": staged,
+        "entryPriceSource": "paper-fill" if has_fill else "staged-limit",
+        "contracts": quantity, "quantitySource": quantity_source,
+        "entryPremiumDollars": premium,
+        "estimatedMaxLoss": loss, "estimatedMaxProfit": profit,
+        "estimatedMaxProfitUncapped": bool(uncapped and valid),
+        "valuationBasisValid": valid,
+        "issues": issues, "basis": "gross; standard 100-share strategy units; excludes fees",
+    }
 
 
 def strategy_name(item: dict[str, Any]) -> str:

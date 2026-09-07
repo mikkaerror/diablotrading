@@ -57,6 +57,7 @@ def _ticket(
         "expiration": expiration,
         "daysUntilEarnings": days_until_earnings,
         "entryLimit": entry_limit,
+        "entryCostType": "credit" if estimated_credit is not None else "debit",
         "estimatedMaxLoss": estimated_max_loss,
         "estimatedMaxProfit": estimated_max_profit,
         "strikePlan": {"estimatedCredit": estimated_credit} if estimated_credit else None,

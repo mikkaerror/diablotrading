@@ -1272,11 +1272,11 @@
   {
     "id": "mission-7613c4ad",
     "createdAt": "2026-09-07T13:17:21.500846-06:00",
-    "updatedAt": "2026-09-07T13:17:21.500846-06:00",
+    "updatedAt": "2026-09-07T13:24:41.735524-06:00",
     "title": "Consolidate entry economics and preserve rejected-mark provenance",
-    "body": "Continue authorized cleanup. Give MTM and exit diagnostics one pure entry-cost/quantity calculation, preserve unknown economics instead of finite-looking defaults, reconcile displayed fill basis, and retain blocked-mark reasons. No risk constants, thresholds, universe, ticket actions or broker authority changes.",
+    "body": "Completed shared pure entry_economics contract for valuation and exit reports. Invalid quantities/fills cannot create target or risk numbers; known debit fills retain cost when planning price is absent. Management displays fill-adjusted economics and blocks marks with known entry-basis mismatches while retaining status/timestamp/reasons. 91 focused and 2023 full tests pass; math12/hygiene/diff clean. Identical-input old/new comparison: 12 priced rows, no target/stop/risk changes. Doctor11 attention, broker off. Docs/knowledge/manual zero-progress run state updated. No thresholds, risk constants, universe or ticket changes.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "done",
     "priority": "high",
     "tags": [
       "cleanup",

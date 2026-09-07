@@ -138,6 +138,12 @@ quantity where present, suppresses incomplete-leg P/L, and keeps midpoint
 and bid/ask liquidation estimates distinct. Earnings countdowns age from
 dated evidence; undated counts remain unknown. Management is advisory and
 does not execute exits, change campaign exit assignments or tune thresholds.
+The pure `inferno_trade_evidence.entry_economics` helper is the common source
+of entry price, quantity and adjusted payoff denominators for MTM and exit
+reports. Invalid fills/counts remain unknown. Marks with a known mismatch
+against the ticket's current entry basis cannot fire price rules; their fetch
+status, timestamp and rejection reasons remain visible. Planning price and
+actual fill price are displayed separately.
 
 `reports/paper_test_director_latest.txt` can surface operator-routable paper
 candidates, auto-selected research candidates, priced paper-research variants,
