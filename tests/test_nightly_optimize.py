@@ -10,11 +10,30 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "nightly_optimize.sh"
 
 
+def script_text() -> str:
+    """Return the nightly script with ``shared:`` step labels normalized.
+
+    Since 2026-09-04 steps the twice-daily model refresh already owns carry a
+    ``shared:`` prefix so the nightly loop can skip them by default. The
+    dependency-order guarantees below are about the sequence, not the prefix,
+    so the prefix is stripped before any position lookup.
+    """
+    return SCRIPT.read_text(encoding="utf-8").replace('run_step "shared:', 'run_step "')
+
+
 class NightlyOptimizeTests(unittest.TestCase):
     """Keep evidence summaries downstream of the bounded evidence loop."""
 
+    def test_shared_steps_are_skipped_by_default_and_restorable(self) -> None:
+        raw = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('RUN_SHARED="${INFERNO_NIGHTLY_RUN_SHARED:-0}"', raw)
+        self.assertIn('if [[ "$label" == shared:* ]]; then', raw)
+        # Steps no other schedule owns must stay unprefixed so they always run.
+        for label in ("schwab chain history", "schwab chain diff", "evidence goal loop", "paper velocity", "funnel diagnostic"):
+            self.assertIn(f'run_step "{label}"', raw, label)
+
     def test_evidence_goal_loop_precedes_summary_recomputes(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         goal_loop = text.index('run_step "evidence goal loop"')
         performance = text.index('run_step "performance analytics"')
@@ -30,20 +49,20 @@ class NightlyOptimizeTests(unittest.TestCase):
         )
 
     def test_nightly_loop_does_not_approve_or_stage_tickets(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         self.assertNotIn("approval_queue.py approve", text)
         self.assertNotIn("paper_execution.py stage", text)
         self.assertNotIn("submit_live_order", text)
 
     def test_live_account_sync_uses_supported_cli(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         self.assertIn('"$PYTHON" inferno_live_account_sync.py', text)
         self.assertNotIn("inferno_live_account_sync.py --quiet", text)
 
     def test_nightly_refresh_preserves_schwab_snapshot_price_overlay(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         options = text.index('run_step "schwab options chain"')
         overlay = text.index('run_step "snapshot price overlay"')
@@ -53,7 +72,7 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(overlay, history)
 
     def test_nightly_refresh_runs_short_premium_monitor(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         funnel = text.index('run_step "funnel diagnostic"')
         short_premium = text.index('run_step "short premium study"')
@@ -63,7 +82,7 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(short_premium, mastery)
 
     def test_nightly_refreshes_tech_cohort_before_command_center(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
         refresh = text.index('run_step "basket market refresh"')
         contract = text.index('run_step "basket data contract"')
         cohort = text.index('run_step "tech cohort evaluator"')
@@ -73,7 +92,7 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(cohort, command)
 
     def test_nightly_refreshes_diagnostics_in_dependency_order(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
         options = text.index('run_step "schwab options chain"')
         transactions = text.index('run_step "schwab transaction ledger"')
         edge = text.index('run_step "schwab edge signals"')
@@ -100,7 +119,7 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(thresholds, command)
 
     def test_nightly_layers_deposit_and_cash_truth_before_growth_stack(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         live_sync = text.index('run_step "live account sync"')
         transactions = text.index('run_step "schwab transaction ledger"')
@@ -116,13 +135,13 @@ class NightlyOptimizeTests(unittest.TestCase):
         self.assertLess(growth_stack, command)
 
     def test_deployed_copy_can_use_repo_root(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         self.assertIn('cd "${INFERNO_ROOT:-$(dirname "$0")}"', text)
         self.assertIn('RUN_LOG="${INFERNO_NIGHTLY_LOG:-data/nightly_optimize_run.log}"', text)
 
     def test_nightly_housekeeping_is_logs_only(self) -> None:
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = script_text()
 
         self.assertIn(
             'run_step "runtime log housekeeping" "$PYTHON" inferno_housekeeping.py --logs-only --include-external-logs',

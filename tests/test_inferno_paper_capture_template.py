@@ -14,8 +14,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from datetime import date, timedelta
+
 import inferno_paper_capture_template as ct
 import inferno_tos_fill_ingest as fi
+
+# The template only emits rows for tickets that can still be filled, so the
+# fixture expiration must stay in the future instead of rotting on a fixed date.
+FUTURE_EXPIRATION = (date.today() + timedelta(days=45)).isoformat()
 
 
 def _ledger(*tickets: dict) -> dict:
@@ -27,7 +33,7 @@ STAGED_CHKP = {
     "ticker": "CHKP",
     "strategy": "CALL_DEBIT_SPREAD",
     "status": "paper-staged",
-    "expiration": "2026-08-21",
+    "expiration": FUTURE_EXPIRATION,
     "entryCostType": "NET_DEBIT_LIMIT",
 }
 
@@ -49,7 +55,7 @@ class CaptureTemplateTests(unittest.TestCase):
         row = payload["rows"][0]
         self.assertEqual(row["ticketId"], "SIMCHKP0001")
         self.assertEqual(row["strategy"], "CALL_DEBIT_SPREAD")
-        self.assertEqual(row["expiration"], "2026-08-21")
+        self.assertEqual(row["expiration"], FUTURE_EXPIRATION)
         self.assertEqual(row["contracts"], "1")
         # Environment must be the exact token the scorer accepts (case-insensitively).
         self.assertEqual(row["environment"].lower(), fi.PAPER_MONEY_ENVIRONMENT)

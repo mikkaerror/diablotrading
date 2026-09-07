@@ -17,6 +17,7 @@ the ledger writers are stubbed.
 import csv
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,12 +32,15 @@ except Exception:  # pragma: no cover - alignment test skips if module absent
     poc = None
 
 
+# Keep the fixture fillable: the template drops expired staged tickets.
+FUTURE_EXPIRATION = (date.today() + timedelta(days=45)).isoformat()
+
 STAGED_CHKP = {
     "ticketId": "LOOPCHKP01",
     "ticker": "CHKP",
     "strategy": "CALL_DEBIT_SPREAD",
     "status": "paper-staged",
-    "expiration": "2026-08-21",
+    "expiration": FUTURE_EXPIRATION,
     "entryCostType": "NET_DEBIT_LIMIT",
 }
 
