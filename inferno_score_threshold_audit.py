@@ -9,8 +9,11 @@ constants, alter the universe, or touch broker authority.
 
 import argparse
 import json
+import math
 import re
+from collections import Counter, defaultdict
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 from inferno_config import (
@@ -33,6 +36,7 @@ from inferno_expected_move_ledger import (
     HURDLE_HARD_ATR_MULTIPLE,
     HURDLE_REASONABLE_ATR_MULTIPLE,
     HURDLE_STRETCH_ATR_MULTIPLE,
+    parse_date,
 )
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_math_config import OPERATOR_LEVEL, gate_percentile_for_level
@@ -48,6 +52,13 @@ from inferno_paper_variant_scanner import (
     MIN_WHEEL_IV_RANK,
     PRICE_CAP,
     WHEEL_PROXY_PRICE_CAP,
+    MIN_READY as VARIANT_MIN_READY,
+    credit_spread_candidate,
+    short_premium_defined_candidate,
+)
+from inferno_trade_evidence import (
+    LONG_VOL_MAX_IMPLIED_MOVE_PCT, LONG_VOL_EVENT_WINDOW_DAYS,
+    LONG_VOL_EVENT_IMPLIED_MOVE_MIN_PCT, LONG_VOL_EVENT_IMPLIED_MOVE_MAX_PCT,
 )
 from inferno_risk_policy import SCHWAB_OPTIONS_MAX_AGE_HOURS, VISIBLE_QUOTE_MIN_PRICE
 from inferno_score_calibration import MIN_CALIBRATION_SAMPLE, MIN_MONOTONIC_BUCKET_SAMPLE
@@ -75,6 +86,9 @@ MODEL_COMMAND_CENTER_FILE = DATA_DIR / "inferno_model_command_center.json"
 STRATEGY_ALTERNATIVE_PRICING_FILE = DATA_DIR / "inferno_strategy_alternative_pricing.json"
 PAPER_VARIANT_SCANNER_FILE = DATA_DIR / "inferno_paper_variant_scanner.json"
 DTE_POLICY_ANALYSIS_FILE = DATA_DIR / "inferno_dte_policy_analysis.json"
+TRACKER_SNAPSHOT_FILE = DATA_DIR / "latest_snapshot.json"
+TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
+TICKET_CAP_POLICY_FILE = DATA_DIR / "inferno_ticket_cap_policy.json"
 
 
 def text(value: Any) -> str:
@@ -116,6 +130,10 @@ def artifact_inputs() -> dict[str, dict[str, Any]]:
         "strategyAlternativePricing": load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {},
         "paperVariantScanner": load_json_file(PAPER_VARIANT_SCANNER_FILE) or {},
         "dtePolicyAnalysis": load_json_file(DTE_POLICY_ANALYSIS_FILE) or {},
+        "trackerSnapshot": load_json_file(TRACKER_SNAPSHOT_FILE) or {},
+        "trackerTaxonomy": load_json_file(TRACKER_TAXONOMY_FILE) or {},
+        "ticketCapPolicy": load_json_file(TICKET_CAP_POLICY_FILE) or {},
+        "eventMoveCalibration": load_json_file(DATA_DIR / "inferno_event_move_calibration.json") or {},
     }
 
 
@@ -295,6 +313,15 @@ def threshold_catalog() -> list[dict[str, Any]]:
             "assumption": "ATR-normalized premium pressure is more informative than direction alone.",
         },
         {
+            "area": "long_vol_evidence_guard",
+            "metric": "absolute implied-move band",
+            "threshold": f"maximum {LONG_VOL_MAX_IMPLIED_MOVE_PCT}%; within {LONG_VOL_EVENT_WINDOW_DAYS} days to earnings require {LONG_VOL_EVENT_IMPLIED_MOVE_MIN_PCT}-{LONG_VOL_EVENT_IMPLIED_MOVE_MAX_PCT}%",
+            "scale": "implied move percent of underlying; not annualized IV",
+            "source": "inferno_trade_evidence.py::long_vol_hurdle",
+            "use": "Controls long-vol paper-comparison evidence eligibility; unchanged by this audit.",
+            "assumption": "A common percentage band fits every ticker and tenor. This remains unvalidated.",
+        },
+        {
             "area": "score_calibration",
             "metric": "score bucket sample",
             "threshold": f"overall >= {MIN_CALIBRATION_SAMPLE}; monotonic bucket >= {MIN_MONOTONIC_BUCKET_SAMPLE}",
@@ -306,11 +333,11 @@ def threshold_catalog() -> list[dict[str, Any]]:
         {
             "area": "paper_variant_scanner",
             "metric": "credit-spread variant",
-            "threshold": f"price < {PRICE_CAP}, IV rank > {MIN_CREDIT_IV_RANK}, support >= {MIN_SUPPORT_ATR} ATR",
+            "threshold": f"price < {PRICE_CAP}, IV rank > {MIN_CREDIT_IV_RANK}, readiness >= {VARIANT_MIN_READY}, signal true, earnings >14 days when known",
             "scale": "price, IV rank, ATR multiple",
             "source": "inferno_paper_variant_scanner.py",
             "use": "Research-only candidate backfill when main funnel is stagnant.",
-            "assumption": "Scanner is discovery only; pricing/risk gates remain authoritative.",
+            "assumption": "Nominal stock price is an affordability proxy in this one route; support/ATR is a warning, not this route's admission gate.",
         },
         {
             "area": "paper_variant_scanner",
@@ -562,6 +589,187 @@ def dte_findings(dte_policy: dict[str, Any]) -> list[dict[str, Any]]:
                 source="reports/dte_policy_analysis_latest.txt",
             )
         )
+    return findings
+
+
+def finite_number(value: Any) -> float | None:
+    """Audit inputs cannot turn missing/nonfinite values into gate evidence."""
+    if isinstance(value, bool):
+        return None
+    parsed = number(value)
+    return parsed if parsed is not None and math.isfinite(parsed) else None
+
+
+def universe_premium_context(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Read-only fit audit of the actual tracked universe and priced structures.
+
+    Counterfactuals replay one discovery predicate with only its nominal-price
+    cutoff neutralized. They are never returned to a candidate/staging pipeline.
+    Taxonomy is descriptive reference data, not a sector-specific risk policy.
+    """
+    snapshot = artifacts.get("trackerSnapshot") or {}
+    taxonomy = artifacts.get("trackerTaxonomy") or {}
+    pricing = artifacts.get("strategyAlternativePricing") or {}
+    policy = artifacts.get("ticketCapPolicy") or {}
+    event_calibration = artifacts.get("eventMoveCalibration") or {}
+    selected_tail_rows = [row for row in event_calibration.get("symbols") or [] if row.get("eventSource") == "inferred-large-move-volume-surge"]
+    by_ticker = {}
+    duplicate_rows = 0
+    for row in snapshot.get("rows") or []:
+        ticker = text(row.get("ticker")).upper()
+        if not ticker:
+            continue
+        if ticker in by_ticker:
+            duplicate_rows += 1
+            continue
+        by_ticker[ticker] = row
+    references = {text(row.get("ticker")).upper(): row for row in taxonomy.get("entries") or []}
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    counterfactuals = []
+    for ticker, row in sorted(by_ticker.items()):
+        reference = references.get(ticker) or {}
+        price = finite_number(row.get("price"))
+        excluded_only_by_price = False
+        if price is not None and price >= PRICE_CAP:
+            # Exact current route replay; no alternate gate or risk threshold.
+            excluded_only_by_price = credit_spread_candidate({**row, "price": PRICE_CAP / 2}) is not None
+        record = {
+            "ticker": ticker, "price": price,
+            "atrPercent": finite_number(row.get("atrPercent")),
+            "ivRank": finite_number(row.get("ivRank")),
+            "priceAboveCreditRouteCap": price is not None and price >= PRICE_CAP,
+            "excludedOnlyByNominalPriceInCreditRoute": excluded_only_by_price,
+            "broadShortPremiumRouteEligible": short_premium_defined_candidate(row) is not None,
+            "referenceSource": reference.get("referenceSource"),
+            "referenceAsOf": reference.get("referenceAsOf"),
+            "referenceFresh": reference.get("referenceFresh"),
+        }
+        exposure = text(reference.get("economicExposure")) or "unclassified"
+        groups[exposure].append(record)
+        if excluded_only_by_price:
+            counterfactuals.append(record)
+
+    cohorts = []
+    for exposure, rows in sorted(groups.items()):
+        prices = [row["price"] for row in rows if row["price"] is not None and row["price"] > 0]
+        atrs = [row["atrPercent"] for row in rows if row["atrPercent"] is not None and row["atrPercent"] > 0]
+        cohorts.append({
+            "economicExposure": exposure, "tickers": [row["ticker"] for row in rows],
+            "tickerCount": len(rows), "pricedTickers": len(prices), "atrCoveredTickers": len(atrs),
+            "medianStockPrice": round(median(prices), 4) if prices else None,
+            "medianDailyAtrPct": round(median(atrs), 4) if atrs else None,
+            "aboveNominalPriceCap": sum(row["priceAboveCreditRouteCap"] for row in rows),
+            "excludedOnlyByNominalPrice": sum(row["excludedOnlyByNominalPriceInCreditRoute"] for row in rows),
+        })
+
+    construction_cap = finite_number((policy.get("constructionBand") or {}).get("hardCapDollars"))
+    paper_cap = finite_number((policy.get("effectiveBand") or {}).get("hardCapDollars"))
+    live_cap = finite_number((policy.get("liveCapitalBand") or {}).get("hardCapDollars"))
+    structures = []
+    for item in pricing.get("items") or []:
+        if item.get("status") != "priced":
+            continue
+        plan = item.get("strikePlan") or {}
+        ticker = text(item.get("ticker")).upper()
+        spot = finite_number(item.get("price"))
+        loss = finite_number(plan.get("estimatedMaxLoss"))
+        profit = finite_number(plan.get("estimatedMaxProfit"))
+        expiry = parse_date(item.get("expiration") or plan.get("expiration"))
+        # An explicit tracker event date outranks a rolling days-to-event field.
+        earnings = parse_date((by_ticker.get(ticker) or {}).get("nextEarnings"))
+        as_of = parse_date(item.get("generatedAt") or pricing.get("generatedAt"))
+        record = {
+            "ticker": ticker, "strategy": plan.get("strategy") or item.get("recommendedStrategy"),
+            "sourceGeneratedAt": item.get("generatedAt") or pricing.get("generatedAt"),
+            "expiration": expiry.isoformat() if expiry else None,
+            "earningsDate": earnings.isoformat() if earnings else None,
+            "calendarDaysToExpirationAtPricing": (expiry - as_of).days if expiry and as_of else None,
+            "eventCoverage": "unknown" if not expiry or not earnings else "expires-before-earnings" if expiry < earnings else "same-date-timing-unknown" if expiry == earnings else "expires-after-earnings",
+            "stockPrice": spot, "maxLossDollars": loss, "maxProfitDollars": profit,
+            "maxProfitR": round(profit / loss, 4) if profit is not None and loss is not None and loss > 0 else None,
+            "fitsConstructionCap": loss <= construction_cap if loss is not None and loss >= 0 and construction_cap is not None else None,
+            "fitsPaperBudget": loss <= paper_cap if loss is not None and loss >= 0 and paper_cap is not None else None,
+            "combinedPassed": item.get("combinedPassed"),
+            "upsideCapMovePct": None, "spreadWidthPctOfSpot": None,
+        }
+        legs = plan.get("legs") or []
+        buys = [leg for leg in legs if leg.get("putCall") == "CALL" and leg.get("instruction") == "BUY_TO_OPEN"]
+        sells = [leg for leg in legs if leg.get("putCall") == "CALL" and leg.get("instruction") == "SELL_TO_OPEN"]
+        if record["strategy"] == "CALL_DEBIT_SPREAD" and len(legs) == 2 and len(buys) == len(sells) == 1 and spot is not None and spot > 0:
+            lower, upper = finite_number(buys[0].get("strike")), finite_number(sells[0].get("strike"))
+            if lower is not None and upper is not None and upper > lower:
+                record["upsideCapMovePct"] = round((upper / spot - 1) * 100, 4)
+                record["spreadWidthPctOfSpot"] = round((upper - lower) / spot * 100, 4)
+        structures.append(record)
+
+    rows = [row for members in groups.values() for row in members]
+    return {
+        "verdict": "universe-fit-diagnostic" if rows else "missing-universe",
+        "sourceGeneratedAt": {"tracker": snapshot.get("generatedAt"), "taxonomy": taxonomy.get("generatedAt"), "pricing": pricing.get("generatedAt"), "ticketPolicy": policy.get("generatedAt")},
+        "tickerCount": len(rows), "duplicateTrackerRows": duplicate_rows,
+        "missingTaxonomyTickers": [row["ticker"] for row in groups.get("unclassified", [])],
+        "aboveNominalPriceCap": sum(row["priceAboveCreditRouteCap"] for row in rows),
+        "creditRouteStockPriceCap": PRICE_CAP,
+        "nominalPriceOnlyExclusions": counterfactuals,
+        "nominalPriceOnlyExclusionCount": len(counterfactuals),
+        "historicalBenchmarkAudit": {
+            "sourceGeneratedAt": event_calibration.get("generatedAt"),
+            "outcomeSelectedSymbols": len(selected_tail_rows),
+            "outcomeSelectedEvents": sum(len(row.get("events") or []) for row in selected_tail_rows),
+            "typicalEventCalibrationAllowed": False,
+            "reason": "Largest moves selected after their outcomes describe tails, not an unbiased earnings-event distribution. Match verified event dates and option tenor before inferring premium value.",
+        },
+        "cohorts": cohorts,
+        "caps": {"constructionDollars": construction_cap, "simulatedPaperDollars": paper_cap, "liveCapitalDollars": live_cap},
+        "pricedStructures": structures,
+        "pricedStructureCounts": {
+            "rows": len(structures), "tickers": len({r["ticker"] for r in structures}),
+            "fitsConstructionCap": sum(r["fitsConstructionCap"] is True for r in structures),
+            "fitsPaperBudget": sum(r["fitsPaperBudget"] is True for r in structures),
+            "combinedPassed": sum(r["combinedPassed"] is True for r in structures),
+            "eventCoverage": dict(Counter(r["eventCoverage"] for r in structures)),
+        },
+        "limits": [
+            "Reference taxonomy is descriptive; no sector-specific threshold has been calibrated.",
+            "The stock-price cutoff belongs to one credit-discovery route. Other routes may still cover these names.",
+            "Price-only exclusions are predicate counterfactuals, not newly eligible or executable candidates.",
+            "Dollar risk, relative premium value, option tenor and upside participation are separate dimensions.",
+            "Spread upside caps are expiration payoff mechanics, not price targets or early-exit forecasts.",
+            "An option expiring before earnings may fit a pre-event thesis, but does not cover the earnings jump.",
+            "Historical/stale quotes remain historical; this audit performs no network refresh or repricing.",
+        ],
+        "thresholdsChanged": False, "candidateSelectionChanged": False,
+    }
+
+
+def universe_premium_findings(context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Make structural model mismatches visible without recommending new limits."""
+    if not context.get("tickerCount"):
+        return []
+    findings = [finding(
+        "P1", "Long-vol implied-move guards are not calibrated to sector or option tenor",
+        f"Maximum implied move={LONG_VOL_MAX_IMPLIED_MOVE_PCT}%; earnings-window band={LONG_VOL_EVENT_IMPLIED_MOVE_MIN_PCT}-{LONG_VOL_EVENT_IMPLIED_MOVE_MAX_PCT}% within {LONG_VOL_EVENT_WINDOW_DAYS} days. Daily-ATR rank thresholds also omit option tenor.",
+        "A large premium can reflect stock price, duration or volatility; a high-volatility label does not establish an upside advantage. The fixed band can reject both low and high required moves regardless of a positive supplied forecast.",
+        "Evaluate unchanged-policy counterfactuals by ticker/event/tenor with reconciled outcomes; preserve enforced guards until evidence supports an operator-reviewed change.",
+        source="inferno_trade_evidence.py::long_vol_hurdle / inferno_expected_move_ledger.py::premium_hurdle",
+    )]
+    if context.get("aboveNominalPriceCap"):
+        findings.append(finding(
+            "P2", "One discovery route uses stock price as a proxy for spread affordability",
+            f"{context['aboveNominalPriceCap']}/{context['tickerCount']} tracked names are at or above ${PRICE_CAP:g}; {context['nominalPriceOnlyExclusionCount']} clear that route's other predicates.",
+            "Defined-risk spread loss depends on strikes and net premium, so nominal stock price alone cannot establish affordability. Other discovery routes remain available.",
+            "Inspect actual contract loss, quote quality and capped upside before proposing a revised discovery cutoff; no new candidate is admitted by this audit.",
+            source="inferno_paper_variant_scanner.py::credit_spread_candidate",
+        ))
+    benchmark = context.get("historicalBenchmarkAudit") or {}
+    if benchmark.get("outcomeSelectedSymbols"):
+        findings.append(finding(
+            "P1", "Selected large-move days cannot validate typical event premium thresholds",
+            f"Historical benchmark contains {benchmark['outcomeSelectedEvents']} outcome-selected events across {benchmark['outcomeSelectedSymbols']} symbols.",
+            benchmark["reason"],
+            "Keep tail summaries descriptive; evaluate all independently dated events, including small moves, on chronological holdouts before using them to justify a threshold.",
+            source="inferno_event_move_calibration.json",
+        ))
     return findings
 
 
@@ -894,6 +1102,7 @@ def build_score_threshold_audit(
     artifacts = artifacts if artifacts is not None else artifact_inputs()
     production_sensitivity = production_sensitivity if production_sensitivity is not None else build_sensitivity(source="production")
     shadow_sensitivity = shadow_sensitivity if shadow_sensitivity is not None else build_sensitivity(source="shadow-replay")
+    premium_context = universe_premium_context(artifacts)
 
     findings: list[dict[str, Any]] = []
     findings.extend(calibration_findings(artifacts.get("scoreCalibration") or {}))
@@ -902,6 +1111,7 @@ def build_score_threshold_audit(
     findings.extend(capital_findings(artifacts.get("capitalScaling") or {}))
     findings.extend(pricing_findings(artifacts.get("strategyAlternativePricing") or {}, artifacts.get("paperVariantScanner") or {}))
     findings.extend(dte_findings(artifacts.get("dtePolicyAnalysis") or {}))
+    findings.extend(universe_premium_findings(premium_context))
     findings.extend(constant_drift_findings())
     findings.extend(gate_selectivity_findings())
     findings.extend(spread_liquidity_consistency_findings())
@@ -926,6 +1136,7 @@ def build_score_threshold_audit(
         },
         "thresholdCatalog": catalog,
         "findings": findings,
+        "universePremiumContext": premium_context,
         "assumptionChecks": assumption_checks(artifacts, production_sensitivity, shadow_sensitivity),
         "sensitivitySummary": {
             "productionPromotedAnyUnder": production_sensitivity.get("promotedAnyUnder") or [],
@@ -934,6 +1145,16 @@ def build_score_threshold_audit(
             "shadowSourceLabGeneratedAt": shadow_sensitivity.get("sourceLabGeneratedAt"),
         },
         "externalReferences": [
+            {
+                "name": "OIC option price behavior",
+                "url": "https://www.optionseducation.org/referencelibrary/faq/option-price-behavior",
+                "use": "Separate stock price, time and volatility effects from a directional forecast.",
+            },
+            {
+                "name": "Schwab implied volatility context",
+                "url": "https://www.schwab.com/learn/story/aligning-your-options-with-implied-volatility",
+                "use": "IV reflects expected movement in either direction; a high premium does not establish upside edge.",
+            },
             {
                 "name": "OCC Characteristics and Risks of Standardized Options",
                 "url": "https://www.theocc.com/company-information/documents-and-archives/options-disclosure-document",
@@ -992,6 +1213,25 @@ def render_score_threshold_audit(payload: dict[str, Any]) -> str:
         lines.append(f"  next: {item.get('recommendation')}")
     if not payload.get("findings"):
         lines.append("- none")
+
+    context = payload.get("universePremiumContext") or {}
+    caps = context.get("caps") or {}
+    structure_counts = context.get("pricedStructureCounts") or {}
+    lines.extend([
+        "", "Universe and premium fit (saved source data):",
+        f"- source timestamps: {json.dumps(context.get('sourceGeneratedAt') or {})}",
+        f"- tracked names: {context.get('tickerCount', 0)}; at/above credit-route stock-price cutoff: {context.get('aboveNominalPriceCap', 0)}; excluded only by this cutoff: {context.get('nominalPriceOnlyExclusionCount', 0)}",
+        f"- effective saved caps: construction=${caps.get('constructionDollars')}; simulated paper=${caps.get('simulatedPaperDollars')}; live capital=${caps.get('liveCapitalDollars')}",
+        f"- priced structures: {structure_counts.get('rows', 0)} across {structure_counts.get('tickers', 0)} names; construction-fit={structure_counts.get('fitsConstructionCap', 0)}; paper-budget-fit={structure_counts.get('fitsPaperBudget', 0)}; combined-pass={structure_counts.get('combinedPassed', 0)}",
+        f"- event coverage: {json.dumps(structure_counts.get('eventCoverage') or {})}",
+    ])
+    for row in context.get("cohorts") or []:
+        lines.append(f"  {row['economicExposure']}: n={row['tickerCount']}; stock-price median=${row['medianStockPrice']}; daily ATR median={row['medianDailyAtrPct']}%; at/above cutoff={row['aboveNominalPriceCap']}")
+    for row in context.get("pricedStructures") or []:
+        if row.get("upsideCapMovePct") is not None:
+            lines.append(f"- {row['ticker']} call spread expiring {row['expiration']}: upside capped at +{row['upsideCapMovePct']}% from saved spot; max loss=${row['maxLossDollars']}; max profit=${row['maxProfitDollars']} ({row['maxProfitR']}R); {row['eventCoverage']}")
+    for limit in context.get("limits") or []:
+        lines.append(f"- limitation: {limit}")
 
     lines.extend(["", "Threshold catalog:"])
     by_area: dict[str, list[dict[str, Any]]] = {}

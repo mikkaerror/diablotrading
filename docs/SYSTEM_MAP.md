@@ -122,6 +122,15 @@ decoupled through `inferno_risk_policy.evaluate_strike_item(..., mode="paper")`
 and uses the simulated paper budget from `inferno_config.py`; quote, liquidity,
 spread, duplicate, source-divergence, and authority-tripwire gates still apply.
 
+`reports/score_threshold_audit_latest.txt` also joins the tracked universe and
+reference taxonomy to saved alternative pricing and the effective ticket-cap
+policy. It distinguishes nominal-price discovery filters from actual contract
+loss, exposes call-spread upside caps and expiration/earnings coverage, and
+labels selected large-move history as tail evidence. The JSON preserves source
+timestamps and missing inputs. Counterfactual filter counts are diagnostic;
+they never feed selection or staging. Expected-move candidates carry explicit
+option-tenor comparability metadata and cannot claim matched-horizon fair value.
+
 `reports/paper_test_director_latest.txt` can surface operator-routable paper
 candidates, auto-selected research candidates, priced paper-research variants,
 or construction-watch alternatives from the strategy-pricing lane. Those rows

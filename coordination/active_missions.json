@@ -1193,11 +1193,11 @@
   {
     "id": "mission-ec0dc193",
     "createdAt": "2026-09-06T20:44:50.845393-06:00",
-    "updatedAt": "2026-09-06T20:44:50.845393-06:00",
+    "updatedAt": "2026-09-06T20:59:29.399831-06:00",
     "title": "Audit premium thresholds against the tracked high-mover universe",
-    "body": "User requested audit of upper limits, premiums and thresholds for semiconductors, construction and large movers. Add source-backed cohort/price-filter counterfactuals, separate construction/paper/live caps, and diagnose option tenor versus daily-ATR and bullish spread upside caps. Improve research assumption/reporting semantics without changing risk constants, eligible universe, approvals, ticket states, broker or authority.",
+    "body": "Completed source-backed universe/premium diagnostic: 183 names, 110 above credit-route cutoff but zero excluded solely by it; separate construction/paper/live caps; 17 priced rows, 11 construction-fit, 0 combined passes; call-spread upside caps and earnings/expiration coverage exposed. Fixed threshold catalog support-ATR admission claim, added actual long-vol guard tests and tail-selection warning. 36 focused / 1996 full tests pass, math/secret/diff clean; Doctor35 attention, authority off. No risk constants, eligible universe, candidate selection, tickets or broker action changed by this audit. Concurrent 59ae9c6 included comparability metadata; descriptive hurdle rebase belongs to that separate change.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "done",
     "priority": "high",
     "tags": [
       "thresholds",
