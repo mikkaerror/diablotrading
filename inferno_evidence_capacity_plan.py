@@ -42,6 +42,7 @@ from inferno_config import (
     local_now,
 )
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_math_config import MAX_DAILY_RISK_UNITS
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -55,6 +56,7 @@ PROMOTION_TARGET = 30
 HORIZON_WEEKS = 20
 DEFAULT_HOLD_DAYS = 3.0          # earnings tickets open just before, close just after the print
 TRADING_DAYS_PER_WEEK = 5
+TYPICAL_RISK_UNITS_PER_INTENT = 0.75   # inferno_execution_clerk.risk_units_for_row for readiness 76-86 / confidence 2
 ELIGIBLE_SETUPS = {"Straddle", "Vertical Call", "Vertical Put", "Strangle"}
 
 
@@ -90,6 +92,7 @@ def weekly_capacity(*, hold_days: float = DEFAULT_HOLD_DAYS) -> dict[str, float]
         "activeIntents": MAX_ACTIVE_EXECUTION_INTENTS * turnover,
         "openPaperTickets": MAX_OPEN_PAPER_TICKETS * turnover,
         "dailyBudget": (PAPER_DAILY_BUDGET_DOLLARS / max(PAPER_TICKET_BUDGET_DOLLARS, 1.0)) * TRADING_DAYS_PER_WEEK,
+        "dailyRiskUnits": (MAX_DAILY_RISK_UNITS / TYPICAL_RISK_UNITS_PER_INTENT) * TRADING_DAYS_PER_WEEK,
     }
     binding = min(caps, key=caps.get)
     return {**{k: round(v, 2) for k, v in caps.items()}, "bindingCap": binding, "weeklyCapacity": round(caps[binding], 2), "holdDaysAssumed": hold_days}
@@ -147,7 +150,7 @@ def build_plan(*, snapshot: Any = None, velocity: dict[str, Any] | None = None, 
         "counts": {"universe": len(rows), "reportingInCandidateWindow": in_window, "peakWeekEligible": peak["eligible"], "scoredSoFar": scored},
         "candidateWindowDays": CANDIDATE_MAX_DAYS_UNTIL_EARNINGS,
         "peakWeek": {"week": peak["week"], "startsOn": (today + timedelta(days=7 * peak["week"])).isoformat() if peak["week"] is not None else None, "eligible": peak["eligible"], "reporting": peak["reporting"]},
-        "caps": {"executionQueueLimit": EXECUTION_QUEUE_LIMIT, "maxActiveExecutionIntents": MAX_ACTIVE_EXECUTION_INTENTS, "maxOpenPaperTickets": MAX_OPEN_PAPER_TICKETS, "maxPaperTicketsPerEvent": MAX_PAPER_TICKETS_PER_EVENT, "paperDailyBudget": PAPER_DAILY_BUDGET_DOLLARS, "paperTicketBudget": PAPER_TICKET_BUDGET_DOLLARS},
+        "caps": {"maxDailyRiskUnits": MAX_DAILY_RISK_UNITS, "executionQueueLimit": EXECUTION_QUEUE_LIMIT, "maxActiveExecutionIntents": MAX_ACTIVE_EXECUTION_INTENTS, "maxOpenPaperTickets": MAX_OPEN_PAPER_TICKETS, "maxPaperTicketsPerEvent": MAX_PAPER_TICKETS_PER_EVENT, "paperDailyBudget": PAPER_DAILY_BUDGET_DOLLARS, "paperTicketBudget": PAPER_TICKET_BUDGET_DOLLARS},
         "capacity": capacity,
         "historicalWeeklyFillRate": historical_rate,
         "projection": projection,
@@ -172,7 +175,7 @@ def plan_text(payload: dict[str, Any]) -> str:
         f"Universe: {counts.get('universe')} | reporting inside the {payload.get('candidateWindowDays')}-day candidate window now: {counts.get('reportingInCandidateWindow')}",
         f"Peak week: week {peak.get('week')} (from {peak.get('startsOn')}) | {peak.get('reporting')} reporting, {peak.get('eligible')} eligible after confidence/setup screens",
         "",
-        f"Weekly scored-outcome capacity by cap (hold {cap.get('holdDaysAssumed')}d): queue {cap.get('queueLimit')} | active intents {cap.get('activeIntents')} | open paper tickets {cap.get('openPaperTickets')} | daily budget {cap.get('dailyBudget')}",
+        f"Weekly scored-outcome capacity by cap (hold {cap.get('holdDaysAssumed')}d): queue {cap.get('queueLimit')} | active intents {cap.get('activeIntents')} | open paper tickets {cap.get('openPaperTickets')} | daily budget {cap.get('dailyBudget')} | daily risk units {cap.get('dailyRiskUnits')}",
         f"Binding cap: {cap.get('bindingCap')} -> {cap.get('weeklyCapacity')} / week",
         f"Historical operator fill rate: {payload.get('historicalWeeklyFillRate')} / week",
         "",

@@ -338,3 +338,31 @@ vol the strictness is defensible, but a fixed 20% means "never" for
 AXTI/AEHR/CCOI (median realized 25–29%) and "generous" for a 5% name. Once
 the curated earnings history has accumulated (§15), the guard can be
 expressed relative to the name's own median realized move. Not changed.
+
+## 20. APPLIED — operator-approved settings (reversible, local `.env.inferno`)
+
+Operator: "do what makes sense for this project." Applied, all paper/research
+lane, live authority untouched, each reversible by deleting the line:
+
+| setting | before | now | why |
+|---|---|---|---|
+| `SCHWAB_OPTIONS_STRIKE_COUNT` | 24 | 64 | chain window stopped short of the expected move (§12) |
+| `INFERNO_REVIEW_QUEUE_LIMIT` / `INFERNO_EXECUTION_QUEUE_LIMIT` | 5 / 5 | 8 / 8 | season intake breadth (§18); made env-overridable in `inferno_config.py`, code defaults unchanged |
+| `INFERNO_MAX_ACTIVE_EXECUTION_INTENTS` | 3 | 5 | binding in-season cap (§18); env-overridable, default unchanged |
+| `MAX_OPEN_PAPER_TICKETS` | 5 | 8 | keeps open-ticket turnover above the intents cap |
+
+Not changed: `MAX_DAILY_RISK_UNITS=3.0` (math config, live-sizing semantics)
+still caps approval-ready intents at ~4/day at ~0.75 units each; the
+capacity plan now reports it as its own ceiling. `MAX_SINGLE_TICKET_DOLLARS`
+($500 construction cap) unchanged.
+
+Correction to §16: the paper lane already runs at `INFERNO_PAPER_TICKET_BUDGET=2000`.
+At that budget an expected-move-width vertical fits **166/183 (91%)** of the
+universe; the 57% figure is against the $500 construction cap. The cap-fit
+report now shows both. The remaining misses at $2,000 are the $1,000+ names
+(FIX, ASML, MPWR, EQIX, LITE, GEV, STX).
+
+Capacity plan after the change: binding cap is still active intents, now
+8.3 scored outcomes/week; 30 clears in **week 8 (~Nov 2)** at capacity. The
+historical fill rate (0.47/week) is unchanged by any of this — that is the
+step only the operator can move.

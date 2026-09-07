@@ -62,6 +62,10 @@ EVENT_MOVE_ATR_MULTIPLE_PROXY = 2.13
 # An ATM-to-1-expected-move vertical costs roughly 40-45% of its width; a
 # half-expected-move vertical (short strike closer) costs closer to 45-50%.
 EXPECTED_MOVE_DEBIT_COST_RATIO = 0.42
+try:
+    from inferno_config import PAPER_TICKET_BUDGET_DOLLARS as _PAPER_CAP
+except Exception:  # noqa: BLE001
+    _PAPER_CAP = 500.0
 HALF_MOVE_DEBIT_COST_RATIO = 0.47
 
 
@@ -198,7 +202,9 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
         "eventMoveFromCurated": 0,
         "eventMoveFromProxy": 0,
         "eventMoveUnavailable": 0,
+        "debitExpectedMovePaperFits": 0,
     }
+    paper_cap = float(_PAPER_CAP)
     implied_moves, curated_moves = _event_move_sources()
     for row in rows:
         if not isinstance(row, dict):
@@ -230,9 +236,11 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
         thesis_fits = {
             "debit_expected_move": _fits(thesis["debit_expected_move"], cap),
             "debit_half_move": _fits(thesis["debit_half_move"], cap),
+            "debit_expected_move_paper": _fits(thesis["debit_expected_move"], paper_cap),
         }
         counts["debitExpectedMoveFits"] += int(thesis_fits["debit_expected_move"])
         counts["debitHalfMoveFits"] += int(thesis_fits["debit_half_move"])
+        counts["debitExpectedMovePaperFits"] += int(thesis_fits["debit_expected_move_paper"])
         counts[{
             "schwab-atm-implied": "eventMoveFromSchwab",
             "curated-earnings-history-median": "eventMoveFromCurated",
@@ -287,6 +295,7 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
     priced = counts["total"] - counts["missingPrice"] - counts["eventMoveUnavailable"]
     thesis_fit_rate = (counts["debitExpectedMoveFits"] / priced) if priced else 0.0
     half_fit_rate = (counts["debitHalfMoveFits"] / priced) if priced else 0.0
+    paper_fit_rate = (counts["debitExpectedMovePaperFits"] / priced) if priced else 0.0
     if thesis_fit_rate < 0.30:
         thesis_verdict = "cap-too-small-for-expected-move-structures"
     elif thesis_fit_rate < 0.60:
@@ -296,6 +305,8 @@ def build_audit(*, snapshot: dict | None = None, cap_dollars: float | None = Non
 
     payload = {
         "thesisFitRate": round(thesis_fit_rate, 4),
+        "paperCapDollars": paper_cap,
+        "thesisFitRateAtPaperCap": round(paper_fit_rate, 4),
         "halfMoveFitRate": round(half_fit_rate, 4),
         "thesisVerdict": thesis_verdict,
         "generatedAt": __import__("datetime").datetime.now(
@@ -351,6 +362,7 @@ def render_text(payload: dict) -> str:
         f"  Verdict:                    {payload.get('thesisVerdict','?')}",
         f"  Expected-move-width debit:  {counts.get('debitExpectedMoveFits',0)}/{counts.get('total',0)}  ({payload.get('thesisFitRate',0)*100:.1f}% of priced names)",
         f"  Half-move-width debit:      {counts.get('debitHalfMoveFits',0)}/{counts.get('total',0)}  ({payload.get('halfMoveFitRate',0)*100:.1f}%)",
+        f"  At the PAPER budget (${payload.get('paperCapDollars',0):.0f}): expected-move-width debit fits {counts.get('debitExpectedMovePaperFits',0)}/{counts.get('total',0)}  ({payload.get('thesisFitRateAtPaperCap',0)*100:.1f}%)",
         f"  Event-move source: schwab implied {counts.get('eventMoveFromSchwab',0)} | curated history {counts.get('eventMoveFromCurated',0)} | ATR proxy {counts.get('eventMoveFromProxy',0)} | unavailable {counts.get('eventMoveUnavailable',0)}",
         "  Note: the $5-wide / $1-wide rows above always fit by construction; they say nothing about whether the structure can express the move.",
         "",

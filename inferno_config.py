@@ -188,9 +188,12 @@ UPDATER_SCRIPTS = [
     "R-20DayATR.py",
 ]
 UPDATER_LABEL = "BC/P/Q/R PyCharm jobs"
-REVIEW_QUEUE_LIMIT = 5
+# Queue breadth. Env-overridable since 2026-09-07 so the operator can widen
+# intake for an earnings-season burst without a code change (see
+# reports/evidence_capacity_plan_latest.txt); defaults are unchanged.
+REVIEW_QUEUE_LIMIT = int(os.environ.get("INFERNO_REVIEW_QUEUE_LIMIT", "5"))
 LONG_TERM_QUEUE_LIMIT = 5
-EXECUTION_QUEUE_LIMIT = 5
+EXECUTION_QUEUE_LIMIT = int(os.environ.get("INFERNO_EXECUTION_QUEUE_LIMIT", "5"))
 SCORE_FORMULA_COLUMNS = ("U", "V", "W", "X", "Y")
 
 BROKER_EXECUTION_SURFACE = "thinkorswim"
@@ -204,7 +207,7 @@ AUTO_PAPER_SELECTION_ENABLED = os.environ.get("INFERNO_AUTO_PAPER_SELECTION", "1
     "on",
 }
 MAX_SINGLE_TRADE_RISK_UNITS = 1.0
-MAX_ACTIVE_EXECUTION_INTENTS = 3
+MAX_ACTIVE_EXECUTION_INTENTS = int(os.environ.get("INFERNO_MAX_ACTIVE_EXECUTION_INTENTS", "3"))
 MAX_SINGLE_TICKET_DOLLARS = float(os.environ.get("MAX_SINGLE_TICKET_DOLLARS", "500"))
 MAX_DAILY_TICKET_DOLLARS = float(os.environ.get("MAX_DAILY_TICKET_DOLLARS", "1500"))
 # Paper tickets are simulated evidence only. Keep this budget independent from
