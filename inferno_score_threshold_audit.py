@@ -60,6 +60,7 @@ from inferno_trade_evidence import (
     LONG_VOL_MAX_IMPLIED_MOVE_PCT, LONG_VOL_EVENT_WINDOW_DAYS,
     LONG_VOL_EVENT_IMPLIED_MOVE_MIN_PCT, LONG_VOL_EVENT_IMPLIED_MOVE_MAX_PCT,
 )
+from inferno_trade_management import exit_economics
 from inferno_risk_policy import SCHWAB_OPTIONS_MAX_AGE_HOURS, VISIBLE_QUOTE_MIN_PRICE
 from inferno_score_calibration import MIN_CALIBRATION_SAMPLE, MIN_MONOTONIC_BUCKET_SAMPLE
 from inferno_strategy_lab import (
@@ -691,6 +692,7 @@ def universe_premium_context(artifacts: dict[str, dict[str, Any]]) -> dict[str, 
             "fitsPaperBudget": loss <= paper_cap if loss is not None and loss >= 0 and paper_cap is not None else None,
             "combinedPassed": item.get("combinedPassed"),
             "upsideCapMovePct": None, "spreadWidthPctOfSpot": None,
+            "exitEconomics": exit_economics({**item, "strategy": plan.get("strategy") or item.get("recommendedStrategy")}),
         }
         legs = plan.get("legs") or []
         buys = [leg for leg in legs if leg.get("putCall") == "CALL" and leg.get("instruction") == "BUY_TO_OPEN"]
@@ -769,6 +771,17 @@ def universe_premium_findings(context: dict[str, Any]) -> list[dict[str, Any]]:
             benchmark["reason"],
             "Keep tail summaries descriptive; evaluate all independently dated events, including small moves, on chronological holdouts before using them to justify a threshold.",
             source="inferno_event_move_calibration.json",
+        ))
+    structures = context.get("pricedStructures") or []
+    fractional = [r for r in structures if (r.get("exitEconomics") or {}).get("wholeContractScaleOutPossible") is False]
+    oversized_stops = [r for r in structures if (r.get("exitEconomics") or {}).get("plannedStopExceedsDefinedMaxLoss") is True]
+    if fractional or oversized_stops:
+        findings.append(finding(
+            "P1", "Exit mechanics must fit contract counts and actual payoff bounds",
+            f"Of {len(structures)} saved priced structures: {len(fractional)} cannot follow the fractional scale-out at their contract count; {len(oversized_stops)} have a planned stop loss larger than defined maximum loss.",
+            "Profit percent can mean return on debit, entry credit, maximum profit or maximum risk. These denominators imply different dollar outcomes and break-even win rates.",
+            "Review integer-unit exit plans and report target/stop dollars plus full-loss stress; preserve current thresholds and record no exit action.",
+            source="inferno_trade_management.py::exit_economics",
         ))
     return findings
 
@@ -1230,6 +1243,8 @@ def render_score_threshold_audit(payload: dict[str, Any]) -> str:
     for row in context.get("pricedStructures") or []:
         if row.get("upsideCapMovePct") is not None:
             lines.append(f"- {row['ticker']} call spread expiring {row['expiration']}: upside capped at +{row['upsideCapMovePct']}% from saved spot; max loss=${row['maxLossDollars']}; max profit=${row['maxProfitDollars']} ({row['maxProfitR']}R); {row['eventCoverage']}")
+        economics = row.get("exitEconomics") or {}
+        lines.append(f"  {row['ticker']} {row['strategy']} exit economics: target=${economics.get('firstTargetProfitDollars')} ({economics.get('targetBasis')}); stop loss=${economics.get('plannedStopLossDollars')}; target/max-risk={economics.get('firstTargetReturnOnMaxRisk')}; whole-unit ladder={economics.get('wholeContractScaleOutPossible')}; stop exceeds max loss={economics.get('plannedStopExceedsDefinedMaxLoss')}")
     for limit in context.get("limits") or []:
         lines.append(f"- limitation: {limit}")
 

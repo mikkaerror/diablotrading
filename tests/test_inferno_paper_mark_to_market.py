@@ -113,7 +113,7 @@ class SingleTicketMTMTests(unittest.TestCase):
         self.assertEqual(out["unrealizedPnlDollars"], -170.0)
         self.assertAlmostEqual(out["unrealizedPnlPctOfEntryLimit"], -0.4857, places=3)
         self.assertEqual(out["fetchStatus"], "ok")
-        self.assertEqual(out["warnings"], [])
+        self.assertIn("entry uses a planning limit, not an observed paper fill", out["warnings"])
 
     def test_debit_spread_at_double(self) -> None:
         """When current spread mid = 2x entry limit, PnL = +max profit-ish."""

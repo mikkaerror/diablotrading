@@ -44,6 +44,7 @@ CLI::
 
 import argparse
 import json
+import math
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -101,11 +102,11 @@ PAPER_MTM_STAGE = "paper-mark-to-market-research-only"
 
 def _safe_float(value: Any) -> float | None:
     """Best-effort numeric coercion."""
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
     try:
         v = float(value)
-        return v if v == v else None  # filter NaN
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError):
         return None
 
@@ -113,9 +114,9 @@ def _safe_float(value: Any) -> float | None:
 def _instruction_sign(instruction: str | None) -> int | None:
     """+1 for BUY_TO_OPEN, -1 for SELL_TO_OPEN. Anything else is ambiguous."""
     raw = str(instruction or "").upper()
-    if raw.startswith("BUY"):
+    if raw == "BUY_TO_OPEN":
         return 1
-    if raw.startswith("SELL"):
+    if raw == "SELL_TO_OPEN":
         return -1
     return None
 
@@ -279,13 +280,17 @@ def mark_to_market_one_ticket(
     """
     legs = ticket.get("legs") or []
     contract_multiplier = 100
-    contracts_quantity = 1  # the desk does single-contract paper tickets
+    paper_execution = ticket.get("paperExecution") or {}
+    quantity = _safe_float(paper_execution.get("contracts", ticket.get("contracts", 1)))
+    quantity_valid = quantity is not None and quantity > 0 and quantity.is_integer()
+    contracts_quantity = int(quantity) if quantity_valid else 1
 
     per_leg_rows: list[dict[str, Any]] = []
     entry_signed_mid = 0.0
     current_signed_mid: float | None = 0.0
     any_leg_unmatched = False
     any_leg_missing_sign = False
+    liquidation_signed_value: float | None = 0.0
 
     for leg in legs:
         symbol = leg.get("symbol")
@@ -315,10 +320,18 @@ def mark_to_market_one_ticket(
         if not match:
             any_leg_unmatched = True
 
-        if sign is not None and current_mid is not None:
-            current_signed_mid += sign * current_mid  # type: ignore[operator]
-        elif sign is not None and current_mid is None:
+        if sign is not None and current_mid is not None and current_mid >= 0:
+            if current_signed_mid is not None:
+                current_signed_mid += sign * current_mid
+        else:
             current_signed_mid = None  # cannot compute net without all legs
+        # A quoted liquidation stress: sell long legs at bid, buy shorts at ask.
+        # This is neither a fill guarantee nor a substitute for the midpoint.
+        if sign is not None and current_bid is not None and current_ask is not None and 0 <= current_bid <= current_ask:
+            if liquidation_signed_value is not None:
+                liquidation_signed_value += current_bid if sign > 0 else -current_ask
+        else:
+            liquidation_signed_value = None
 
         delta_pct: float | None = None
         if original_mid is not None and current_mid is not None and original_mid != 0:
@@ -344,10 +357,10 @@ def mark_to_market_one_ticket(
         )
 
     staged_entry_limit = _safe_float(ticket.get("entryLimit"))
-    paper_execution = ticket.get("paperExecution") or {}
     executed_entry_price = _safe_float(paper_execution.get("entryPrice"))
-    entry_limit = executed_entry_price if executed_entry_price is not None else staged_entry_limit
-    entry_price_source = "paper-fill" if executed_entry_price is not None else "staged-limit"
+    has_execution_price = "entryPrice" in paper_execution
+    entry_limit = executed_entry_price if has_execution_price else staged_entry_limit
+    entry_price_source = "paper-fill" if has_execution_price else "staged-limit"
     entry_cost_type = str(ticket.get("entryCostType") or "").lower()
     max_loss = _safe_float(ticket.get("estimatedMaxLoss"))
     max_profit_raw = ticket.get("estimatedMaxProfit")
@@ -360,19 +373,29 @@ def mark_to_market_one_ticket(
 
     # A staged limit is a planning estimate, but imported paperMoney fills are
     # the evidence source for an open ticket's P/L.  For a defined-risk debit
-    # position, a better entry reduces maximum loss and increases the remaining
-    # maximum profit by the same dollar amount.  Do not reinterpret uncapped or
-    # credit structures here.
+    # position, a better entry reduces maximum loss and increases maximum
+    # profit. Credit structures must also use the credit actually collected.
     if (
         executed_entry_price is not None
-        and entry_cost_type != "credit"
+        and entry_cost_type == "debit"
         and staged_entry_limit is not None
         and entry_limit is not None
     ):
-        entry_delta_dollars = (staged_entry_limit - entry_limit) * contract_multiplier * contracts_quantity
-        max_loss = entry_limit * contract_multiplier * contracts_quantity
+        entry_delta_dollars = (staged_entry_limit - entry_limit) * contract_multiplier
+        max_loss = entry_limit * contract_multiplier
         if max_profit is not None:
             max_profit = max_profit + entry_delta_dollars
+    if executed_entry_price is not None and entry_cost_type == "credit":
+        max_profit = executed_entry_price * contract_multiplier
+        max_loss = (max_loss + (staged_entry_limit - executed_entry_price) * contract_multiplier
+                    if max_loss is not None and staged_entry_limit is not None else None)
+    # Plan estimates are for one strategy unit; fill quantity scales dollars,
+    # while percentage returns stay invariant for identical units.
+    max_loss = max_loss * contracts_quantity if max_loss is not None else None
+    max_profit = max_profit * contracts_quantity if max_profit is not None else None
+    if not legs or any_leg_missing_sign or not quantity_valid:
+        current_signed_mid = None
+        liquidation_signed_value = None
 
     # Unrealized PnL per share (long the position):
     #   For any structure, signed_mid_now − signed_mid_at_entry captures the
@@ -385,7 +408,8 @@ def mark_to_market_one_ticket(
     unrealized_pnl_pct_of_max_profit: float | None = None
     playbook_pct_of_debit: float | None = None
 
-    if current_signed_mid is not None and entry_limit is not None:
+    liquidation_pnl_dollars = None
+    if current_signed_mid is not None and entry_limit is not None and entry_limit > 0 and entry_cost_type in {"debit", "credit"}:
         # For a DEBIT, entry_limit is positive (the per-share cost).
         # For a CREDIT, entry_limit is positive (the per-share credit received).
         # We need the *signed* reference: debit -> +entry_limit, credit -> -entry_limit.
@@ -406,6 +430,8 @@ def mark_to_market_one_ticket(
         unrealized_pnl_dollars = round(
             per_share_pnl * contract_multiplier * contracts_quantity, 2
         )
+        if liquidation_signed_value is not None:
+            liquidation_pnl_dollars = round((liquidation_signed_value - signed_entry_reference) * contract_multiplier * contracts_quantity, 2)
         unrealized_pnl_pct_of_entry_limit = (
             round(per_share_pnl / entry_limit, 4) if entry_limit > 0 else None
         )
@@ -430,6 +456,14 @@ def mark_to_market_one_ticket(
         warnings.append("at least one leg could not be matched in the chain")
     if any_leg_missing_sign:
         warnings.append("at least one leg has an unrecognized instruction")
+    if not legs:
+        warnings.append("no option legs; valuation unavailable")
+    if not quantity_valid:
+        warnings.append("invalid contract quantity; valuation unavailable")
+    if entry_limit is None or entry_limit <= 0 or entry_cost_type not in {"debit", "credit"}:
+        warnings.append("entry price or debit/credit basis invalid; P/L unavailable")
+    if entry_price_source == "staged-limit":
+        warnings.append("entry uses a planning limit, not an observed paper fill")
     if current_signed_mid is None:
         warnings.append("current net mid is unavailable; price-triggered rules are blocked")
     if contracts is None:
@@ -459,6 +493,10 @@ def mark_to_market_one_ticket(
         "entryLimit": entry_limit,
         "stagedEntryLimit": staged_entry_limit,
         "entryPriceSource": entry_price_source,
+        "contracts": contracts_quantity if quantity_valid else None,
+        "pnlBasis": "gross-midpoint-mark; excludes commissions and fees",
+        "quotedLiquidationPnlDollars": liquidation_pnl_dollars,
+        "quotedLiquidationBasis": "long legs at bid, short legs at ask; not a guaranteed fill",
         "estimatedMaxLoss": max_loss,
         "estimatedMaxProfit": max_profit,
         "estimatedMaxProfitUncapped": max_profit_uncapped,

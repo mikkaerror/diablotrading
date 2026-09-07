@@ -52,6 +52,7 @@ def _ticket(
     return {
         "ticketId": ticket_id,
         "ticker": ticker,
+        "sourceStrikePlanGeneratedAt": TODAY.isoformat(),
         "strategy": strategy,
         "expiration": expiration,
         "daysUntilEarnings": days_until_earnings,

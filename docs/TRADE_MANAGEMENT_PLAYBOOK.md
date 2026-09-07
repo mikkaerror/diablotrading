@@ -5,6 +5,13 @@
 **Reference NLV:** $5,000 (worked example). Rules scale linearly with NLV via the formula already wired in `inferno_capital_scaling.py`.
 **Anchored to:** the `inferno_capital_scaling` recommender (1% / ticket, $25 floor, $2k ceiling, symmetric drawdown), the existing `inferno_paper_exit_auditor`, and the strategy generator's two output families (long-vol cap-aware variants vs defined-risk premium plays).
 
+**Assumption review, 2026-09-06:** The percentages below are existing research
+triggers, not calibrated optimal exits or expected returns. Current saved
+construction/paper/live capital policy takes precedence over this historical
+$5,000 sizing illustration. Single-contract tickets cannot execute half/quarter
+scale-outs. Targets use gross midpoint marks; quotes, fees, gaps and actual
+fills can materially change the result. See [[ENTRY_EXIT_REVIEW_2026-09-06]].
+
 This document defines, in rules, what to do *after* the strategy generator hands you a ticket: when to scale out, when to let it run, when to cut, when to walk away on time. The goal is to make every closed outcome a *decision you made on purpose*, not a position that drifted into expiry.
 
 ---
@@ -16,14 +23,17 @@ The strategy generator already produces two structurally different trade types:
 **Lane A — Runners** (long-vol, capped loss, uncapped or large-multiple upside)
 - LONG_STRADDLE, LONG_STRANGLE, LONG_CALL, LONG_PUT
 - Max loss = debit paid (defined when you enter)
-- Max profit = "large" — typically 3-10× debit on a hit, but most cycles lose
-- Empirical base rate: ~40% win rate, slightly negative expectancy at average prices
+- Upside depends on structure: a long call is theoretically uncapped; a long
+  put has a finite maximum. No typical 3–10× gain is established by desk evidence.
+- Win rate and expectancy are unvalidated; use reconciled, source-separated
+  option outcomes rather than a generic family base rate.
 
 **Lane B — Fixed gains** (defined-risk premium, both sides capped)
 - PUT_CREDIT_SPREAD, CALL_CREDIT_SPREAD, CALL_DEBIT_SPREAD, PUT_DEBIT_SPREAD, IRON_CONDOR
 - Max loss = defined (width − credit, or debit paid)
 - Max profit = defined (credit collected, or width − debit)
-- Empirical base rate: ~60-75% win rate, modestly positive expectancy
+- Win rate and expectancy depend on entry credit/debit, strikes, exit rules
+  and friction. No 60–75% win rate or positive expectancy is assumed.
 
 These need different management because their P&L curves are different shapes. Treating them with one rulebook is the most common amateur mistake in this game.
 
@@ -79,11 +89,15 @@ For every winning long-vol position, scale out in **three pieces**, not all at o
 
 | Trigger | Action | Position after |
 |---|---|---|
-| **+50% of debit** (e.g., $50 paid → $75 mark) | Close 50% of position | 50% remaining, ~+25% of debit banked |
-| **+100% of debit** (2× — break-even on the loser) | Close another 25% | 25% remaining, ~+50% of debit banked, **trade is now fully de-risked** |
-| **+200% of debit** OR ticker has moved through the further breakeven | Close the last 25% | Position flat, max realized win |
+| **+50% of debit** (e.g., $50 paid → $75 mark) | Close 50% of original position | 75% of original debit recovered; losing the remainder still produces a 25% total loss |
+| **+100% of debit** | Close another 25% of original position | 125% of original debit recovered; gross total return is at least +25% if remainder expires worthless |
+| **+200% of debit** | Close the last 25% of original position | Flat; full sequential ladder returns **+100% of original debit**, before fees |
 
-The third tranche is the "runner" — it's the chunk that pays for all the trades that didn't move. If you skip the third tranche, your expected value falls below break-even because you're cutting off the fat right tail.
+This illustration requires whole strategy units (four units for exact
+50/25/25 fractions) and sequential fills exactly at each target. It does not
+authorize increasing size to make the ladder possible. Selling an individual
+spread leg changes the structure. Whether retaining a runner improves
+expectancy must be tested; it is not established by the ladder arithmetic.
 
 ### 3.3 The runner stop-loss
 
@@ -101,7 +115,10 @@ This is the call where most edge gets won or lost on long-vol earnings trades.
 - **If the desk's selection edge is in pricing IV cheap → realized move expansion** (the typical edge story): **exit BEFORE the announcement.** You're buying the IV runup, not the binary outcome. The IV crush eats the gains otherwise.
 - **If the desk's selection edge is in identifying a binary that will hugely overshoot consensus** (the "no, this stock is going to gap 20%" thesis): **hold through the announcement.** Accept the IV crush; bet on the realized move being so large that it overwhelms the crush.
 
-Without 30+ closed outcomes you don't yet know which edge you have. **Default to pre-event exit** for the first 30 outcomes — it's the lower-variance way to collect the evidence that tells you which side your edge is on.
+The current Lane A default remains pre-event exit. A sample count alone does
+not establish either advantage or authorize a switch. Pre-event IV expansion
+and holding through an earnings jump are distinct hypotheses: record the
+intended exit before entry and compare them using dated option quotes.
 
 ---
 
@@ -189,9 +206,9 @@ other rule has an "unless" clause. This one does not.
 If an open position is showing unrealized loss, the response options are:
 
 1. **Close** — take the loss, free the capital, log the outcome.
-2. **Roll** — close the current expiration and open the next one at the same
-   or wider strikes (Lane B only, for credit structures with thesis intact
-   and DTE ≤ 14). Always reduces a loss, never adds new max-loss.
+2. **Roll** — closing one trade and opening another preserves the first
+   trade's realized loss and can add risk. This is not a loss-reduction
+   guarantee or authorization to bypass the current no-roll default.
 3. **Hold** — only if the stop-loss verdict has not fired and the original
    thesis is intact. Time is allowed to do its work. New money is not added.
 

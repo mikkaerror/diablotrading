@@ -14,10 +14,10 @@ Strategy taxonomy (mirrors the playbook):
   Lane A -- long-vol, capped loss, large/uncapped upside.
     LONG_STRADDLE, LONG_STRANGLE, LONG_CALL, LONG_PUT
     Rules: +50% / +100% / +200% scale-out, -50% stop, time-stops, pre-event
-    exit by default until 30 closed outcomes accrue.
+    exit by current default; sample count alone does not change it.
 
-  Lane B credit -- defined-risk, high win-rate, capped profit.
-    PUT_CREDIT_SPREAD, CALL_CREDIT_SPREAD, IRON_CONDOR
+  Lane B credit -- defined-risk, capped profit; win rate is not assumed.
+    PUT_CREDIT_SPREAD, CALL_CREDIT_SPREAD, IRON_CONDOR, SHORT_PREMIUM_DEFINED
     Rules: close at +50% of max profit, accelerated trim in last 7 days,
     stop at -100% of credit collected.
 
@@ -26,7 +26,7 @@ Strategy taxonomy (mirrors the playbook):
     Rules: half off at +50% of max profit, close the rest at +80%, hard
     stop at -50% of debit.
 
-  Unknown -- not classifiable; emits ``hold`` plus a warning.
+  Unknown -- not classifiable; emits ``awaiting-data`` plus a warning.
 
 Strict invariants: research-only, promotable=False, authorityChanged=False,
 liveTradingAllowed False, brokerSubmitAllowed False. Never mutates the
@@ -34,6 +34,7 @@ ledger or the MTM artifact.
 """
 
 import argparse
+import math
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,7 @@ LANE_B_CREDIT_TAKE_PROFIT_1_PCT_OF_MAX = 0.50
 LANE_B_CREDIT_TAKE_PROFIT_2_PCT_OF_MAX = 0.25  # only if T-7 or sooner
 LANE_B_CREDIT_LATE_DAYS = 7
 LANE_B_CREDIT_FORCE_CLOSE_DAYS = 3
-LANE_B_CREDIT_STOP_PCT_OF_CREDIT = -1.0  # loss = 2x the credit collected
+LANE_B_CREDIT_STOP_PCT_OF_CREDIT = -1.0  # buyback cost = 2x credit; loss = 1x credit
 
 LANE_B_DEBIT_TAKE_PROFIT_1_PCT_OF_MAX = 0.50
 LANE_B_DEBIT_TAKE_PROFIT_2_PCT_OF_MAX = 0.80
@@ -93,11 +94,11 @@ VERDICTS = (
 
 
 def _safe_float(value: Any) -> float | None:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
     try:
         v = float(value)
-        return v if v == v else None
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError):
         return None
 
@@ -121,7 +122,7 @@ def _strategy_lane(strategy: str | None) -> str:
         return "unknown"
     if name in {"LONG_STRADDLE", "LONG_STRANGLE", "LONG_CALL", "LONG_PUT"}:
         return "lane-a"
-    if name in {"PUT_CREDIT_SPREAD", "CALL_CREDIT_SPREAD", "IRON_CONDOR"}:
+    if name in {"PUT_CREDIT_SPREAD", "CALL_CREDIT_SPREAD", "IRON_CONDOR", "SHORT_PREMIUM_DEFINED"}:
         return "lane-b-credit"
     if name in {"CALL_DEBIT_SPREAD", "PUT_DEBIT_SPREAD", "VERTICAL_DEBIT_SPREAD"}:
         return "lane-b-debit"
@@ -135,20 +136,38 @@ def _days_to_expiration(ticket: dict[str, Any], today: date) -> int | None:
     return (exp - today).days
 
 
-def _days_until_earnings(ticket: dict[str, Any]) -> int | None:
-    """Read frozen daysUntilEarnings from the ledger entry.
+def event_timing(ticket: dict[str, Any], today: date) -> dict[str, Any]:
+    """Age a dated earnings observation; never treat a frozen count as current.
 
-    Note: this is the count captured at strike-plan time, not a live count.
-    The playbook treats it as a directional signal rather than a real-time
-    metric; the operator should refresh the strike plan to recompute.
+    eventId is deliberately excluded: legacy IDs can fall back to expiration.
+    Calendar-day inference retains its source; it does not infer release time.
     """
-    raw = ticket.get("daysUntilEarnings")
-    if raw is None:
-        return None
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
+    event_date = None
+    source = "unknown"
+    for context_name in (None, "trackerContext", "marketContext", "marketContextSummary"):
+        context = ticket if context_name is None else (ticket.get(context_name) or {})
+        for field in ("nextEarnings", "earningsDate", "reportDate"):
+            event_date = _parse_iso_date(context.get(field))
+            if event_date:
+                source = f"{context_name + '.' if context_name else ''}{field}"
+                break
+        if event_date:
+            break
+    if event_date is None:
+        days = _safe_float(ticket.get("daysUntilEarnings"))
+        if days is not None and days.is_integer():
+            for field in ("sourceStrikePlanGeneratedAt", "refreshedAt", "tradeDate", "createdAt"):
+                as_of = _parse_iso_date(ticket.get(field))
+                if as_of:
+                    try:
+                        event_date = as_of + timedelta(days=int(days))
+                        source = f"inferred-daysUntilEarnings-at-{field}"
+                    except OverflowError:
+                        pass
+                    break
+    return {"earningsDate": event_date.isoformat() if event_date else None,
+            "daysUntilEarnings": (event_date - today).days if event_date else None,
+            "source": source, "releaseTimeKnown": False}
 
 
 def _open_paper_tickets(ledger: dict[str, Any]) -> list[dict[str, Any]]:
@@ -173,7 +192,10 @@ def _verdict_lane_a(
     Returns (verdict, rationale_lines).
     """
     rationale: list[str] = []
-    if mark is None or mark.get("playbookPctOfDebit") is None:
+    if dte_earnings is not None and 0 <= dte_earnings <= PRE_EVENT_EXIT_DAYS:
+        return "pre-event-exit", [f"pre-event exit: daysUntilEarnings = {dte_earnings} ≤ {PRE_EVENT_EXIT_DAYS}; calendar rule does not require an option mark"]
+    pct = _safe_float((mark or {}).get("playbookPctOfDebit"))
+    if pct is None:
         if dte is not None and dte <= LANE_A_TIME_STOP_HARD_DAYS:
             rationale.append(
                 f"hard time stop: {dte}d to expiry (≤ {LANE_A_TIME_STOP_HARD_DAYS}d)"
@@ -182,16 +204,7 @@ def _verdict_lane_a(
         rationale.append("mark-to-market unavailable; price-triggered rules blocked")
         return "awaiting-data", rationale
 
-    pct = float(mark.get("playbookPctOfDebit") or 0.0)
     rationale.append(f"playbook %-of-debit = {pct:+.4f}")
-
-    # Pre-event exit: close before earnings unless desk has explicit
-    # post-event-edge evidence (we don't until 30 outcomes accrue).
-    if dte_earnings is not None and dte_earnings <= PRE_EVENT_EXIT_DAYS and dte_earnings >= 0:
-        rationale.append(
-            f"pre-event exit: daysUntilEarnings = {dte_earnings} ≤ {PRE_EVENT_EXIT_DAYS}"
-        )
-        return "pre-event-exit", rationale
 
     # Hard time stop -- close everything by T-2.
     if dte is not None and dte <= LANE_A_TIME_STOP_HARD_DAYS:
@@ -263,8 +276,7 @@ def _verdict_lane_b_credit(
     if pct_max is not None:
         rationale.append(f"unrealized %-of-max-profit = {pct_max:+.4f}")
 
-    # Stop loss: per playbook §4.3, close credit spread when loss is 2x credit
-    # collected (≈ -100% of credit). Credit-collected = estimated_credit * 100.
+    # Buyback at 2x entry credit means P/L is -1x credit, not a 2x loss.
     if pnl_dollars is not None and estimated_credit and estimated_credit > 0:
         credit_dollars = estimated_credit * 100
         stop_loss_dollars = LANE_B_CREDIT_STOP_PCT_OF_CREDIT * credit_dollars
@@ -376,6 +388,98 @@ def _strategy_plan(ticket: dict[str, Any]) -> dict[str, Any]:
     return plan if isinstance(plan, dict) else {}
 
 
+def exit_economics(ticket: dict[str, Any], mark: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Translate existing exit rules into dollars and explicit return bases.
+
+    Two-outcome break-even rates are algebraic stress cases, not forecasts or
+    historical win rates. No threshold or position is changed here.
+    """
+    plan = _strategy_plan(ticket)
+    lane = _strategy_lane(ticket.get("strategy") or plan.get("strategy"))
+    execution = ticket.get("paperExecution") or {}
+    cost_type = ticket.get("entryCostType") or ("credit" if "estimatedCredit" in plan else "debit" if "estimatedDebit" in plan else None)
+    price = _safe_float(execution.get("entryPrice") if "entryPrice" in execution else ticket.get("entryLimit", plan.get("estimatedCredit") if cost_type == "credit" else plan.get("estimatedDebit")))
+    quantity = _safe_float(execution.get("contracts", ticket.get("contracts", 1)))
+    quantity = int(quantity) if quantity is not None and quantity > 0 and quantity.is_integer() else None
+    dollars = price * 100 * quantity if price is not None and price > 0 and quantity else None
+    loss = _safe_float((mark or {}).get("estimatedMaxLoss") if mark else ticket.get("estimatedMaxLoss", plan.get("estimatedMaxLoss")))
+    profit = _safe_float((mark or {}).get("estimatedMaxProfit") if mark else ticket.get("estimatedMaxProfit", plan.get("estimatedMaxProfit")))
+    # Without a reconciled MTM, supplied estimates describe one planned unit.
+    if not mark and quantity:
+        staged_price = _safe_float(ticket.get("entryLimit", plan.get("estimatedCredit") if cost_type == "credit" else plan.get("estimatedDebit")))
+        if "entryPrice" in execution:
+            if price is None or price <= 0:
+                loss = profit = None
+            elif cost_type == "credit":
+                profit = price * 100
+                loss = loss + (staged_price - price) * 100 if loss is not None and staged_price is not None else None
+            elif cost_type == "debit":
+                loss = price * 100
+                profit = profit + (staged_price - price) * 100 if profit is not None and staged_price is not None else None
+        loss = loss * quantity if loss is not None else None
+        profit = profit * quantity if profit is not None else None
+    if lane == "lane-a":
+        target_base, stop_base = dollars, dollars
+        target_fraction, stop_fraction = LANE_A_TAKE_PROFIT_1_PCT_OF_DEBIT, abs(LANE_A_STOP_LOSS_PCT_OF_DEBIT)
+        ladder = [0.5, 0.25, 0.25]
+        basis = "entry-debit"
+    elif lane == "lane-b-debit":
+        target_base, stop_base = profit, dollars
+        target_fraction, stop_fraction = LANE_B_DEBIT_TAKE_PROFIT_1_PCT_OF_MAX, abs(LANE_B_DEBIT_STOP_PCT_OF_DEBIT)
+        ladder = [0.5, 0.5]
+        basis = "maximum-profit"
+    elif lane == "lane-b-credit":
+        target_base, stop_base = profit, dollars
+        target_fraction, stop_fraction = LANE_B_CREDIT_TAKE_PROFIT_1_PCT_OF_MAX, abs(LANE_B_CREDIT_STOP_PCT_OF_CREDIT)
+        ladder = [1.0]
+        basis = "maximum-profit"
+    else:
+        target_base = stop_base = target_fraction = stop_fraction = None
+        ladder, basis = [], "unknown"
+    target = target_base * target_fraction if target_base is not None and target_base > 0 and target_fraction is not None else None
+    stop = stop_base * stop_fraction if stop_base is not None and stop_base > 0 and stop_fraction is not None else None
+    def breakeven(loss_case):
+        return round(loss_case / (target + loss_case), 6) if target is not None and loss_case is not None and loss_case > 0 else None
+    ladder_possible = (all(float(quantity * part).is_integer() for part in ladder)
+                       if quantity and ladder else None)
+    runner_illustration = []
+    if lane == "lane-a":
+        cash_recovered = realized_gain = closed_fraction = 0.0
+        triggers = [LANE_A_TAKE_PROFIT_1_PCT_OF_DEBIT, LANE_A_TAKE_PROFIT_2_PCT_OF_DEBIT, LANE_A_TAKE_PROFIT_3_PCT_OF_DEBIT]
+        for fraction, gain in zip(ladder, triggers):
+            closed_fraction += fraction
+            cash_recovered += fraction * (1 + gain)
+            realized_gain += fraction * gain
+            runner_illustration.append({
+                "triggerGainOnDebit": gain, "closeFractionOfOriginal": fraction,
+                "cashRecoveredFractionOfOriginalDebit": round(cash_recovered, 6),
+                "realizedGainFractionOfOriginalDebit": round(realized_gain, 6),
+                "totalReturnIfRemainderExpiresWorthless": round(cash_recovered - 1, 6),
+                "remainingFraction": round(1 - closed_fraction, 6),
+            })
+    return {
+        "lane": lane, "targetBasis": basis, "entryPremiumDollars": dollars,
+        "firstTargetProfitDollars": round(target, 4) if target is not None else None,
+        "firstTargetReturnOnMaxRisk": round(target / loss, 6) if target is not None and loss is not None and loss > 0 else None,
+        "plannedStopLossDollars": round(stop, 4) if stop is not None else None,
+        "plannedStopExceedsDefinedMaxLoss": stop > loss if stop is not None and loss is not None and loss > 0 else None,
+        "definedMaxLossDollars": loss,
+        "twoOutcomeBreakevenAtPlannedStop": breakeven(stop),
+        "twoOutcomeBreakevenAtFullLoss": breakeven(loss),
+        "contracts": quantity, "scaleOutFractionsOfOriginal": ladder,
+        "wholeContractScaleOutPossible": ladder_possible,
+        "runnerLadderIllustration": runner_illustration,
+        "assumptions": ["Gross values exclude fees and execution slippage.",
+                        "First target is a full-position equivalent; a partial close realizes only its closed fraction.",
+                        "A stop threshold is a trigger, not a guaranteed loss ceiling.",
+                        "Break-even rates assume only target wins and the stated loss; they are not predictions.",
+                        "Scale-out requires whole strategy units; closing one spread leg changes the exposure.",
+                        "Runner illustration assumes sequential fills exactly at each trigger; gaps and skipped tiers are excluded.",
+                        "No automatic rounding, sizing increase, repeated trim or ticket action is authorized."],
+        "thresholdsChanged": False,
+    }
+
+
 # ─────────────────────────── per-position assessment ─────────────────
 
 
@@ -386,13 +490,29 @@ def assess_ticket(
     today: date,
 ) -> dict[str, Any]:
     """Return the verdict and rationale for one open ticket."""
+    # Known incomplete/error valuations cannot fire a price trigger even if
+    # a legacy artifact accidentally carries numeric remnants.
+    if mark and mark.get("fetchStatus") in {"partial", "chain-unavailable", "error", "not-configured", "disabled"}:
+        mark = None
     lane = _strategy_lane(ticket.get("strategy"))
     dte = _days_to_expiration(ticket, today)
-    dte_earnings = _days_until_earnings(ticket)
+    timing = event_timing(ticket, today)
+    dte_earnings = timing["daysUntilEarnings"]
     plan = _strategy_plan(ticket)
     estimated_credit = _safe_float(
         plan.get("estimatedCredit") if plan else ticket.get("estimatedCredit")
     )
+    # The credit stop is on total entry credit, including executed quantity.
+    # The rule helper converts this per-share equivalent to dollars once.
+    execution = ticket.get("paperExecution") or {}
+    if lane == "lane-b-credit" and (mark or {}).get("entryCostType") == "credit":
+        entry_credit = _safe_float(mark.get("entryLimit"))
+        quantity = _safe_float(mark.get("contracts", 1))
+        estimated_credit = entry_credit * quantity if entry_credit is not None and quantity is not None and quantity > 0 else None
+    elif lane == "lane-b-credit" and ticket.get("entryCostType") == "credit":
+        entry_credit = _safe_float(execution.get("entryPrice") if "entryPrice" in execution else ticket.get("entryLimit"))
+        quantity = _safe_float(execution.get("contracts", 1))
+        estimated_credit = entry_credit * quantity if entry_credit is not None and quantity is not None and quantity > 0 else None
 
     if lane == "lane-a":
         verdict, rationale = _verdict_lane_a(
@@ -406,7 +526,7 @@ def assess_ticket(
         verdict, rationale = _verdict_lane_b_debit(mark=mark, dte=dte)
     else:
         verdict, rationale = (
-            "hold",
+            "awaiting-data",
             [f"unknown strategy family '{ticket.get('strategy')}'; no rules applied"],
         )
 
@@ -422,6 +542,8 @@ def assess_ticket(
             and LANE_B_CREDIT_FORCE_CLOSE_DAYS < dte <= DTE_POLICY_REVIEW_DAYS
         ),
         "daysUntilEarnings": dte_earnings,
+        "eventTiming": timing,
+        "exitEconomics": exit_economics(ticket, mark),
         "entryLimit": _safe_float(ticket.get("entryLimit")),
         "estimatedMaxLoss": _safe_float(ticket.get("estimatedMaxLoss")),
         "estimatedMaxProfit": ticket.get("estimatedMaxProfit"),
@@ -531,6 +653,8 @@ def build_trade_management(
             "broker submit OFF; liveTradingAllowed False; no authority change",
             "21 DTE is a review trigger; cohort evidence decides whether a family should close there",
             "verdicts are recommendations -- the operator clicks the buttons",
+            "percentages identify their denominator; targets and stops are unvalidated hypotheses, not expected gains",
+            "single-contract units cannot follow half/quarter scale-outs; no size increase or fractional-leg exit is implied",
         ],
     }
 
@@ -580,6 +704,10 @@ def trade_management_text(payload: dict[str, Any]) -> str:
                 lines.append(f"       unrealized PnL: ${pnl:+.2f}")
             for r in a.get("rationale") or []:
                 lines.append(f"       - {r}")
+            economics = a.get("exitEconomics") or {}
+            lines.append(f"       first target basis: {economics.get('targetBasis')}; profit=${economics.get('firstTargetProfitDollars')}; planned stop loss=${economics.get('plannedStopLossDollars')}")
+            if economics.get("wholeContractScaleOutPossible") is False:
+                lines.append("       contract-count mismatch: configured scale-out requires fractional units; operator plan review needed")
     lines.append("")
     lines.append("Reminders:")
     for r in payload.get("reminders") or []:

@@ -1251,5 +1251,22 @@
       "shared-lane",
       "data"
     ]
+  },
+  {
+    "id": "mission-052a15e5",
+    "createdAt": "2026-09-06T21:05:16.393996-06:00",
+    "updatedAt": "2026-09-06T21:16:38.011346-06:00",
+    "title": "Audit entry and exit economics and percentage assumptions",
+    "body": "Completed entry/exit accounting and assumption audit. Fixed incomplete-leg MTM, credit/debit actual-fill quantity and denominators, and dated event countdown; calendar rules survive missing marks. Existing credit campaign alias now has management coverage. Exposed target/stop dollars, whole-unit scale-out feasibility, stop/full-loss stress, and runner cash recovery. 5/17 saved stops exceed max loss; 2/17 ladders require fractional units. 84 focused and 2010 full tests pass; math12, hygiene, diff clean; Doctor34 attention, authority off. Thresholds/risk constants/universe/ticket states unchanged. Docs and knowledge updated; manual run records zero promotion progress.",
+    "owner": "codex",
+    "status": "done",
+    "priority": "high",
+    "tags": [
+      "entry",
+      "exit",
+      "pnl",
+      "assumptions",
+      "research-only"
+    ]
   }
 ]

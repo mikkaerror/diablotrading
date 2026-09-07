@@ -131,6 +131,14 @@ timestamps and missing inputs. Counterfactual filter counts are diagnostic;
 they never feed selection or staging. Expected-move candidates carry explicit
 option-tenor comparability metadata and cannot claim matched-horizon fair value.
 
+The same audit and `reports/trade_management_latest.txt` expose entry/exit
+economics: target/stop dollars, return denominator, whole-unit scale-out
+feasibility and full-loss stress. MTM uses actual paper-fill credit/debit and
+quantity where present, suppresses incomplete-leg P/L, and keeps midpoint
+and bid/ask liquidation estimates distinct. Earnings countdowns age from
+dated evidence; undated counts remain unknown. Management is advisory and
+does not execute exits, change campaign exit assignments or tune thresholds.
+
 `reports/paper_test_director_latest.txt` can surface operator-routable paper
 candidates, auto-selected research candidates, priced paper-research variants,
 or construction-watch alternatives from the strategy-pricing lane. Those rows
