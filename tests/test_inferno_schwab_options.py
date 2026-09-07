@@ -319,3 +319,108 @@ class SchwabOptionsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AtmSeriesAndQuoteSessionTests(unittest.TestCase):
+    """The ATM reference must never be a same-day series, and quote timing is labelled."""
+
+    @staticmethod
+    def _contract(symbol: str, put_call: str, exp: str, dte: int, strike: float, bid: float, ask: float, **extra):
+        return {
+            "symbol": symbol, "putCall": put_call, "expirationDate": exp, "daysToExpiration": dte,
+            "strikePrice": strike, "bid": bid, "ask": ask, "openInterest": 5000, "totalVolume": 800,
+            "delta": 0.5 if put_call == "CALL" else -0.5, "gamma": 0.01, "theta": -0.05, "vega": 0.1,
+            "volatility": 60.0, **extra,
+        }
+
+    def _chain(self, dead_quote_ms: int | None = None, live_quote_ms: int | None = None) -> dict:
+        dead = {}
+        live = {}
+        for strike in (155.0, 160.0, 165.0):
+            # Expired-today series: pennies, 50%+ spreads (what a post-close 0-DTE tape looks like).
+            dead[str(strike)] = [self._contract(f"D{strike}", "CALL", "2026-09-04", 0, strike, 0.01, 0.03, quoteTimeInLong=dead_quote_ms)]
+            live[str(strike)] = [self._contract(f"L{strike}", "CALL", "2026-09-11", 7, strike, 9.0, 9.3, quoteTimeInLong=live_quote_ms)]
+        dead_p = {k: [dict(v[0], putCall="PUT", symbol=v[0]["symbol"] + "P")] for k, v in dead.items()}
+        live_p = {k: [dict(v[0], putCall="PUT", symbol=v[0]["symbol"] + "P")] for k, v in live.items()}
+        return {
+            "symbol": "ORCL", "underlyingPrice": 158.78,
+            "callExpDateMap": {"2026-09-04:0": dead, "2026-09-11:7": live},
+            "putExpDateMap": {"2026-09-04:0": dead_p, "2026-09-11:7": live_p},
+        }
+
+    def test_same_day_series_is_never_the_atm_reference(self) -> None:
+        summary = schwab.summarize_chain("ORCL", self._chain())
+        self.assertEqual(summary["atmExpiration"], "2026-09-11")
+        self.assertEqual(summary["atmDaysToExpiration"], 7)
+        self.assertFalse(summary["atmSeriesFallback"])
+        self.assertEqual(summary["atmSkippedExpirations"], ["2026-09-04"])
+        self.assertTrue(summary["paperLiquidityPass"], summary["paperLiquidityBlockReason"])
+        self.assertGreater(summary["atmStraddleMid"], 15.0)
+        self.assertNotIn("atm-series-fallback-sub-min-dte", summary["qualityFlags"])
+
+    def test_legacy_nearest_series_is_flagged_when_nothing_clears_min_dte(self) -> None:
+        chain = self._chain()
+        chain["callExpDateMap"].pop("2026-09-11:7")
+        chain["putExpDateMap"].pop("2026-09-11:7")
+        summary = schwab.summarize_chain("ORCL", chain)
+        self.assertEqual(summary["atmExpiration"], "2026-09-04")
+        self.assertTrue(summary["atmSeriesFallback"])
+        self.assertIn("atm-series-fallback-sub-min-dte", summary["qualityFlags"])
+        self.assertFalse(summary["paperLiquidityPass"])
+
+    def test_nearest_atm_pair_min_dte_is_explicit(self) -> None:
+        contracts = [schwab.normalize_contract(c) for c in schwab.flatten_contracts(self._chain())]
+        legacy = schwab.nearest_atm_pair(contracts, 158.78, min_dte=0)
+        self.assertEqual(legacy["call"]["expirationDate"], "2026-09-04")
+        self.assertFalse(legacy["seriesFallback"])
+        guarded = schwab.nearest_atm_pair(contracts, 158.78)
+        self.assertEqual(guarded["call"]["expirationDate"], "2026-09-11")
+
+    def test_quote_session_classification(self) -> None:
+        # 2026-09-04 (Friday) 13:00 ET == 17:00 UTC
+        regular = 1788541200000
+        self.assertEqual(schwab.classify_quote_session(regular), "regular")
+        self.assertEqual(schwab.classify_quote_session(regular + 3 * 3600 * 1000 + 5 * 60 * 1000), "late-close")  # 16:05 ET
+        self.assertEqual(schwab.classify_quote_session(regular + 6 * 3600 * 1000), "off-hours")  # 19:00 ET
+        self.assertEqual(schwab.classify_quote_session(regular + 2 * 24 * 3600 * 1000), "off-hours")  # Sunday
+        self.assertEqual(schwab.classify_quote_session(None), "unknown")
+
+    def test_off_hours_snapshot_is_labelled_but_still_fails_closed(self) -> None:
+        off_hours = 1788561600000  # 2026-09-04 18:40 ET
+        summary = schwab.summarize_chain("ORCL", self._chain(dead_quote_ms=off_hours, live_quote_ms=off_hours))
+        self.assertEqual(summary["quoteSession"], "off-hours")
+        self.assertFalse(summary["quoteSessionIsRegular"])
+        self.assertIn("off-hours-quote-snapshot", summary["qualityFlags"])
+        self.assertEqual(summary["spreadEvidenceQuality"], "off-hours-quotes")
+        # Fixtures without a timestamp stay unflagged so legacy tests and offline fixtures keep their meaning.
+        plain = schwab.summarize_chain("ORCL", self._chain())
+        self.assertEqual(plain["quoteSession"], "unknown")
+        self.assertNotIn("unknown-quote-snapshot", plain["qualityFlags"])
+
+
+class RegradeTests(unittest.TestCase):
+    """Stored tapes can be re-graded offline after a rule change."""
+
+    def test_regrade_moves_dead_series_row_to_live_series_without_touching_prices(self) -> None:
+        chain = AtmSeriesAndQuoteSessionTests()._chain()
+        fresh = schwab.summarize_chain("ORCL", chain)
+        # Simulate the legacy grade: force the dead series as the stored ATM reference.
+        legacy_pair = schwab.nearest_atm_pair(fresh["contracts"], fresh["underlyingPrice"], min_dte=0)
+        legacy = {**fresh, **schwab.atm_metrics(legacy_pair, fresh["underlyingPrice"], fresh["contracts"])}
+        self.assertEqual(legacy["atmExpiration"], "2026-09-04")
+        self.assertFalse(legacy["paperLiquidityPass"])
+
+        regraded = schwab.regrade_row(legacy)
+        self.assertEqual(regraded["atmExpiration"], "2026-09-11")
+        self.assertTrue(regraded["paperLiquidityPass"])
+        self.assertEqual(regraded["underlyingPrice"], legacy["underlyingPrice"])
+        self.assertEqual(regraded["contracts"], legacy["contracts"])
+        self.assertEqual(regraded["regrade"]["before"]["atmExpiration"], "2026-09-04")
+
+    def test_regrade_report_keeps_generated_at_and_stamps_provenance(self) -> None:
+        report = {"generatedAt": "2026-09-04T16:27:47-06:00", "rows": [], "reminders": ["read-only"]}
+        out = schwab.regrade_report(report)
+        self.assertEqual(out["generatedAt"], report["generatedAt"])
+        self.assertIn("regradedAt", out)
+        self.assertIn("read-only", out["reminders"])
+        self.assertTrue(any("regraded offline" in r for r in out["reminders"]))

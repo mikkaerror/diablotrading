@@ -21,8 +21,9 @@ summary this adapter emits into operator-facing tier-classified signals.
 import argparse
 import json
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -49,6 +50,17 @@ PAPER_MAX_SPREAD_PCT = 0.20
 PAPER_MIN_WINDOW_OI = 250
 HARD_WIDE_SPREAD_PCT = 0.25
 DEFAULT_CHAIN_PARAMS = {"strikeCount": SCHWAB_OPTIONS_STRIKE_COUNT}
+# The ATM reference series must have at least this many calendar days left.
+# A same-day-expiring series (0 DTE) is never a fair proxy for an earnings
+# desk that trades 7-60 DTE structures: after the close on expiration day the
+# quotes are pennies with 50-200% spreads, and even intraday its straddle mid
+# says nothing about the event-window move. See docs/WEAKPOINT_AUDIT_2026-09-07.md.
+ATM_MIN_DTE = 1
+MARKET_TZ = ZoneInfo("America/New_York")
+QUOTE_SESSION_REGULAR = "regular"
+QUOTE_SESSION_LATE_CLOSE = "late-close"
+QUOTE_SESSION_OFF_HOURS = "off-hours"
+QUOTE_SESSION_UNKNOWN = "unknown"
 
 
 def https_context() -> ssl.SSLContext:
@@ -348,8 +360,29 @@ def liquidity_score_for_contract(spread_pct: float | None, open_interest: int, v
     return min(100, score)
 
 
-def nearest_atm_pair(contracts: list[dict[str, Any]], underlying_price: float | None) -> dict[str, Any] | None:
-    """Return the nearest same-expiration ATM call/put pair."""
+def contract_dte(contract: dict[str, Any]) -> int | None:
+    """Return the contract's days-to-expiration when the payload carries one."""
+    value = contract.get("daysToExpiration")
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def nearest_atm_pair(
+    contracts: list[dict[str, Any]],
+    underlying_price: float | None,
+    *,
+    min_dte: int = ATM_MIN_DTE,
+) -> dict[str, Any] | None:
+    """Return the nearest same-expiration ATM call/put pair.
+
+    Expirations with fewer than ``min_dte`` days left are skipped first, so a
+    same-day (already expiring or expired) series can never become the ATM
+    reference for expected move, spread, or fill friction. If no expiration
+    clears the floor the legacy nearest series is used and the result carries
+    ``seriesFallback=True`` so consumers can see the evidence is degraded.
+    """
     if underlying_price is None:
         return None
     calls = [c for c in contracts if c.get("putCall") == "CALL" and c.get("mid")]
@@ -357,24 +390,94 @@ def nearest_atm_pair(contracts: list[dict[str, Any]], underlying_price: float | 
     if not calls or not puts:
         return None
 
-    expirations = sorted({c["expirationDate"] for c in calls if c.get("expirationDate")})
-    for expiration in expirations:
-        exp_calls = [c for c in calls if c.get("expirationDate") == expiration]
-        exp_puts = [p for p in puts if p.get("expirationDate") == expiration]
-        best_call = min(exp_calls, key=lambda c: abs((c.get("strikePrice") or 0) - underlying_price), default=None)
-        if not best_call:
-            continue
-        best_put = min(
-            exp_puts,
-            key=lambda p: (
-                abs((p.get("strikePrice") or 0) - (best_call.get("strikePrice") or underlying_price)),
-                abs((p.get("strikePrice") or 0) - underlying_price),
-            ),
-            default=None,
-        )
-        if best_put:
-            return {"call": best_call, "put": best_put}
-    return None
+    def _pair_for(expirations: list[str]) -> dict[str, Any] | None:
+        for expiration in expirations:
+            exp_calls = [c for c in calls if c.get("expirationDate") == expiration]
+            exp_puts = [p for p in puts if p.get("expirationDate") == expiration]
+            best_call = min(exp_calls, key=lambda c: abs((c.get("strikePrice") or 0) - underlying_price), default=None)
+            if not best_call:
+                continue
+            best_put = min(
+                exp_puts,
+                key=lambda p: (
+                    abs((p.get("strikePrice") or 0) - (best_call.get("strikePrice") or underlying_price)),
+                    abs((p.get("strikePrice") or 0) - underlying_price),
+                ),
+                default=None,
+            )
+            if best_put:
+                return {"call": best_call, "put": best_put}
+        return None
+
+    all_expirations = sorted({c["expirationDate"] for c in calls if c.get("expirationDate")})
+    eligible = sorted(
+        {
+            c["expirationDate"]
+            for c in calls
+            if c.get("expirationDate") and (contract_dte(c) is None or contract_dte(c) >= min_dte)
+        }
+    )
+    pair = _pair_for(eligible)
+    if pair:
+        pair["seriesFallback"] = False
+        pair["skippedExpirations"] = [e for e in all_expirations if e not in eligible and e < pair["call"]["expirationDate"]]
+        return pair
+    pair = _pair_for(all_expirations)
+    if pair:
+        pair["seriesFallback"] = True
+        pair["skippedExpirations"] = []
+    return pair
+
+
+def classify_quote_session(epoch_ms: int | float | None) -> str:
+    """Classify a Schwab quote timestamp by US equity-options session.
+
+    ``regular`` is 09:30-16:00 ET on a weekday, ``late-close`` is the 16:00-16:15
+    ET window where equity options still print, everything else is
+    ``off-hours``. Holidays are not modeled here; a weekday holiday reads as
+    regular-session only if quotes actually carry an in-session timestamp,
+    which they do not, so it lands in ``off-hours`` naturally.
+    """
+    if not epoch_ms:
+        return QUOTE_SESSION_UNKNOWN
+    try:
+        stamp = datetime.fromtimestamp(float(epoch_ms) / 1000.0, tz=timezone.utc).astimezone(MARKET_TZ)
+    except (OverflowError, OSError, ValueError):
+        return QUOTE_SESSION_UNKNOWN
+    if stamp.weekday() >= 5:
+        return QUOTE_SESSION_OFF_HOURS
+    minutes = stamp.hour * 60 + stamp.minute
+    if 9 * 60 + 30 <= minutes < 16 * 60:
+        return QUOTE_SESSION_REGULAR
+    if 16 * 60 <= minutes < 16 * 60 + 15:
+        return QUOTE_SESSION_LATE_CLOSE
+    return QUOTE_SESSION_OFF_HOURS
+
+
+def quote_session_metrics(contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize when the chain's quotes were last updated and in which session.
+
+    The latest ``quoteTimeInLong`` across the chain is the honest "as of" for
+    the snapshot. A non-regular session means spreads reflect pulled or
+    indicative market-maker quotes, so a wide-spread verdict is a data-timing
+    observation, not a regular-session liquidity fact. Gates still fail
+    closed; this only labels the evidence.
+    """
+    stamps = [contract.get("quoteTimeInLong") for contract in contracts if contract.get("quoteTimeInLong")]
+    latest = max(stamps) if stamps else None
+    session = classify_quote_session(latest)
+    as_of = None
+    if latest:
+        try:
+            as_of = datetime.fromtimestamp(float(latest) / 1000.0, tz=timezone.utc).astimezone(MARKET_TZ).isoformat()
+        except (OverflowError, OSError, ValueError):
+            as_of = None
+    return {
+        "quoteAsOf": as_of,
+        "quoteSession": session,
+        "quoteSessionIsRegular": session == QUOTE_SESSION_REGULAR,
+        "spreadEvidenceQuality": "regular-session" if session == QUOTE_SESSION_REGULAR else f"{session}-quotes",
+    }
 
 
 def spread_primary_liquidity_score(spread_pct: float | None, open_interest: int) -> int:
@@ -584,6 +687,9 @@ def atm_metrics(
         return {
             "atmStrike": None,
             "atmExpiration": None,
+            "atmDaysToExpiration": None,
+            "atmSeriesFallback": False,
+            "atmSkippedExpirations": [],
             "atmStraddleMid": None,
             "atmExpectedMoveDollar": None,
             "atmImpliedMovePct": None,
@@ -637,6 +743,9 @@ def atm_metrics(
     return {
         "atmStrike": strike,
         "atmExpiration": call.get("expirationDate"),
+        "atmDaysToExpiration": contract_dte(call),
+        "atmSeriesFallback": bool(atm_pair.get("seriesFallback")),
+        "atmSkippedExpirations": list(atm_pair.get("skippedExpirations") or []),
         "atmStraddleMid": straddle_mid,
         "atmExpectedMoveDollar": straddle_mid,
         "atmImpliedMovePct": implied_move_pct,
@@ -743,6 +852,11 @@ def chain_quality_flags(
         flags.append("thin-atm-liquidity")
     if greeks_completeness_pct is not None and greeks_completeness_pct < 0.80:
         flags.append("incomplete-greeks")
+    if atm.get("atmSeriesFallback"):
+        flags.append("atm-series-fallback-sub-min-dte")
+    session = atm.get("quoteSession")
+    if session in (QUOTE_SESSION_LATE_CLOSE, QUOTE_SESSION_OFF_HOURS):
+        flags.append(f"{session}-quote-snapshot")
     return flags
 
 
@@ -762,6 +876,7 @@ def summarize_chain(symbol: str, chain: dict[str, Any]) -> dict[str, Any]:
     avg_spread_pct = mean_number([contract.get("spreadPct") for contract in contracts])
     liquid_avg_spread_pct = mean_number([contract.get("spreadPct") for contract in liquid_contracts])
     atm = atm_metrics(atm_pair, underlying_price, contracts)
+    atm.update(quote_session_metrics(contracts))
     quality_score = chain_quality_score(
         contract_count=len(contracts),
         liquid_count=len(liquid_contracts),
@@ -868,8 +983,10 @@ def render_report(report: dict[str, Any]) -> str:
         f"Status: {report.get('status')}",
         f"Configured: {report.get('configured')}",
         f"Symbols: {report.get('symbolCount')}",
-        "",
     ]
+    if report.get("regradedAt"):
+        lines.append(f"Regraded: {report.get('regradedAt')} | rule {report.get('regradeRule')}")
+    lines.append("")
     rows = report.get("rows") or []
     if rows:
         lines.append("Chain summaries:")
@@ -879,13 +996,19 @@ def render_report(report: dict[str, Any]) -> str:
             lines.append(
                 f"- {row.get('symbol')}: contracts={row.get('contractCount')} "
                 f"liquid={row.get('liquidContractCount')} ATM={row.get('atmStrike')} "
-                f"exp={row.get('atmExpiration')} straddle={row.get('atmStraddleMid')} "
+                f"exp={row.get('atmExpiration')} ({row.get('atmDaysToExpiration')}d) "
+                f"straddle={row.get('atmStraddleMid')} "
                 f"move={move_text} liq={row.get('atmLiquidityScore')} "
                 f"quality={row.get('quoteQualityScore')}/{row.get('quoteQualityLabel')} "
                 f"spread={row.get('atmSpreadQuality')}"
             )
             if row.get("qualityFlags"):
                 lines.append(f"  flags: {', '.join(row.get('qualityFlags') or [])}")
+            if row.get("quoteSession"):
+                lines.append(
+                    f"  quotes: {row.get('quoteSession')} session as of {row.get('quoteAsOf')}"
+                    f" | spread evidence {row.get('spreadEvidenceQuality')}"
+                )
             top_contracts = row.get("topLiquidContracts") or []
             if top_contracts:
                 preview = ", ".join(
@@ -911,6 +1034,70 @@ def save_report(report: dict[str, Any]) -> None:
     atomic_write_text(SCHWAB_OPTIONS_TEXT_FILE, render_report(report))
 
 
+def regrade_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Re-summarize one stored chain row from its normalized contracts.
+
+    No network: this re-applies the current ATM-series, liquidity-gate, and
+    quote-session rules to contracts already on disk. Provenance is kept —
+    the snapshot's contracts and prices are unchanged; only derived grades
+    move. Used after a grading-rule change so the desk does not wait for the
+    next scheduled fetch to see the corrected verdicts.
+    """
+    contracts = [c for c in (row.get("contracts") or []) if isinstance(c, dict)]
+    underlying_price = number(row.get("underlyingPrice"))
+    if not contracts or underlying_price is None:
+        return row
+    atm_pair = nearest_atm_pair(contracts, underlying_price)
+    liquid_contracts = [c for c in contracts if (c.get("liquidityScore") or 0) >= 70]
+    greek_complete = [contract for contract in contracts if contract_has_greeks(contract)]
+    greeks_completeness_pct = pct(len(greek_complete) / len(contracts))
+    atm = atm_metrics(atm_pair, underlying_price, contracts)
+    atm.update(quote_session_metrics(contracts))
+    quality_score = chain_quality_score(
+        contract_count=len(contracts),
+        liquid_count=len(liquid_contracts),
+        atm_liquidity_score=atm.get("atmLiquidityScore"),
+        atm_spread_pct=atm.get("atmSpreadPct"),
+        greeks_completeness_pct=greeks_completeness_pct,
+    )
+    quality_flags = chain_quality_flags(
+        underlying_price=underlying_price,
+        contract_count=len(contracts),
+        liquid_count=len(liquid_contracts),
+        atm=atm,
+        greeks_completeness_pct=greeks_completeness_pct,
+    )
+    before = {
+        "atmExpiration": row.get("atmExpiration"),
+        "atmSpreadPct": row.get("atmSpreadPct"),
+        "paperLiquidityPass": row.get("paperLiquidityPass"),
+        "quoteQualityScore": row.get("quoteQualityScore"),
+    }
+    regraded = {
+        **row,
+        **atm,
+        "quoteQualityScore": quality_score,
+        "quoteQualityLabel": quote_quality_label(quality_score),
+        "qualityFlags": quality_flags,
+        "regrade": {"before": before, "rule": f"atm-min-dte>={ATM_MIN_DTE}; quote-session-labelled"},
+    }
+    return regraded
+
+
+def regrade_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Regrade every stored row in place and stamp the report with provenance."""
+    rows = [regrade_row(row) for row in (report.get("rows") or []) if isinstance(row, dict)]
+    return {
+        **report,
+        "rows": rows,
+        "regradedAt": local_now().isoformat(),
+        "regradeRule": f"atm-min-dte>={ATM_MIN_DTE}; quote-session-labelled",
+        "reminders": list(dict.fromkeys(list(report.get("reminders") or []) + [
+            "regraded offline from stored contracts; snapshot prices and generatedAt are unchanged",
+        ])),
+    }
+
+
 def load_fixture(path: Path) -> dict[str, dict[str, Any]]:
     """Load either a single-chain fixture or a symbol-keyed fixture bundle."""
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -925,7 +1112,21 @@ def main() -> int:
     parser.add_argument("symbols", nargs="*", help="Ticker symbols to fetch or normalize.")
     parser.add_argument("--fixture", type=Path, help="Normalize fixture JSON instead of calling Schwab.")
     parser.add_argument("--json", action="store_true", help="Print JSON instead of text.")
+    parser.add_argument(
+        "--regrade",
+        action="store_true",
+        help="Re-summarize the stored tape from its saved contracts under current grading rules; no network.",
+    )
     args = parser.parse_args()
+
+    if args.regrade:
+        if not SCHWAB_OPTIONS_FILE.exists():
+            print("no stored Schwab options tape to regrade")
+            return 1
+        report = regrade_report(json.loads(SCHWAB_OPTIONS_FILE.read_text(encoding="utf-8")))
+        save_report(report)
+        print(json.dumps(report, indent=2) if args.json else render_report(report))
+        return 0
 
     fixtures = load_fixture(args.fixture) if args.fixture else None
     symbols = args.symbols or (list(fixtures.keys()) if fixtures else [])

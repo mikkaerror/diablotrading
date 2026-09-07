@@ -1126,5 +1126,68 @@
       "evidence",
       "shared-lane"
     ]
+  },
+  {
+    "id": "mission-8e7720f1",
+    "createdAt": "2026-09-07T02:37:14.573732+00:00",
+    "updatedAt": "2026-09-07T02:37:14.573732+00:00",
+    "title": "Quote-model repair: ATM reference series must be >=1 DTE; quote-session provenance; offline regrade",
+    "body": "Claude lane-cross into inferno_schwab_options.py (operator-authorized). Dead 0-DTE series was the ATM reference on post-close snapshots; ORCL/QCOM/IREN/CLSK now pass the paper gate on the regraded 09-04 tape. Added quoteSession labels and --regrade. Tests +7; suite 1974 green. See docs/WEAKPOINT_AUDIT_2026-09-07.md sections 1-3.",
+    "owner": "shared",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "lane-cross",
+      "schwab",
+      "quote-model",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-e510cd50",
+    "createdAt": "2026-09-07T02:37:15.533907+00:00",
+    "updatedAt": "2026-09-07T02:37:15.533907+00:00",
+    "title": "Preserve last-good tapes on failed refresh (schwab_options, daily_ops, strike_selector)",
+    "body": "Three modules overwrite a good artifact with an empty/failed one when the upstream is unavailable (no token, yfinance unreachable). Extend the ledger lifecycle contract (lastAttemptAt vs lastSuccessfulAt) to the tapes: on non-ok status with an existing multi-row artifact, record the attempt and keep the rows. Observed and manually restored 2026-09-07. See docs/WEAKPOINT_AUDIT_2026-09-07.md section 4.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "high",
+    "tags": [
+      "fail-closed",
+      "artifact-lifecycle",
+      "codex-lane"
+    ]
+  },
+  {
+    "id": "mission-21b444aa",
+    "createdAt": "2026-09-07T02:37:17.400108+00:00",
+    "updatedAt": "2026-09-07T02:37:17.400108+00:00",
+    "title": "Promotion-gap win-rate floor: shrink payoff ratio toward structure prior below minimum sample",
+    "body": "n=3 payoff ratio 0.094 implies a 0.944 win-rate floor; statistically empty. Below ~10 closed outcomes per structure, shrink toward the structure's theoretical max-profit/max-loss and label the floor prior-dominated. 30-count gate unchanged. See docs/WEAKPOINT_AUDIT_2026-09-07.md section 5.",
+    "owner": "codex",
+    "status": "open",
+    "priority": "medium",
+    "tags": [
+      "strategy-lab",
+      "promotion-gate",
+      "calibration",
+      "codex-lane"
+    ]
+  },
+  {
+    "id": "mission-2af0d9be",
+    "createdAt": "2026-09-07T02:37:19.240255+00:00",
+    "updatedAt": "2026-09-07T02:37:19.240255+00:00",
+    "title": "Run cap-fit construction at shadow-slate generation",
+    "body": "All 12 shadow scenarios are Straddle/Vertical Call, several on $750+ underlyings vs the $500 cap. Apply the bounded cap-fit alternatives at slate generation so shadow evidence accrues on stageable structures. See docs/WEAKPOINT_AUDIT_2026-09-07.md section 6.",
+    "owner": "shared",
+    "status": "open",
+    "priority": "medium",
+    "tags": [
+      "shadow",
+      "cap-fit",
+      "paper-evidence",
+      "shared-lane"
+    ]
   }
 ]
