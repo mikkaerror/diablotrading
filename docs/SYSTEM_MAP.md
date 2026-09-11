@@ -11,6 +11,9 @@ trading authority prematurely.
 
 The concise command brief lives in [`MISSION_CONTROL.md`](MISSION_CONTROL.md).
 Use this file for architecture; use Mission Control for purpose and strategy.
+Use [Model Research Guidelines](MODEL_RESEARCH_GUIDELINES.md) for assumption
+reviews and challenger experiments. Those guidelines govern research design;
+they do not implement new scoring rules or expand execution authority.
 
 The current authority state is intentionally conservative:
 

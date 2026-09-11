@@ -1,91 +1,69 @@
 # Model Theory
 
-How the desk thinks. One page. No drift.
+Revised September 10, 2026. See [Model Research Guidelines](MODEL_RESEARCH_GUIDELINES.md)
+for the concrete review contract and initial experiment queue.
 
 ## Premise
 
-A durable trading desk is one that can tell the difference between belief and
-evidence. Strong opinions are not proof. Good vibes are not authority.
+The model should help identify profitable opportunities in the AI infrastructure
+cycle. Business growth, stock mispricing and option payoff are separate claims.
+Current weighted scores organize research; they are not calibrated win
+probabilities. Arithmetic correctness does not establish predictive value.
 
-Every action on this desk is gated by evidence quality, a confidence bound, and
-an authority manifest. Every artifact is timestamped. Every promotion is earned
-by math.
+Guidelines that fail their purpose should be corrected or tested against an
+alternative. Research can proceed while production trading gates remain closed.
 
-## The operating loop
+## Observe
 
-```
-Observe  →  Hypothesise  →  Prove  →  Promote
-   ↑                                   │
-   └──────────── feedback ─────────────┘
-```
+Check source dates, units, missingness, session completeness and instrument
+horizon. Old observations may support explicitly historical research, but
+cannot be presented as current execution evidence. Preserve the inputs that
+were actually available at prediction time.
 
-### Observe
+## Form a hypothesis
 
-Ask: what is true right now?
+Translate industry knowledge into a falsifiable claim: which supplier gains,
+what changes in its economics, what investors may underestimate, and when the
+change should become observable. Match the research horizon to the claim.
 
-The desk watches the sheet, the brief, the live-book health, and the command
-center. If observation is stale, the desk pauses. We do not act on a blind
-surface.
+Do not require every longer-horizon thesis to pass an earnings-entry window.
+Do not treat a category label or repeated technical input as independent proof.
+Missing evidence is an uncertainty to report, not an invented negative value.
 
-### Hypothesise
+## Compare
 
-Ask: what edge might the evidence support?
+Freeze the current baseline, challenger, target, holding period, costs and
+success criterion before evaluating later outcomes. Keep event-related rows
+together and prevent post-outcome information from entering the predictions.
 
-Research layers turn ideas into testable claims with explicit thresholds and
-failure modes. A hypothesis is not a recommendation; it is a candidate for
-measurement.
+Ask:
 
-### Prove
+- Do selected stocks outperform a suitable benchmark over the declared horizon?
+- Do option structures earn net value after premium, spreads and costs?
+- Do added features improve results beyond a simple momentum or valuation rule?
+- Which future winners were filtered out, and how many losers would loosening
+  that filter also admit?
+- Are improvements robust to concentration, missing observations and downside?
 
-Ask: what happened on paper?
+Legacy archive diagnostics can reveal defects without qualifying as fitting
+data. A failed challenger is useful evidence; it does not justify moving its
+success criterion after seeing the results.
 
-Paper tickets, shadow outcomes, and outcome review decide whether a strategy is
-actually durable. No paper proof, no promotion.
+## Validate and review
 
-The proof layer now also asks two calibration questions:
+Software tests verify implementation. Empirical validation evaluates predictive
+value. Paper-promotion requirements evaluate a separate authority boundary.
+Neither enough rows nor one successful live trade satisfies all three.
 
-- Did higher `readiness` / `scenarioScore` buckets lead to better closed
-  observations?
-- Did long-vol structures produce enough realised movement to clear their
-  breakeven or debit-implied hurdle?
+Separate source-qualified paper outcomes, shadow simulations and operator live
+results. Scores and findings cannot approve, reject, close or promote tickets.
+The operator performs allowed manual actions; agents never enable live trading
+or broker submission. No guideline revision changes runtime thresholds or risk
+constants by itself.
 
-Those answers sharpen the theory, but they do not grant authority by
-themselves.
+## What the architecture supports
 
-### Promote
-
-Ask: has the strategy earned more authority?
-
-Authority is computed, not declared. The authority manifest flips only when the
-evidence earns it. Today the desk remains pinned to:
-
-```text
-authorityLevel: paper-evidence-only
-brokerSubmitAllowed: false
-liveTradingAllowed: false
-```
-
-## Why this works
-
-The architecture is conservative by design:
-
-- same evidence in, same verdict out
-- confidence bounds over point estimates
-- minimum sample sizes before any claim becomes promotable
-- isolated failures instead of global collapse
-- atomic writes so partial state does not masquerade as truth
-
-The desk does not become smarter than its evidence. It becomes more honest
-about the evidence it has.
-
-## What the model never does
-
-- Place a trade.
-- Open a new thinkorswim instance.
-- Edit the authority manifest outside the authority controller.
-- Promote a strategy by hand.
-- Pretend a backtest is proof when the paper loop has not closed.
-
-## Single sentence
-
-Build the desk that survives the math, not the desk that survives the quarter.
+Deterministic formulas, explicit source lineage, reproducible comparisons and
+fixed evaluators make decisions inspectable. They do not guarantee returns.
+The research objective is to identify which measurements add predictive value,
+correct those that are misdefined, and retire those that do not earn their place.

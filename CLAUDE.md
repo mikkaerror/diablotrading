@@ -106,6 +106,12 @@ pattern) that the operator opts into via an ack file.
 
 ## 3. The 30-outcome promotion gate
 
+For model assumptions and discovery research, also follow
+`docs/MODEL_RESEARCH_GUIDELINES.md`. Technical cutoffs and score weights are
+hypotheses to test, not reasons to stop research outside an earnings window.
+The promotion sample minimum is not a prerequisite for an isolated research
+comparison, and a successful comparison does not change production authority.
+
 Read the current scored count and distinct-event count from
 `reports/strategy_lab_latest.txt`; do not carry a historical 0/30 claim into
 new sessions. The sample minimum is only one gate: expectancy, payoff quality,

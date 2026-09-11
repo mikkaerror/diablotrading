@@ -11,6 +11,16 @@ Read `CLAUDE.md`, `docs/SYSTEM_MAP.md`, and the latest command-center report bef
 - Wealth targets, lifestyle goals, fear, urgency, or emotional distress are context—not authorization to widen risk, bypass evidence, or change authority.
 - Autonomous optimization may refresh data, recompute research artifacts, run tests, and improve paper/shadow evidence tooling.
 
+## Model research standard
+
+- Follow `docs/MODEL_RESEARCH_GUIDELINES.md` when evaluating or changing model assumptions.
+- Treat discovery scores and technical cutoffs as testable hypotheses, not established probabilities or proof of edge. A guideline may be corrected or retired when its assumptions fail; its age is not evidence for keeping it.
+- Separate business prospects, stock-price opportunity, trade construction, and portfolio risk. Evaluate each strategy at its declared horizon; the earnings window is not a universal limit on research.
+- Distinguish arithmetic correctness, input quality, predictive value, and execution eligibility. Reused inputs are not independent confirmation; missing observations are not negative evidence.
+- Measure missed opportunities as well as selected outcomes using frozen inputs, fixed evaluation rules, and the same eligible universe. Require later data and simple baselines before claiming an improvement.
+- Diagnose whether an empty queue comes from data, discovery, economics, routing, or authority. Repair authorized tooling defects; do not interpret every empty queue as either no opportunity or excessive risk limits.
+- Research guideline revisions do not change production thresholds, risk constants, universe membership, evaluator code, ticket decisions, or authority. Propose concrete runtime changes separately with measured effects and the applicable operator review.
+
 ## Agent-loop standard
 
 - Separate safety, execution, and value gates.

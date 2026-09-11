@@ -1,28 +1,17 @@
 # Mission Control
 
-Current as of 2026-08-09.
-
-This is the shortest honest description of the desk. Read this before changing
-code, interpreting a signal, opening thinkorswim, or asking another model to
-help.
+Guidelines revised September 10, 2026. Generated reports supply current desk state.
 
 ## Mission
 
-Build a disciplined AI-infrastructure trading desk that refreshes data,
-identifies asymmetric opportunities, collects paper evidence, and briefs the
-operator without granting live trading authority before the math earns it.
+Investigate substantial upside in the AI infrastructure cycle and build a desk
+that improves decisions after costs. Illustrative contribution forecasts are
+not the strategy's return target. The operator's industry knowledge supplies
+hypotheses to test using public evidence.
 
-The desk is here to create repeatable decision quality. It is not here to make
-every morning exciting.
-
-## Operating Principle
-
-Evidence first. Authority second. Execution last.
-
-The system can research, rank, simulate, size, and brief. It cannot submit live
-orders unless the authority manifest explicitly permits that future state.
-
-Current posture:
+The system researches, ranks, simulates, models sizing and briefs. Agents never
+enable live trading or broker submission. Operator decisions remain separate
+from automated research.
 
 ```text
 authorityLevel: paper-evidence-only
@@ -30,108 +19,78 @@ brokerSubmitAllowed: false
 liveTradingAllowed: false
 ```
 
-## Current Desk Snapshot
+## Current Desk Sources
 
-Updated 2026-08-09. Generated artifacts take precedence for current market and account facts.
-
-| Lane | Current read |
-|---|---|
-| Approved account scope | read-only Schwab account ending 8499; TOS remains a manual visual cockpit |
-| Live positions captured | TE, IREN, HIVE, CLSK |
-| Tracker sync | HIVE, TE, and CLSK appended; IREN already existed; formulas hydrated and audits healthy |
-| Fresh capital posture | manual review may be possible when current artifacts qualify; no candidate or order authorization; paper/strategy evidence keeps automation off |
-| Schwab option tape | fresh; current active read is thin-data-only, so use it as research context rather than sizing permission |
-| Automation authority | unchanged: research/paper only, no live submit |
+Use `./inferno status` for the latest summary, the Schwab account artifact for
+positions, `reports/paper_evidence_loop_latest.txt` for final paper routing,
+and `reports/strategy_lab_latest.txt` for qualified outcomes. Do not carry a
+static holdings list, quote-freshness claim or historical sample count forward.
 
 ## Strategy Thesis
 
-The operator is bullish on the AI infrastructure cycle: semiconductors,
-datacenter power, cooling, networking, security, cloud rails, and adjacent
-industrial shovel sellers.
+The operator is bullish on semiconductors, data-center power, cooling,
+networking, security, cloud infrastructure and adjacent suppliers.
 
-The desk should not treat that thesis as permission to chase. It should turn
-the thesis into falsifiable strategy cells:
+Apply [Model Research Guidelines](MODEL_RESEARCH_GUIDELINES.md): distinguish
+business prospects, stock-price opportunity, trade construction and results.
+The following cells are hypotheses; their features require validation.
 
-| Strategy cell | What it tries to capture | What must confirm it |
+| Strategy cell | What it investigates | Measurements to test |
 |---|---|---|
-| AI infrastructure momentum | Winners keep winning in a real capex cycle | trend, RVOL, support/resistance, sector breadth |
-| Earnings catalyst timing | Pre-event repricing before/around earnings | fresh earnings date, readiness, trigger, implied-vs-realized move |
-| Defined-risk options | Conviction with known maximum loss | tight spread, liquidity, Greeks, written exit, capped risk |
-| Long-term discount buys | Quality names offered at temporary discount | drawdown context, thesis intact, support, fundamental quality |
-| Paper scenario slate | More evidence without forcing live trades | timestamped setup, reason code, realized outcome, R-unit score |
+| Business growth over quarters | Suppliers convert builds into durable earnings | funded demand, capacity delivery, pricing, margins, cash generation, financing |
+| Stock opportunity over weeks/months | Growth or leadership exceeds market expectations | valuation scenarios, earnings revisions, relative strength, sector breadth |
+| Earnings catalyst | Repricing around a particular event | verified announcement timing, expected versus implied move, session-aware participation |
+| Defined-risk options | A priced structure expresses a declared thesis | premium, liquidity, expiration, Greeks, payoff bounds, written exit |
+| Share accumulation | Longer-horizon ownership captures the thesis | business quality, valuation and portfolio fit without an expiration deadline |
+
+A 21-day earnings window defines one lane; it is not a universal research
+filter. These research cells do not change eligible instruments or tickers.
 
 ## What Counts As Edge
 
-An edge is not a good story. An edge is a rule cell that survives:
+A strategy needs later, source-qualified outcomes showing net value and
+acceptable downside against a simple baseline. Report uncertainty, costs,
+concentration and opportunities missed by the filters. A sample minimum, a
+profitable trade, or agreement between scores sharing inputs is insufficient.
 
-1. enough closed outcomes
-2. positive expectancy after friction
-3. confidence-bound testing
-4. walk-forward validation
-5. drawdown limits
-6. liquidity and slippage checks
-7. authority controls
+Investigate uncertain signals through isolated comparisons. Correct an invalid
+measurement; test an unproven modeling choice. Do not preserve a discovery rule
+merely because it is conservative or already implemented.
 
-The desk should assume every signal is guilty until evidence proves otherwise.
+## Data and Authority
 
-## Data Authority
+Broker artifacts govern account facts. Timestamped tracker and provider data
+govern observed inputs. Versioned code and operator-owned configuration govern
+runtime rules; documents do not silently replace them. Separate live results,
+source-qualified paper fills and exploratory simulations.
 
-| Need | Source of truth | Role |
-|---|---|---|
-| Universe and tracker columns | Google Earnings Tracker | Strategy source of truth |
-| Options chain and quote quality | Schwab API | Primary read-only option market-data source |
-| Broker cash, positions, fills | Schwab account API for cash/positions; supervised TOS/fill export for fills | Broker reality check only |
-| Prices, ATR, RVOL, support/resistance | Market context layer and tracker scripts | Setup and timing evidence |
-| Outcomes | Paper/shadow/live ledgers | Promotion evidence |
-
-If these disagree, generated artifacts win for the trading day, but docs win
-for policy.
-
-## Decision Ladder
-
-1. Observe: refresh tracker, Schwab/TOS posture, health checks.
-2. Rank: score the universe and identify top candidates.
-3. Simulate: build paper/shadow scenarios before forcing live action.
-4. Prove: close outcomes and score them in R-units.
-5. Size: apply conservative Kelly, risk caps, and concentration gates.
-6. Stage: prepare broker-neutral intents.
-7. Approve: operator confirms any real-money action.
-
-Skipping a rung means the trade is research-only.
-
-## Hard Boundaries
-
-- No live submit without explicit final operator confirmation.
+- Agents never approve, reject, close or promote operator paper tickets.
+- Live broker access remains read-only; previews are not orders.
+- Risk constants and eligible universe remain operator-owned.
 - No new TOS window from background automation.
-- No undefined-risk options while the desk is in early authority phases.
-- No stale earnings dates, stale tracker rows, or stale option quotes.
-- No trade without a written exit.
-- No promotion from backtests alone.
-- No credentials, broker exports, or account artifacts in git.
+- Existing execution gates, defined-risk requirements and written exits remain.
+- Backtests and research findings do not grant authority.
+- Credentials, broker exports and account artifacts stay out of git.
 
-## Current Strategic Bottleneck
+## Diagnose the Bottleneck
 
-The bottleneck is not idea generation. The bottleneck is evidence throughput.
-
-We need more closed paper/shadow outcomes, cleaner quote quality, and tighter
-post-trade attribution before the desk can honestly say which rule cells work.
+Distinguish missing data, discovery filters, trade economics, routing and
+execution authority. An empty queue does not identify which one failed. Keep
+priced research visible with its actual route requirements. More shadow rows
+cannot substitute for qualified paper evidence.
 
 ## Next Build Priorities
 
-1. Schwab chain freshness, IV calibration, and quote-quality thresholds inside
-   strike selection / risk policy.
-2. Support/resistance + RVOL gates as first-class risk-policy inputs.
-3. Paper outcome capture throughput so attribution, edge decay, portfolio
-   correlation, and drawdown rules have enough closed evidence to judge.
-4. Capacity / slippage-decay limits after more closed outcomes exist.
-5. Crowdedness/reflexivity v2: /movers, sector ETF vol, VIX term structure,
-   and short-interest context after the v1 monitor proves useful.
-6. Cleaner two-model workflow: Codex owns repo/risk/tests/docs; Claude owns
-   TOS export stabilization; both write concise coordination notes.
+1. Correct measurement semantics: session completeness, null/zero handling,
+   source dates, payoff arithmetic and independently sourced fills/costs.
+2. Trace priced research through the operator workflow without dropping gates.
+3. Compare the current model with simple momentum and fundamental/valuation
+   baselines over declared horizons, including rejected observations.
+4. Test technical features before making them risk-policy requirements; expose
+   redundant inputs, clipping and category assumptions.
+5. Evaluate net outcomes, downside, benchmark performance and missed winners
+   on later observations. Report guideline, code, validation and authority
+   status separately.
 
-## One-Line Strategy
-
-Trade the AI infrastructure cycle only when timing, liquidity, structure,
-evidence, and authority all agree.
-
-If they do not agree, collect evidence instead.
+Codex owns model/risk/tests/docs; Claude owns TOS export stabilization. Shared
+work is coordinated through the command center. See [System Map](SYSTEM_MAP.md).

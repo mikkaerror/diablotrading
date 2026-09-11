@@ -1346,5 +1346,20 @@
       "provenance",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-c8deff6d",
+    "createdAt": "2026-09-10T19:28:58.421843-06:00",
+    "updatedAt": "2026-09-10T19:33:10.858499-06:00",
+    "title": "Revise model research guidelines around measurable predictive value",
+    "body": "Revised AGENTS.md, CLAUDE bootstrap reference, Mission Control, Model Theory and System Map; added MODEL_RESEARCH_GUIDELINES.md and linked knowledge note. Guidelines now require horizon-specific research, explicit measurement semantics, independent evidence, baseline comparisons, missed-opportunity accounting and causal queue diagnosis. Numerical/runtime changes remain separately reviewable. 43 focused and 2083 full tests passed; math12, hygiene, links and diff clean. Ten protected file hashes unchanged; authority and broker submit off. Doctor retains4 operational attention items. No qualifying paper progress.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "model-guidelines",
+      "research-only",
+      "documentation"
+    ]
   }
 ]
