@@ -1393,5 +1393,20 @@
       "sizing",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-2d3132c0",
+    "createdAt": "2026-09-10T21:02:31.242137-06:00",
+    "updatedAt": "2026-09-10T21:08:53.226081-06:00",
+    "title": "Audit guardrail meaning and infrastructure-cycle horizons",
+    "body": "Completed frozen 40/183 gate attribution, reproduced all saved lanes, demonstrated negative-P/E valuation and past-event classifier defects with actual pure functions, inventoried potential cache exposure and documented full-cycle shareholder economics. Earnings gate removal alone adds four catalyst research names; no return inference. 95 focused and 2092 broad tests pass; nine production hashes unchanged. Research-only; no policy, universe, ticket or authority changes.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "guardrails",
+      "research-only",
+      "big-picture"
+    ]
   }
 ]

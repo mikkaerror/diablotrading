@@ -1,0 +1,1542 @@
+{
+  "edgeGeneratedAt": "2026-09-10T16:29:04.476415-06:00",
+  "sourceHash": "e3a5d004fd6ab1324ca4bfe157a82beec6d90486540f5fe8c349accef4a05737",
+  "trackerGeneratedAt": "2026-09-10T16:29:02.499546-06:00",
+  "trackerTickers": [
+    "AAOI",
+    "AAPL",
+    "ACM",
+    "ACMR",
+    "ACN",
+    "AEE",
+    "AEHR",
+    "AES",
+    "AGX",
+    "ALAB",
+    "ALG",
+    "AMAT",
+    "AMD",
+    "AME",
+    "AMKR",
+    "AMT",
+    "AMZN",
+    "ANET",
+    "AOS",
+    "APH",
+    "APLD",
+    "ARM",
+    "ASML",
+    "ASPI",
+    "ASTS",
+    "ASX",
+    "ATEN",
+    "AVAV",
+    "AVGO",
+    "AXTI",
+    "AZZ",
+    "BDC",
+    "BMI",
+    "BWXT",
+    "CARR",
+    "CAT",
+    "CCI",
+    "CCJ",
+    "CCOI",
+    "CDNS",
+    "CDW",
+    "CEG",
+    "CHKP",
+    "CIEN",
+    "CIFR",
+    "CLFD",
+    "CLSK",
+    "CMI",
+    "COHR",
+    "COR",
+    "CRDO",
+    "CRM",
+    "CRWV",
+    "CSCO",
+    "CTSH",
+    "CWEN",
+    "D",
+    "DBX",
+    "DDOG",
+    "DELL",
+    "DLR",
+    "DOCN",
+    "DOV",
+    "DUK",
+    "DXC",
+    "DY",
+    "ECL",
+    "EME",
+    "EMR",
+    "ENB",
+    "ENPH",
+    "ENS",
+    "EQIX",
+    "ESE",
+    "ETN",
+    "FCX",
+    "FFIV",
+    "FIX",
+    "FLNC",
+    "FLR",
+    "FN",
+    "FSLR",
+    "FTNT",
+    "FTV",
+    "GDS",
+    "GE",
+    "GEV",
+    "GFS",
+    "GLW",
+    "GNRC",
+    "GOOG",
+    "GVA",
+    "HD",
+    "HIVE",
+    "HON",
+    "HPE",
+    "HUBB",
+    "IBM",
+    "IEX",
+    "IREN",
+    "IRM",
+    "J",
+    "JCI",
+    "KEYS",
+    "KLAC",
+    "LDOS",
+    "LEU",
+    "LITE",
+    "LMT",
+    "LOW",
+    "LRCX",
+    "LTBR",
+    "LUNR",
+    "MEI",
+    "META",
+    "MOD",
+    "MP",
+    "MPWR",
+    "MRVL",
+    "MSFT",
+    "MTZ",
+    "MYRG",
+    "NBIS",
+    "NEE",
+    "NICE",
+    "NNE",
+    "NTAP",
+    "NVDA",
+    "NVT",
+    "OKLO",
+    "ONDS",
+    "ORA",
+    "ORCL",
+    "OSS",
+    "OTEX",
+    "PANW",
+    "PATH",
+    "PH",
+    "PL",
+    "POET",
+    "POR",
+    "PRIM",
+    "PWR",
+    "QCOM",
+    "RBC",
+    "RDWR",
+    "RKLB",
+    "ROK",
+    "RRX",
+    "SBAC",
+    "SERV",
+    "SHLS",
+    "SMCI",
+    "SMR",
+    "SNX",
+    "SO",
+    "SPXC",
+    "ST",
+    "STRL",
+    "STX",
+    "TDC",
+    "TE",
+    "TEL",
+    "TEX",
+    "TKR",
+    "TPC",
+    "TSLA",
+    "TT",
+    "TXN",
+    "UEC",
+    "USAR",
+    "UUUU",
+    "VISN",
+    "VNET",
+    "VOYG",
+    "VRT",
+    "VST",
+    "WCC",
+    "WDC",
+    "WSC",
+    "XE",
+    "XEL",
+    "ZBH"
+  ],
+  "rows": [
+    {
+      "ticker": "CHKP",
+      "category": "Cybersecurity Toll Booths",
+      "lane": "Research Watchlist",
+      "readiness": 91,
+      "longTermScore": 6.3,
+      "daysUntilEarnings": 55,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 80.41,
+        "confirmationScore": 81.0,
+        "qualityScore": 78.66
+      },
+      "marketContext": {
+        "distanceToSupportPct": 2.92
+      }
+    },
+    {
+      "ticker": "FFIV",
+      "category": "Cloud/Data Rails",
+      "lane": "Research Watchlist",
+      "readiness": 86,
+      "longTermScore": 5.99,
+      "daysUntilEarnings": 46,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 79.2,
+        "confirmationScore": 73.75,
+        "qualityScore": 77.71
+      },
+      "marketContext": {
+        "distanceToSupportPct": 5.59
+      }
+    },
+    {
+      "ticker": "TDC",
+      "category": "Cloud/Data Rails",
+      "lane": "Long-Term Shovel Accumulation",
+      "readiness": 93,
+      "longTermScore": 7.9,
+      "daysUntilEarnings": 54,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 78.65,
+        "confirmationScore": 64.75,
+        "qualityScore": 66.7
+      },
+      "marketContext": {
+        "distanceToSupportPct": 2.52
+      }
+    },
+    {
+      "ticker": "OTEX",
+      "category": "Cloud/Data Rails",
+      "lane": "Research Watchlist",
+      "readiness": 95,
+      "longTermScore": 4.93,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 75.23,
+        "confirmationScore": 58.75,
+        "qualityScore": 65.36
+      },
+      "marketContext": {
+        "distanceToSupportPct": 1.24
+      }
+    },
+    {
+      "ticker": "ASML",
+      "category": "Semiconductor Supply Chain",
+      "lane": "Research Watchlist",
+      "readiness": 87,
+      "longTermScore": 4.88,
+      "daysUntilEarnings": 34,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 74.76,
+        "confirmationScore": 61.5,
+        "qualityScore": 79.62
+      },
+      "marketContext": {
+        "distanceToSupportPct": 4.04
+      }
+    },
+    {
+      "ticker": "ACMR",
+      "category": "Semiconductor Supply Chain",
+      "lane": "Long-Term Shovel Accumulation",
+      "readiness": 95,
+      "longTermScore": 7.79,
+      "daysUntilEarnings": 55,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 74.16,
+        "confirmationScore": 46.5,
+        "qualityScore": 61.16
+      },
+      "marketContext": {
+        "distanceToSupportPct": 8.25
+      }
+    },
+    {
+      "ticker": "ARM",
+      "category": "AI/Compute Picks",
+      "lane": "Research Watchlist",
+      "readiness": 88,
+      "longTermScore": 6.22,
+      "daysUntilEarnings": 55,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 70.74,
+        "confirmationScore": 54.0,
+        "qualityScore": 75.19
+      },
+      "marketContext": {
+        "distanceToSupportPct": 11.3
+      }
+    },
+    {
+      "ticker": "FCX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 99,
+      "longTermScore": 7.08,
+      "daysUntilEarnings": 42,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 67.43,
+        "confirmationScore": 86.25,
+        "qualityScore": 60.23
+      },
+      "marketContext": {
+        "distanceToSupportPct": 7.92
+      }
+    },
+    {
+      "ticker": "AEHR",
+      "category": "Semiconductor Supply Chain",
+      "lane": "Research Watchlist",
+      "readiness": 94,
+      "longTermScore": 7.08,
+      "daysUntilEarnings": 53,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 66.65,
+        "confirmationScore": 61.5,
+        "qualityScore": 41.45
+      },
+      "marketContext": {
+        "distanceToSupportPct": 20.87
+      }
+    },
+    {
+      "ticker": "NVT",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 99,
+      "longTermScore": 9.25,
+      "daysUntilEarnings": 50,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 63.49,
+        "confirmationScore": 46.5,
+        "qualityScore": 69.53
+      },
+      "marketContext": {
+        "distanceToSupportPct": 7.28
+      }
+    },
+    {
+      "ticker": "ORA",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 83,
+      "longTermScore": 7.38,
+      "daysUntilEarnings": 55,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 63.31,
+        "confirmationScore": 100.0,
+        "qualityScore": 43.73
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.5
+      }
+    },
+    {
+      "ticker": "STX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 98,
+      "longTermScore": 9.16,
+      "daysUntilEarnings": 47,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 62.74,
+        "confirmationScore": 46.5,
+        "qualityScore": 79.05
+      },
+      "marketContext": {
+        "distanceToSupportPct": 11.46
+      }
+    },
+    {
+      "ticker": "TEX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 88,
+      "longTermScore": 7.21,
+      "daysUntilEarnings": 49,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 62.03,
+        "confirmationScore": 71.0,
+        "qualityScore": 57.15
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.91
+      }
+    },
+    {
+      "ticker": "BDC",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 97,
+      "longTermScore": 8.61,
+      "daysUntilEarnings": 49,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 61.96,
+        "confirmationScore": 58.75,
+        "qualityScore": 54.55
+      },
+      "marketContext": {
+        "distanceToSupportPct": 4.65
+      }
+    },
+    {
+      "ticker": "ACN",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 98,
+      "longTermScore": 6.51,
+      "daysUntilEarnings": 21,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 61.31,
+        "confirmationScore": 54.0,
+        "qualityScore": 56.41
+      },
+      "marketContext": {
+        "distanceToSupportPct": 4.59
+      }
+    },
+    {
+      "ticker": "FIX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 96,
+      "longTermScore": 9.94,
+      "daysUntilEarnings": 42,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 60.54,
+        "confirmationScore": 54.0,
+        "qualityScore": 50.39
+      },
+      "marketContext": {
+        "distanceToSupportPct": 5.35
+      }
+    },
+    {
+      "ticker": "AME",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 83,
+      "longTermScore": 8.95,
+      "daysUntilEarnings": 49,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 60.43,
+        "confirmationScore": 52.5,
+        "qualityScore": 66.47
+      },
+      "marketContext": {
+        "distanceToSupportPct": 1.98
+      }
+    },
+    {
+      "ticker": "AGX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 85,
+      "longTermScore": 4.56,
+      "daysUntilEarnings": 84,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 60.31,
+        "confirmationScore": 75.25,
+        "qualityScore": 66.95
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.41
+      }
+    },
+    {
+      "ticker": "SHLS",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 97,
+      "longTermScore": 7.96,
+      "daysUntilEarnings": 54,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 59.98,
+        "confirmationScore": 54.0,
+        "qualityScore": 56.09
+      },
+      "marketContext": {
+        "distanceToSupportPct": 7.03
+      }
+    },
+    {
+      "ticker": "EME",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 88,
+      "longTermScore": 8.28,
+      "daysUntilEarnings": 49,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 59.94,
+        "confirmationScore": 60.25,
+        "qualityScore": 54.17
+      },
+      "marketContext": {
+        "distanceToSupportPct": 3.51
+      }
+    },
+    {
+      "ticker": "ENPH",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 86,
+      "longTermScore": 4.71,
+      "daysUntilEarnings": 47,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 59.64,
+        "confirmationScore": 81.5,
+        "qualityScore": 48.5
+      },
+      "marketContext": {
+        "distanceToSupportPct": 6.54
+      }
+    },
+    {
+      "ticker": "ENB",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 88,
+      "longTermScore": 4.28,
+      "daysUntilEarnings": 57,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 57.89,
+        "confirmationScore": 71.0,
+        "qualityScore": 51.27
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.25
+      }
+    },
+    {
+      "ticker": "GLW",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 90,
+      "longTermScore": 6.82,
+      "daysUntilEarnings": 47,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.93,
+        "confirmationScore": 46.5,
+        "qualityScore": 58.25
+      },
+      "marketContext": {
+        "distanceToSupportPct": 14.63
+      }
+    },
+    {
+      "ticker": "DXC",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 87,
+      "longTermScore": 5.86,
+      "daysUntilEarnings": 49,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.91,
+        "confirmationScore": 67.5,
+        "qualityScore": 39.09
+      },
+      "marketContext": {
+        "distanceToSupportPct": 6.16
+      }
+    },
+    {
+      "ticker": "IRM",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 83,
+      "longTermScore": 5.4,
+      "daysUntilEarnings": 55,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.88,
+        "confirmationScore": 60.25,
+        "qualityScore": 54.71
+      },
+      "marketContext": {
+        "distanceToSupportPct": 1.89
+      }
+    },
+    {
+      "ticker": "BMI",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 88,
+      "longTermScore": 4.46,
+      "daysUntilEarnings": 41,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.85,
+        "confirmationScore": 49.75,
+        "qualityScore": 57.98
+      },
+      "marketContext": {
+        "distanceToSupportPct": 1.59
+      }
+    },
+    {
+      "ticker": "CCOI",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 92,
+      "longTermScore": 7.38,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.72,
+        "confirmationScore": 56.0,
+        "qualityScore": 35.66
+      },
+      "marketContext": {
+        "distanceToSupportPct": 5.39
+      }
+    },
+    {
+      "ticker": "LITE",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 87,
+      "longTermScore": 7.6,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.29,
+        "confirmationScore": 46.5,
+        "qualityScore": 64.24
+      },
+      "marketContext": {
+        "distanceToSupportPct": 16.16
+      }
+    },
+    {
+      "ticker": "MOD",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 99,
+      "longTermScore": 7.44,
+      "daysUntilEarnings": 47,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 56.14,
+        "confirmationScore": 43.5,
+        "qualityScore": 45.83
+      },
+      "marketContext": {
+        "distanceToSupportPct": 3.58
+      }
+    },
+    {
+      "ticker": "AAOI",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 96,
+      "longTermScore": 8.31,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 55.36,
+        "confirmationScore": 54.0,
+        "qualityScore": 42.79
+      },
+      "marketContext": {
+        "distanceToSupportPct": 6.13
+      }
+    },
+    {
+      "ticker": "LUNR",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 86,
+      "longTermScore": 7.52,
+      "daysUntilEarnings": 61,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 55.3,
+        "confirmationScore": 60.25,
+        "qualityScore": 32.96
+      },
+      "marketContext": {
+        "distanceToSupportPct": 3.01
+      }
+    },
+    {
+      "ticker": "CEG",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 93,
+      "longTermScore": 5.35,
+      "daysUntilEarnings": 60,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 55.17,
+        "confirmationScore": 46.5,
+        "qualityScore": 45.8
+      },
+      "marketContext": {
+        "distanceToSupportPct": 7.4
+      }
+    },
+    {
+      "ticker": "CLFD",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 84,
+      "longTermScore": 6.63,
+      "daysUntilEarnings": 75,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 55.15,
+        "confirmationScore": 49.75,
+        "qualityScore": 50.67
+      },
+      "marketContext": {
+        "distanceToSupportPct": 5.73
+      }
+    },
+    {
+      "ticker": "CDW",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 85,
+      "longTermScore": 4.49,
+      "daysUntilEarnings": 54,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 55.03,
+        "confirmationScore": 58.5,
+        "qualityScore": 43.75
+      },
+      "marketContext": {
+        "distanceToSupportPct": 8.77
+      }
+    },
+    {
+      "ticker": "SNX",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 84,
+      "longTermScore": 5.14,
+      "daysUntilEarnings": 14,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 54.7,
+        "confirmationScore": 67.5,
+        "qualityScore": 47.58
+      },
+      "marketContext": {
+        "distanceToSupportPct": 4.74
+      }
+    },
+    {
+      "ticker": "FLNC",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 96,
+      "longTermScore": 6.45,
+      "daysUntilEarnings": 74,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 54.03,
+        "confirmationScore": 67.75,
+        "qualityScore": 35.08
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.52
+      }
+    },
+    {
+      "ticker": "VNET",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 93,
+      "longTermScore": 6.58,
+      "daysUntilEarnings": 70,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 53.1,
+        "confirmationScore": 46.5,
+        "qualityScore": 33.56
+      },
+      "marketContext": {
+        "distanceToSupportPct": 7.37
+      }
+    },
+    {
+      "ticker": "RKLB",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 84,
+      "longTermScore": 7.32,
+      "daysUntilEarnings": 60,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 52.0,
+        "confirmationScore": 75.25,
+        "qualityScore": 39.69
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.82
+      }
+    },
+    {
+      "ticker": "USAR",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 87,
+      "longTermScore": 5.98,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 49.98,
+        "confirmationScore": 87.75,
+        "qualityScore": 23.88
+      },
+      "marketContext": {
+        "distanceToSupportPct": 0.25
+      }
+    },
+    {
+      "ticker": "SMR",
+      "category": "Unclassified",
+      "lane": "Ignore For Theme",
+      "readiness": 98,
+      "longTermScore": 4.69,
+      "daysUntilEarnings": 56,
+      "signalTrigger": true,
+      "scores": {
+        "edgeScore": 46.77,
+        "confirmationScore": 46.5,
+        "qualityScore": 24.83
+      },
+      "marketContext": {
+        "distanceToSupportPct": 16.45
+      }
+    }
+  ],
+  "pureSource": "def clamp(value: float, low: float=0.0, high: float=100.0) -> float:\n    \"\"\"Clamp a score into a predictable range.\"\"\"\n    return max(low, min(high, value))\n\ndef number(value: Any, default: float=0.0) -> float:\n    \"\"\"Safely coerce spreadsheet/API values into floats.\"\"\"\n    try:\n        return float(value)\n    except (TypeError, ValueError):\n        return default\n\ndef tracker_timing_score(row: dict[str, Any]) -> float:\n    \"\"\"Score short-term trade timing from existing tracker fields.\"\"\"\n    readiness = number(row.get('readiness'))\n    priority = clamp(number(row.get('priority')) / 10 * 100)\n    confidence = clamp(number(row.get('confidence')) / 3 * 100)\n    trigger = 100.0 if row.get('signalTrigger') else 0.0\n    days = number(row.get('daysUntilEarnings'), 999)\n    timing_window = 100.0 if 0 <= days <= 21 else 55.0 if 22 <= days <= 45 else 25.0\n    return round(readiness * 0.35 + priority * 0.2 + confidence * 0.15 + trigger * 0.15 + timing_window * 0.15, 2)\n\ndef market_context_row(row: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Return the normalized confirmation block for a snapshot row.\"\"\"\n    context = row.get('marketContext')\n    return context if isinstance(context, dict) else {}\n\ndef quality_score(metadata: dict[str, Any]) -> float:\n    \"\"\"Score business quality from simple profitability and balance-sheet clues.\"\"\"\n    gross = clamp(number(metadata.get('grossMargins')) * 100, high=85) / 85 * 100\n    operating = clamp(number(metadata.get('operatingMargins')) * 100, low=-20, high=45)\n    operating = (operating + 20) / 65 * 100\n    profit = clamp(number(metadata.get('profitMargins')) * 100, low=-20, high=35)\n    profit = (profit + 20) / 55 * 100\n    growth = clamp(number(metadata.get('revenueGrowth')) * 100, low=-20, high=50)\n    growth = (growth + 20) / 70 * 100\n    cash = 100.0 if number(metadata.get('freeCashflow')) > 0 else 35.0\n    debt = number(metadata.get('debtToEquity'), 75)\n    debt_score = clamp(100 - debt / 2, low=15, high=100)\n    return round(gross * 0.22 + operating * 0.22 + profit * 0.18 + growth * 0.18 + cash * 0.12 + debt_score * 0.08, 2)\n\ndef valuation_risk_score(row: dict[str, Any], metadata: dict[str, Any]) -> float:\n    \"\"\"Score valuation risk with a bias against extreme multiple chasing.\"\"\"\n    pe = number(metadata.get('forwardPE') or metadata.get('trailingPE') or row.get('pe'), 999)\n    ps = number(metadata.get('priceToSalesTrailing12Months'), 999)\n    beta = number(metadata.get('beta'), 1.2)\n    pe_score = 100 if pe <= 25 else 75 if pe <= 45 else 45 if pe <= 80 else 20\n    ps_score = 100 if ps <= 6 else 75 if ps <= 12 else 45 if ps <= 20 else 20\n    beta_score = 100 if beta <= 1.2 else 75 if beta <= 1.7 else 45 if beta <= 2.2 else 20\n    value_stack = clamp(number(row.get('longTermScore')) / 10 * 100)\n    return round(pe_score * 0.3 + ps_score * 0.25 + beta_score * 0.15 + value_stack * 0.3, 2)\n\ndef classify_lane(row: dict[str, Any], scores: dict[str, Any], category: dict[str, Any]) -> str:\n    \"\"\"Separate trade setups from long-term accumulation setups.\"\"\"\n    is_shovel = category.get('category') != 'Unclassified'\n    days = number(row.get('daysUntilEarnings'), 999)\n    context = market_context_row(row)\n    distance_to_support = number(context.get('distanceToSupportPct'), 999)\n    if not is_shovel:\n        return 'Ignore For Theme'\n    if scores['edgeScore'] >= 72 and scores['confirmationScore'] >= 60 and row.get('signalTrigger') and (number(row.get('readiness')) >= 85) and (days <= 21):\n        return 'Catalyst Trade Candidate'\n    if scores['edgeScore'] >= 68 and number(row.get('longTermScore')) >= 6.5 and (scores['qualityScore'] >= 50) and (distance_to_support <= 10):\n        return 'Long-Term Shovel Accumulation'\n    if scores['edgeScore'] >= 60:\n        return 'Research Watchlist'\n    return 'Theme Too Weak'",
+  "protectedHashes": {
+    "inferno_edge_research.py": "1f50874396fade8807cbe365ba3bad048cfdb20fc0827736da5ac8eb2e5eb188",
+    "inferno_risk_policy.py": "57b4b4776cdfee7d4d07ea4cd6e3db5c7890e856ddd50ff99a42a54fea705fc0",
+    "inferno_config.py": "c6c9943d365be5e09901623376f52884463f3565a7a3241095c3f6336a7ecd47",
+    "inferno_capital_scaling.py": "d8e48b384684d135230ec0c0fc8aa3bf3fb9d7c5983fe2d3d7dc81ce77b5b4d5",
+    "inferno_capital_allocator.py": "4ed4a610ec692eea17e5d69004388ecb3da8c818105f8eba4dabb43f1a90738a",
+    "inferno_trade_evidence.py": "8eb1f8c34ccfa28fa6af66d017e806a59cd856b0ab68f9ec5d3d05919d8319c8",
+    "inferno_expected_move_ledger.py": "fc6e95b3678cd8e1fec0b0a8d7ed0297e1ef5b336eb762014838ddb9f7c40e6b",
+    "inferno_authority_controller.py": "b6f703aeca89f1da9c582b5705ceebb19b71beeda4ec0e78f4f9cd9f70728213",
+    "inferno_score_calibration.py": "a36f858a3ce39214fdd0ae8c37add38444301b08a54b78d41f702a7c8dbb68fe"
+  },
+  "peInputs": {
+    "HPE": {
+      "forwardPE": 12.297393,
+      "trailingPE": 28.881441,
+      "fetchedAt": "2026-09-08T16:28:45.876701-06:00"
+    },
+    "TDC": {
+      "forwardPE": 9.704171,
+      "trailingPE": 5.949474,
+      "fetchedAt": "2026-09-02T16:30:34.982921-06:00"
+    },
+    "WSC": {
+      "forwardPE": 21.151936,
+      "trailingPE": null,
+      "fetchedAt": "2026-05-08T10:33:31.937243-06:00"
+    },
+    "PSTG": {
+      "forwardPE": 23.884089,
+      "trailingPE": 123.27273,
+      "fetchedAt": "2026-04-22T22:44:42.385580-06:00"
+    },
+    "AMD": {
+      "forwardPE": 31.746778,
+      "trailingPE": 125.6352,
+      "fetchedAt": "2026-09-08T07:50:08.318992-06:00"
+    },
+    "ACMR": {
+      "forwardPE": 24.212255,
+      "trailingPE": 34.333336,
+      "fetchedAt": "2026-09-02T06:05:00.294528-06:00"
+    },
+    "SMR": {
+      "forwardPE": -14.880038,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-07T22:57:35.536457-06:00"
+    },
+    "MEI": {
+      "forwardPE": 37.357143,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-07T22:57:35.756594-06:00"
+    },
+    "DDOG": {
+      "forwardPE": 72.34703,
+      "trailingPE": 429.52,
+      "fetchedAt": "2026-09-03T16:34:09.156462-06:00"
+    },
+    "TSLA": {
+      "forwardPE": 168.75047,
+      "trailingPE": 399.85342,
+      "fetchedAt": "2026-05-08T10:33:28.389667-06:00"
+    },
+    "CLFD": {
+      "forwardPE": 32.011173,
+      "trailingPE": 98.793106,
+      "fetchedAt": "2026-09-07T06:06:45.763411-06:00"
+    },
+    "WDC": {
+      "forwardPE": 14.723367,
+      "trailingPE": 17.358335,
+      "fetchedAt": "2026-09-07T06:06:46.259791-06:00"
+    },
+    "DELL": {
+      "forwardPE": 16.115192,
+      "trailingPE": 33.89155,
+      "fetchedAt": "2026-09-02T06:05:01.434571-06:00"
+    },
+    "CHKP": {
+      "forwardPE": 11.857455,
+      "trailingPE": 13.744615,
+      "fetchedAt": "2026-09-02T08:19:22.220338-06:00"
+    },
+    "TEX": {
+      "forwardPE": 10.597361,
+      "trailingPE": 30.25359,
+      "fetchedAt": "2026-09-07T16:29:25.120222-06:00"
+    },
+    "PRIM": {
+      "forwardPE": 14.821522,
+      "trailingPE": 18.752758,
+      "fetchedAt": "2026-06-24T06:06:17.358268-06:00"
+    },
+    "GNRC": {
+      "forwardPE": 20.492907,
+      "trailingPE": 79.43866,
+      "fetchedAt": "2026-04-22T22:44:45.818216-06:00"
+    },
+    "VRT": {
+      "forwardPE": 31.881002,
+      "trailingPE": 65.650116,
+      "fetchedAt": "2026-09-08T16:28:45.369440-06:00"
+    },
+    "GDS": {
+      "forwardPE": 896.42334,
+      "trailingPE": 13.878319,
+      "fetchedAt": "2026-09-07T06:06:46.758099-06:00"
+    },
+    "CCOI": {
+      "forwardPE": -3.8903277,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-07T16:29:25.672428-06:00"
+    },
+    "AAPL": {
+      "forwardPE": 30.93393,
+      "trailingPE": 35.84485,
+      "fetchedAt": "2026-05-13T07:57:27.492224-06:00"
+    },
+    "RDWR": {
+      "forwardPE": 20.213873,
+      "trailingPE": 60.488636,
+      "fetchedAt": "2026-05-13T07:57:25.990683-06:00"
+    },
+    "ALG": {
+      "forwardPE": 14.11999,
+      "trailingPE": 20.639256,
+      "fetchedAt": "2026-09-09T07:53:23.211119-06:00"
+    },
+    "CRM": {
+      "forwardPE": 11.226282,
+      "trailingPE": 21.526316,
+      "fetchedAt": "2026-05-13T07:57:25.171569-06:00"
+    },
+    "AZZ": {
+      "forwardPE": 17.31305,
+      "trailingPE": 20.602133,
+      "fetchedAt": "2026-09-02T16:30:34.469185-06:00"
+    },
+    "SNX": {
+      "forwardPE": 12.062455,
+      "trailingPE": 18.524391,
+      "fetchedAt": "2026-09-09T16:28:49.122275-06:00"
+    },
+    "ESE": {
+      "forwardPE": 29.685843,
+      "trailingPE": 50.81076,
+      "fetchedAt": "2026-09-03T16:34:07.809125-06:00"
+    },
+    "HUBB": {
+      "forwardPE": 20.545055,
+      "trailingPE": 27.861883,
+      "fetchedAt": "2026-08-23T06:01:43.672689-06:00"
+    },
+    "CSCO": {
+      "forwardPE": 19.903717,
+      "trailingPE": 32.30216,
+      "fetchedAt": "2026-04-22T22:44:49.065958-06:00"
+    },
+    "AOS": {
+      "forwardPE": 13.895569,
+      "trailingPE": 15.486667,
+      "fetchedAt": "2026-05-12T13:59:18.816661-06:00"
+    },
+    "CAT": {
+      "forwardPE": 25.335312,
+      "trailingPE": 35.372574,
+      "fetchedAt": "2026-09-09T07:53:23.446783-06:00"
+    },
+    "FLNC": {
+      "forwardPE": 75.212555,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-07T16:29:25.963960-06:00"
+    },
+    "FTNT": {
+      "forwardPE": 44.154102,
+      "trailingPE": 58.86525,
+      "fetchedAt": "2026-08-30T16:01:14.607251-06:00"
+    },
+    "CTSH": {
+      "forwardPE": 8.378505,
+      "trailingPE": 11.195228,
+      "fetchedAt": "2026-05-08T10:33:39.325166-06:00"
+    },
+    "SHLS": {
+      "forwardPE": 12.191583,
+      "trailingPE": 35.36842,
+      "fetchedAt": "2026-09-02T16:30:35.229657-06:00"
+    },
+    "NTAP": {
+      "forwardPE": 13.766653,
+      "trailingPE": 19.70218,
+      "fetchedAt": "2026-05-13T07:57:27.206812-06:00"
+    },
+    "GVA": {
+      "forwardPE": 19.089233,
+      "trailingPE": 38.154373,
+      "fetchedAt": "2026-05-13T07:57:28.084429-06:00"
+    },
+    "DBX": {
+      "forwardPE": 10.443943,
+      "trailingPE": 18.928177,
+      "fetchedAt": "2026-09-02T06:05:00.907130-06:00"
+    },
+    "MOD": {
+      "forwardPE": 17.806309,
+      "trailingPE": 72.36431,
+      "fetchedAt": "2026-09-04T16:27:33.083673-06:00"
+    },
+    "BMI": {
+      "forwardPE": 26.430601,
+      "trailingPE": 30.81616,
+      "fetchedAt": "2026-09-08T07:50:09.304115-06:00"
+    },
+    "DY": {
+      "forwardPE": 19.09075,
+      "trailingPE": 36.350193,
+      "fetchedAt": "2026-08-25T07:12:01.796922-06:00"
+    },
+    "AGX": {
+      "forwardPE": 26.008097,
+      "trailingPE": 36.068516,
+      "fetchedAt": "2026-09-03T07:59:40.138538-06:00"
+    },
+    "MPWR": {
+      "forwardPE": 50.360565,
+      "trailingPE": 109.74066,
+      "fetchedAt": "2026-06-22T08:37:48.884708-06:00"
+    },
+    "ACN": {
+      "forwardPE": 12.740905,
+      "trailingPE": 14.925659,
+      "fetchedAt": "2026-09-04T16:27:33.594907-06:00"
+    },
+    "THR": {
+      "forwardPE": 24.587097,
+      "trailingPE": 44.955883,
+      "fetchedAt": "2026-06-01T23:32:22.473502-06:00"
+    },
+    "NVT": {
+      "forwardPE": 24.098734,
+      "trailingPE": 43.244442,
+      "fetchedAt": "2026-09-04T08:12:37.193527-06:00"
+    },
+    "ANET": {
+      "forwardPE": 36.41469,
+      "trailingPE": 60.421227,
+      "fetchedAt": "2026-09-03T07:59:40.364338-06:00"
+    },
+    "TPC": {
+      "forwardPE": 14.39442,
+      "trailingPE": 37.63793,
+      "fetchedAt": "2026-09-03T16:34:08.648402-06:00"
+    },
+    "TXN": {
+      "forwardPE": 24.278408,
+      "trailingPE": 39.216995,
+      "fetchedAt": "2026-09-07T16:29:26.242018-06:00"
+    },
+    "OTEX": {
+      "forwardPE": 5.831595,
+      "trailingPE": 9.6317835,
+      "fetchedAt": "2026-09-03T16:34:07.514540-06:00"
+    },
+    "ORCL": {
+      "forwardPE": 13.806353,
+      "trailingPE": 25.919245,
+      "fetchedAt": "2026-08-30T16:01:15.091052-06:00"
+    },
+    "FSLR": {
+      "forwardPE": 9.699347,
+      "trailingPE": 15.051001,
+      "fetchedAt": "2026-05-13T07:57:26.511722-06:00"
+    },
+    "AME": {
+      "forwardPE": 24.898039,
+      "trailingPE": 34.881752,
+      "fetchedAt": "2026-09-08T07:50:09.884612-06:00"
+    },
+    "POR": {
+      "forwardPE": 13.511855,
+      "trailingPE": 21.431417,
+      "fetchedAt": "2026-08-11T07:50:24.703523-06:00"
+    },
+    "GLW": {
+      "forwardPE": 33.359722,
+      "trailingPE": 66.41936,
+      "fetchedAt": "2026-09-02T16:30:35.741384-06:00"
+    },
+    "MYRG": {
+      "forwardPE": 34.080685,
+      "trailingPE": 47.704193,
+      "fetchedAt": "2026-05-08T10:33:37.902353-06:00"
+    },
+    "BDC": {
+      "forwardPE": 11.230172,
+      "trailingPE": 18.314936,
+      "fetchedAt": "2026-09-02T08:19:21.965869-06:00"
+    },
+    "J": {
+      "forwardPE": 17.582495,
+      "trailingPE": 47.43279,
+      "fetchedAt": "2026-08-05T20:55:50.950367-06:00"
+    },
+    "DXC": {
+      "forwardPE": 3.7902994,
+      "trailingPE": 15.148648,
+      "fetchedAt": "2026-08-30T16:01:14.843231-06:00"
+    },
+    "SBAC": {
+      "forwardPE": 22.104511,
+      "trailingPE": 19.653305,
+      "fetchedAt": "2026-08-19T06:04:30.041357-06:00"
+    },
+    "KEYS": {
+      "forwardPE": 23.971586,
+      "trailingPE": 44.2774,
+      "fetchedAt": "2026-09-07T06:06:46.985837-06:00"
+    },
+    "QCOM": {
+      "forwardPE": 16.513882,
+      "trailingPE": 19.262558,
+      "fetchedAt": "2026-09-07T22:57:35.979533-06:00"
+    },
+    "STRL": {
+      "forwardPE": 21.140438,
+      "trailingPE": 38.5292,
+      "fetchedAt": "2026-08-19T18:30:04.637030-06:00"
+    },
+    "IBM": {
+      "forwardPE": 16.892908,
+      "trailingPE": 20.081408,
+      "fetchedAt": "2026-04-24T08:23:11.868021-06:00"
+    },
+    "MSFT": {
+      "forwardPE": 22.115297,
+      "trailingPE": 26.214912,
+      "fetchedAt": "2026-04-24T08:23:12.100142-06:00"
+    },
+    "ATEN": {
+      "forwardPE": 23.376848,
+      "trailingPE": 47.12281,
+      "fetchedAt": "2026-04-24T08:23:12.377543-06:00"
+    },
+    "FLR": {
+      "forwardPE": 16.841549,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T08:19:21.705018-06:00"
+    },
+    "APH": {
+      "forwardPE": 23.874586,
+      "trailingPE": 38.66125,
+      "fetchedAt": "2026-08-21T08:37:40.244742-06:00"
+    },
+    "DOV": {
+      "forwardPE": 18.961765,
+      "trailingPE": 27.47875,
+      "fetchedAt": "2026-05-10T08:52:50.500099-06:00"
+    },
+    "GE": {
+      "forwardPE": 32.826897,
+      "trailingPE": 35.35404,
+      "fetchedAt": "2026-04-26T07:42:50.222537-06:00"
+    },
+    "LDOS": {
+      "forwardPE": 10.525196,
+      "trailingPE": 12.562091,
+      "fetchedAt": "2026-08-26T06:23:15.232963-06:00"
+    },
+    "NEE": {
+      "forwardPE": 21.72124,
+      "trailingPE": 24.182741,
+      "fetchedAt": "2026-04-26T07:42:50.690511-06:00"
+    },
+    "NICE": {
+      "forwardPE": 8.061484,
+      "trailingPE": 10.377456,
+      "fetchedAt": "2026-04-26T07:42:50.959156-06:00"
+    },
+    "AEE": {
+      "forwardPE": 19.17545,
+      "trailingPE": 20.808989,
+      "fetchedAt": "2026-04-26T07:42:51.196494-06:00"
+    },
+    "ETN": {
+      "forwardPE": 26.244766,
+      "trailingPE": 43.11609,
+      "fetchedAt": "2026-09-08T07:50:08.812234-06:00"
+    },
+    "CWEN": {
+      "forwardPE": 19.431942,
+      "trailingPE": 37.0,
+      "fetchedAt": "2026-09-07T06:06:47.498249-06:00"
+    },
+    "CDW": {
+      "forwardPE": 12.764892,
+      "trailingPE": 18.314905,
+      "fetchedAt": "2026-09-07T06:06:47.229981-06:00"
+    },
+    "CEG": {
+      "forwardPE": 22.408022,
+      "trailingPE": 29.223852,
+      "fetchedAt": "2026-09-04T16:27:34.093619-06:00"
+    },
+    "VNET": {
+      "forwardPE": 40.52463,
+      "trailingPE": null,
+      "fetchedAt": "2026-08-31T09:35:39.952078-06:00"
+    },
+    "MRVL": {
+      "forwardPE": 33.5776,
+      "trailingPE": 74.72517,
+      "fetchedAt": "2026-09-08T07:50:09.603325-06:00"
+    },
+    "XEL": {
+      "forwardPE": 16.833904,
+      "trailingPE": 20.945204,
+      "fetchedAt": "2026-08-30T16:01:15.349917-06:00"
+    },
+    "D": {
+      "forwardPE": 16.455158,
+      "trailingPE": 18.489676,
+      "fetchedAt": "2026-05-13T07:57:27.769961-06:00"
+    },
+    "CMI": {
+      "forwardPE": 17.936405,
+      "trailingPE": 31.738752,
+      "fetchedAt": "2026-08-18T16:30:32.119869-06:00"
+    },
+    "SMCI": {
+      "forwardPE": 7.7310586,
+      "trailingPE": 12.630368,
+      "fetchedAt": "2026-09-08T07:50:08.044062-06:00"
+    },
+    "ZBH": {
+      "forwardPE": 10.3912325,
+      "trailingPE": 22.868933,
+      "fetchedAt": "2026-09-09T06:06:54.387172-06:00"
+    },
+    "ENPH": {
+      "forwardPE": 15.457639,
+      "trailingPE": 34.80693,
+      "fetchedAt": "2026-09-03T07:59:39.870991-06:00"
+    },
+    "PANW": {
+      "forwardPE": 46.07389,
+      "trailingPE": 102.17877,
+      "fetchedAt": "2026-04-28T07:08:03.345111-06:00"
+    },
+    "FFIV": {
+      "forwardPE": 21.809217,
+      "trailingPE": 32.68988,
+      "fetchedAt": "2026-08-30T16:01:14.358290-06:00"
+    },
+    "AVGO": {
+      "forwardPE": 18.762774,
+      "trailingPE": 60.902153,
+      "fetchedAt": "2026-09-02T16:30:35.491416-06:00"
+    },
+    "HD": {
+      "forwardPE": 20.182951,
+      "trailingPE": 23.140646,
+      "fetchedAt": "2026-04-29T06:04:59.523190-06:00"
+    },
+    "MTZ": {
+      "forwardPE": 31.596142,
+      "trailingPE": 64.97281,
+      "fetchedAt": "2026-06-15T10:11:30.689543-06:00"
+    },
+    "VISN": {
+      "forwardPE": 9.1541395,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-03T16:34:08.326976-06:00"
+    },
+    "ECL": {
+      "forwardPE": 29.28594,
+      "trailingPE": 37.036194,
+      "fetchedAt": "2026-08-14T13:58:40.236672-06:00"
+    },
+    "PWR": {
+      "forwardPE": 34.189545,
+      "trailingPE": 75.69989,
+      "fetchedAt": "2026-08-10T16:36:14.410889-06:00"
+    },
+    "SPXC": {
+      "forwardPE": 20.53348,
+      "trailingPE": 35.307556,
+      "fetchedAt": "2026-08-25T07:12:02.269898-06:00"
+    },
+    "META": {
+      "forwardPE": 16.721766,
+      "trailingPE": 21.974573,
+      "fetchedAt": "2026-05-05T16:08:48.182455-10:00"
+    },
+    "LOW": {
+      "forwardPE": 15.5091715,
+      "trailingPE": 17.079815,
+      "fetchedAt": "2026-09-08T07:50:09.057839-06:00"
+    },
+    "NVDA": {
+      "forwardPE": 17.483482,
+      "trailingPE": 40.18405,
+      "fetchedAt": "2026-05-05T16:08:48.801054-10:00"
+    },
+    "COR": {
+      "forwardPE": 15.847619,
+      "trailingPE": 23.358366,
+      "fetchedAt": "2026-08-12T16:27:35.524905-06:00"
+    },
+    "GOOG": {
+      "forwardPE": 24.441393,
+      "trailingPE": 18.069744,
+      "fetchedAt": "2026-08-06T06:07:25.249287-06:00"
+    },
+    "EME": {
+      "forwardPE": 20.172527,
+      "trailingPE": 23.101278,
+      "fetchedAt": "2026-09-03T16:34:08.060660-06:00"
+    },
+    "DLR": {
+      "forwardPE": 62.845318,
+      "trailingPE": 51.72619,
+      "fetchedAt": "2026-05-08T10:33:30.945830-06:00"
+    },
+    "ASML": {
+      "forwardPE": 28.888939,
+      "trailingPE": 58.952324,
+      "fetchedAt": "2026-09-09T07:53:22.980159-06:00"
+    },
+    "LITE": {
+      "forwardPE": 30.089605,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-09T07:53:22.732039-06:00"
+    },
+    "STX": {
+      "forwardPE": 15.337883,
+      "trailingPE": 60.967697,
+      "fetchedAt": "2026-09-07T16:29:26.496499-06:00"
+    },
+    "ENS": {
+      "forwardPE": 12.806054,
+      "trailingPE": 19.49732,
+      "fetchedAt": "2026-09-07T22:57:36.422818-06:00"
+    },
+    "AMT": {
+      "forwardPE": 24.00647,
+      "trailingPE": 27.108067,
+      "fetchedAt": "2026-08-05T16:42:21.886339-06:00"
+    },
+    "CIEN": {
+      "forwardPE": 36.6276,
+      "trailingPE": 118.44816,
+      "fetchedAt": "2026-09-02T16:30:34.733245-06:00"
+    },
+    "IRM": {
+      "forwardPE": 42.834576,
+      "trailingPE": 82.87943,
+      "fetchedAt": "2026-09-07T22:57:36.192358-06:00"
+    },
+    "TT": {
+      "forwardPE": 25.93631,
+      "trailingPE": 33.78763,
+      "fetchedAt": "2026-08-23T06:01:44.710252-06:00"
+    },
+    "ARM": {
+      "forwardPE": 82.27695,
+      "trailingPE": 257.23468,
+      "fetchedAt": "2026-09-07T06:06:46.508873-06:00"
+    },
+    "FCX": {
+      "forwardPE": 17.587261,
+      "trailingPE": 35.651962,
+      "fetchedAt": "2026-09-04T16:27:33.834897-06:00"
+    },
+    "FIX": {
+      "forwardPE": 25.925049,
+      "trailingPE": 38.45526,
+      "fetchedAt": "2026-09-02T16:30:35.985226-06:00"
+    },
+    "VOYG": {
+      "forwardPE": -27.32082,
+      "trailingPE": null,
+      "fetchedAt": "2026-05-13T12:12:56.894746-06:00"
+    },
+    "LUNR": {
+      "forwardPE": -94.83871,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-03T16:34:07.218934-06:00"
+    },
+    "AEHR": {
+      "forwardPE": 68.97125,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-09T07:53:22.207980-06:00"
+    },
+    "MTN": {
+      "forwardPE": 23.611652,
+      "trailingPE": 32.10215,
+      "fetchedAt": "2026-08-04T11:59:47.013744-06:00"
+    },
+    "ASTS": {
+      "forwardPE": -48.092583,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-04T12:16:00.900874-06:00"
+    },
+    "AAOI": {
+      "forwardPE": 22.466318,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T06:05:01.186860-06:00"
+    },
+    "RKLB": {
+      "forwardPE": 1436.7686,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-04T12:16:01.166232-06:00"
+    },
+    "PL": {
+      "forwardPE": 12223.776,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-08T07:50:08.555696-06:00"
+    },
+    "UUUU": {
+      "forwardPE": 29.319588,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T06:04:59.833556-06:00"
+    },
+    "USAR": {
+      "forwardPE": 575.3334,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T06:04:59.576647-06:00"
+    },
+    "CCI": {
+      "forwardPE": 25.683811,
+      "trailingPE": 30.469387,
+      "fetchedAt": "2026-08-19T18:30:07.092447-06:00"
+    },
+    "ENB": {
+      "forwardPE": 20.906128,
+      "trailingPE": 25.81383,
+      "fetchedAt": "2026-09-10T07:53:41.590498-06:00"
+    },
+    "CIFR": {
+      "forwardPE": 49.525425,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T06:05:00.603239-06:00"
+    },
+    "ORA": {
+      "forwardPE": 38.663807,
+      "trailingPE": 48.436275,
+      "fetchedAt": "2026-09-09T16:28:49.649043-06:00"
+    },
+    "IREN": {
+      "forwardPE": -168.60379,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-04T16:27:33.357735-06:00"
+    },
+    "MP": {
+      "forwardPE": 60.77454,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-03T16:34:08.903269-06:00"
+    },
+    "OKLO": {
+      "forwardPE": -38.369232,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-02T06:05:00.054391-06:00"
+    },
+    "CRWV": {
+      "forwardPE": -49.509953,
+      "trailingPE": null,
+      "fetchedAt": "2026-09-08T07:50:07.669964-06:00"
+    }
+  },
+  "protocol": "Use saved scores unchanged; remove one Boolean gate at a time. Count admissions, not return or edge. Do not retune thresholds or change theme-score bonuses."
+}

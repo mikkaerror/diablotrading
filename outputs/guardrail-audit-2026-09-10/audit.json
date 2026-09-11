@@ -1,0 +1,177 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "sourceGeneratedAt": "2026-09-10T16:29:04.476415-06:00",
+  "scored": 40,
+  "tracked": 183,
+  "baselineLaneCounts": {
+    "Research Watchlist": 6,
+    "Long-Term Shovel Accumulation": 2,
+    "Ignore For Theme": 32
+  },
+  "gateAblations": {
+    "catalyst": {
+      "baseline": [],
+      "oneGateRemoved": [
+        {
+          "removedGate": "mappedTheme",
+          "totalPassing": 0,
+          "added": []
+        },
+        {
+          "removedGate": "edge72",
+          "totalPassing": 0,
+          "added": []
+        },
+        {
+          "removedGate": "confirmation60",
+          "totalPassing": 0,
+          "added": []
+        },
+        {
+          "removedGate": "trigger",
+          "totalPassing": 0,
+          "added": []
+        },
+        {
+          "removedGate": "readiness85",
+          "totalPassing": 0,
+          "added": []
+        },
+        {
+          "removedGate": "earningsWithin21",
+          "totalPassing": 4,
+          "added": [
+            "ASML",
+            "CHKP",
+            "FFIV",
+            "TDC"
+          ]
+        }
+      ],
+      "failedGateCounts": {
+        "earningsWithin21": 38,
+        "confirmation60": 21,
+        "edge72": 34,
+        "mappedTheme": 32,
+        "readiness85": 6
+      }
+    },
+    "ownership": {
+      "baseline": [
+        "ACMR",
+        "TDC"
+      ],
+      "oneGateRemoved": [
+        {
+          "removedGate": "mappedTheme",
+          "totalPassing": 2,
+          "added": []
+        },
+        {
+          "removedGate": "edge68",
+          "totalPassing": 2,
+          "added": []
+        },
+        {
+          "removedGate": "longTerm65",
+          "totalPassing": 6,
+          "added": [
+            "ASML",
+            "CHKP",
+            "FFIV",
+            "OTEX"
+          ]
+        },
+        {
+          "removedGate": "quality50",
+          "totalPassing": 2,
+          "added": []
+        },
+        {
+          "removedGate": "supportWithin10",
+          "totalPassing": 2,
+          "added": []
+        }
+      ],
+      "failedGateCounts": {
+        "longTerm65": 17,
+        "supportWithin10": 6,
+        "mappedTheme": 32,
+        "edge68": 33,
+        "quality50": 16
+      }
+    }
+  },
+  "negativeEffectivePE": [
+    {
+      "ticker": "SMR",
+      "effectivePE": -14.880038,
+      "selectedIn40": true,
+      "fetchedAt": "2026-09-07T22:57:35.536457-06:00"
+    },
+    {
+      "ticker": "CCOI",
+      "effectivePE": -3.8903277,
+      "selectedIn40": true,
+      "fetchedAt": "2026-09-07T16:29:25.672428-06:00"
+    },
+    {
+      "ticker": "VOYG",
+      "effectivePE": -27.32082,
+      "selectedIn40": false,
+      "fetchedAt": "2026-05-13T12:12:56.894746-06:00"
+    },
+    {
+      "ticker": "LUNR",
+      "effectivePE": -94.83871,
+      "selectedIn40": true,
+      "fetchedAt": "2026-09-03T16:34:07.218934-06:00"
+    },
+    {
+      "ticker": "ASTS",
+      "effectivePE": -48.092583,
+      "selectedIn40": false,
+      "fetchedAt": "2026-09-04T12:16:00.900874-06:00"
+    },
+    {
+      "ticker": "IREN",
+      "effectivePE": -168.60379,
+      "selectedIn40": false,
+      "fetchedAt": "2026-09-04T16:27:33.357735-06:00"
+    },
+    {
+      "ticker": "OKLO",
+      "effectivePE": -38.369232,
+      "selectedIn40": false,
+      "fetchedAt": "2026-09-02T06:05:00.054391-06:00"
+    },
+    {
+      "ticker": "CRWV",
+      "effectivePE": -49.509953,
+      "selectedIn40": false,
+      "fetchedAt": "2026-09-08T07:50:07.669964-06:00"
+    }
+  ],
+  "negativeEarningsDays": [],
+  "syntheticChecks": {
+    "negativePEValuationScores": {
+      "-10": 94.0,
+      "20": 94.0,
+      "100": 70.0
+    },
+    "pastEarningsWithOtherwisePassingInputs": "Catalyst Trade Candidate",
+    "qualityAt50And200PctGrowth": [
+      40.51,
+      40.51
+    ]
+  },
+  "caveats": [
+    "Gate failures overlap; removal counts are not additive.",
+    "Existing 40-name selection and scores retained, including theme-score penalty.",
+    "Cache is a current read, not proven identical to metadata used at scoring; negative-PE footprint is potential exposure.",
+    "Synthetic probes demonstrate semantics, not actual profitable missed trades.",
+    "No future outcomes, transaction costs, probability calibration or threshold optimization."
+  ]
+}

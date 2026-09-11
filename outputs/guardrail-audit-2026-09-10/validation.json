@@ -1,0 +1,15 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "savedLanesReproduced": 40,
+  "frozenGateAblationChecksPassed": true,
+  "syntheticSemanticProbesPassed": 3,
+  "focusedTestsPassed": 95,
+  "fullTestsPassed": 2092,
+  "fullTestSeconds": 48.487,
+  "protectedProductionFilesUnchanged": 9,
+  "performanceEdgeEstablished": false
+}

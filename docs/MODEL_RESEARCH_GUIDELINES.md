@@ -56,6 +56,20 @@ universe. A new research lane does not make a name or instrument trade-eligible.
 
 ## Evaluate guidelines before replacing runtime rules
 
+The [guardrails and cycle review](GUARDRAILS_AND_CYCLE_REVIEW_2026-09-10.md)
+adds a frozen gate-attribution audit and two demonstrated metric defects:
+nonpositive P/E can receive favorable valuation credit, and a negative earnings
+day can pass the catalyst classifier. Prioritize consistent metric semantics
+and full-universe impact review before lowering score cutoffs. These are
+documented findings; no production repair is implied by this guideline.
+
+For infrastructure research, trace end demand through funded commitments,
+construction, delivery, acceptance, utilization, cash generation and value per
+diluted share. Separate the customer capex and supplier revenue associated with
+the same spend. Track constraints being relieved as well as constraints becoming
+more severe. Every long-horizon thesis needs a delay/funding case and a valuation
+case; an earnings date or large backlog alone does not provide either.
+
 For each proposed change, record the existing rule and its source, intended
 purpose, observed failure, affected population, proposed alternative and
 falsifier. Distinguish a calculation defect from an unproven modeling choice.
