@@ -63,6 +63,12 @@ day can pass the catalyst classifier. Prioritize consistent metric semantics
 and full-universe impact review before lowering score cutoffs. These are
 documented findings; no production repair is implied by this guideline.
 
+Implementation update: following operator authorization, the September 10
+[metric repair](../outputs/metric-semantics-2026-09-10/README.md) corrects these
+two semantics in edge research. A fixed 183-name comparison changes eight
+scores downward and zero lanes. P/E source/status is explicit; the existing
+missing-input bucket, scoring weights and thresholds remain unchanged.
+
 For infrastructure research, trace end demand through funded commitments,
 construction, delivery, acceptance, utilization, cash generation and value per
 diluted share. Separate the customer capex and supplier revenue associated with

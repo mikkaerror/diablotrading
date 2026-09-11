@@ -11,6 +11,7 @@ does not confuse a durable shovel thesis with a short-term catalyst.
 
 import argparse
 import json
+import math
 from datetime import timedelta
 from typing import Any
 
@@ -165,13 +166,28 @@ def category_for_ticker(ticker: str, metadata: dict[str, Any]) -> dict[str, Any]
     return {"category": "Unclassified", "thesis": "not clearly mapped to the online-world shovel thesis", "baseScore": 35}
 
 
+def earnings_timing_context(row: dict[str, Any]) -> dict[str, Any]:
+    """Validate the supplied event offset; this does not confirm an event date."""
+    raw = row.get("daysUntilEarnings")
+    if raw is None or raw == "":
+        return {"days": None, "status": "missing"}
+    try:
+        days = float(raw)
+    except (TypeError, ValueError):
+        return {"days": None, "status": "invalid"}
+    if isinstance(raw, bool) or not math.isfinite(days):
+        return {"days": None, "status": "invalid"}
+    return {"days": days, "status": "past" if days < 0 else "upcoming"}
+
+
 def tracker_timing_score(row: dict[str, Any]) -> float:
     """Score short-term trade timing from existing tracker fields."""
     readiness = number(row.get("readiness"))
     priority = clamp(number(row.get("priority")) / 10 * 100)
     confidence = clamp(number(row.get("confidence")) / 3 * 100)
     trigger = 100.0 if row.get("signalTrigger") else 0.0
-    days = number(row.get("daysUntilEarnings"), 999)
+    timing = earnings_timing_context(row)
+    days = timing["days"] if timing["days"] is not None else 999
     timing_window = 100.0 if 0 <= days <= 21 else 55.0 if 22 <= days <= 45 else 25.0
     return round(
         readiness * 0.35
@@ -239,9 +255,33 @@ def quality_score(metadata: dict[str, Any]) -> float:
     return round(gross * 0.22 + operating * 0.22 + profit * 0.18 + growth * 0.18 + cash * 0.12 + debt_score * 0.08, 2)
 
 
+def valuation_pe_context(row: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+    """Preserve forward/trailing provenance without treating losses as cheap.
+
+    Only absent values permit fallback. A present but nonmeaningful forward
+    multiple must not be hidden behind a positive trailing multiple.
+    """
+    for source, raw in (("forwardPE", metadata.get("forwardPE")),
+                        ("trailingPE", metadata.get("trailingPE")),
+                        ("trackerPE", row.get("pe"))):
+        if raw is None or raw == "":
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return {"value": None, "source": source, "status": "invalid"}
+        if isinstance(raw, bool) or not math.isfinite(value):
+            return {"value": None, "source": source, "status": "invalid"}
+        return {"value": value if value > 0 else None, "rawValue": value,
+                "source": source, "status": "meaningful" if value > 0 else "not-meaningful"}
+    return {"value": None, "source": None, "status": "missing"}
+
+
 def valuation_risk_score(row: dict[str, Any], metadata: dict[str, Any]) -> float:
     """Score valuation risk with a bias against extreme multiple chasing."""
-    pe = number(metadata.get("forwardPE") or metadata.get("trailingPE") or row.get("pe"), 999)
+    pe_context = valuation_pe_context(row, metadata)
+    # Preserve the existing missing-P/E bucket; do not reweight other metrics.
+    pe = pe_context["value"] if pe_context["value"] is not None else 999
     ps = number(metadata.get("priceToSalesTrailing12Months"), 999)
     beta = number(metadata.get("beta"), 1.2)
     pe_score = 100 if pe <= 25 else 75 if pe <= 45 else 45 if pe <= 80 else 20
@@ -267,6 +307,8 @@ def edge_score(row: dict[str, Any], metadata: dict[str, Any], category: dict[str
         "confirmationScore": confirmation,
         "qualityScore": quality,
         "valuationRiskScore": valuation,
+        "valuationInputs": {"pe": valuation_pe_context(row, metadata)},
+        "earningsTiming": earnings_timing_context(row),
         "technicalResearch": technical,
         "technicalDiscoveryScore": technical.get("score"),
     }
@@ -275,7 +317,8 @@ def edge_score(row: dict[str, Any], metadata: dict[str, Any], category: dict[str
 def classify_lane(row: dict[str, Any], scores: dict[str, Any], category: dict[str, Any]) -> str:
     """Separate trade setups from long-term accumulation setups."""
     is_shovel = category.get("category") != "Unclassified"
-    days = number(row.get("daysUntilEarnings"), 999)
+    timing = earnings_timing_context(row)
+    days = timing["days"]
     context = market_context_row(row)
     distance_to_support = number(context.get("distanceToSupportPct"), 999)
     if not is_shovel:
@@ -285,7 +328,8 @@ def classify_lane(row: dict[str, Any], scores: dict[str, Any], category: dict[st
         and scores["confirmationScore"] >= 60
         and row.get("signalTrigger")
         and number(row.get("readiness")) >= 85
-        and days <= 21
+        and timing["status"] == "upcoming"
+        and days is not None and 0 <= days <= 21
     ):
         return "Catalyst Trade Candidate"
     if (
@@ -426,6 +470,10 @@ def edge_research_text(report: dict[str, Any]) -> str:
                 f"(RVOL {context.get('rvol', 'N/A')}x | {trend} | "
                 f"S {context.get('support', 'N/A')} / R {context.get('resistance', 'N/A')})"
             )
+            pe = (item.get("scores", {}).get("valuationInputs") or {}).get("pe")
+            if pe and pe.get("status") != "meaningful":
+                lines.append(f"   P/E: {pe.get('status')} ({pe.get('source') or 'no source'}); "
+                             "no cheap-earnings credit; existing missing-input score bucket applies.")
 
     section("Catalyst trade candidates", report.get("topCatalystTrades", []))
     section("Long-term shovel accumulation", report.get("topLongTermShovels", []))

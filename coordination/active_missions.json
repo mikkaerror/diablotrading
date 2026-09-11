@@ -1408,5 +1408,21 @@
       "research-only",
       "big-picture"
     ]
+  },
+  {
+    "id": "mission-16547ecb",
+    "createdAt": "2026-09-10T21:18:05.211956-06:00",
+    "updatedAt": "2026-09-10T21:18:05.211956-06:00",
+    "title": "Implement metric fixes then coverage and valuation priorities",
+    "body": "User authorized sequential priorities: correct misleading P/E and earnings-date inputs with frozen full-universe impact review; complete research-only industry coverage; build supplier versus developer valuation scenarios. Preserve risk constants, eligible universe, ticket decisions and broker authority.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "metrics",
+      "coverage",
+      "valuation",
+      "research-only"
+    ]
   }
 ]

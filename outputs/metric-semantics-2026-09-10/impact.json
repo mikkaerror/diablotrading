@@ -1,0 +1,3451 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "sourceAsOf": "2026-09-10T16:29:02.499546-06:00",
+  "count": 183,
+  "metadataMissing": 55,
+  "changedScores": [
+    {
+      "ticker": "SMR",
+      "metadataAvailable": true,
+      "oldEdge": 46.77,
+      "newEdge": 43.41,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -14.880038,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CCOI",
+      "metadataAvailable": true,
+      "oldEdge": 56.72,
+      "newEdge": 53.36,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -3.8903277,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LUNR",
+      "metadataAvailable": true,
+      "oldEdge": 55.3,
+      "newEdge": 51.94,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -94.83871,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ASTS",
+      "metadataAvailable": true,
+      "oldEdge": 48.1,
+      "newEdge": 44.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -48.092583,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 60.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "OKLO",
+      "metadataAvailable": true,
+      "oldEdge": 52.88,
+      "newEdge": 49.52,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -38.369232,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CRWV",
+      "metadataAvailable": true,
+      "oldEdge": 69.53,
+      "newEdge": 66.17,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": null,
+        "rawValue": -49.509953,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 62.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "IREN",
+      "metadataAvailable": true,
+      "oldEdge": 42.37,
+      "newEdge": 39.01,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -168.60379,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VOYG",
+      "metadataAvailable": true,
+      "oldEdge": 47.67,
+      "newEdge": 44.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -27.32082,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    }
+  ],
+  "changedLanes": [],
+  "before": {
+    "Ignore For Theme": 147,
+    "Long-Term Shovel Accumulation": 4,
+    "Research Watchlist": 28,
+    "Theme Too Weak": 4
+  },
+  "after": {
+    "Ignore For Theme": 147,
+    "Long-Term Shovel Accumulation": 4,
+    "Research Watchlist": 28,
+    "Theme Too Weak": 4
+  },
+  "rows": [
+    {
+      "ticker": "FCX",
+      "metadataAvailable": true,
+      "oldEdge": 67.43,
+      "newEdge": 67.43,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.587261,
+        "rawValue": 17.587261,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 42.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MOD",
+      "metadataAvailable": true,
+      "oldEdge": 56.14,
+      "newEdge": 56.14,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.806309,
+        "rawValue": 17.806309,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NVT",
+      "metadataAvailable": true,
+      "oldEdge": 63.49,
+      "newEdge": 63.49,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.098734,
+        "rawValue": 24.098734,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 50.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ACN",
+      "metadataAvailable": true,
+      "oldEdge": 61.31,
+      "newEdge": 61.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12.740905,
+        "rawValue": 12.740905,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 21.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "STX",
+      "metadataAvailable": true,
+      "oldEdge": 62.74,
+      "newEdge": 62.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 15.337883,
+        "rawValue": 15.337883,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SMR",
+      "metadataAvailable": true,
+      "oldEdge": 46.77,
+      "newEdge": 43.41,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -14.880038,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "BDC",
+      "metadataAvailable": true,
+      "oldEdge": 61.96,
+      "newEdge": 61.96,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 11.230172,
+        "rawValue": 11.230172,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SHLS",
+      "metadataAvailable": true,
+      "oldEdge": 59.98,
+      "newEdge": 59.98,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12.191583,
+        "rawValue": 12.191583,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FIX",
+      "metadataAvailable": true,
+      "oldEdge": 60.54,
+      "newEdge": 60.54,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 25.925049,
+        "rawValue": 25.925049,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 42.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AAOI",
+      "metadataAvailable": true,
+      "oldEdge": 55.36,
+      "newEdge": 55.36,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 22.466318,
+        "rawValue": 22.466318,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FLNC",
+      "metadataAvailable": true,
+      "oldEdge": 54.03,
+      "newEdge": 54.03,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 75.212555,
+        "rawValue": 75.212555,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 74.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ACMR",
+      "metadataAvailable": true,
+      "oldEdge": 74.16,
+      "newEdge": 74.16,
+      "oldLane": "Long-Term Shovel Accumulation",
+      "newLane": "Long-Term Shovel Accumulation",
+      "pe": {
+        "value": 24.212255,
+        "rawValue": 24.212255,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "OTEX",
+      "metadataAvailable": true,
+      "oldEdge": 75.23,
+      "newEdge": 75.23,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 5.831595,
+        "rawValue": 5.831595,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AEHR",
+      "metadataAvailable": true,
+      "oldEdge": 66.65,
+      "newEdge": 66.65,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 68.97125,
+        "rawValue": 68.97125,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TDC",
+      "metadataAvailable": true,
+      "oldEdge": 78.65,
+      "newEdge": 78.65,
+      "oldLane": "Long-Term Shovel Accumulation",
+      "newLane": "Long-Term Shovel Accumulation",
+      "pe": {
+        "value": 9.704171,
+        "rawValue": 9.704171,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CEG",
+      "metadataAvailable": true,
+      "oldEdge": 55.17,
+      "newEdge": 55.17,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 22.408022,
+        "rawValue": 22.408022,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 60.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VNET",
+      "metadataAvailable": true,
+      "oldEdge": 53.1,
+      "newEdge": 53.1,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 40.52463,
+        "rawValue": 40.52463,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 70.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CCOI",
+      "metadataAvailable": true,
+      "oldEdge": 56.72,
+      "newEdge": 53.36,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -3.8903277,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CHKP",
+      "metadataAvailable": true,
+      "oldEdge": 80.41,
+      "newEdge": 80.41,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 11.857455,
+        "rawValue": 11.857455,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GLW",
+      "metadataAvailable": true,
+      "oldEdge": 56.93,
+      "newEdge": 56.93,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 33.359722,
+        "rawValue": 33.359722,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "BMI",
+      "metadataAvailable": true,
+      "oldEdge": 56.85,
+      "newEdge": 56.85,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 26.430601,
+        "rawValue": 26.430601,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TEX",
+      "metadataAvailable": true,
+      "oldEdge": 62.03,
+      "newEdge": 62.03,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 10.597361,
+        "rawValue": 10.597361,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "EME",
+      "metadataAvailable": true,
+      "oldEdge": 59.94,
+      "newEdge": 59.94,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.172527,
+        "rawValue": 20.172527,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ARM",
+      "metadataAvailable": true,
+      "oldEdge": 70.74,
+      "newEdge": 70.74,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 82.27695,
+        "rawValue": 82.27695,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ENB",
+      "metadataAvailable": true,
+      "oldEdge": 57.89,
+      "newEdge": 57.89,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.906128,
+        "rawValue": 20.906128,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 57.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ASML",
+      "metadataAvailable": true,
+      "oldEdge": 74.76,
+      "newEdge": 74.76,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 28.888939,
+        "rawValue": 28.888939,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 34.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DXC",
+      "metadataAvailable": true,
+      "oldEdge": 56.91,
+      "newEdge": 56.91,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 3.7902994,
+        "rawValue": 3.7902994,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "USAR",
+      "metadataAvailable": true,
+      "oldEdge": 49.98,
+      "newEdge": 49.98,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 575.3334,
+        "rawValue": 575.3334,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LITE",
+      "metadataAvailable": true,
+      "oldEdge": 56.29,
+      "newEdge": 56.29,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 30.089605,
+        "rawValue": 30.089605,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FFIV",
+      "metadataAvailable": true,
+      "oldEdge": 79.2,
+      "newEdge": 79.2,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 21.809217,
+        "rawValue": 21.809217,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 46.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ENPH",
+      "metadataAvailable": true,
+      "oldEdge": 59.64,
+      "newEdge": 59.64,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 15.457639,
+        "rawValue": 15.457639,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LUNR",
+      "metadataAvailable": true,
+      "oldEdge": 55.3,
+      "newEdge": 51.94,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -94.83871,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CDW",
+      "metadataAvailable": true,
+      "oldEdge": 55.03,
+      "newEdge": 55.03,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12.764892,
+        "rawValue": 12.764892,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AGX",
+      "metadataAvailable": true,
+      "oldEdge": 60.31,
+      "newEdge": 60.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 26.008097,
+        "rawValue": 26.008097,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 84.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SNX",
+      "metadataAvailable": true,
+      "oldEdge": 54.7,
+      "newEdge": 54.7,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12.062455,
+        "rawValue": 12.062455,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 14.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "RKLB",
+      "metadataAvailable": true,
+      "oldEdge": 52.0,
+      "newEdge": 52.0,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 1436.7686,
+        "rawValue": 1436.7686,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 60.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CLFD",
+      "metadataAvailable": true,
+      "oldEdge": 55.15,
+      "newEdge": 55.15,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.011173,
+        "rawValue": 32.011173,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 75.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AME",
+      "metadataAvailable": true,
+      "oldEdge": 60.43,
+      "newEdge": 60.43,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.898039,
+        "rawValue": 24.898039,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CIFR",
+      "metadataAvailable": true,
+      "oldEdge": 40.33,
+      "newEdge": 40.33,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 49.525425,
+        "rawValue": 49.525425,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ORA",
+      "metadataAvailable": true,
+      "oldEdge": 63.31,
+      "newEdge": 63.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 38.663807,
+        "rawValue": 38.663807,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "IRM",
+      "metadataAvailable": true,
+      "oldEdge": 56.88,
+      "newEdge": 56.88,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 42.834576,
+        "rawValue": 42.834576,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ZBH",
+      "metadataAvailable": true,
+      "oldEdge": 58.14,
+      "newEdge": 58.14,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 10.3912325,
+        "rawValue": 10.3912325,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ASTS",
+      "metadataAvailable": true,
+      "oldEdge": 48.1,
+      "newEdge": 44.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -48.092583,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 60.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "HPE",
+      "metadataAvailable": true,
+      "oldEdge": 71.84,
+      "newEdge": 71.84,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 12.297393,
+        "rawValue": 12.297393,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 84.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TPC",
+      "metadataAvailable": true,
+      "oldEdge": 60.18,
+      "newEdge": 60.18,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 14.39442,
+        "rawValue": 14.39442,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "OKLO",
+      "metadataAvailable": true,
+      "oldEdge": 52.88,
+      "newEdge": 49.52,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -38.369232,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DDOG",
+      "metadataAvailable": true,
+      "oldEdge": 69.36,
+      "newEdge": 69.36,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 72.34703,
+        "rawValue": 72.34703,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PL",
+      "metadataAvailable": true,
+      "oldEdge": 55.95,
+      "newEdge": 55.95,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12223.776,
+        "rawValue": 12223.776,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 90.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AMD",
+      "metadataAvailable": true,
+      "oldEdge": 69.2,
+      "newEdge": 69.2,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 31.746778,
+        "rawValue": 31.746778,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MP",
+      "metadataAvailable": true,
+      "oldEdge": 54.88,
+      "newEdge": 54.88,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 60.77454,
+        "rawValue": 60.77454,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FLR",
+      "metadataAvailable": true,
+      "oldEdge": 54.18,
+      "newEdge": 54.18,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 16.841549,
+        "rawValue": 16.841549,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 57.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CAT",
+      "metadataAvailable": true,
+      "oldEdge": 56.14,
+      "newEdge": 56.14,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 25.335312,
+        "rawValue": 25.335312,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FTNT",
+      "metadataAvailable": true,
+      "oldEdge": 74.92,
+      "newEdge": 74.92,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 44.154102,
+        "rawValue": 44.154102,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CRWV",
+      "metadataAvailable": true,
+      "oldEdge": 69.53,
+      "newEdge": 66.17,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": null,
+        "rawValue": -49.509953,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 62.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ORCL",
+      "metadataAvailable": true,
+      "oldEdge": 72.01,
+      "newEdge": 72.01,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 13.806353,
+        "rawValue": 13.806353,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 0.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AZZ",
+      "metadataAvailable": true,
+      "oldEdge": 51.81,
+      "newEdge": 51.81,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.31305,
+        "rawValue": 17.31305,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 27.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CCI",
+      "metadataAvailable": true,
+      "oldEdge": 61.61,
+      "newEdge": 61.61,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 25.683811,
+        "rawValue": 25.683811,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VRT",
+      "metadataAvailable": true,
+      "oldEdge": 58.16,
+      "newEdge": 58.16,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 31.881002,
+        "rawValue": 31.881002,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AMT",
+      "metadataAvailable": true,
+      "oldEdge": 61.31,
+      "newEdge": 61.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.00647,
+        "rawValue": 24.00647,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TXN",
+      "metadataAvailable": true,
+      "oldEdge": 76.19,
+      "newEdge": 76.19,
+      "oldLane": "Long-Term Shovel Accumulation",
+      "newLane": "Long-Term Shovel Accumulation",
+      "pe": {
+        "value": 24.278408,
+        "rawValue": 24.278408,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VISN",
+      "metadataAvailable": true,
+      "oldEdge": 59.63,
+      "newEdge": 59.63,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 9.1541395,
+        "rawValue": 9.1541395,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SBAC",
+      "metadataAvailable": true,
+      "oldEdge": 63.03,
+      "newEdge": 63.03,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 22.104511,
+        "rawValue": 22.104511,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LOW",
+      "metadataAvailable": true,
+      "oldEdge": 57.64,
+      "newEdge": 57.64,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 15.5091715,
+        "rawValue": 15.5091715,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 69.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DELL",
+      "metadataAvailable": true,
+      "oldEdge": 71.03,
+      "newEdge": 71.03,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 16.115192,
+        "rawValue": 16.115192,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 78.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "QCOM",
+      "metadataAvailable": true,
+      "oldEdge": 73.58,
+      "newEdge": 73.58,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 16.513882,
+        "rawValue": 16.513882,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "KEYS",
+      "metadataAvailable": true,
+      "oldEdge": 61.0,
+      "newEdge": 61.0,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 23.971586,
+        "rawValue": 23.971586,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 75.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MEI",
+      "metadataAvailable": true,
+      "oldEdge": 52.05,
+      "newEdge": 52.05,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 37.357143,
+        "rawValue": 37.357143,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 83.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CIEN",
+      "metadataAvailable": true,
+      "oldEdge": 57.48,
+      "newEdge": 57.48,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 36.6276,
+        "rawValue": 36.6276,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 91.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "HUBB",
+      "metadataAvailable": true,
+      "oldEdge": 56.87,
+      "newEdge": 56.87,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.545055,
+        "rawValue": 20.545055,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PWR",
+      "metadataAvailable": true,
+      "oldEdge": 54.15,
+      "newEdge": 54.15,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 34.189545,
+        "rawValue": 34.189545,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ECL",
+      "metadataAvailable": true,
+      "oldEdge": 53.41,
+      "newEdge": 53.41,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 29.28594,
+        "rawValue": 29.28594,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TT",
+      "metadataAvailable": true,
+      "oldEdge": 56.02,
+      "newEdge": 56.02,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 25.93631,
+        "rawValue": 25.93631,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "UUUU",
+      "metadataAvailable": true,
+      "oldEdge": 50.09,
+      "newEdge": 50.09,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 29.319588,
+        "rawValue": 29.319588,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AVGO",
+      "metadataAvailable": true,
+      "oldEdge": 73.02,
+      "newEdge": 73.02,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 18.762774,
+        "rawValue": 18.762774,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 90.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SPXC",
+      "metadataAvailable": true,
+      "oldEdge": 54.97,
+      "newEdge": 54.97,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.53348,
+        "rawValue": 20.53348,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "STRL",
+      "metadataAvailable": true,
+      "oldEdge": 55.04,
+      "newEdge": 55.04,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 21.140438,
+        "rawValue": 21.140438,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MYRG",
+      "metadataAvailable": true,
+      "oldEdge": 54.06,
+      "newEdge": 54.06,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 34.080685,
+        "rawValue": 34.080685,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CWEN",
+      "metadataAvailable": true,
+      "oldEdge": 56.17,
+      "newEdge": 56.17,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.431942,
+        "rawValue": 19.431942,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GDS",
+      "metadataAvailable": true,
+      "oldEdge": 51.37,
+      "newEdge": 51.37,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 896.42334,
+        "rawValue": 896.42334,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 69.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ALG",
+      "metadataAvailable": true,
+      "oldEdge": 56.93,
+      "newEdge": 56.93,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 14.11999,
+        "rawValue": 14.11999,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DY",
+      "metadataAvailable": true,
+      "oldEdge": 51.58,
+      "newEdge": 51.58,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.09075,
+        "rawValue": 19.09075,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 76.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MTZ",
+      "metadataAvailable": true,
+      "oldEdge": 52.27,
+      "newEdge": 52.27,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 31.596142,
+        "rawValue": 31.596142,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "IREN",
+      "metadataAvailable": true,
+      "oldEdge": 42.37,
+      "newEdge": 39.01,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -168.60379,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ESE",
+      "metadataAvailable": true,
+      "oldEdge": 55.59,
+      "newEdge": 55.59,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 29.685843,
+        "rawValue": 29.685843,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 70.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MRVL",
+      "metadataAvailable": true,
+      "oldEdge": 67.2,
+      "newEdge": 67.2,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 33.5776,
+        "rawValue": 33.5776,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 82.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FSLR",
+      "metadataAvailable": true,
+      "oldEdge": 59.87,
+      "newEdge": 59.87,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 9.699347,
+        "rawValue": 9.699347,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ETN",
+      "metadataAvailable": true,
+      "oldEdge": 52.66,
+      "newEdge": 52.66,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 26.244766,
+        "rawValue": 26.244766,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CMI",
+      "metadataAvailable": true,
+      "oldEdge": 52.05,
+      "newEdge": 52.05,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.936405,
+        "rawValue": 17.936405,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "XEL",
+      "metadataAvailable": true,
+      "oldEdge": 53.55,
+      "newEdge": 53.55,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 16.833904,
+        "rawValue": 16.833904,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "POR",
+      "metadataAvailable": true,
+      "oldEdge": 53.61,
+      "newEdge": 53.61,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 13.511855,
+        "rawValue": 13.511855,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 50.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VOYG",
+      "metadataAvailable": true,
+      "oldEdge": 47.67,
+      "newEdge": 44.31,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "rawValue": -27.32082,
+        "source": "forwardPE",
+        "status": "not-meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ALAB",
+      "metadataAvailable": false,
+      "oldEdge": 40.65,
+      "newEdge": 40.65,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 140.11,
+        "rawValue": 140.11,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "WDC",
+      "metadataAvailable": true,
+      "oldEdge": 57.71,
+      "newEdge": 57.71,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 14.723367,
+        "rawValue": 14.723367,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "WSC",
+      "metadataAvailable": true,
+      "oldEdge": 54.14,
+      "newEdge": 54.14,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 21.151936,
+        "rawValue": 21.151936,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 60.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GOOG",
+      "metadataAvailable": true,
+      "oldEdge": 74.33,
+      "newEdge": 74.33,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 24.441393,
+        "rawValue": 24.441393,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PRIM",
+      "metadataAvailable": true,
+      "oldEdge": 50.24,
+      "newEdge": 50.24,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 14.821522,
+        "rawValue": 14.821522,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DBX",
+      "metadataAvailable": true,
+      "oldEdge": 72.44,
+      "newEdge": 72.44,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 10.443943,
+        "rawValue": 10.443943,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ASPI",
+      "metadataAvailable": false,
+      "oldEdge": 46.8,
+      "newEdge": 46.8,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ANET",
+      "metadataAvailable": true,
+      "oldEdge": 56.57,
+      "newEdge": 56.57,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 36.41469,
+        "rawValue": 36.41469,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SMCI",
+      "metadataAvailable": true,
+      "oldEdge": 66.97,
+      "newEdge": 66.97,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 7.7310586,
+        "rawValue": 7.7310586,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LEU",
+      "metadataAvailable": false,
+      "oldEdge": 49.37,
+      "newEdge": 49.37,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 76.01,
+        "rawValue": 76.01,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AMKR",
+      "metadataAvailable": false,
+      "oldEdge": 45.13,
+      "newEdge": 45.13,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 22.24,
+        "rawValue": 22.24,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 46.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CDNS",
+      "metadataAvailable": false,
+      "oldEdge": 47.37,
+      "newEdge": 47.37,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 56.69,
+        "rawValue": 56.69,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 46.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "POET",
+      "metadataAvailable": false,
+      "oldEdge": 40.9,
+      "newEdge": 40.9,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "UEC",
+      "metadataAvailable": false,
+      "oldEdge": 46.45,
+      "newEdge": 46.45,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 14.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "KLAC",
+      "metadataAvailable": false,
+      "oldEdge": 59.76,
+      "newEdge": 59.76,
+      "oldLane": "Theme Too Weak",
+      "newLane": "Theme Too Weak",
+      "pe": {
+        "value": 48.4,
+        "rawValue": 48.4,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ENS",
+      "metadataAvailable": true,
+      "oldEdge": 50.79,
+      "newEdge": 50.79,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 12.806054,
+        "rawValue": 12.806054,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "APH",
+      "metadataAvailable": true,
+      "oldEdge": 54.13,
+      "newEdge": 54.13,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 23.874586,
+        "rawValue": 23.874586,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "J",
+      "metadataAvailable": true,
+      "oldEdge": 51.92,
+      "newEdge": 51.92,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.582495,
+        "rawValue": 17.582495,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 70.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AXTI",
+      "metadataAvailable": false,
+      "oldEdge": 41.74,
+      "newEdge": 41.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 3512.49,
+        "rawValue": 3512.49,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CCJ",
+      "metadataAvailable": false,
+      "oldEdge": 44.12,
+      "newEdge": 44.12,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 165.05,
+        "rawValue": 165.05,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 50.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "HIVE",
+      "metadataAvailable": false,
+      "oldEdge": 41.92,
+      "newEdge": 41.92,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "XE",
+      "metadataAvailable": false,
+      "oldEdge": 44.28,
+      "newEdge": 44.28,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 67.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "RRX",
+      "metadataAvailable": false,
+      "oldEdge": 45.28,
+      "newEdge": 45.28,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.26,
+        "rawValue": 32.26,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "BWXT",
+      "metadataAvailable": false,
+      "oldEdge": 42.33,
+      "newEdge": 42.33,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 39.48,
+        "rawValue": 39.48,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CLSK",
+      "metadataAvailable": false,
+      "oldEdge": 39.55,
+      "newEdge": 39.55,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 75.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "WCC",
+      "metadataAvailable": false,
+      "oldEdge": 47.07,
+      "newEdge": 47.07,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.47,
+        "rawValue": 24.47,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "APLD",
+      "metadataAvailable": false,
+      "oldEdge": 38.29,
+      "newEdge": 38.29,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 28.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LRCX",
+      "metadataAvailable": false,
+      "oldEdge": 59.92,
+      "newEdge": 59.92,
+      "oldLane": "Theme Too Weak",
+      "newLane": "Theme Too Weak",
+      "pe": {
+        "value": 51.73,
+        "rawValue": 51.73,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CARR",
+      "metadataAvailable": false,
+      "oldEdge": 44.74,
+      "newEdge": 44.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 39.27,
+        "rawValue": 39.27,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "RBC",
+      "metadataAvailable": false,
+      "oldEdge": 45.16,
+      "newEdge": 45.16,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 47.24,
+        "rawValue": 47.24,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 50.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FN",
+      "metadataAvailable": false,
+      "oldEdge": 44.81,
+      "newEdge": 44.81,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 30.96,
+        "rawValue": 30.96,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 53.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LDOS",
+      "metadataAvailable": true,
+      "oldEdge": 50.38,
+      "newEdge": 50.38,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 10.525196,
+        "rawValue": 10.525196,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CTSH",
+      "metadataAvailable": true,
+      "oldEdge": 52.52,
+      "newEdge": 52.52,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 8.378505,
+        "rawValue": 8.378505,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "COHR",
+      "metadataAvailable": false,
+      "oldEdge": 41.39,
+      "newEdge": 41.39,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 71.16,
+        "rawValue": 71.16,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "COR",
+      "metadataAvailable": true,
+      "oldEdge": 48.8,
+      "newEdge": 48.8,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 15.847619,
+        "rawValue": 15.847619,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "HD",
+      "metadataAvailable": true,
+      "oldEdge": 54.13,
+      "newEdge": 54.13,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.182951,
+        "rawValue": 20.182951,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 68.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NNE",
+      "metadataAvailable": false,
+      "oldEdge": 39.62,
+      "newEdge": 39.62,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 98.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ASX",
+      "metadataAvailable": false,
+      "oldEdge": 38.36,
+      "newEdge": 38.36,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 46.19,
+        "rawValue": 46.19,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TEL",
+      "metadataAvailable": false,
+      "oldEdge": 43.39,
+      "newEdge": 43.39,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.03,
+        "rawValue": 20.03,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LTBR",
+      "metadataAvailable": false,
+      "oldEdge": 43.35,
+      "newEdge": 43.35,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "FTV",
+      "metadataAvailable": false,
+      "oldEdge": 40.97,
+      "newEdge": 40.97,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.08,
+        "rawValue": 32.08,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DOCN",
+      "metadataAvailable": false,
+      "oldEdge": 39.59,
+      "newEdge": 39.59,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 59.79,
+        "rawValue": 59.79,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NBIS",
+      "metadataAvailable": false,
+      "oldEdge": 39.34,
+      "newEdge": 39.34,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PATH",
+      "metadataAvailable": false,
+      "oldEdge": 45.37,
+      "newEdge": 45.37,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.64,
+        "rawValue": 20.64,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 83.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "RDWR",
+      "metadataAvailable": true,
+      "oldEdge": 67.82,
+      "newEdge": 67.82,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 20.213873,
+        "rawValue": 20.213873,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GEV",
+      "metadataAvailable": false,
+      "oldEdge": 43.35,
+      "newEdge": 43.35,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 26.41,
+        "rawValue": 26.41,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MPWR",
+      "metadataAvailable": true,
+      "oldEdge": 65.16,
+      "newEdge": 65.16,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 50.360565,
+        "rawValue": 50.360565,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "JCI",
+      "metadataAvailable": false,
+      "oldEdge": 43.6,
+      "newEdge": 43.6,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.82,
+        "rawValue": 24.82,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TE",
+      "metadataAvailable": false,
+      "oldEdge": 38.17,
+      "newEdge": 38.17,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ACM",
+      "metadataAvailable": false,
+      "oldEdge": 42.73,
+      "newEdge": 42.73,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 28.79,
+        "rawValue": 28.79,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 68.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DOV",
+      "metadataAvailable": true,
+      "oldEdge": 56.49,
+      "newEdge": 56.49,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 18.961765,
+        "rawValue": 18.961765,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 42.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "OSS",
+      "metadataAvailable": false,
+      "oldEdge": 42.93,
+      "newEdge": 42.93,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 158.26,
+        "rawValue": 158.26,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ONDS",
+      "metadataAvailable": false,
+      "oldEdge": 45.93,
+      "newEdge": 45.93,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.21,
+        "rawValue": 24.21,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AMAT",
+      "metadataAvailable": false,
+      "oldEdge": 55.69,
+      "newEdge": 55.69,
+      "oldLane": "Theme Too Weak",
+      "newLane": "Theme Too Weak",
+      "pe": {
+        "value": 39.16,
+        "rawValue": 39.16,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NICE",
+      "metadataAvailable": true,
+      "oldEdge": 69.35,
+      "newEdge": 69.35,
+      "oldLane": "Long-Term Shovel Accumulation",
+      "newLane": "Long-Term Shovel Accumulation",
+      "pe": {
+        "value": 8.061484,
+        "rawValue": 8.061484,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ROK",
+      "metadataAvailable": false,
+      "oldEdge": 44.04,
+      "newEdge": 44.04,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 39.45,
+        "rawValue": 39.45,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GE",
+      "metadataAvailable": true,
+      "oldEdge": 52.15,
+      "newEdge": 52.15,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.826897,
+        "rawValue": 32.826897,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 40.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GNRC",
+      "metadataAvailable": true,
+      "oldEdge": 49.38,
+      "newEdge": 49.38,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 20.492907,
+        "rawValue": 20.492907,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GFS",
+      "metadataAvailable": false,
+      "oldEdge": 42.34,
+      "newEdge": 42.34,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 35.84,
+        "rawValue": 35.84,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 61.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TSLA",
+      "metadataAvailable": true,
+      "oldEdge": 42.63,
+      "newEdge": 42.63,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 168.75047,
+        "rawValue": 168.75047,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "META",
+      "metadataAvailable": true,
+      "oldEdge": 66.0,
+      "newEdge": 66.0,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 16.721766,
+        "rawValue": 16.721766,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AES",
+      "metadataAvailable": false,
+      "oldEdge": 44.34,
+      "newEdge": 44.34,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 5.64,
+        "rawValue": 5.64,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "VST",
+      "metadataAvailable": false,
+      "oldEdge": 40.06,
+      "newEdge": 40.06,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 24.86,
+        "rawValue": 24.86,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SERV",
+      "metadataAvailable": false,
+      "oldEdge": 39.49,
+      "newEdge": 39.49,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 62.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PANW",
+      "metadataAvailable": true,
+      "oldEdge": 65.04,
+      "newEdge": 65.04,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 46.07389,
+        "rawValue": 46.07389,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 70.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "LMT",
+      "metadataAvailable": false,
+      "oldEdge": 45.74,
+      "newEdge": 45.74,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.53,
+        "rawValue": 19.53,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 40.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "SO",
+      "metadataAvailable": false,
+      "oldEdge": 41.29,
+      "newEdge": 41.29,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 21.16,
+        "rawValue": 21.16,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ATEN",
+      "metadataAvailable": true,
+      "oldEdge": 67.46,
+      "newEdge": 67.46,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 23.376848,
+        "rawValue": 23.376848,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 54.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "PH",
+      "metadataAvailable": false,
+      "oldEdge": 41.04,
+      "newEdge": 41.04,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.81,
+        "rawValue": 32.81,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CRM",
+      "metadataAvailable": true,
+      "oldEdge": 67.88,
+      "newEdge": 67.88,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 11.226282,
+        "rawValue": 11.226282,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 83.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "TKR",
+      "metadataAvailable": false,
+      "oldEdge": 39.38,
+      "newEdge": 39.38,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.05,
+        "rawValue": 32.05,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "IEX",
+      "metadataAvailable": false,
+      "oldEdge": 41.27,
+      "newEdge": 41.27,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 31.84,
+        "rawValue": 31.84,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "EQIX",
+      "metadataAvailable": false,
+      "oldEdge": 42.3,
+      "newEdge": 42.3,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 65.89,
+        "rawValue": 65.89,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CRDO",
+      "metadataAvailable": false,
+      "oldEdge": 38.67,
+      "newEdge": 38.67,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 57.25,
+        "rawValue": 57.25,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 81.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "CSCO",
+      "metadataAvailable": true,
+      "oldEdge": 52.22,
+      "newEdge": 52.22,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.903717,
+        "rawValue": 19.903717,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 63.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "metadataAvailable": true,
+      "oldEdge": 47.36,
+      "newEdge": 47.36,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 30.93393,
+        "rawValue": 30.93393,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "D",
+      "metadataAvailable": true,
+      "oldEdge": 51.98,
+      "newEdge": 51.98,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 16.455158,
+        "rawValue": 16.455158,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 50.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NTAP",
+      "metadataAvailable": true,
+      "oldEdge": 65.01,
+      "newEdge": 65.01,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 13.766653,
+        "rawValue": 13.766653,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 82.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "HON",
+      "metadataAvailable": false,
+      "oldEdge": 42.63,
+      "newEdge": 42.63,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 7.85,
+        "rawValue": 7.85,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 42.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AEE",
+      "metadataAvailable": true,
+      "oldEdge": 48.35,
+      "newEdge": 48.35,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.17545,
+        "rawValue": 19.17545,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "GVA",
+      "metadataAvailable": true,
+      "oldEdge": 46.22,
+      "newEdge": 46.22,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 19.089233,
+        "rawValue": 19.089233,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NVDA",
+      "metadataAvailable": true,
+      "oldEdge": 69.2,
+      "newEdge": 69.2,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 17.483482,
+        "rawValue": 17.483482,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 68.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "IBM",
+      "metadataAvailable": true,
+      "oldEdge": 49.12,
+      "newEdge": 49.12,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 16.892908,
+        "rawValue": 16.892908,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 41.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "ST",
+      "metadataAvailable": false,
+      "oldEdge": 36.33,
+      "newEdge": 36.33,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 70.14,
+        "rawValue": 70.14,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AOS",
+      "metadataAvailable": true,
+      "oldEdge": 46.6,
+      "newEdge": 46.6,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 13.895569,
+        "rawValue": 13.895569,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "NEE",
+      "metadataAvailable": true,
+      "oldEdge": 48.94,
+      "newEdge": 48.94,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 21.72124,
+        "rawValue": 21.72124,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 47.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "MSFT",
+      "metadataAvailable": true,
+      "oldEdge": 65.53,
+      "newEdge": 65.53,
+      "oldLane": "Research Watchlist",
+      "newLane": "Research Watchlist",
+      "pe": {
+        "value": 22.115297,
+        "rawValue": 22.115297,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 48.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AMZN",
+      "metadataAvailable": false,
+      "oldEdge": 52.16,
+      "newEdge": 52.16,
+      "oldLane": "Theme Too Weak",
+      "newLane": "Theme Too Weak",
+      "pe": {
+        "value": 20.26,
+        "rawValue": 20.26,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 49.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DLR",
+      "metadataAvailable": true,
+      "oldEdge": 47.23,
+      "newEdge": 47.23,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 62.845318,
+        "rawValue": 62.845318,
+        "source": "forwardPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 42.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "AVAV",
+      "metadataAvailable": false,
+      "oldEdge": 36.7,
+      "newEdge": 36.7,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": null,
+        "source": null,
+        "status": "missing"
+      },
+      "earnings": {
+        "days": 83.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "DUK",
+      "metadataAvailable": false,
+      "oldEdge": 38.83,
+      "newEdge": 38.83,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 17.9,
+        "rawValue": 17.9,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 56.0,
+        "status": "upcoming"
+      }
+    },
+    {
+      "ticker": "EMR",
+      "metadataAvailable": false,
+      "oldEdge": 38.44,
+      "newEdge": 38.44,
+      "oldLane": "Ignore For Theme",
+      "newLane": "Ignore For Theme",
+      "pe": {
+        "value": 32.45,
+        "rawValue": 32.45,
+        "source": "trackerPE",
+        "status": "meaningful"
+      },
+      "earnings": {
+        "days": 55.0,
+        "status": "upcoming"
+      }
+    }
+  ],
+  "caveat": "Fixed cache/row comparison, not historical reconstruction or fresh fundamentals. Missing metadata stays absent. Full-universe scoring here does not change production selection or eligibility."
+}

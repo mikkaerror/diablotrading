@@ -31,6 +31,33 @@ def sample_row(*, technical: dict | None = None) -> dict:
 
 
 class InfernoEdgeResearchTests(unittest.TestCase):
+    def test_negative_forward_pe_is_not_cheap_or_hidden_by_trailing(self):
+        row = sample_row()
+        missing = edge.valuation_risk_score(row, {})
+        self.assertEqual(edge.valuation_risk_score(row, {"forwardPE": -10, "trailingPE": 15}), missing)
+        self.assertGreater(edge.valuation_risk_score(row, {"forwardPE": 15}), missing)
+        info = edge.valuation_pe_context(row, {"forwardPE": -10, "trailingPE": 15})
+        self.assertEqual(info["status"], "not-meaningful")
+        self.assertEqual(info["source"], "forwardPE")
+
+    def test_pe_falls_back_only_when_absent(self):
+        self.assertEqual(edge.valuation_pe_context({"pe": 12}, {"forwardPE": None, "trailingPE": 20})["value"], 20)
+        self.assertEqual(edge.valuation_pe_context({"pe": 12}, {})["source"], "trackerPE")
+        for raw in (0, "bad", float("nan"), float("inf"), True):
+            info = edge.valuation_pe_context({"pe": 12}, {"forwardPE": raw, "trailingPE": 20})
+            self.assertIsNone(info["value"])
+            self.assertEqual(info["source"], "forwardPE")
+
+    def test_only_valid_forward_earnings_offsets_enter_catalyst_lane(self):
+        scores = {"edgeScore": 90, "confirmationScore": 90, "qualityScore": 90}
+        category = {"category": "AI/Compute Picks"}
+        for raw in (-1, None, "bad", float("nan"), float("inf"), -float("inf"), True, 22):
+            row = sample_row(); row["daysUntilEarnings"] = raw
+            self.assertNotEqual(edge.classify_lane(row, scores, category), "Catalyst Trade Candidate")
+        for raw in (0, 21, "14"):
+            row = sample_row(); row["daysUntilEarnings"] = raw
+            self.assertEqual(edge.classify_lane(row, scores, category), "Catalyst Trade Candidate")
+
     def test_technical_discovery_context_does_not_change_edge_score_or_lane(self) -> None:
         metadata = {
             "grossMargins": 0.6,
