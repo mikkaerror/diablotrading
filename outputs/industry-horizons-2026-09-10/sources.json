@@ -1,0 +1,200 @@
+[
+  {
+    "id": 1,
+    "citation": "Inferno local research snapshot, September 10, 2026. `frozen-inputs.json`, `coverage-audit.json`, and `profile.py` in this report's directory; source hashes and individual generation times are retained. Production definitions inspected in `inferno_edge_research.py`, `inferno_conviction_research.py`, and `inferno_tracker_registry.py`. The frozen extracts omit account holdings and contain research fields only.",
+    "urls": [],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 2,
+    "citation": "Microsoft. [Fiscal Year 2026 Fourth Quarter Earnings Conference Call](https://www.microsoft.com/en-us/investor/events/fy-2026/earnings-fy-2026-q4). July 29, 2026. CFO capital expenditure and lease-accounting discussion.",
+    "urls": [
+      "https://www.microsoft.com/en-us/investor/events/fy-2026/earnings-fy-2026-q4"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 3,
+    "citation": "Meta. [Meta Reports Second Quarter 2026 Results](https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Second-Quarter-2026-Results/default.aspx). July 29, 2026. Capital expenditure outlook.",
+    "urls": [
+      "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Second-Quarter-2026-Results/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 4,
+    "citation": "Amazon. [Amazon.com Announces Second Quarter Results](https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/default.aspx). July 30, 2026. AWS growth and trailing cash flow.",
+    "urls": [
+      "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 5,
+    "citation": "Oracle. [Oracle Announces Q1 Results Driven by Triple Digit Growth in Cloud Infrastructure Revenues](https://investor.oracle.com/investor-news/news-details/2026/Oracle-Announces-Q1-Results-Driven-by-Triple-Digit-Growth-in-Cloud-Infrastructure-Revenues/default.aspx). September 10, 2026.",
+    "urls": [
+      "https://investor.oracle.com/investor-news/news-details/2026/Oracle-Announces-Q1-Results-Driven-by-Triple-Digit-Growth-in-Cloud-Infrastructure-Revenues/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 6,
+    "citation": "NVIDIA. [Financial Results for Second Quarter Fiscal 2027](https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx). August 26, 2026. Reported revenue, guidance and architecture update.",
+    "urls": [
+      "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 7,
+    "citation": "Broadcom. [Third Quarter Fiscal Year 2026 Financial Results](https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announces-third-quarter-fiscal-year-2026-financial). September 2, 2026. AI semiconductor revenue and outlook.",
+    "urls": [
+      "https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announces-third-quarter-fiscal-year-2026-financial"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 8,
+    "citation": "Astera Labs. [Second Quarter 2026 Financial Results](https://ir.asteralabs.com/news-releases/news-release-details/astera-labs-reports-second-quarter-2026-financial-results). August 4, 2026. Scorpio, revenue and outlook.",
+    "urls": [
+      "https://ir.asteralabs.com/news-releases/news-release-details/astera-labs-reports-second-quarter-2026-financial-results"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 9,
+    "citation": "Credo. [First Quarter of Fiscal Year 2027 Financial Results](https://investors.credosemi.com/news-events/news/news-details/2026/Credo-Technology-Group-Holding-Ltd-Reports-First-Quarter-of-Fiscal-Year-2027-Financial-Results/default.aspx). September 1, 2026.",
+    "urls": [
+      "https://investors.credosemi.com/news-events/news/news-details/2026/Credo-Technology-Group-Holding-Ltd-Reports-First-Quarter-of-Fiscal-Year-2027-Financial-Results/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 10,
+    "citation": "Lumentum. [Fourth Quarter and Full Fiscal Year 2026 Results](https://investor.lumentum.com/financial-news-releases/news-details/2026/Lumentum-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Results/default.aspx). August 11, 2026.",
+    "urls": [
+      "https://investor.lumentum.com/financial-news-releases/news-details/2026/Lumentum-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Results/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 11,
+    "citation": "ASML. [Q2 2026 Financial Results](https://www.asml.com/en/news/press-releases/2026/q2-2026-financial-results). July 15, 2026.",
+    "urls": [
+      "https://www.asml.com/en/news/press-releases/2026/q2-2026-financial-results"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 12,
+    "citation": "Eaton. [Record Second Quarter 2026 Results](https://www.eaton.com/sg/en-us/company/news-insights/news-releases/2026/eaton-reports-record-second-quarter-2026-results.html). Q2 2026 release, accessed September 10, 2026. Organic and acquisition growth, orders and backlog.",
+    "urls": [
+      "https://www.eaton.com/sg/en-us/company/news-insights/news-releases/2026/eaton-reports-record-second-quarter-2026-results.html"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 13,
+    "citation": "Vertiv. [Strong Second Quarter 2026 Results and Raised Guidance](https://investors.vertiv.com/news/news-details/2026/Vertiv-Reports-Strong-Second-Quarter-2026-with-Diluted-EPS-Growth-of-53-Adjusted-Diluted-EPS-Growth-of-60-Raises-Full-Year-2026-Guidance-Across-All-Key-Metrics/default.aspx). July 29, 2026.",
+    "urls": [
+      "https://investors.vertiv.com/news/news-details/2026/Vertiv-Reports-Strong-Second-Quarter-2026-with-Diluted-EPS-Growth-of-53-Adjusted-Diluted-EPS-Growth-of-60-Raises-Full-Year-2026-Guidance-Across-All-Key-Metrics/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 14,
+    "citation": "GE Vernova. [Second Quarter 2026 Financial Results and Raised Guidance](https://www.gevernova.com/news/press-releases/ge-vernova-reports-second-quarter-2026-financial-results-raises-2026-financial). Q2 2026 release, accessed September 10, 2026. Gas backlog and slot reservations.",
+    "urls": [
+      "https://www.gevernova.com/news/press-releases/ge-vernova-reports-second-quarter-2026-financial-results-raises-2026-financial"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 15,
+    "citation": "Comfort Systems USA. [Second Quarter 2026 Results, Exhibit 99.1](https://www.sec.gov/Archives/edgar/data/1035983/000110465926086255/fix-20260723xex99d1.htm). July 23, 2026. Revenue and same-store backlog.",
+    "urls": [
+      "https://www.sec.gov/Archives/edgar/data/1035983/000110465926086255/fix-20260723xex99d1.htm"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 16,
+    "citation": "CoreWeave. [Strong Second Quarter 2026 Results](https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx). August 11, 2026. Backlog definition, active and contracted power, financing costs.",
+    "urls": [
+      "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 17,
+    "citation": "IREN. [FY26 Results, SEC-filed release](https://www.sec.gov/Archives/edgar/data/1878848/000187884826000051/irenreportsfy26results.htm). August 27, 2026. Contracted and operating ARR, delivery milestones and prepayments.",
+    "urls": [
+      "https://www.sec.gov/Archives/edgar/data/1878848/000187884826000051/irenreportsfy26results.htm"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 18,
+    "citation": "Nebius Group. [Q2 2026 Letter to Shareholders](https://assets.nebius.com/assets/a6ecfd85-a6cb-4967-8ef7-9a25bd261f9c/SHLQ226.pdf). August 12, 2026, pages 2-4. Capacity timing, contracts and revenue.",
+    "urls": [
+      "https://assets.nebius.com/assets/a6ecfd85-a6cb-4967-8ef7-9a25bd261f9c/SHLQ226.pdf"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 19,
+    "citation": "Cipher Digital. [Q2 Business Update, SEC-filed presentation](https://www.sec.gov/Archives/edgar/data/1819989/000181998926000038/cipherdigital_businessup.htm). August 4, 2026. Contracted HPC and conditional grid pipeline.",
+    "urls": [
+      "https://www.sec.gov/Archives/edgar/data/1819989/000181998926000038/cipherdigital_businessup.htm"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 20,
+    "citation": "International Energy Agency. [Key Questions on Energy and AI: Executive Summary](https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary). 2026 update, accessed September 10, 2026. Forecasts, efficiency and infrastructure bottlenecks.",
+    "urls": [
+      "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 21,
+    "citation": "US Nuclear Regulatory Commission. [Oklo Aurora Powerhouse: Pre-application Activities](https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/okla-aurora-powerhouse). Accessed September 10, 2026.",
+    "urls": [
+      "https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/okla-aurora-powerhouse"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 22,
+    "citation": "Oklo. [Form 10-Q for June 30, 2026](https://www.sec.gov/Archives/edgar/data/1849056/000162828026054571/oklo-20260630.htm). 2026 filing, accessed September 10, 2026. DOE pathway and NRC interactions.",
+    "urls": [
+      "https://www.sec.gov/Archives/edgar/data/1849056/000162828026054571/oklo-20260630.htm"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 23,
+    "citation": "Constellation Energy. [Second Quarter 2026 Results](https://investors.constellationenergy.com/node/10176/pdf). August 6, 2026. PPAs, outages and Crane restart progress.",
+    "urls": [
+      "https://investors.constellationenergy.com/node/10176/pdf"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 24,
+    "citation": "Micron. [Fiscal Fourth Quarter Results Scheduled for September 30, 2026](https://investors.micron.com/news/press-release/2026/Micron-Technology-to-Report-Fiscal-Fourth-Quarter-Results-on-September-30-2026/default.aspx). 2026 event announcement, accessed September 10, 2026.",
+    "urls": [
+      "https://investors.micron.com/news/press-release/2026/Micron-Technology-to-Report-Fiscal-Fourth-Quarter-Results-on-September-30-2026/default.aspx"
+    ],
+    "accessed": "2026-09-10"
+  },
+  {
+    "id": 25,
+    "citation": "Open Compute Project. [2026 OCP Global Summit](https://www.opencompute.org/summit/global-summit). Organizer schedule, accessed September 10, 2026.",
+    "urls": [
+      "https://www.opencompute.org/summit/global-summit"
+    ],
+    "accessed": "2026-09-10"
+  }
+]

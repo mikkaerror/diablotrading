@@ -1,0 +1,22 @@
+{
+  "researchAsOf": "2026-09-10T19:46:50-06:00",
+  "protectedProductionFilesUnchanged": 10,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "submitLiveOrderBlocked": true,
+  "reproducibleCoverageAudit": true,
+  "uniqueTickerGrain": true,
+  "pdfPages": 12,
+  "pdfSha256": "9de457f4ffe4d588fccd935b40555d7fbd8a2f1e7dfc5ce53c089f2fa5cb8a2a",
+  "pdfTextBoundsPass": true,
+  "all12RenderedPagesVisuallyReviewed": true,
+  "sourceCount": 25,
+  "publicSources": 24,
+  "localLinksChecked": 12,
+  "fullSuite": {
+    "tests": 2083,
+    "seconds": 58.692,
+    "result": "PASS"
+  },
+  "gitDiffCheck": "PASS"
+}

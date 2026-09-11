@@ -1361,5 +1361,21 @@
       "research-only",
       "documentation"
     ]
+  },
+  {
+    "id": "mission-2698e297",
+    "createdAt": "2026-09-10T19:39:05.256969-06:00",
+    "updatedAt": "2026-09-10T19:58:48.406078-06:00",
+    "title": "Research AI infrastructure industries and investment horizons",
+    "body": "Completed 12-page industry and timeline research with 24 public primary sources plus frozen local evidence. Reproduced top-40 selection from 183 tracker names; only 47/183 map under existing rules using full reference metadata; 55 missing edge cache entries and 48 older than 14 days. Preserved issuer-guidance versus actual, gross versus IT MW, funding and revenue timelines. Report and reproducible audit: outputs/industry-horizons-2026-09-10/. PDF: output/pdf/ai-infrastructure-industries-and-timelines.pdf. Added coverage-first guideline and durable knowledge note. All 2083 tests pass; ten production hashes unchanged, submission disabled, no ticket or universe changes. No predictive-validation or paper-outcome progress claimed.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "deep-research",
+      "industry",
+      "horizons",
+      "research-only"
+    ]
   }
 ]

@@ -84,11 +84,19 @@ These are proposed experiments, not implemented changes or new thresholds.
 
 | Priority | Existing behavior to investigate | Bounded next step | Evidence needed for adoption |
 |---|---|---|---|
+| 0 | Edge research selects 40/183 names before business evaluation; existing themes omit much physical infrastructure | Audit coverage and issuer/period provenance first; September 10 research reproduced the selection and mapped only 47/183 with existing rules on full reference metadata | Every name has a sourced economic classification or explicit unresolved reason; no eligibility or score change implied |
 | 1 | Daily RVOL used as intraday confirmation | Trace each consuming field and bar timestamp; distinguish completed and partial sessions | Reproduced misclassification and verified session-aware input semantics |
 | 2 | Missing values and valid zeros share fallbacks | Audit feature transformations with explicit null/zero examples | Correct units and missingness propagation without replacing facts with assumptions |
 | 3 | Core quality clips revenue growth at 50%; theme credit is category-based | Preserve raw growth and compare a robust continuous transform with the frozen baseline | Later improvement after controlling for sector and concentration; no tuning on holdout |
 | 4 | Earnings timing dominates discovery; multiple scores reuse inputs | Evaluate a separate longer-horizon research rank and remove redundant features in isolated comparisons | Incremental net value and downside evidence versus simple baselines |
 | 5 | Priced variants can remain absent from the operator queue | Trace source, economics, route requirements and explicit block reasons end to end | Correct reporting and an operator-owned path that preserves every applicable gate |
+
+The [September 10 industry and horizon assessment](../outputs/industry-horizons-2026-09-10/research.md)
+adds primary-source operating evidence and a reproducible coverage audit.
+Prioritize product ramps, executable construction, and funded capacity
+conversion over generic AI labels. Record event dates, operating milestones,
+financial periods and research holding periods separately. This assessment is
+research evidence, not a fitted model or a valuation-ranked buy list.
 
 ## Authority and completion
 
