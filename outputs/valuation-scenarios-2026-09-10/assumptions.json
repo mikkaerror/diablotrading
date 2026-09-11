@@ -1,0 +1,50 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "gateInput": false,
+  "horizonYears": 3,
+  "assumptionsStatus": "Illustrative sensitivities, not forecasts or calibrated probabilities",
+  "referencePrices": {
+    "asOf": "2026-09-09",
+    "source": "Frozen Schwab read-only /marketdata/v1/pricehistory closes; retrieved 2026-09-10T20:06:20.142794-06:00",
+    "ANET": 192.93,
+    "IREN": 45.37
+  },
+  "sources": {
+    "anetQ2": "https://investors.arista.com/Communications/Press-Releases-and-Events/Press-Release-Detail/2026/Arista-Networks-Inc--Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+    "irenFY26": "https://www.sec.gov/Archives/edgar/data/1878848/000187884826000051/irenreportsfy26results.htm",
+    "iren10K": "https://www.sec.gov/Archives/edgar/data/1878848/000187884826000052/iren-20260630.htm",
+    "accessed": "2026-09-10"
+  },
+  "reportedFacts": {
+    "ANET": {"sixMonthGaapDilutedEps": 1.75, "periodEnd": "2026-06-30", "source": "anetQ2"},
+    "IREN": {
+      "source": "iren10K", "periodEnd": "2026-06-30", "monetaryUnit": "USD million, rounded to one decimal",
+      "operatingCashFlow": 2100.4, "deferredRevenueCashFlowChange": 1841.7,
+      "propertyPaymentsExHardware": 2998.0, "hardwarePayments": 1335.1,
+      "cashEquivalents": 5895.6, "debtCurrent": 169.4, "debtLongTerm": 7423.6,
+      "financeLeasesCurrent": 125.3, "financeLeasesLongTerm": 118.5,
+      "ordinarySharesMillions": 394.058648, "shareCountAsOf": "2026-08-14"
+    }
+  },
+  "ANET": {
+    "earningsAnchor": "Double reported first-half GAAP diluted EPS; neither TTM nor forward consensus EPS",
+    "scenarios": [
+      {"case": "Slower growth / compression", "epsGrowth": 0.10, "terminalPE": 30},
+      {"case": "Strong growth / compression", "epsGrowth": 0.20, "terminalPE": 40},
+      {"case": "Sustained exceptional growth", "epsGrowth": 0.30, "terminalPE": 50}
+    ]
+  },
+  "IREN": {
+    "monetaryUnit": "USD million; shares in millions",
+    "scenarios": [
+      {"case": "Delayed ramp / funding stress", "annualRevenue": 2000, "ebitdaMargin": 0.30, "terminalEVtoEBITDA": 8, "terminalNetDebtIncludingFinanceLeases": 6000, "terminalDilutedShares": 600, "replacementCapexFraction": 0.25, "cashInterest": 500, "cashTaxes": 0},
+      {"case": "Delivery / continued capital needs", "annualRevenue": 4000, "ebitdaMargin": 0.45, "terminalEVtoEBITDA": 12, "terminalNetDebtIncludingFinanceLeases": 4000, "terminalDilutedShares": 500, "replacementCapexFraction": 0.20, "cashInterest": 500, "cashTaxes": 150},
+      {"case": "Scale / strong economics", "annualRevenue": 6000, "ebitdaMargin": 0.55, "terminalEVtoEBITDA": 16, "terminalNetDebtIncludingFinanceLeases": 2000, "terminalDilutedShares": 450, "replacementCapexFraction": 0.15, "cashInterest": 450, "cashTaxes": 350}
+    ],
+    "capitalStructureConvention": "Terminal debt is remaining debt after any assumed conversions; share count includes assumed issuance and dilution. No separate conversion overlay. These joint endpoints are not a funded construction plan.",
+    "cashResidualConvention": "EBITDA less replacement capex, interest and taxes; excludes growth capex, working capital, principal repayments and further adjustment reconciliation. Not free cash flow."
+  }
+}

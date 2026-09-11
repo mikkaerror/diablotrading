@@ -76,6 +76,13 @@ the same spend. Track constraints being relieved as well as constraints becoming
 more severe. Every long-horizon thesis needs a delay/funding case and a valuation
 case; an earnings date or large backlog alone does not provide either.
 
+Implementation follow-through: [full industry coverage](FULL_INDUSTRY_COVERAGE_2026-09-10.md)
+now exposes all 183 tracker names, with 24 issuer-linked roles and 159 explicit
+provider-level review gaps. [Supplier/developer valuation](SUPPLIER_DEVELOPER_VALUATION_2026-09-10.md)
+adds reproducible ANET/IREN growth, multiple, funding and dilution sensitivities.
+These complete the authorized reporting and scenario priorities; they do not
+validate the scenario inputs or establish complete issuer diligence.
+
 For each proposed change, record the existing rule and its source, intended
 purpose, observed failure, affected population, proposed alternative and
 falsifier. Distinguish a calculation defect from an unproven modeling choice.

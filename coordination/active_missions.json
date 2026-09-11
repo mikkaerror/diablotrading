@@ -1412,11 +1412,11 @@
   {
     "id": "mission-16547ecb",
     "createdAt": "2026-09-10T21:18:05.211956-06:00",
-    "updatedAt": "2026-09-10T21:18:05.211956-06:00",
+    "updatedAt": "2026-09-10T21:34:19.715008-06:00",
     "title": "Implement metric fixes then coverage and valuation priorities",
-    "body": "User authorized sequential priorities: correct misleading P/E and earnings-date inputs with frozen full-universe impact review; complete research-only industry coverage; build supplier versus developer valuation scenarios. Preserve risk constants, eligible universe, ticket decisions and broker authority.",
+    "body": "Completed priorities sequentially: corrected P/E and catalyst-date semantics with frozen 183-name impact (8 score decreases, no lane changes); implemented full industry visibility for 183 names with 24 issuer-linked roles and 159 explicit review gaps plus morning integration; completed reproducible ANET/IREN three-year valuation, funding and dilution sensitivities. Production suite 2098 passed, scenario checks 4 passed, artifact reproduction and research-only flags verified. No calibrated return edge, complete issuer diligence, risk-policy change or trade authority inferred.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [
       "metrics",

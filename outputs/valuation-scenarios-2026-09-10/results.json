@@ -1,0 +1,148 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "gateInput": false,
+  "horizonYears": 3,
+  "assumptionsStatus": "Illustrative sensitivities, not forecasts or calibrated probabilities",
+  "referencePrices": {
+    "asOf": "2026-09-09",
+    "source": "Frozen Schwab read-only /marketdata/v1/pricehistory closes; retrieved 2026-09-10T20:06:20.142794-06:00",
+    "ANET": 192.93,
+    "IREN": 45.37
+  },
+  "ANET": {
+    "annualizedHalfYearEps": 3.5,
+    "priceToAnnualizedHalfYearEps": 55.12285714285714,
+    "scenarios": [
+      {
+        "case": "Slower growth / compression",
+        "epsGrowth": 0.1,
+        "terminalPE": 30,
+        "terminalPrice": 139.75500000000005,
+        "priceReturn": -0.27561809982895324
+      },
+      {
+        "case": "Strong growth / compression",
+        "epsGrowth": 0.2,
+        "terminalPE": 40,
+        "terminalPrice": 241.91999999999996,
+        "priceReturn": 0.25392629451096216
+      },
+      {
+        "case": "Sustained exceptional growth",
+        "epsGrowth": 0.3,
+        "terminalPE": 50,
+        "terminalPrice": 384.475,
+        "priceReturn": 0.9928212304981081
+      }
+    ],
+    "epsGrowthRequiredForDoubleAt40PE": 0.40206207302126096
+  },
+  "IREN": {
+    "historicalPpeCashPayments": 4333.1,
+    "historicalCfoMinusPpePayments": -2232.7000000000003,
+    "historicalCfoLessDeferredRevenueChange": 258.70000000000005,
+    "historicalCfoLessDeferredRevenueChangeAndPpe": -4074.4000000000005,
+    "bookNetDebtIncludingFinanceLeasesExRestrictedCash": 1941.1999999999998,
+    "datedReferenceEquityValue": 17878.440859759998,
+    "scenarios": [
+      {
+        "case": "Delayed ramp / funding stress",
+        "annualRevenue": 2000,
+        "ebitdaMargin": 0.3,
+        "terminalEVtoEBITDA": 8,
+        "terminalNetDebtIncludingFinanceLeases": 6000,
+        "terminalDilutedShares": 600,
+        "replacementCapexFraction": 0.25,
+        "cashInterest": 500,
+        "cashTaxes": 0,
+        "terminalPrice": 0.0,
+        "priceReturn": -1.0,
+        "partialCashResidual": -400.0,
+        "revenueRequiredToMatchReferencePrice": 13842.5,
+        "revenueRequiredForDouble": 25185.0
+      },
+      {
+        "case": "Delivery / continued capital needs",
+        "annualRevenue": 4000,
+        "ebitdaMargin": 0.45,
+        "terminalEVtoEBITDA": 12,
+        "terminalNetDebtIncludingFinanceLeases": 4000,
+        "terminalDilutedShares": 500,
+        "replacementCapexFraction": 0.2,
+        "cashInterest": 500,
+        "cashTaxes": 150,
+        "terminalPrice": 35.2,
+        "priceReturn": -0.22415693189332142,
+        "partialCashResidual": 350.0,
+        "revenueRequiredToMatchReferencePrice": 4941.666666666666,
+        "revenueRequiredForDouble": 9142.592592592591
+      },
+      {
+        "case": "Scale / strong economics",
+        "annualRevenue": 6000,
+        "ebitdaMargin": 0.55,
+        "terminalEVtoEBITDA": 16,
+        "terminalNetDebtIncludingFinanceLeases": 2000,
+        "terminalDilutedShares": 450,
+        "replacementCapexFraction": 0.15,
+        "cashInterest": 450,
+        "cashTaxes": 350,
+        "terminalPrice": 112.8888888888889,
+        "priceReturn": 1.4881835770087921,
+        "partialCashResidual": 1600.0,
+        "revenueRequiredToMatchReferencePrice": 2547.329545454545,
+        "revenueRequiredForDouble": 4867.386363636363
+      }
+    ],
+    "fundingSensitivityAtMiddleOperatingCase": [
+      {
+        "netDebt": 2000,
+        "shares": 400,
+        "price": 49.0
+      },
+      {
+        "netDebt": 2000,
+        "shares": 500,
+        "price": 39.2
+      },
+      {
+        "netDebt": 2000,
+        "shares": 600,
+        "price": 32.666666666666664
+      },
+      {
+        "netDebt": 4000,
+        "shares": 400,
+        "price": 44.0
+      },
+      {
+        "netDebt": 4000,
+        "shares": 500,
+        "price": 35.2
+      },
+      {
+        "netDebt": 4000,
+        "shares": 600,
+        "price": 29.333333333333332
+      },
+      {
+        "netDebt": 6000,
+        "shares": 400,
+        "price": 39.0
+      },
+      {
+        "netDebt": 6000,
+        "shares": 500,
+        "price": 31.2
+      },
+      {
+        "netDebt": 6000,
+        "shares": 600,
+        "price": 26.0
+      }
+    ]
+  }
+}
