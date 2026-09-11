@@ -1,0 +1,23 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "brokerSubmitAllowed": false,
+  "liveTradingAllowed": false,
+  "focusedTests": 9,
+  "focusedTestsPassed": true,
+  "broaderTests": 2092,
+  "broaderTestsPassed": true,
+  "broaderTestSeconds": 57.406,
+  "protectedProductionFilesUnchanged": 10,
+  "historySymbols": 17,
+  "observationsPerSymbol": 252,
+  "latestPriceObservation": "2026-09-09",
+  "accountReconciliationWithinTwoCents": true,
+  "accountInputsAndOutputsGitIgnored": true,
+  "limitations": [
+    "No current executable quotes or forward valuation ranking.",
+    "Scenario sizing is not validated optimal allocation or changed policy.",
+    "Arithmetic and integrity tests do not prove investment edge."
+  ]
+}

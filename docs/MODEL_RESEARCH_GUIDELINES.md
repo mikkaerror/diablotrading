@@ -98,6 +98,27 @@ conversion over generic AI labels. Record event dates, operating milestones,
 financial periods and research holding periods separately. This assessment is
 research evidence, not a fitted model or a valuation-ranked buy list.
 
+## Position construction and holding period
+
+The [September 10 position strategy](POSITION_STRATEGY_RESEARCH_2026-09-10.md)
+extends the review to ownership, business milestones and event trades. Choose
+the holding period before the instrument. Match additions to improvements in
+per-share economics or valuation, and distinguish a price decline from new
+evidence. A long-term holding designation does not automatically justify an add.
+
+Evaluate position size against both account loss scenarios and combined losses
+across shared economic exposure. Preserve maximum committed stock capital,
+scenario loss and paired option risk as separate measurements. Do not interpret
+illustrative sizing percentages, ATR references, correlations or the allocator's
+default sleeve/tranche splits as validated targets or adopted risk constants.
+
+Ownership gains need not be capped at a generic 3–5% take-profit rule. Research
+exits based on thesis, valuation and concentration separately from option
+expiration and capped-payoff management. Wider holding tolerance requires
+reconsidering initial dollars and portfolio stress; it is not permission to
+increase the account loss budget. Marked gains and expected deposits cannot fund
+research allocations until their appropriate broker status is reconciled.
+
 ## Authority and completion
 
 Correcting documentation and running isolated research comparisons do not need

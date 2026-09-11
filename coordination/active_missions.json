@@ -1377,5 +1377,21 @@
       "horizons",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-ededcb93",
+    "createdAt": "2026-09-10T20:02:37.142075-06:00",
+    "updatedAt": "2026-09-10T20:13:35.323913-06:00",
+    "title": "Build timing sizing and long-term portfolio research plan",
+    "body": "Completed source-backed position-role and milestone strategy, isolated 17-symbol history audit, refreshed account reconciliation, standard paired vertical economics, simultaneous stress and position-size scenarios. Nine focused tests and full suite passed; production hashes unchanged. Account artifacts stay ignored. Observation lag preserved: daily history ends September 9. No risk constants, universe, operator policy, ticket actions or trading authority changed.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "portfolio",
+      "timing",
+      "sizing",
+      "research-only"
+    ]
   }
 ]
