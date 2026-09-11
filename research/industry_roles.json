@@ -1,0 +1,294 @@
+{
+  "researchOnly": true,
+  "gateInput": false,
+  "roles": {
+    "MSFT": {
+      "role": "hyperscaler and cloud platform",
+      "horizon": "multi-quarter capacity and monetization",
+      "watchMetrics": [
+        "funded capex",
+        "cloud revenue conversion",
+        "cash generation"
+      ],
+      "sourceUrl": "https://www.microsoft.com/en-us/investor/events/fy-2026/earnings-fy-2026-q4",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "AMZN": {
+      "role": "hyperscaler and cloud platform",
+      "horizon": "multi-quarter capacity and monetization",
+      "watchMetrics": [
+        "funded capex",
+        "cloud revenue conversion",
+        "cash generation"
+      ],
+      "sourceUrl": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "ORCL": {
+      "role": "hyperscaler and cloud platform",
+      "horizon": "multi-quarter capacity and monetization",
+      "watchMetrics": [
+        "funded capex",
+        "cloud revenue conversion",
+        "cash generation"
+      ],
+      "sourceUrl": "https://investor.oracle.com/investor-news/news-details/2026/Oracle-Announces-Q1-Results-Driven-by-Triple-Digit-Growth-in-Cloud-Infrastructure-Revenues/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "META": {
+      "role": "AI demand and advertising platform",
+      "horizon": "multi-quarter monetization",
+      "watchMetrics": [
+        "AI monetization",
+        "capital spending",
+        "cash generation"
+      ],
+      "sourceUrl": "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Second-Quarter-2026-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "NVDA": {
+      "role": "compute and custom silicon",
+      "horizon": "product ramps over 1\u20138 quarters",
+      "watchMetrics": [
+        "shipments",
+        "customer mix",
+        "gross margin"
+      ],
+      "sourceUrl": "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Announces-Financial-Results-for-Second-Quarter-Fiscal-2027/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "AVGO": {
+      "role": "compute and custom silicon",
+      "horizon": "product ramps over 1\u20138 quarters",
+      "watchMetrics": [
+        "shipments",
+        "customer mix",
+        "gross margin"
+      ],
+      "sourceUrl": "https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announces-third-quarter-fiscal-year-2026-financial",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "ALAB": {
+      "role": "high-speed interconnect and optics",
+      "horizon": "product ramps over 1\u20138 quarters",
+      "watchMetrics": [
+        "design-win conversion",
+        "revenue acceleration",
+        "gross margin"
+      ],
+      "sourceUrl": "https://ir.asteralabs.com/news-releases/news-release-details/astera-labs-reports-second-quarter-2026-financial-results",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "CRDO": {
+      "role": "high-speed interconnect and optics",
+      "horizon": "product ramps over 1\u20138 quarters",
+      "watchMetrics": [
+        "design-win conversion",
+        "revenue acceleration",
+        "gross margin"
+      ],
+      "sourceUrl": "https://investors.credosemi.com/news-events/news/news-details/2026/Credo-Technology-Group-Holding-Ltd-Reports-First-Quarter-of-Fiscal-Year-2027-Financial-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "LITE": {
+      "role": "high-speed interconnect and optics",
+      "horizon": "product ramps over 1\u20138 quarters",
+      "watchMetrics": [
+        "design-win conversion",
+        "revenue acceleration",
+        "gross margin"
+      ],
+      "sourceUrl": "https://investor.lumentum.com/financial-news-releases/news-details/2026/Lumentum-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "ASML": {
+      "role": "semiconductor manufacturing equipment",
+      "horizon": "orders and deliveries over several quarters",
+      "watchMetrics": [
+        "order conversion",
+        "customer capital spending",
+        "shipment timing"
+      ],
+      "sourceUrl": "https://www.asml.com/en/news/press-releases/2026/q2-2026-financial-results",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "ETN": {
+      "role": "power, cooling and construction",
+      "horizon": "backlog conversion over 1\u20133 years",
+      "watchMetrics": [
+        "executable backlog",
+        "organic orders",
+        "delivery and cash collection"
+      ],
+      "sourceUrl": "https://www.eaton.com/sg/en-us/company/news-insights/news-releases/2026/eaton-reports-record-second-quarter-2026-results.html",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "VRT": {
+      "role": "power, cooling and construction",
+      "horizon": "backlog conversion over 1\u20133 years",
+      "watchMetrics": [
+        "executable backlog",
+        "organic orders",
+        "delivery and cash collection"
+      ],
+      "sourceUrl": "https://investors.vertiv.com/news/news-details/2026/Vertiv-Reports-Strong-Second-Quarter-2026-with-Diluted-EPS-Growth-of-53-Adjusted-Diluted-EPS-Growth-of-60-Raises-Full-Year-2026-Guidance-Across-All-Key-Metrics/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "GEV": {
+      "role": "power, cooling and construction",
+      "horizon": "backlog conversion over 1\u20133 years",
+      "watchMetrics": [
+        "executable backlog",
+        "organic orders",
+        "delivery and cash collection"
+      ],
+      "sourceUrl": "https://www.gevernova.com/news/press-releases/ge-vernova-reports-second-quarter-2026-financial-results-raises-2026-financial",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "FIX": {
+      "role": "power, cooling and construction",
+      "horizon": "backlog conversion over 1\u20133 years",
+      "watchMetrics": [
+        "executable backlog",
+        "organic orders",
+        "delivery and cash collection"
+      ],
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1035983/000110465926086255/fix-20260723xex99d1.htm",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "CRWV": {
+      "role": "GPU cloud and data-center development",
+      "horizon": "commissioning through 2026\u20132028 and later",
+      "watchMetrics": [
+        "contracted versus live capacity",
+        "funded capital spending",
+        "cash and dilution"
+      ],
+      "sourceUrl": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "IREN": {
+      "role": "GPU cloud and data-center development",
+      "horizon": "commissioning through 2026\u20132028 and later",
+      "watchMetrics": [
+        "contracted versus live capacity",
+        "funded capital spending",
+        "cash and dilution"
+      ],
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1878848/000187884826000051/irenreportsfy26results.htm",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "NBIS": {
+      "role": "GPU cloud and data-center development",
+      "horizon": "commissioning through 2026\u20132028 and later",
+      "watchMetrics": [
+        "contracted versus live capacity",
+        "funded capital spending",
+        "cash and dilution"
+      ],
+      "sourceUrl": "https://assets.nebius.com/assets/a6ecfd85-a6cb-4967-8ef7-9a25bd261f9c/SHLQ226.pdf",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "CIFR": {
+      "role": "GPU cloud and data-center development",
+      "horizon": "commissioning through 2026\u20132028 and later",
+      "watchMetrics": [
+        "contracted versus live capacity",
+        "funded capital spending",
+        "cash and dilution"
+      ],
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1819989/000181998926000038/cipherdigital_businessup.htm",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "OKLO": {
+      "role": "advanced nuclear development",
+      "horizon": "multi-year regulatory and funding milestones",
+      "watchMetrics": [
+        "licensing stage",
+        "project funding",
+        "commercial operation"
+      ],
+      "sourceUrl": "https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/okla-aurora-powerhouse",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "CEG": {
+      "role": "electricity generation and contracted power",
+      "horizon": "multi-year power delivery",
+      "watchMetrics": [
+        "contract economics",
+        "available generation",
+        "project milestones"
+      ],
+      "sourceUrl": "https://investors.constellationenergy.com/node/10176/pdf",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "TE": {
+      "role": "solar manufacturing and factory financing",
+      "horizon": "G2 commissioning expected Q1 2027",
+      "watchMetrics": [
+        "factory funding",
+        "yield and output",
+        "recurring margins"
+      ],
+      "sourceUrl": "https://ir.t1energy.com/news-releases/news-release-details/t1-energy-reports-second-quarter-2026-results",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "HIVE": {
+      "role": "digital-currency operations and growing HPC",
+      "horizon": "GPU deployment in 2026 and longer projects into 2028",
+      "watchMetrics": [
+        "live versus contracted GPU revenue",
+        "mining economics",
+        "funding"
+      ],
+      "sourceUrl": "https://www.hivedigitaltechnologies.com/static/hivesite/filings/000106299326004447/exhibit99-1.htm",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "CLSK": {
+      "role": "mining and contracted data-center development",
+      "horizon": "Sandersville deliveries expected from Q4 2027",
+      "watchMetrics": [
+        "project financing",
+        "construction milestones",
+        "lease conditions"
+      ],
+      "sourceUrl": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Secures-Twenty-Year-Lease-with-High-Investment-Grade-Global-Technology-Company-for-Data-Center-in-Sandersville-Georgia/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    },
+    "ANET": {
+      "role": "data-center networking systems",
+      "horizon": "network deployments across several quarters",
+      "watchMetrics": [
+        "cloud customer demand",
+        "product and service margins",
+        "cash generation"
+      ],
+      "sourceUrl": "https://investors.arista.com/Communications/Press-Releases-and-Events/Press-Release-Detail/2026/Arista-Networks-Inc--Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+      "reviewedAt": "2026-09-10",
+      "reviewAfter": "2026-12-09"
+    }
+  }
+}

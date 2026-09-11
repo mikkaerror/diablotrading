@@ -58,6 +58,7 @@ EDGE_RESEARCH_FILE = ROOT / "data" / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = ROOT / "data" / "inferno_conviction_research.json"
 WATCHLIST_BRIEF_FILE = ROOT / "data" / "inferno_watchlist_brief.json"
 TRACKER_TAXONOMY_FILE = ROOT / "data" / "inferno_tracker_taxonomy.json"
+INDUSTRY_COVERAGE_FILE = ROOT / "data" / "inferno_industry_coverage.json"
 TRACKER_REGISTRY_FILE = ROOT / "data" / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = ROOT / "data" / "inferno_tracker_role_review.json"
 TRACKER_ROLE_POLICY_PACKET_FILE = ROOT / "data" / "inferno_tracker_role_policy_packet.json"
@@ -863,6 +864,20 @@ def tracker_registry_status(report: dict) -> tuple[bool, str]:
     else:
         detail = json.dumps({"generatedAt": generated, "verdict": verdict, "trackedRows": tracked_rows})
     return ok, detail
+
+
+def industry_coverage_status(report: dict) -> tuple[bool, str]:
+    if not report:
+        return False, "missing"
+    safe = report.get("researchOnly") is True and all(report.get(k) is False for k in
+           ("promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed", "gateInput"))
+    fresh = all(recent_or_today(str(report.get(k, "")), max_age_hours=36) for k in
+                ("generatedAt", "sourceTrackerAsOf", "sourceTaxonomyAsOf"))
+    complete = isinstance(report.get("trackedRows"), int) and report["trackedRows"] > 0 and report.get("coveredRows") == report["trackedRows"]
+    return safe and fresh and complete, (
+        f"visible={report.get('coveredRows')}/{report.get('trackedRows')} | "
+        f"evidence={report.get('evidenceCounts')} | issuer reviews due={report.get('issuerReviewDue')} | "
+        f"sources fresh={fresh} | research-only={safe}")
 
 
 def tracker_taxonomy_status(report: dict) -> tuple[bool, str]:
@@ -2375,6 +2390,11 @@ def main() -> int:
     tracker_taxonomy_ok, tracker_taxonomy_detail = tracker_taxonomy_status(tracker_taxonomy)
     lines.append(summarize_status("Full-tracker reference taxonomy", tracker_taxonomy_ok, tracker_taxonomy_detail))
     if not tracker_taxonomy_ok:
+        warnings += 1
+
+    industry_ok, industry_detail = industry_coverage_status(load_json_file(INDUSTRY_COVERAGE_FILE) or {})
+    lines.append(summarize_status("Full industry research coverage", industry_ok, industry_detail))
+    if not industry_ok:
         warnings += 1
 
     tracker_registry = load_json_file(TRACKER_REGISTRY_FILE) or {}

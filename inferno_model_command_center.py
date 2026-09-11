@@ -95,6 +95,7 @@ EDGE_RESEARCH_FILE = DATA_DIR / "inferno_edge_research.json"
 CONVICTION_RESEARCH_FILE = DATA_DIR / "inferno_conviction_research.json"
 WATCHLIST_BRIEF_FILE = DATA_DIR / "inferno_watchlist_brief.json"
 TRACKER_TAXONOMY_FILE = DATA_DIR / "inferno_tracker_taxonomy.json"
+INDUSTRY_COVERAGE_FILE = DATA_DIR / "inferno_industry_coverage.json"
 TRACKER_REGISTRY_FILE = DATA_DIR / "inferno_tracker_registry.json"
 TRACKER_ROLE_REVIEW_FILE = DATA_DIR / "inferno_tracker_role_review.json"
 TRACKER_ROLE_POLICY_PACKET_FILE = DATA_DIR / "inferno_tracker_role_policy_packet.json"
@@ -487,6 +488,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "lane": "tracker-taxonomy",
         "question": "Do all tracker names have fresh, source-labelled sector, industry, and broad economic-exposure data?",
         "artifact": "reports/tracker_taxonomy_latest.txt",
+        "owner": "codex",
+    },
+    {
+        "lane": "industry-coverage",
+        "question": "Which economic roles and timelines cover every tracker name, and which still need issuer review?",
+        "artifact": "reports/industry_coverage_latest.txt",
         "owner": "codex",
     },
     {
@@ -1233,6 +1240,7 @@ def build_command_center() -> dict[str, Any]:
         "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
         "watchlistBrief": artifact_summary(WATCHLIST_BRIEF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
         "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "industryCoverage": artifact_summary(INDUSTRY_COVERAGE_FILE, keys=("stage", "verdict", "generatedAt", "trackedRows", "coveredRows", "evidenceCounts", "issuerReviewDue", "researchOnly", "promotable", "authorityChanged")),
         "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRoleReview": artifact_summary(TRACKER_ROLE_REVIEW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
         "trackerRolePolicy": artifact_summary(TRACKER_ROLE_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),

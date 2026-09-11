@@ -136,6 +136,7 @@ Generated artifacts beat durable docs when they disagree.
 | Schwab daily operator tape | `reports/schwab_daily_ops_latest.txt` |
 | AI-basket market refresh | `reports/ai_basket_refresh_latest.txt` |
 | Full-tracker reference taxonomy | `reports/tracker_taxonomy_latest.txt` |
+| Full industry roles, timelines and issuer-review gaps | `reports/industry_coverage_latest.txt` |
 | Full-tracker registry | `reports/tracker_registry_latest.txt` |
 | Full-tracker role review | `reports/tracker_role_review_latest.txt` |
 | Full-tracker blank role-policy packet | `reports/tracker_role_policy_packet_latest.txt` and `reports/tracker_role_policy_packet_latest.csv` |
