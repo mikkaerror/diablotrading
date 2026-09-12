@@ -974,9 +974,9 @@ def _load_universe_readiness() -> list[float]:
     for row in rows:
         if not isinstance(row, dict):
             continue
-        raw = row.get("readiness")
-        if isinstance(raw, (int, float)):
-            values.append(float(raw))
+        parsed = finite_number(row.get("readiness"))
+        if parsed is not None:
+            values.append(parsed)
     return values
 
 
@@ -986,16 +986,13 @@ def gate_selectivity_findings(
     gate: float = MIN_READY_SCORE,
     intended_percentile: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Flag when the fixed readiness gate's live selectivity drifts from intent.
+    """Compare one score cutoff with a separate rank-policy reference.
 
-    The readiness gate is a fixed number (72), but the desk's stated pickiness
-    lives in ``inferno_math_config.OPERATOR_LEVEL`` as a *percentile* target
-    (default: keep the top 20%). A fixed cutoff silently changes how selective
-    it is as the universe distribution shifts. This check measures where the
-    gate currently sits in the universe and flags material divergence from the
-    intended top-percentile band. Diagnostic only — it does not move the gate.
+    Neither matching the reference nor admitting more/fewer names establishes
+    predictive value. This is not the combined pipeline admission rate.
     """
-    values = readiness_values if readiness_values is not None else _load_universe_readiness()
+    supplied = readiness_values if readiness_values is not None else _load_universe_readiness()
+    values = [value for raw in supplied if (value := finite_number(raw)) is not None]
     n = len(values)
     if n < MIN_SELECTIVITY_SAMPLE:
         return []
@@ -1017,23 +1014,22 @@ def gate_selectivity_findings(
     return [
         finding(
             "P2",
-            f"Readiness gate selectivity ({direction}) diverges from intended pickiness",
+            f"Readiness cutoff selectivity ({direction}) differs from percentile reference",
             (
                 f"gate readiness >= {gate:g} admits {admitted_frac * 100:.0f}% of the "
-                f"{n}-name universe (sits at the {gate_percentile:.0f}th percentile); "
-                f"OPERATOR_LEVEL '{OPERATOR_LEVEL}' intends the top "
+                f"{n} observed readiness values (sits at the {gate_percentile:.0f}th percentile); "
+                f"the separate OPERATOR_LEVEL '{OPERATOR_LEVEL}' reference is top "
                 f"{100.0 - intended_percentile:.0f}%."
             ),
             (
-                "A fixed readiness cutoff is "
-                f"{direction} than the desk's stated percentile pickiness and will "
-                "keep drifting as the universe distribution moves."
+                "This measures one predicate, not complete candidate eligibility. "
+                "A different admission fraction is not evidence that either the "
+                "fixed cutoff or percentile target improves returns."
             ),
             (
-                "Express the gate as a percentile target (top "
-                f"{100.0 - intended_percentile:.0f}% via gate_percentile_for_level), "
-                "or recalibrate the fixed value to that percentile. Surface only; "
-                "the gate is operator-owned and unchanged here."
+                "Compare fixed and percentile rules on frozen, same-universe "
+                "later outcomes, including rejected names, costs and downside. "
+                "Preserve the gate; do not replace it merely to match a quota."
             ),
             source="gate_selectivity_scan",
         )
@@ -1056,21 +1052,10 @@ def _load_schwab_option_rows() -> list[dict[str, Any]]:
 def spread_liquidity_consistency_findings(
     *, rows: list[dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
-    """Flag candidates the spread gate admits but the liquidity model rejects.
+    """Surface different chain-quality flags without asserting a risk verdict.
 
-    The risk gate blocks an option only when its ATM spread exceeds 35% (the
-    system's own ``wide-atm-spread`` flag). But chain liquidity is judged
-    separately by a blended score (spread + open interest + volume); when no
-    contract clears that bar the chain is flagged ``no-liquid-contracts`` /
-    ``thin-atm-liquidity``. A candidate can therefore have an *acceptable*
-    spread (no ``wide-atm-spread`` flag) yet still be liquidity-rejected — the
-    two criteria disagree, and the spread gate passes something the desk's own
-    liquidity model considers untradeable.
-
-    This keys entirely off the flags the system already emits (no re-hardcoded
-    thresholds). It stays silent when the disagreement is absent — e.g. when
-    every illiquid name is also wide-spread, which is the case in the current
-    snapshot. Diagnostic only.
+    Missing wide-spread flags do not prove an observed spread, an executable
+    contract, or passage through all downstream risk checks.
     """
     rows = rows if rows is not None else _load_schwab_option_rows()
     contested: list[str] = []
@@ -1086,20 +1071,20 @@ def spread_liquidity_consistency_findings(
     return [
         finding(
             "P2",
-            "Spread gate admits names the liquidity model rejects",
+            "Liquidity warnings exist without a wide-spread flag",
             (
-                f"{len(contested)} option name(s) clear the 35% ATM-spread gate "
-                f"(no wide-atm-spread flag) yet are liquidity-flagged: {listed}."
+                f"{len(contested)} option name(s) have no wide-atm-spread flag "
+                f"but have thin/no-liquid-contract flags: {listed}."
             ),
             (
-                "The pure-spread block (>35%) and the blended liquidity bar "
-                "(score ≥ 70 over spread + OI + volume) disagree, so the risk gate "
-                "passes chains the desk's own liquidity model calls untradeable."
+                "Spread width and blended liquidity measure different properties. "
+                "Absence of one flag does not establish quote completeness, "
+                "contract tradability or passage through the full risk gate."
             ),
             (
-                "Gate the risk policy on atmLiquidityScore (the model's own bar), "
-                "not only on the 35% spread ceiling, so the two liquidity criteria "
-                "agree. Surface only; risk gate is operator-owned and unchanged."
+                "Trace the selected contracts, timestamps, spreads, open interest, "
+                "volume and downstream block reasons before proposing a policy "
+                "change. The blended score also requires validation; keep policy unchanged."
             ),
             source="spread_liquidity_consistency_scan",
         )

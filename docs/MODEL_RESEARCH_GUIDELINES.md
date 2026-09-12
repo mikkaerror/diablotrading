@@ -83,6 +83,15 @@ adds reproducible ANET/IREN growth, multiple, funding and dilution sensitivities
 These complete the authorized reporting and scenario priorities; they do not
 validate the scenario inputs or establish complete issuer diligence.
 
+The [September 12 assumptions review](ASSUMPTIONS_AND_BIG_PICTURE_2026-09-12.md)
+extends the metric repair to conviction: valid-zero precedence, finite numeric
+inputs, fallback P/E validity and forward-event lists. Its frozen 183-name
+comparison changes no current scores/actions. It also documents the coarse
+`fallback` source label, incomplete edge linkage and overlapping score inputs.
+Do not upgrade source confidence from an attached history payload alone or
+replace a fixed cutoff merely to match a percentile quota. Field-level
+provenance and later same-universe outcomes remain necessary.
+
 For each proposed change, record the existing rule and its source, intended
 purpose, observed failure, affected population, proposed alternative and
 falsifier. Distinguish a calculation defect from an unproven modeling choice.

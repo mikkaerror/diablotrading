@@ -1424,5 +1424,20 @@
       "valuation",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-a5cf9ae2",
+    "createdAt": "2026-09-11T22:05:19.851932-06:00",
+    "updatedAt": "2026-09-12T12:51:22.950211-06:00",
+    "title": "Clean conviction inputs and audit threshold assumptions",
+    "body": "Completed conviction finite/zero/P-E/event semantics and input diagnostics; corrected unvalidated percentile replacement and false liquidity-bypass reporting. Frozen 183-name comparison reproduces 1098 saved fields and changes zero current scores/actions. Found 183 fallback-labelled contexts despite 179 attached history pulses, 40 edge-linked names and 124 missing-edge penalties; documented big-picture chain, threshold ledger and next provenance comparison. 93 focused and 2104 full tests pass; reproduction, protected hashes, math, hygiene and diff clean. Research-only; no risk, universe, ticket, evaluator or authority changes. No predictive gain or qualified paper progress claimed.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "assumptions",
+      "thresholds",
+      "research-only"
+    ]
   }
 ]

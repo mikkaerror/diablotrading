@@ -10,6 +10,7 @@ approval state, broker state, or authority.
 
 import argparse
 import json
+import math
 from collections import Counter
 from collections.abc import Callable
 from typing import Any
@@ -180,16 +181,57 @@ REGIME_REFERENCES: tuple[dict[str, Any], ...] = (
 )
 
 
-def number(value: Any, default: float = 0.0) -> float:
-    """Parse a loose numeric value into a float."""
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return 1.0 if value else 0.0
+def numeric_input(value: Any) -> dict[str, Any]:
+    """Keep absent and invalid observations distinct from a valid zero."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return {"value": None, "status": "missing"}
     try:
-        return float(str(value).replace("$", "").replace(",", "").replace("%", ""))
-    except ValueError:
-        return default
+        parsed = float(str(value).replace("$", "").replace(",", "").replace("%", ""))
+    except (TypeError, ValueError):
+        return {"value": None, "status": "invalid"}
+    if isinstance(value, bool) or not math.isfinite(parsed):
+        return {"value": None, "status": "invalid"}
+    return {"value": parsed, "status": "observed"}
+
+
+def number(value: Any, default: float = 0.0) -> float:
+    """Parse a finite numeric observation, retaining the existing default."""
+    parsed = numeric_input(value)["value"]
+    return parsed if parsed is not None else default
+
+
+def market_numeric_input(row: dict[str, Any], key: str, fallback_key: str | None = None) -> dict[str, Any]:
+    """Use tracker fallback only when context is absent, never for zero/invalid."""
+    raw = context(row).get(key)
+    parsed = numeric_input(raw)
+    source = f"marketContext.{key}"
+    if parsed["status"] == "missing":
+        source = fallback_key or key
+        parsed = numeric_input(row.get(source))
+    return {**parsed, "source": source}
+
+
+def tracker_pe_context(row: dict[str, Any]) -> dict[str, Any]:
+    """A nonpositive earnings multiple cannot measure cheapness."""
+    parsed = numeric_input(row.get("pe"))
+    if parsed["value"] is not None:
+        parsed["status"] = "meaningful" if parsed["value"] > 0 else "not-meaningful"
+        if parsed["value"] <= 0:
+            parsed["value"] = None
+    return {**parsed, "source": "pe"}
+
+
+def earnings_timing_context(row: dict[str, Any]) -> dict[str, Any]:
+    """Validate the supplied offset without asserting issuer confirmation."""
+    parsed = numeric_input(row.get("daysUntilEarnings"))
+    days = parsed["value"]
+    return {"days": days, "status": ("past" if days < 0 else "upcoming") if days is not None else parsed["status"]}
+
+
+def within_earnings_window(row: dict[str, Any], maximum: float) -> bool:
+    """Keep past and invalid events outside a forward-looking research list."""
+    days = earnings_timing_context(row)["days"]
+    return days is not None and 0 <= days <= maximum
 
 
 def clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
@@ -306,10 +348,10 @@ def options_score(row: dict[str, Any]) -> float:
 def structure_score(row: dict[str, Any]) -> float:
     """Score market structure from trend, RVOL, ATR expansion, and room to resistance."""
     ctx = context(row)
-    rvol = number(ctx.get("rvol") or row.get("rvol"), 1.0)
-    atr_expansion = number(ctx.get("atrExpansion") or row.get("atrZScore"))
-    resistance_room = number(ctx.get("distanceToResistancePct") or row.get("distanceToResistancePct"), 0.0)
-    support_distance = number(ctx.get("distanceToSupportPct") or row.get("distanceToSupportPct"), 999.0)
+    rvol = number(market_numeric_input(row, "rvol")["value"], 1.0)
+    atr_expansion = number(market_numeric_input(row, "atrExpansion", "atrZScore")["value"])
+    resistance_room = number(market_numeric_input(row, "distanceToResistancePct")["value"], 0.0)
+    support_distance = number(market_numeric_input(row, "distanceToSupportPct")["value"], 999.0)
     alignment = number(ctx.get("alignmentScore"), 50.0)
 
     rvol_score = 100.0 if rvol >= 1.35 else 78.0 if rvol >= 1.0 else 48.0 if rvol >= 0.5 else 28.0
@@ -352,7 +394,7 @@ def quality_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
         if score >= 0:
             return score
     value = clamp(number(row.get("valueScore")) / 10.0 * 100.0)
-    pe = number(row.get("pe"), 999.0)
+    pe = number(tracker_pe_context(row)["value"], 999.0)
     pe_score = 100.0 if 0 < pe <= 25 else 72.0 if pe <= 50 else 42.0 if pe <= 100 else 18.0
     return round(value * 0.55 + pe_score * 0.45, 2)
 
@@ -364,13 +406,13 @@ def valuation_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
         if score >= 0:
             return score
     long_term = clamp(number(row.get("longTermScore")) / 10.0 * 100.0)
-    pe = number(row.get("pe"), 999.0)
+    pe = number(tracker_pe_context(row)["value"], 999.0)
     pe_score = 100.0 if 0 < pe <= 25 else 75.0 if pe <= 45 else 45.0 if pe <= 90 else 15.0
     return round(long_term * 0.60 + pe_score * 0.40, 2)
 
 
 def evidence_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
-    """Score evidence freshness and cross-layer agreement."""
+    """Score source-status and shared-input agreement, not independent evidence."""
     source_status = str(context(row).get("sourceStatus") or "").lower()
     source = 55.0 if source_status == "fallback" else 85.0 if source_status else 65.0
     edge_agreement = number(edge.get("edgeScore"), 50.0) if edge else 45.0
@@ -380,7 +422,7 @@ def evidence_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
 
 def long_term_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
     """Score long-term accumulation attractiveness."""
-    support_distance = number(context(row).get("distanceToSupportPct") or row.get("distanceToSupportPct"), 999.0)
+    support_distance = number(market_numeric_input(row, "distanceToSupportPct")["value"], 999.0)
     buy_zone = clamp(100.0 - support_distance / 14.0 * 100.0)
     return round(
         theme_score(row, edge) * 0.22
@@ -393,7 +435,7 @@ def long_term_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
 
 
 def gut_check_score(row: dict[str, Any], edge: dict[str, Any] | None) -> float:
-    """Combine independent pillars into a single conviction score."""
+    """Combine overlapping research pillars into an uncalibrated rank score."""
     return round(
         theme_score(row, edge) * 0.18
         + timing_score(row) * 0.20
@@ -557,9 +599,9 @@ def risk_flags(row: dict[str, Any], edge: dict[str, Any] | None) -> list[str]:
         flags.append("market context fallback")
     if number(row.get("pe"), 0.0) > 90:
         flags.append("high PE")
-    if number(ctx.get("distanceToResistancePct") or row.get("distanceToResistancePct"), 99.0) < 3:
+    if number(market_numeric_input(row, "distanceToResistancePct")["value"], 99.0) < 3:
         flags.append("near resistance")
-    if number(ctx.get("distanceToSupportPct") or row.get("distanceToSupportPct"), 0.0) > 18:
+    if number(market_numeric_input(row, "distanceToSupportPct")["value"], 0.0) > 18:
         flags.append("far from support")
     if options_score(row) < 45:
         flags.append("options setup thin")
@@ -599,6 +641,20 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
         "pillarBalanceScore": balance,
         "uncertaintyPenalty": penalty,
         "evidenceGrade": evidence_grade(adjusted, balance, penalty),
+        "inputDiagnostics": {
+            "trackerPE": tracker_pe_context(row),
+            "peUsedByFallbackPillars": {
+                key: numeric_input(((edge or {}).get("scores") or {}).get(score))["value"] is None
+                or number(((edge or {}).get("scores") or {}).get(score), -1.0) < 0
+                for key, score in (("quality", "qualityScore"), ("valuation", "valuationRiskScore"))
+            },
+            "earningsTiming": earnings_timing_context(row),
+            "structure": {
+                key: market_numeric_input(row, key, fallback)
+                for key, fallback in (("rvol", None), ("atrExpansion", "atrZScore"),
+                                      ("distanceToResistancePct", None), ("distanceToSupportPct", None))
+            },
+        },
         "longTermConvictionScore": long_term,
         "researchAction": research_action(row, adjusted, long_term, flags),
         "readiness": row.get("readiness"),
@@ -622,8 +678,8 @@ def build_row(row: dict[str, Any], edge: dict[str, Any] | None) -> dict[str, Any
 
 
 def ctx_value(row: dict[str, Any], key: str) -> Any:
-    """Read a market-context value with tracker fallback."""
-    return context(row).get(key, row.get(key))
+    """Read numeric market context with the same precedence as scoring."""
+    return market_numeric_input(row, key)["value"]
 
 
 def conviction_thesis(row: dict[str, Any], edge: dict[str, Any] | None, gut: float, long_term: float) -> str:
@@ -631,9 +687,9 @@ def conviction_thesis(row: dict[str, Any], edge: dict[str, Any] | None, gut: flo
     ticker = str(row.get("ticker") or "").upper()
     category = CATEGORY_OVERRIDES.get(ticker) or (edge or {}).get("category") or "theme"
     if gut >= 78:
-        return f"{ticker} has multi-pillar confirmation in {category}; trust it only through sizing and strike gates."
+        return f"{ticker} has aligned research scores in {category}; shared inputs are not independent confirmation."
     if long_term >= 72:
-        return f"{ticker} looks better as inventory than as a chase; accumulate only on weakness."
+        return f"{ticker} merits ownership research; test milestones, valuation and portfolio fit before considering additions."
     if ticker in SLEEPER_HINTS:
         return f"{ticker} is a possible sleeper; demand cleaner evidence before upgrading it."
     if ticker in GIANT_TICKERS:
@@ -703,12 +759,12 @@ def build_conviction_research(
     )
     near_term = top_filter(
         ranked,
-        lambda item: item["signalTrigger"] and number(item["readiness"]) >= 85 and number(item["daysUntilEarnings"], 999) <= 30,
+        lambda item: item["signalTrigger"] and number(item["readiness"]) >= 85 and within_earnings_window(item, 30),
         limit=limit,
     )
     options_watch = top_filter(
         ranked,
-        lambda item: item["pillars"]["options"] >= 62 and number(item["daysUntilEarnings"], 999) <= 45,
+        lambda item: item["pillars"]["options"] >= 62 and within_earnings_window(item, 45),
         limit=limit,
     )
     technical_leaders = top_filter(
@@ -741,11 +797,14 @@ def build_conviction_research(
         "stage": "conviction-research-only",
         "researchOnly": True,
         "promotable": False,
-        "mathVersion": "conviction-v2-balance-uncertainty",
+        "mathVersion": "conviction-v3-input-semantics",
+        "authorityChanged": False,
+        "brokerSubmitAllowed": False,
+        "liveTradingAllowed": False,
         "trackedRows": len(snapshot_rows),
         "scoredRows": len(ranked),
         "coverage": coverage,
-        "regimeThesis": "AI/data-center semiconductor bull cycle remains strong; the desk still requires local ticker evidence and sizing discipline.",
+        "regimeThesis": "AI infrastructure demand is a research hypothesis to test through funded delivery, cash generation and value per share; the dated references below are not a current regime check.",
         "regimeReferences": list(REGIME_REFERENCES),
         "strategyReferences": list(STRATEGY_REFERENCES),
         "metricsThatMatter": [
@@ -773,6 +832,7 @@ def build_conviction_research(
         "ranked": ranked,
         "safety": [
             "Research-only; never changes approval, broker, or authority state.",
+            "Scores and letter grades are uncalibrated heuristics, not probabilities or independent evidence. Missing inputs can still use legacy scoring defaults; inputDiagnostics exposes the reviewed fields.",
             "Strong theme is not a trade. A trade still needs paper evidence, strike gates, and explicit confirmation.",
             "Use sleepers for investigation, not blind size.",
         ],
@@ -825,7 +885,7 @@ def conviction_research_text(report: dict[str, Any]) -> str:
 
     lines.extend(render_section("Behemoths / giants", report.get("behemoths") or []))
     lines.extend(render_section("Sleepers to investigate", report.get("sleepers") or []))
-    lines.extend(render_section("Near-term winners", report.get("nearTermWinners") or []))
+    lines.extend(render_section("Near-term catalyst research", report.get("nearTermWinners") or []))
     lines.extend(render_section("Options watch", report.get("optionsWatch") or []))
     lines.extend(render_section("Technical discovery leaders (uncalibrated; no gate change)", report.get("technicalDiscoveryLeaders") or [], score_key="technicalResearchScore"))
     lines.extend(render_section("Best balanced conviction", report.get("bestBalanced") or [], score_key="convictionAdjustedScore"))

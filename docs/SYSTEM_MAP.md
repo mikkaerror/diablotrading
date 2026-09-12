@@ -82,6 +82,13 @@ without substituting a current mark. This is an intrinsic proxy, not a fill or
 broker settlement. See [[MODEL_CALIBRATION_REVIEW_2026-09-06]] for evidence,
 remaining limitations, and predeclared challenger experiments.
 
+Conviction now preserves valid zeros, labels reviewed missing/invalid inputs,
+rejects nonmeaningful fallback P/E and excludes past events from forward lists.
+Its scores, grades and source penalties remain uncalibrated. The threshold
+audit distinguishes single-predicate selectivity from complete eligibility.
+See [[ASSUMPTIONS_AND_BIG_PICTURE_2026-09-12]] for source-label limitations,
+overlapping inputs and the unchanged-production-threshold review.
+
 Paper outcome review is now a read-only operator queue. Expiration never
 closes a paper ticket. Fill ingestion defaults to a non-mutating preview,
 including legacy scheduled `ingest` calls and missing-report status fallbacks.

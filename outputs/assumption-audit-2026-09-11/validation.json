@@ -1,0 +1,53 @@
+{
+  "verifiedAt": "2026-09-12T18:51:22.803193+00:00",
+  "focused": {
+    "tests": 93,
+    "passed": true,
+    "seconds": 0.339
+  },
+  "fullSuite": {
+    "tests": 2104,
+    "passed": true,
+    "seconds": 49.918
+  },
+  "baselineFieldsMatched": 1098,
+  "currentChangedRows": 0,
+  "artifactReproductionPassed": true,
+  "diffCheckPassed": true,
+  "protectedHashesUnchanged": {
+    "inferno_edge_research.py": true,
+    "inferno_config.py": true,
+    "inferno_math_config.py": true,
+    "inferno_risk_policy.py": true,
+    "inferno_capital_allocator.py": true,
+    "inferno_capital_scaling.py": true,
+    "inferno_trade_evidence.py": true,
+    "inferno_expected_move_ledger.py": true,
+    "inferno_authority_controller.py": true,
+    "inferno_score_calibration.py": true,
+    "data/inferno_paper_execution_ledger.json": true
+  },
+  "codeHashes": {
+    "inferno_conviction_research.py": "8caed240bbf3d79c5e8daee39b806a79e6e7b2629ce960e495a5bdb515453989",
+    "inferno_score_threshold_audit.py": "3faa93860ab128657b332521e842c989e73ee39cf42538167e9708c4ccd2943b",
+    "tests/test_inferno_conviction_research.py": "6cc7d0b093d42076ada1825ead9769c059f70cf1ab6e622dfff0eced049bc4e4",
+    "tests/test_inferno_score_threshold_audit.py": "4b58a916a6ae449f6f962465f20ffaa3d90c33f8ab6c4c62e1839484d36c9347"
+  },
+  "researchOnly": true,
+  "authorityChanged": false,
+  "liveTradingAllowed": false,
+  "brokerSubmitAllowed": false,
+  "monetaryRunCost": null,
+  "limitations": [
+    "No predictive gain or qualified paper outcome progress.",
+    "Prior unrelated research and model notes remain outside this commit scope."
+  ],
+  "math": {
+    "generatedAt": "2026-09-12T12:10:50.216230-06:00",
+    "verdict": "clean"
+  },
+  "secretHygiene": {
+    "generatedAt": "2026-09-12T04:59:13.435506-06:00",
+    "verdict": "healthy"
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 """Regression tests for the research-only conviction map."""
 
 import unittest
+from copy import deepcopy
 
 import inferno_conviction_research as conviction
 
@@ -120,6 +121,62 @@ def sample_edge_research() -> dict:
 class InfernoConvictionResearchTests(unittest.TestCase):
     """Verify the conviction layer stays useful and research-only."""
 
+    def test_context_zero_is_observed_and_does_not_use_tracker_fallback(self) -> None:
+        row = sample_rows()[0]
+        row.update(rvol=2.0, atrZScore=2.0, distanceToSupportPct=25, distanceToResistancePct=10)
+        row["marketContext"].update(rvol=0, atrExpansion=0, distanceToSupportPct=0, distanceToResistancePct=0)
+        # Bull trend 24 + RVOL 5.04 + expansion 6 + resistance 0 + support 12 + alignment 7.2.
+        self.assertEqual(conviction.structure_score(row), 54.24)
+        self.assertIn("near resistance", conviction.risk_flags(row, None))
+        self.assertNotIn("far from support", conviction.risk_flags(row, None))
+        missing_support = deepcopy(row)
+        missing_support["marketContext"]["distanceToSupportPct"] = None
+        self.assertAlmostEqual(conviction.long_term_score(row, None) - conviction.long_term_score(missing_support, None), 12.0)
+        diag = conviction.build_row(row, None)["inputDiagnostics"]["structure"]["rvol"]
+        self.assertEqual(diag, {"value": 0.0, "status": "observed", "source": "marketContext.rvol"})
+
+    def test_only_absent_context_allows_fallback_and_nonfinite_is_not_a_score(self) -> None:
+        for raw in (None, "", " "):
+            row = {"rvol": 1.25, "marketContext": {"rvol": raw}}
+            self.assertEqual(conviction.market_numeric_input(row, "rvol")["value"], 1.25)
+            self.assertEqual(conviction.ctx_value(row, "rvol"), 1.25)
+        for raw in (float("nan"), float("inf"), -float("inf"), True, False, "bad"):
+            row = {"rvol": 1.25, "marketContext": {"rvol": raw}}
+            with self.subTest(raw=raw):
+                self.assertEqual(conviction.market_numeric_input(row, "rvol")["status"], "invalid")
+                self.assertIsNone(conviction.ctx_value(row, "rvol"))
+                self.assertEqual(conviction.number(raw, 7), 7)
+
+    def test_nonpositive_pe_uses_existing_missing_bucket_and_keeps_linked_scores(self) -> None:
+        row = sample_rows()[0]
+        row["valueScore"] = 8
+        missing = dict(row, pe=None)
+        for pe in (-10, 0, float("nan"), float("inf"), True, "bad"):
+            with self.subTest(pe=pe):
+                changed = dict(row, pe=pe)
+                self.assertEqual(conviction.quality_score(changed, None), conviction.quality_score(missing, None))
+                self.assertEqual(conviction.valuation_score(changed, None), conviction.valuation_score(missing, None))
+                edge = sample_edge_research()["ranked"][0]
+                self.assertEqual(conviction.quality_score(changed, edge), 88)
+                self.assertEqual(conviction.valuation_score(changed, edge), 62)
+        self.assertGreater(conviction.quality_score(dict(row, pe=20), None), conviction.quality_score(missing, None))
+
+    def test_near_term_lists_retain_valid_boundaries_and_exclude_invalid_offsets(self) -> None:
+        for days in (-1, None, "bad", True, False, float("nan"), float("inf"), -float("inf")):
+            row = dict(sample_rows()[0], daysUntilEarnings=days)
+            report = conviction.build_conviction_research(rows=[row], edge_research={"ranked": []})
+            with self.subTest(days=days):
+                self.assertEqual(report["nearTermWinners"], [])
+                self.assertEqual(report["optionsWatch"], [])
+                self.assertEqual(len(report["ranked"]), 1)
+        for days, near, options in ((0, True, True), (30, True, True), (31, False, True), (45, False, True), (46, False, False)):
+            row = dict(sample_rows()[0], daysUntilEarnings=days)
+            report = conviction.build_conviction_research(rows=[row], edge_research={"ranked": []})
+            self.assertEqual(bool(report["nearTermWinners"]), near)
+            self.assertEqual(bool(report["optionsWatch"]), options)
+            self.assertFalse(report["brokerSubmitAllowed"])
+            self.assertFalse(report["liveTradingAllowed"])
+
     def test_conviction_research_classifies_giants_sleepers_and_contradictions(self) -> None:
         report = conviction.build_conviction_research(
             rows=sample_rows(),
@@ -130,7 +187,7 @@ class InfernoConvictionResearchTests(unittest.TestCase):
         self.assertTrue(report["researchOnly"])
         self.assertFalse(report["promotable"])
         self.assertEqual(report["trackedRows"], 3)
-        self.assertEqual(report["mathVersion"], "conviction-v2-balance-uncertainty")
+        self.assertEqual(report["mathVersion"], "conviction-v3-input-semantics")
         self.assertEqual(report["behemoths"][0]["ticker"], "NVDA")
         self.assertEqual(report["sleepers"][0]["ticker"], "MOD")
         self.assertTrue(report["bestBalanced"])

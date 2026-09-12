@@ -1,0 +1,47 @@
+{
+  "source": "data/inferno_score_calibration.json",
+  "sourceHash": "4ca324739451f33cdec7447e1c1dd6a6211953d6030c17bdca35a999182ccfd9",
+  "generatedAt": "2026-09-12T12:07:22.544623-06:00",
+  "researchOnly": true,
+  "promotable": false,
+  "liveTradingAllowed": false,
+  "brokerSubmitAllowed": false,
+  "counts": {
+    "closedScenarioObservations": 2096,
+    "closedOptionRecords": 907,
+    "scenarioScoreRows": 2096,
+    "readinessRows": 2029,
+    "optionScoreRows": 725,
+    "optionEntryRecords": 1571,
+    "optionEntryScoreRows": 1266,
+    "openOptionEntryRecords": 203,
+    "openOptionEntryScoreRows": 194,
+    "closedOptionEntryRecords": 911,
+    "closedOptionEntryScoreRows": 729,
+    "tables": 12
+  },
+  "evidenceDiagnostics": {
+    "sourceRows": {
+      "paper": 3,
+      "shadow": 904
+    },
+    "scoreProvenanceRows": {
+      "legacy-entry-unverified": 907
+    },
+    "shadowTimingRows": {
+      "closed-before-expiration-session": 713,
+      "unverified-settlement-time": 191
+    },
+    "exposureGroupKey": "source+ticker+expiration; proxy only, not independent events",
+    "exposureGroups": 136,
+    "repeatedExposureRows": 771,
+    "rowsWithoutExposureKey": 0,
+    "largestExposureGroup": 27,
+    "modelFitAllowed": false,
+    "reason": "Descriptive archive only: legacy score provenance, settlement-price lineage and independent temporal validation remain unresolved."
+  },
+  "scenarioScoreProvenance": {
+    "entry-frozen": 126,
+    "legacy-entry-unverified": 1970
+  }
+}

@@ -153,6 +153,21 @@ class GateSelectivityTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["severity"], "P2")
         self.assertIn("looser", findings[0]["title"])
+        self.assertIn("not complete candidate eligibility", findings[0]["interpretation"])
+        self.assertIn("do not replace it merely to match a quota", findings[0]["recommendation"])
+
+    def test_missing_nonfinite_and_boolean_values_do_not_change_selectivity(self) -> None:
+        values = [60 + i * 0.2 for i in range(100)]
+        baseline = audit.gate_selectivity_findings(readiness_values=values, gate=72, intended_percentile=80)
+        invalid = [None, "", True, False, float("nan"), float("inf")]
+        self.assertEqual(audit.gate_selectivity_findings(readiness_values=values + invalid, gate=72, intended_percentile=80), baseline)
+
+    def test_snapshot_loader_preserves_only_numeric_readiness_observations(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "snapshot.json"
+            path.write_text('{"rows":[{"readiness":true},{"readiness":null},{"readiness":"NaN"},{"readiness":"85"},{"readiness":0}]}')
+            with patch.object(audit, "UNIVERSE_SNAPSHOT_FILE", path):
+                self.assertEqual(audit._load_universe_readiness(), [85.0, 0.0])
 
     def test_aligned_gate_not_flagged(self) -> None:
         # Universe 0..89; a gate of 72 admits ~the top 20%, matching intent.
@@ -190,6 +205,9 @@ class SpreadLiquidityConsistencyTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["severity"], "P2")
         self.assertIn("MEI", findings[0]["evidence"])
+        self.assertIn("no wide-atm-spread flag", findings[0]["evidence"])
+        self.assertIn("does not establish", findings[0]["interpretation"])
+        self.assertIn("keep policy unchanged", findings[0]["recommendation"])
 
     def test_wide_spread_name_not_flagged(self) -> None:
         # Already blocked by the spread gate -> no disagreement to report.

@@ -1,0 +1,1671 @@
+{
+  "trackerGeneratedAt": "2026-09-11T16:29:02.552937-06:00",
+  "sourceHash": "91d8f49b5c1cc1961043ec4118adaaa88467478c24fae30eccc4033c30088e10",
+  "counts": {
+    "contextSourceStatus": {
+      "fallback": 183
+    },
+    "pulseSource": {
+      "schwab-price-history": 179,
+      "None": 4
+    },
+    "pulseObservationTime": {
+      "2026-09-10T05:00:00+00:00": 179,
+      "None": 4
+    },
+    "priceSource": {
+      "schwab-options-underlying": 11,
+      "google-sheet-price": 172
+    }
+  },
+  "rows": [
+    {
+      "ticker": "ACN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FCX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FIX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MOD",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "BDC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "EME",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NVT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ACMR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ORA",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SMR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AEHR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CLFD",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ETN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CCOI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AAOI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FLNC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TDC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ARM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TPC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AME",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SHLS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LUNR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "USAR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CEG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AZZ",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "STX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "WDC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AGX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CDW",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "VNET",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ASML",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FFIV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ENPH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GLW",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DXC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "RKLB",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MP",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ASTS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DELL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SNX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "UUUU",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CWEN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CHKP",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ENB",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "HPE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "BMI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "KEYS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "QCOM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "OKLO",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CRWV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CAT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ZBH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LITE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PWR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FTNT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "OTEX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AMD",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FLR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TEX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SBAC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LOW",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MEI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "VRT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ECL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TXN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "VISN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": null,
+      "pulseSourceDataAsOf": null,
+      "pulseStatus": null,
+      "pulseCaptured": false
+    },
+    {
+      "ticker": "DDOG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AMT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "HUBB",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SPXC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CIFR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ANET",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CCI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MYRG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "STRL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ORCL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "IRM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CIEN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MTZ",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DY",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "IREN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ALG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CMI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AVGO",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "XEL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ALAB",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ASPI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MRVL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PRIM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FSLR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "VOYG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ESE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GOOG",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "POR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DBX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AMKR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CDNS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SMCI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "WSC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GDS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "UEC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "POET",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LDOS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "J",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "RRX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "KLAC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DOCN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LEU",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AMAT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AXTI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "RBC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "APLD",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "WCC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "BWXT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ENS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CCJ",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "HD",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CTSH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "APH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GEV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ASX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "XE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "COR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "VST",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TEL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PATH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LRCX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CARR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MPWR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LTBR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "COHR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PH",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NBIS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CLSK",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "HIVE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": null,
+      "pulseSourceDataAsOf": null,
+      "pulseStatus": null,
+      "pulseCaptured": false
+    },
+    {
+      "ticker": "ACM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "OSS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NNE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "RDWR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "JCI",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DOV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ROK",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": null,
+      "pulseSourceDataAsOf": null,
+      "pulseStatus": null,
+      "pulseCaptured": false
+    },
+    {
+      "ticker": "ONDS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "FTV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TKR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "IEX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ATEN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GNRC",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CRDO",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "ST",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AAPL",
+      "contextSourceStatus": "fallback",
+      "priceSource": "schwab-options-underlying",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GFS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NTAP",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SERV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": null,
+      "pulseSourceDataAsOf": null,
+      "pulseStatus": null,
+      "pulseCaptured": false
+    },
+    {
+      "ticker": "NICE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "TSLA",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "META",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AES",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CRM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "LMT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "IBM",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "SO",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NVDA",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "NEE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AMZN",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "MSFT",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "D",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AEE",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "HON",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "GVA",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AVAV",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "CSCO",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "PANW",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "EQIX",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "EMR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "AOS",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DLR",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    },
+    {
+      "ticker": "DUK",
+      "contextSourceStatus": "fallback",
+      "priceSource": "google-sheet-price",
+      "pulseSource": "schwab-price-history",
+      "pulseSourceDataAsOf": "2026-09-10T05:00:00+00:00",
+      "pulseStatus": "ok",
+      "pulseCaptured": true
+    }
+  ],
+  "interpretation": "The row context builder labels all usable rows fallback even when attached OHLCV fields are provider-derived. This status is builder provenance, not field-level freshness proof. No confidence upgrade is justified without validating each consumed field and session."
+}

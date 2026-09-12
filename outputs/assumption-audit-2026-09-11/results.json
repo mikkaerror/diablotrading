@@ -1,0 +1,171 @@
+{
+  "researchOnly": true,
+  "promotable": false,
+  "authorityChanged": false,
+  "liveTradingAllowed": false,
+  "brokerSubmitAllowed": false,
+  "sourceTimes": {
+    "tracker": "2026-09-11T16:29:02.552937-06:00",
+    "edge": "2026-09-11T16:29:04.681371-06:00",
+    "conviction": "2026-09-11T17:10:47.781036-06:00"
+  },
+  "baselineReproduction": {
+    "rows": 183,
+    "fieldsPerRow": 6,
+    "allMatched": true
+  },
+  "sourceHashes": {
+    "data/latest_snapshot.json": "91d8f49b5c1cc1961043ec4118adaaa88467478c24fae30eccc4033c30088e10",
+    "data/inferno_edge_research.json": "146e9d169edb3a9e8033353a395ce4bbcc47c33e9656d7fc7aaefdd93cf86236",
+    "data/inferno_conviction_research.json": "2b5b61aebf4949ddf84c5f24f9f0787716631e38d229be76238fbfe34acbb329"
+  },
+  "revisedSourceHash": "f36008553c34905142606caadc67561d46b938ac944614d5368276f7aab69020",
+  "coverage": {
+    "trackerRows": 183,
+    "edgeLinked": 40,
+    "noEdgeLink": 143,
+    "missingEdgePenaltyRows": 124,
+    "sourceStatusCounts": {
+      "fallback": 183
+    },
+    "fallbackPEStatusCounts": {
+      "missing": 26
+    }
+  },
+  "changes": [],
+  "changedRows": 0,
+  "actionChanges": [],
+  "actionCounts": {
+    "before": {
+      "inventory watchlist": 12,
+      "manual thesis review": 1,
+      "shadow only": 88,
+      "watch only": 82
+    },
+    "after": {
+      "inventory watchlist": 12,
+      "manual thesis review": 1,
+      "shadow only": 88,
+      "watch only": 82
+    }
+  },
+  "sectionMembership": {
+    "nearTerm": {
+      "before": [
+        "ACN",
+        "AZZ",
+        "SNX"
+      ],
+      "after": [
+        "ACN",
+        "AZZ",
+        "SNX"
+      ],
+      "added": [],
+      "removed": []
+    },
+    "optionsWatch": {
+      "before": [
+        "CDNS",
+        "DOV",
+        "FCX"
+      ],
+      "after": [
+        "CDNS",
+        "DOV",
+        "FCX"
+      ],
+      "added": [],
+      "removed": []
+    }
+  },
+  "zeroContexts": [],
+  "thresholdSensitivity": {
+    "readiness": {
+      "observed": 183,
+      "missingOrInvalid": 0,
+      "singlePredicateCounts": {
+        "60": 109,
+        "68": 94,
+        "72": 86,
+        "80": 62,
+        "85": 47,
+        "90": 28
+      }
+    },
+    "adjustedConviction": {
+      "observed": 183,
+      "missingOrInvalid": 0,
+      "singlePredicateCounts": {
+        "56": 13,
+        "62": 3,
+        "68": 1,
+        "72": 0,
+        "78": 0
+      }
+    },
+    "ownershipConviction": {
+      "observed": 183,
+      "missingOrInvalid": 0,
+      "singlePredicateCounts": {
+        "66": 30,
+        "70": 19,
+        "72": 12
+      }
+    }
+  },
+  "rankComparison": {
+    "beforeTop20": [
+      "CHKP",
+      "TDC",
+      "FFIV",
+      "ACMR",
+      "MOD",
+      "ORCL",
+      "ARM",
+      "QCOM",
+      "ETN",
+      "FCX",
+      "ORA",
+      "ASML",
+      "DELL",
+      "SMR",
+      "NVT",
+      "AAOI",
+      "GLW",
+      "BDC",
+      "AEHR",
+      "HPE"
+    ],
+    "afterTop20": [
+      "CHKP",
+      "TDC",
+      "FFIV",
+      "ACMR",
+      "MOD",
+      "ORCL",
+      "ARM",
+      "QCOM",
+      "ETN",
+      "FCX",
+      "ORA",
+      "ASML",
+      "DELL",
+      "SMR",
+      "NVT",
+      "AAOI",
+      "GLW",
+      "BDC",
+      "AEHR",
+      "HPE"
+    ],
+    "top20Overlap": 20
+  },
+  "limitations": [
+    "Frozen snapshot and saved 40-name edge linkage; no provider refresh, outcome labels or full-universe fundamentals rebuild.",
+    "Single-cutoff counts are selectivity, not combined admission, profitability or optimal thresholds.",
+    "P/E corrections retain the existing missing-input buckets. Those buckets remain unvalidated assumptions.",
+    "Research action/list changes do not stage, approve or submit tickets; risk and authority remain downstream.",
+    "Source status is a saved label, not independent freshness proof. No RVOL session-normalization repair is claimed."
+  ]
+}
