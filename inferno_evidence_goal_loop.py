@@ -207,6 +207,26 @@ def load_artifacts() -> dict[str, dict[str, Any]]:
     }
 
 
+def market_evidence_signature() -> str | None:
+    """Hash usable market rows, never report rebuild/failed-attempt timestamps.
+
+    This is only a cadence signal. The independent verifier and all execution
+    gates still decide whether any resulting research is admissible.
+    """
+    sources = {}
+    for name in ("inferno_schwab_options", "inferno_schwab_price_history"):
+        payload = load_json_file(DATA_DIR / f"{name}.json") or {}
+        rows = payload.get("rows") or []
+        usable = [row for row in rows if isinstance(row, dict) and (
+            row.get("underlyingPrice", 0) or row.get("latestClose", 0)
+        ) and row.get("status") not in {"error", "empty-history"}]
+        if usable:
+            sources[name] = usable
+    if not sources:
+        return None
+    return hashlib.sha256(json.dumps(sources, sort_keys=True, default=str).encode()).hexdigest()
+
+
 def artifact_lineage(
     artifacts: dict[str, dict[str, Any]],
     *,
@@ -780,6 +800,9 @@ def _cadence_gate(
             "reason": "adaptive cadence has not reached its next check",
             "nextCheckAt": next_check.isoformat(),
         }
+    if next_check:
+        # A recent skipped precheck must not restart the fallback cooldown.
+        return {"blocked": False, "reason": None, "nextCheckAt": None}
 
     generated = _parse_datetime(last.get("generatedAt"), fallback_tz=now.tzinfo)
     if not generated:
@@ -1002,6 +1025,7 @@ def build_goal_loop(
     monotonic_started = time.monotonic()
     load_state = state_loader or (lambda: load_json_file(GOAL_LOOP_STATE_FILE) or {})
     prior_state = load_state()
+    market_signature = market_evidence_signature()
     precheck_commands = _run_commands(
         PRECHECK_COMMANDS,
         timeout_seconds=timeout_seconds,
@@ -1046,11 +1070,12 @@ def build_goal_loop(
             now=started,
             fallback_cooldown_minutes=duplicate_cooldown_minutes,
         )
-        if cadence_gate.get("blocked") and all_fresh and not readiness.get("ready"):
+        prior_run = _matching_verified_run(prior_state, signature=signature) or {}
+        new_market_evidence = bool(market_signature and market_signature != prior_run.get("marketEvidenceSignature"))
+        if cadence_gate.get("blocked") and all_fresh and not new_market_evidence:
             verdict = "skipped-duplicate-work"
             stop_reason = (
-                f"{cadence_gate.get('reason')}; no eligible paper, settlement, "
-                "or scenario-review work"
+                f"{cadence_gate.get('reason')}; unchanged work and no new usable market evidence"
             )
             value_class = "skipped"
             final_verification = verify_cycle(precheck_artifacts, [], now=started)
@@ -1171,6 +1196,7 @@ def build_goal_loop(
         "sourceLineage": artifact_lineage(final_artifacts, now=generated),
         "artifactRepairs": repairs,
         "workSignature": signature,
+        "marketEvidenceSignature": market_signature,
         "cadence": cadence,
         "authorityLevel": decision.get("authorityLevel"),
         "nextAction": (
@@ -1294,6 +1320,7 @@ def _run_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "progressDelta": payload.get("progressDelta"),
         "artifactRepairs": payload.get("artifactRepairs"),
         "workSignature": payload.get("workSignature"),
+        "marketEvidenceSignature": payload.get("marketEvidenceSignature"),
         "cadence": payload.get("cadence"),
         "governance": payload.get("governance"),
         "verificationPassed": (payload.get("verification") or {}).get("passed"),

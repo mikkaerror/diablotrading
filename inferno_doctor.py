@@ -670,6 +670,17 @@ def research_cycle_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def morning_run_status(report: dict, now: datetime | None = None) -> tuple[bool, str]:
+    """Separate a requested delivery failure from an intentional no-email run."""
+    fresh = in_current_service_cycle(str(report.get("generatedAt") or ""), now=now)
+    skipped = report.get("emailSkipped") is True and not report.get("emailError")
+    delivered = report.get("emailSent") is True and not report.get("emailError")
+    ok = fresh and report.get("ok") is True and (skipped or delivered)
+    if ok:
+        return True, "fresh run; email intentionally skipped" if skipped else "fresh run and email recorded"
+    return False, json.dumps({key: report.get(key) for key in ("generatedAt", "ok", "emailSent", "emailSkipped", "emailError")})
+
+
 def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple[bool, str]:
     """Report fill-ingest safeguards without treating rejected evidence as a fill."""
     if not report:
@@ -2106,16 +2117,7 @@ def main() -> int:
     ops_status = load_json_file(OPS_STATUS_FILE) or {}
     emailed_status = latest_emailed_run_for_cycle(active_cycle_days, now=now)
     ops_reference = emailed_status or ops_status
-    ops_today = in_current_service_cycle(str(ops_reference.get("generatedAt", "")), now=now)
-    ops_email = bool(ops_reference.get("emailSent"))
-    ops_ok = ops_today and ops_email and bool(ops_reference.get("ok", True))
-    ops_detail = f"fresh run and email recorded for cycle {cycle_day}" if ops_ok else json.dumps(
-        {
-            "generatedAt": ops_reference.get("generatedAt"),
-            "ok": ops_reference.get("ok", True),
-            "emailSent": ops_reference.get("emailSent"),
-        }
-    )
+    ops_ok, ops_detail = morning_run_status(ops_reference, now=now)
     lines.append(summarize_status("Morning run", ops_ok, ops_detail))
     if not ops_ok:
         warnings += 1

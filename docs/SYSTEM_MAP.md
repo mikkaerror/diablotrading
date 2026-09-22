@@ -40,6 +40,11 @@ liveTradingAllowed: false
 6. Broker/TOS lanes remain read-only unless the operator gives explicit final
    confirmation for a specific action.
 
+The dawn entry point bounds its complete child job; command-center inputs are
+cached only within one build. Account freshness distinguishes usable observations
+from failed attempts, and unchanged due work respects finite retry windows.
+See [[DESK_CLEANUP_2026-09-22]] for measurements and regression evidence.
+
 Scheduled refreshes fail soft for individual read-only provider calls and
 continue to their command-center/doctor pass. The heartbeat verdict is driven
 only by scheduled sources; manual or intentionally inactive broker probes stay

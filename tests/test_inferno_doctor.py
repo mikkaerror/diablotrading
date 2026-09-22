@@ -25,6 +25,7 @@ from inferno_doctor import (
     liquidity_premium_matrix_status,
     live_position_review_status,
     model_command_center_status,
+    morning_run_status,
     paper_bottleneck_reducer_status,
     paper_blocker_swarm_status,
     paper_capture_template_status,
@@ -48,6 +49,15 @@ from inferno_doctor import (
 
 class InfernoDoctorCycleTests(unittest.TestCase):
     """Verify the doctor respects the active operating cycle across midnight."""
+
+    def test_intentional_email_skip_is_healthy_but_delivery_failure_is_not(self) -> None:
+        now = datetime.fromisoformat("2026-09-22T13:00:00-06:00")
+        report = {"generatedAt": now.isoformat(), "ok": True, "emailSent": False, "emailSkipped": True}
+        self.assertTrue(morning_run_status(report, now=now)[0])
+        self.assertIn("intentionally skipped", morning_run_status(report, now=now)[1])
+        self.assertFalse(morning_run_status({**report, "emailError": "delivery failed"}, now=now)[0])
+        self.assertFalse(morning_run_status({**report, "emailSkipped": False}, now=now)[0])
+        self.assertFalse(morning_run_status({**report, "generatedAt": "2026-09-14T13:00:00-06:00"}, now=now)[0])
 
     def test_cycle_reference_day_uses_previous_day_before_service_hour(self) -> None:
         now = datetime.fromisoformat("2026-04-30T01:30:00-06:00")

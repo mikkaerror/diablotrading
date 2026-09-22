@@ -17,6 +17,9 @@ class InfernoWhileAwayPacketTests(unittest.TestCase):
     """Protect the travel-mode packet's safety and anti-double-count contract."""
 
     def setUp(self) -> None:
+        allowlist = patch("inferno_cash_attribution.account_suffix_allowed", side_effect=lambda suffix: str(suffix) == "8499")
+        allowlist.start()
+        self.addCleanup(allowlist.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)

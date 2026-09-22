@@ -856,9 +856,9 @@ def update_mission(
     raise SystemExit(f"Unknown mission id: {mission_id}")
 
 
-def artifact_summary(path: Path, *, keys: tuple[str, ...] = ("verdict", "message", "generatedAt")) -> dict[str, Any]:
+def artifact_summary(path: Path, *, keys: tuple[str, ...] = ("verdict", "message", "generatedAt"), loader=None) -> dict[str, Any]:
     """Return a compact summary for one JSON artifact."""
-    payload = load_json_file(path) or {}
+    payload = (loader or load_json_file)(path) or {}
     if not payload:
         return {"present": False, "path": str(path)}
     summary = {"present": True, "path": str(path)}
@@ -1056,70 +1056,81 @@ def account_headline_metrics(
 def build_command_center() -> dict[str, Any]:
     """Aggregate the latest desk state into one shared command-center artifact."""
     ensure_command_center_dirs()
+    # One input object per path per build; never reuse a cache across builds.
+    artifact_cache: dict[Path, Any] = {}
 
-    deploy = load_json_file(DEPLOY_PREFLIGHT_FILE) or {}
-    ops = load_json_file(OPS_MAINTENANCE_FILE) or {}
-    live_review = load_json_file(LIVE_POSITION_REVIEW_FILE) or {}
-    live_book_packet = load_json_file(LIVE_BOOK_REVIEW_PACKET_FILE) or {}
-    while_away_packet = load_json_file(WHILE_AWAY_PACKET_FILE) or {}
-    live_sync = load_json_file(LIVE_ACCOUNT_SYNC_FILE) or {}
-    schwab_account_sync = load_json_file(SCHWAB_ACCOUNT_SYNC_FILE) or {}
-    capital_readiness = load_json_file(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
-    deposit_plan = load_json_file(DEPOSIT_PLAN_FILE) or {}
-    growth_stack = load_json_file(GROWTH_STACK_FILE) or {}
-    schwab_transaction_ledger = load_json_file(SCHWAB_TRANSACTION_LEDGER_FILE) or {}
-    cash_attribution = load_json_file(CASH_ATTRIBUTION_FILE) or {}
-    ticket_cap_policy = load_json_file(TICKET_CAP_POLICY_FILE) or {}
-    account_optimization = load_json_file(ACCOUNT_OPTIMIZATION_FILE) or {}
-    risk_gate_audit = load_json_file(RISK_GATE_AUDIT_FILE) or {}
-    paper_director = load_json_file(PAPER_TEST_DIRECTOR_FILE) or {}
-    paper_capture_template = load_json_file(PAPER_CAPTURE_TEMPLATE_FILE) or {}
-    paper_blocker_swarm = load_json_file(PAPER_BLOCKER_SWARM_FILE) or {}
-    liquidity_premium_matrix = load_json_file(LIQUIDITY_PREMIUM_MATRIX_FILE) or {}
-    paper_reducer = load_json_file(PAPER_BOTTLENECK_REDUCER_FILE) or {}
-    fast_paper = load_json_file(FAST_PAPER_COHORT_FILE) or {}
-    evidence_goal_loop = load_json_file(EVIDENCE_GOAL_LOOP_FILE) or {}
-    paper_mtm = load_json_file(PAPER_MTM_FILE) or {}
-    trade_management = load_json_file(TRADE_MANAGEMENT_FILE) or {}
-    scenario_evidence = load_json_file(SCENARIO_EVIDENCE_FILE) or {}
-    scenario_backtest = load_json_file(SCENARIO_BACKTEST_FILE) or {}
-    score_calibration = load_json_file(SCORE_CALIBRATION_FILE) or {}
-    score_threshold_audit = load_json_file(SCORE_THRESHOLD_AUDIT_FILE) or {}
-    expected_move = load_json_file(EXPECTED_MOVE_LEDGER_FILE) or {}
-    strategy_alternatives = load_json_file(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
-    strategy_quote_coverage = load_json_file(STRATEGY_QUOTE_COVERAGE_FILE) or {}
-    strategy_alt_pricing = load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
-    strategy_shadow_comparison = load_json_file(STRATEGY_SHADOW_COMPARISON_FILE) or {}
+    def load_artifact(path: Path):
+        if path not in artifact_cache:
+            artifact_cache[path] = load_json_file(path)
+        return artifact_cache[path]
+
+    def summarize_artifact(path: Path, **kwargs):
+        return artifact_summary(path, loader=load_artifact, **kwargs)
+
+
+    deploy = load_artifact(DEPLOY_PREFLIGHT_FILE) or {}
+    ops = load_artifact(OPS_MAINTENANCE_FILE) or {}
+    live_review = load_artifact(LIVE_POSITION_REVIEW_FILE) or {}
+    live_book_packet = load_artifact(LIVE_BOOK_REVIEW_PACKET_FILE) or {}
+    while_away_packet = load_artifact(WHILE_AWAY_PACKET_FILE) or {}
+    live_sync = load_artifact(LIVE_ACCOUNT_SYNC_FILE) or {}
+    schwab_account_sync = load_artifact(SCHWAB_ACCOUNT_SYNC_FILE) or {}
+    capital_readiness = load_artifact(CAPITAL_DEPLOYMENT_READINESS_FILE) or {}
+    deposit_plan = load_artifact(DEPOSIT_PLAN_FILE) or {}
+    growth_stack = load_artifact(GROWTH_STACK_FILE) or {}
+    schwab_transaction_ledger = load_artifact(SCHWAB_TRANSACTION_LEDGER_FILE) or {}
+    cash_attribution = load_artifact(CASH_ATTRIBUTION_FILE) or {}
+    ticket_cap_policy = load_artifact(TICKET_CAP_POLICY_FILE) or {}
+    account_optimization = load_artifact(ACCOUNT_OPTIMIZATION_FILE) or {}
+    risk_gate_audit = load_artifact(RISK_GATE_AUDIT_FILE) or {}
+    paper_director = load_artifact(PAPER_TEST_DIRECTOR_FILE) or {}
+    paper_capture_template = load_artifact(PAPER_CAPTURE_TEMPLATE_FILE) or {}
+    paper_blocker_swarm = load_artifact(PAPER_BLOCKER_SWARM_FILE) or {}
+    liquidity_premium_matrix = load_artifact(LIQUIDITY_PREMIUM_MATRIX_FILE) or {}
+    paper_reducer = load_artifact(PAPER_BOTTLENECK_REDUCER_FILE) or {}
+    fast_paper = load_artifact(FAST_PAPER_COHORT_FILE) or {}
+    evidence_goal_loop = load_artifact(EVIDENCE_GOAL_LOOP_FILE) or {}
+    paper_mtm = load_artifact(PAPER_MTM_FILE) or {}
+    trade_management = load_artifact(TRADE_MANAGEMENT_FILE) or {}
+    scenario_evidence = load_artifact(SCENARIO_EVIDENCE_FILE) or {}
+    scenario_backtest = load_artifact(SCENARIO_BACKTEST_FILE) or {}
+    score_calibration = load_artifact(SCORE_CALIBRATION_FILE) or {}
+    score_threshold_audit = load_artifact(SCORE_THRESHOLD_AUDIT_FILE) or {}
+    expected_move = load_artifact(EXPECTED_MOVE_LEDGER_FILE) or {}
+    strategy_alternatives = load_artifact(STRATEGY_ALTERNATIVE_SCORER_FILE) or {}
+    strategy_quote_coverage = load_artifact(STRATEGY_QUOTE_COVERAGE_FILE) or {}
+    strategy_alt_pricing = load_artifact(STRATEGY_ALTERNATIVE_PRICING_FILE) or {}
+    strategy_shadow_comparison = load_artifact(STRATEGY_SHADOW_COMPARISON_FILE) or {}
     strategy_shadow_pricing_freshness = source_pricing_freshness(
         strategy_shadow_comparison,
         strategy_alt_pricing,
     )
-    paper_loop = load_json_file(PAPER_EVIDENCE_LOOP_FILE) or {}
-    schwab_chain_history = load_json_file(SCHWAB_CHAIN_HISTORY_FILE) or {}
-    schwab_chain_diff = load_json_file(SCHWAB_CHAIN_DIFF_FILE) or {}
-    performance = load_json_file(PERFORMANCE_ANALYTICS_FILE) or {}
-    strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
-    shadow = load_json_file(SHADOW_EVIDENCE_FILE) or {}
-    edge = load_json_file(EDGE_RESEARCH_FILE) or {}
-    conviction_research = load_json_file(CONVICTION_RESEARCH_FILE) or {}
-    watchlist_brief = load_json_file(WATCHLIST_BRIEF_FILE) or {}
-    tracker_taxonomy = load_json_file(TRACKER_TAXONOMY_FILE) or {}
-    tracker_role_review = load_json_file(TRACKER_ROLE_REVIEW_FILE) or {}
-    tracker_role_policy_packet = load_json_file(TRACKER_ROLE_POLICY_PACKET_FILE) or {}
-    tracker_role_policy = load_json_file(TRACKER_ROLE_POLICY_FILE) or {}
-    math_verify = load_json_file(MATH_VERIFY_FILE) or {}
-    tos_formula_audit = load_json_file(TOS_FORMULA_AUDIT_FILE) or {}
-    tos_custom_metrics = load_json_file(TOS_CUSTOM_METRICS_FILE) or {}
-    tos_metric_theory = load_json_file(TOS_METRIC_THEORY_AUDIT_FILE) or {}
-    schwab_price_history = load_json_file(SCHWAB_PRICE_HISTORY_FILE) or {}
-    schwab_tos_metrics_sync = load_json_file(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
-    market_mastery = load_json_file(MARKET_MASTERY_PLAN_FILE) or {}
-    expectancy_ledger = load_json_file(EXPECTANCY_LEDGER_FILE) or {}
-    dte_policy = load_json_file(DTE_POLICY_ANALYSIS_FILE) or {}
-    behavior_audit = load_json_file(TRADING_BEHAVIOR_AUDIT_FILE) or {}
-    process_compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
-    portfolio_heat = load_json_file(PORTFOLIO_HEAT_FILE) or {}
-    wheel_shadow = load_json_file(WHEEL_SHADOW_FILE) or {}
+    paper_loop = load_artifact(PAPER_EVIDENCE_LOOP_FILE) or {}
+    schwab_chain_history = load_artifact(SCHWAB_CHAIN_HISTORY_FILE) or {}
+    schwab_chain_diff = load_artifact(SCHWAB_CHAIN_DIFF_FILE) or {}
+    performance = load_artifact(PERFORMANCE_ANALYTICS_FILE) or {}
+    strategy_lab = load_artifact(STRATEGY_LAB_FILE) or {}
+    shadow = load_artifact(SHADOW_EVIDENCE_FILE) or {}
+    edge = load_artifact(EDGE_RESEARCH_FILE) or {}
+    conviction_research = load_artifact(CONVICTION_RESEARCH_FILE) or {}
+    watchlist_brief = load_artifact(WATCHLIST_BRIEF_FILE) or {}
+    tracker_taxonomy = load_artifact(TRACKER_TAXONOMY_FILE) or {}
+    tracker_role_review = load_artifact(TRACKER_ROLE_REVIEW_FILE) or {}
+    tracker_role_policy_packet = load_artifact(TRACKER_ROLE_POLICY_PACKET_FILE) or {}
+    tracker_role_policy = load_artifact(TRACKER_ROLE_POLICY_FILE) or {}
+    math_verify = load_artifact(MATH_VERIFY_FILE) or {}
+    tos_formula_audit = load_artifact(TOS_FORMULA_AUDIT_FILE) or {}
+    tos_custom_metrics = load_artifact(TOS_CUSTOM_METRICS_FILE) or {}
+    tos_metric_theory = load_artifact(TOS_METRIC_THEORY_AUDIT_FILE) or {}
+    schwab_price_history = load_artifact(SCHWAB_PRICE_HISTORY_FILE) or {}
+    schwab_tos_metrics_sync = load_artifact(SCHWAB_TOS_METRICS_SYNC_FILE) or {}
+    market_mastery = load_artifact(MARKET_MASTERY_PLAN_FILE) or {}
+    expectancy_ledger = load_artifact(EXPECTANCY_LEDGER_FILE) or {}
+    dte_policy = load_artifact(DTE_POLICY_ANALYSIS_FILE) or {}
+    behavior_audit = load_artifact(TRADING_BEHAVIOR_AUDIT_FILE) or {}
+    process_compliance = load_artifact(PROCESS_COMPLIANCE_FILE) or {}
+    portfolio_heat = load_artifact(PORTFOLIO_HEAT_FILE) or {}
+    wheel_shadow = load_artifact(WHEEL_SHADOW_FILE) or {}
 
     missions = load_active_missions()
     notes = load_notes(limit=12)
@@ -1153,27 +1164,27 @@ def build_command_center() -> dict[str, Any]:
         next_actions.append("No explicit next actions were found; review the latest artifacts manually.")
 
     system_status = {
-        "deployPreflight": artifact_summary(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),
-        "opsMaintenance": artifact_summary(OPS_MAINTENANCE_FILE, keys=("ok", "generatedAt")),
-        "liveAccountSync": artifact_summary(LIVE_ACCOUNT_SYNC_FILE, keys=("verdict", "message", "generatedAt", "matchedSuffix")),
-        "schwabAccountSync": artifact_summary(SCHWAB_ACCOUNT_SYNC_FILE, keys=("stage", "verdict", "message", "generatedAt", "matchedSuffix", "brokerReadOnly", "orderEndpointsAllowed")),
-        "livePositionReview": artifact_summary(LIVE_POSITION_REVIEW_FILE, keys=("verdict", "message", "generatedAt")),
-        "liveBookReviewPacket": artifact_summary(LIVE_BOOK_REVIEW_PACKET_FILE, keys=("verdict", "generatedAt", "capitalReadinessVerdict", "manualDeploymentAllowed", "manualReviewEligible", "orderAuthorization", "autoLiveAllowed")),
-        "whileAwayPacket": artifact_summary(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "capitalDeploymentReadiness": artifact_summary(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "manualReviewEligible", "orderAuthorization", "autoLiveAllowed")),
-        "capitalScenarioMatrix": artifact_summary(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
-        "depositPlan": artifact_summary(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
-        "growthStack": artifact_summary(GROWTH_STACK_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "schwabTransactionLedger": artifact_summary(SCHWAB_TRANSACTION_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "brokerReadOnly", "sourceStatus")),
-        "schwabChainHistory": artifact_summary(SCHWAB_CHAIN_HISTORY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
-        "schwabChainDiff": artifact_summary(SCHWAB_CHAIN_DIFF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
-        "cashAttribution": artifact_summary(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
-        "ticketCapPolicy": artifact_summary(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
-        "accountOptimization": artifact_summary(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "riskGateAudit": artifact_summary(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
-        "refreshHandoff": artifact_summary(REFRESH_HANDOFF_FILE, keys=("status", "generatedAt", "completedAt", "issues", "researchOnly", "promotable")),
-        "paperTestDirector": artifact_summary(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
-        "paperCaptureTemplate": artifact_summary(
+        "deployPreflight": summarize_artifact(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),
+        "opsMaintenance": summarize_artifact(OPS_MAINTENANCE_FILE, keys=("ok", "generatedAt")),
+        "liveAccountSync": summarize_artifact(LIVE_ACCOUNT_SYNC_FILE, keys=("verdict", "message", "generatedAt", "matchedSuffix")),
+        "schwabAccountSync": summarize_artifact(SCHWAB_ACCOUNT_SYNC_FILE, keys=("stage", "verdict", "message", "generatedAt", "matchedSuffix", "brokerReadOnly", "orderEndpointsAllowed")),
+        "livePositionReview": summarize_artifact(LIVE_POSITION_REVIEW_FILE, keys=("verdict", "message", "generatedAt")),
+        "liveBookReviewPacket": summarize_artifact(LIVE_BOOK_REVIEW_PACKET_FILE, keys=("verdict", "generatedAt", "capitalReadinessVerdict", "manualDeploymentAllowed", "manualReviewEligible", "orderAuthorization", "autoLiveAllowed")),
+        "whileAwayPacket": summarize_artifact(WHILE_AWAY_PACKET_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "capitalDeploymentReadiness": summarize_artifact(CAPITAL_DEPLOYMENT_READINESS_FILE, keys=("verdict", "message", "generatedAt", "deploymentDate", "manualDeploymentAllowed", "manualReviewEligible", "orderAuthorization", "autoLiveAllowed")),
+        "capitalScenarioMatrix": summarize_artifact(CAPITAL_SCENARIO_MATRIX_FILE, keys=("stage", "verdict", "generatedAt", "deploymentDate", "scenarioCount")),
+        "depositPlan": summarize_artifact(DEPOSIT_PLAN_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "growthStack": summarize_artifact(GROWTH_STACK_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "schwabTransactionLedger": summarize_artifact(SCHWAB_TRANSACTION_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "brokerReadOnly", "sourceStatus")),
+        "schwabChainHistory": summarize_artifact(SCHWAB_CHAIN_HISTORY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
+        "schwabChainDiff": summarize_artifact(SCHWAB_CHAIN_DIFF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
+        "cashAttribution": summarize_artifact(CASH_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "ticketCapPolicy": summarize_artifact(TICKET_CAP_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "authorityChanged")),
+        "accountOptimization": summarize_artifact(ACCOUNT_OPTIMIZATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "riskGateAudit": summarize_artifact(RISK_GATE_AUDIT_FILE, keys=("verdict", "message", "generatedAt", "liveTradingAllowed")),
+        "refreshHandoff": summarize_artifact(REFRESH_HANDOFF_FILE, keys=("status", "generatedAt", "completedAt", "issues", "researchOnly", "promotable")),
+        "paperTestDirector": summarize_artifact(PAPER_TEST_DIRECTOR_FILE, keys=("verdict", "generatedAt", "authorityLevel")),
+        "paperCaptureTemplate": summarize_artifact(
             PAPER_CAPTURE_TEMPLATE_FILE,
             keys=(
                 "stage",
@@ -1186,44 +1197,44 @@ def build_command_center() -> dict[str, Any]:
                 "expiredTicketCount",
             ),
         ),
-        "paperBlockerSwarm": artifact_summary(
+        "paperBlockerSwarm": summarize_artifact(
             PAPER_BLOCKER_SWARM_FILE,
             keys=("stage", "verdict", "generatedAt", "dominantLane", "researchOnly", "promotable"),
         ),
-        "liquidityPremiumMatrix": artifact_summary(
+        "liquidityPremiumMatrix": summarize_artifact(
             LIQUIDITY_PREMIUM_MATRIX_FILE,
             keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged"),
         ),
-        "paperBottleneckReducer": artifact_summary(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
-        "fastPaperCohort": artifact_summary(
+        "paperBottleneckReducer": summarize_artifact(PAPER_BOTTLENECK_REDUCER_FILE, keys=("verdict", "generatedAt", "scenarioTarget")),
+        "fastPaperCohort": summarize_artifact(
             FAST_PAPER_COHORT_FILE,
             keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable"),
         ),
-        "evidenceGoalLoop": artifact_summary(
+        "evidenceGoalLoop": summarize_artifact(
             EVIDENCE_GOAL_LOOP_FILE,
             keys=("stage", "verdict", "generatedAt", "iterationCount", "authorityLevel"),
         ),
-        "paperMarkToMarket": artifact_summary(PAPER_MTM_FILE, keys=("stage", "verdict", "fetchStatus", "generatedAt", "researchOnly", "promotable", "openPositionCount")),
-        "tradeManagement": artifact_summary(TRADE_MANAGEMENT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "openPositionCount", "actionableCount")),
-        "scenarioEvidence": artifact_summary(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
-        "scenarioBacktest": artifact_summary(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
-        "scoreCalibration": artifact_summary(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "scoreThresholdAudit": artifact_summary(SCORE_THRESHOLD_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "expectedMoveLedger": artifact_summary(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "evidenceCapacityPlan": artifact_summary(EVIDENCE_CAPACITY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
-        "eventMoveCalibration": artifact_summary(EVENT_MOVE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
-        "shortPremiumStudy": artifact_summary(SHORT_PREMIUM_STUDY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "usableBackwardRecords")),
-        "strategyAlternativeScorer": artifact_summary(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "strategyQuoteCoverage": artifact_summary(STRATEGY_QUOTE_COVERAGE_FILE, keys=("stage", "status", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
-        "strategyAlternativePricing": artifact_summary(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "strategyShadowComparison": artifact_summary(STRATEGY_SHADOW_COMPARISON_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "techCohortEvaluator": artifact_summary(TECH_COHORT_EVALUATOR_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "aiBasketRefresh": artifact_summary(AI_BASKET_REFRESH_FILE, keys=("stage", "verdict", "generatedAt", "published", "researchOnly", "authorityChanged")),
-        "aiBasketDataContract": artifact_summary(AI_BASKET_DATA_CONTRACT_FILE, keys=("stage", "verdict", "generatedAt", "signalsTrusted", "researchOnly", "authorityChanged")),
-        "paperEvidenceLoop": artifact_summary(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
-        "performanceAnalytics": artifact_summary(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
+        "paperMarkToMarket": summarize_artifact(PAPER_MTM_FILE, keys=("stage", "verdict", "fetchStatus", "generatedAt", "researchOnly", "promotable", "openPositionCount")),
+        "tradeManagement": summarize_artifact(TRADE_MANAGEMENT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "openPositionCount", "actionableCount")),
+        "scenarioEvidence": summarize_artifact(SCENARIO_EVIDENCE_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "sourceScenarioCount")),
+        "scenarioBacktest": summarize_artifact(SCENARIO_BACKTEST_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "scenarioCount")),
+        "scoreCalibration": summarize_artifact(SCORE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "scoreThresholdAudit": summarize_artifact(SCORE_THRESHOLD_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "expectedMoveLedger": summarize_artifact(EXPECTED_MOVE_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "evidenceCapacityPlan": summarize_artifact(EVIDENCE_CAPACITY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
+        "eventMoveCalibration": summarize_artifact(EVENT_MOVE_CALIBRATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "counts")),
+        "shortPremiumStudy": summarize_artifact(SHORT_PREMIUM_STUDY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "usableBackwardRecords")),
+        "strategyAlternativeScorer": summarize_artifact(STRATEGY_ALTERNATIVE_SCORER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyQuoteCoverage": summarize_artifact(STRATEGY_QUOTE_COVERAGE_FILE, keys=("stage", "status", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
+        "strategyAlternativePricing": summarize_artifact(STRATEGY_ALTERNATIVE_PRICING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "strategyShadowComparison": summarize_artifact(STRATEGY_SHADOW_COMPARISON_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "techCohortEvaluator": summarize_artifact(TECH_COHORT_EVALUATOR_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "aiBasketRefresh": summarize_artifact(AI_BASKET_REFRESH_FILE, keys=("stage", "verdict", "generatedAt", "published", "researchOnly", "authorityChanged")),
+        "aiBasketDataContract": summarize_artifact(AI_BASKET_DATA_CONTRACT_FILE, keys=("stage", "verdict", "generatedAt", "signalsTrusted", "researchOnly", "authorityChanged")),
+        "paperEvidenceLoop": summarize_artifact(PAPER_EVIDENCE_LOOP_FILE, keys=("verdict", "generatedAt", "strategyLabVerdict")),
+        "performanceAnalytics": summarize_artifact(PERFORMANCE_ANALYTICS_FILE, keys=("verdict", "generatedAt", "message")),
         "strategyLab": strategy_lab_status(strategy_lab),
-        "shadowEvidence": artifact_summary(
+        "shadowEvidence": summarize_artifact(
             SHADOW_EVIDENCE_FILE,
             keys=(
                 "verdict",
@@ -1236,39 +1247,39 @@ def build_command_center() -> dict[str, Any]:
                 "message",
             ),
         ),
-        "edgeResearch": artifact_summary(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
-        "convictionResearch": artifact_summary(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
-        "watchlistBrief": artifact_summary(WATCHLIST_BRIEF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
-        "trackerTaxonomy": artifact_summary(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "industryCoverage": artifact_summary(INDUSTRY_COVERAGE_FILE, keys=("stage", "verdict", "generatedAt", "trackedRows", "coveredRows", "evidenceCounts", "issuerReviewDue", "researchOnly", "promotable", "authorityChanged")),
-        "trackerRegistry": artifact_summary(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "trackerRoleReview": artifact_summary(TRACKER_ROLE_REVIEW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "trackerRolePolicy": artifact_summary(TRACKER_ROLE_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
-        "schwabEdgeSignals": artifact_summary(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
-        "outcomeAttribution": artifact_summary(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "ruleEdgeDecay": artifact_summary(RULE_EDGE_DECAY_FILE, keys=("stage", "verdict", "generatedAt", "promotable")),
-        "slippageEstimator": artifact_summary(SLIPPAGE_ESTIMATOR_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "portfolioCorrelation": artifact_summary(PORTFOLIO_CORRELATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "drawdownProtocol": artifact_summary(DRAWDOWN_PROTOCOL_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "consensusMonitor": artifact_summary(CONSENSUS_MONITOR_FILE, keys=("stage", "verdict", "generatedAt", "consensusCount", "researchOnly", "promotable")),
-        "paperVelocity": artifact_summary(PAPER_VELOCITY_FILE, keys=("stage", "verdict", "generatedAt", "totalTickets", "researchOnly", "promotable")),
-        "capitalScaling": artifact_summary(CAPITAL_SCALING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "mathVerify": artifact_summary(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
-        "tosFormulaAudit": artifact_summary(TOS_FORMULA_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "formulaVersion", "checked", "flagCounts")),
-        "tosCustomMetrics": artifact_summary(TOS_CUSTOM_METRICS_FILE, keys=("stage", "verdict", "generatedAt", "registryMetricCount", "missingFormulaMetrics")),
-        "tosMetricTheoryAudit": artifact_summary(TOS_METRIC_THEORY_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "checked", "postureCounts")),
-        "schwabPriceHistory": artifact_summary(SCHWAB_PRICE_HISTORY_FILE, keys=("stage", "status", "generatedAt", "configured", "symbolCount")),
-        "schwabTosMetricsSync": artifact_summary(SCHWAB_TOS_METRICS_SYNC_FILE, keys=("stage", "sourceStatus", "generatedAt", "customMetricsVerdict", "metricValueCount")),
-        "marketMasteryPlan": artifact_summary(
+        "edgeResearch": summarize_artifact(EDGE_RESEARCH_FILE, keys=("verdict", "generatedAt", "message")),
+        "convictionResearch": summarize_artifact(CONVICTION_RESEARCH_FILE, keys=("stage", "generatedAt", "researchOnly", "promotable")),
+        "watchlistBrief": summarize_artifact(WATCHLIST_BRIEF_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged", "brokerSubmitAllowed", "liveTradingAllowed")),
+        "trackerTaxonomy": summarize_artifact(TRACKER_TAXONOMY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "industryCoverage": summarize_artifact(INDUSTRY_COVERAGE_FILE, keys=("stage", "verdict", "generatedAt", "trackedRows", "coveredRows", "evidenceCounts", "issuerReviewDue", "researchOnly", "promotable", "authorityChanged")),
+        "trackerRegistry": summarize_artifact(TRACKER_REGISTRY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "trackerRoleReview": summarize_artifact(TRACKER_ROLE_REVIEW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "trackerRolePolicy": summarize_artifact(TRACKER_ROLE_POLICY_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable", "authorityChanged")),
+        "schwabEdgeSignals": summarize_artifact(SCHWAB_EDGE_SIGNALS_FILE, keys=("stage", "verdict", "generatedAt", "sourceStatus", "sourceConfigured", "researchOnly", "promotable")),
+        "outcomeAttribution": summarize_artifact(OUTCOME_ATTRIBUTION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "ruleEdgeDecay": summarize_artifact(RULE_EDGE_DECAY_FILE, keys=("stage", "verdict", "generatedAt", "promotable")),
+        "slippageEstimator": summarize_artifact(SLIPPAGE_ESTIMATOR_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "portfolioCorrelation": summarize_artifact(PORTFOLIO_CORRELATION_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "drawdownProtocol": summarize_artifact(DRAWDOWN_PROTOCOL_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "consensusMonitor": summarize_artifact(CONSENSUS_MONITOR_FILE, keys=("stage", "verdict", "generatedAt", "consensusCount", "researchOnly", "promotable")),
+        "paperVelocity": summarize_artifact(PAPER_VELOCITY_FILE, keys=("stage", "verdict", "generatedAt", "totalTickets", "researchOnly", "promotable")),
+        "capitalScaling": summarize_artifact(CAPITAL_SCALING_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "mathVerify": summarize_artifact(MATH_VERIFY_FILE, keys=("verdict", "generatedAt", "totalViolations", "missingArtifacts")),
+        "tosFormulaAudit": summarize_artifact(TOS_FORMULA_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "formulaVersion", "checked", "flagCounts")),
+        "tosCustomMetrics": summarize_artifact(TOS_CUSTOM_METRICS_FILE, keys=("stage", "verdict", "generatedAt", "registryMetricCount", "missingFormulaMetrics")),
+        "tosMetricTheoryAudit": summarize_artifact(TOS_METRIC_THEORY_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "checked", "postureCounts")),
+        "schwabPriceHistory": summarize_artifact(SCHWAB_PRICE_HISTORY_FILE, keys=("stage", "status", "generatedAt", "configured", "symbolCount")),
+        "schwabTosMetricsSync": summarize_artifact(SCHWAB_TOS_METRICS_SYNC_FILE, keys=("stage", "sourceStatus", "generatedAt", "customMetricsVerdict", "metricValueCount")),
+        "marketMasteryPlan": summarize_artifact(
             MARKET_MASTERY_PLAN_FILE,
             keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable"),
         ),
-        "expectancyLedger": artifact_summary(EXPECTANCY_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "dtePolicyAnalysis": artifact_summary(DTE_POLICY_ANALYSIS_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "tradingBehaviorAudit": artifact_summary(TRADING_BEHAVIOR_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "processCompliance": artifact_summary(PROCESS_COMPLIANCE_FILE, keys=("stage", "verdict", "generatedAt", "newPaperEntriesAllowed")),
-        "portfolioHeat": artifact_summary(PORTFOLIO_HEAT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
-        "wheelShadow": artifact_summary(WHEEL_SHADOW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "expectancyLedger": summarize_artifact(EXPECTANCY_LEDGER_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "dtePolicyAnalysis": summarize_artifact(DTE_POLICY_ANALYSIS_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "tradingBehaviorAudit": summarize_artifact(TRADING_BEHAVIOR_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "processCompliance": summarize_artifact(PROCESS_COMPLIANCE_FILE, keys=("stage", "verdict", "generatedAt", "newPaperEntriesAllowed")),
+        "portfolioHeat": summarize_artifact(PORTFOLIO_HEAT_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
+        "wheelShadow": summarize_artifact(WHEEL_SHADOW_FILE, keys=("stage", "verdict", "generatedAt", "researchOnly", "promotable")),
     }
     system_status["strategyShadowComparison"]["freshForPricing"] = bool(
         strategy_shadow_pricing_freshness.get("freshForPricing")

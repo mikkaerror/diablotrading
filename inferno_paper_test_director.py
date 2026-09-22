@@ -13,6 +13,7 @@ plan.
 
 import argparse
 import json
+import re
 from collections import Counter
 from typing import Any
 
@@ -44,6 +45,7 @@ EXECUTION_QUEUE_FILE = DATA_DIR / "inferno_execution_queue.json"
 TOS_SANDBOX_FILE = DATA_DIR / "inferno_tos_sandbox_session.json"
 AUTHORITY_MANIFEST_FILE = DATA_DIR / "inferno_authority_manifest.json"
 PERFORMANCE_ANALYTICS_FILE = DATA_DIR / "inferno_performance_analytics.json"
+STRATEGY_LAB_FILE = DATA_DIR / "inferno_strategy_lab.json"
 PAPER_TEST_DIRECTOR_FILE = DATA_DIR / "inferno_paper_test_director.json"
 PAPER_TEST_DIRECTOR_TEXT_FILE = REPORTS_DIR / "paper_test_director_latest.txt"
 PAPER_REHEARSAL_STRIKE_PLAN_FILE = DATA_DIR / "inferno_paper_rehearsal_strike_plan.json"
@@ -817,6 +819,7 @@ def build_director() -> dict[str, Any]:
     performance = load_payload(PERFORMANCE_ANALYTICS_FILE, {"closedMetrics": {}, "deskVerdict": {}})
     strategy_pricing = load_payload(STRATEGY_ALTERNATIVE_PRICING_FILE, {"items": []})
     paper_ledger = load_payload(PAPER_EXECUTION_LEDGER_FILE, {"items": []})
+    strategy_lab = load_payload(STRATEGY_LAB_FILE, {})
 
     source_execution_queue = execution_queue
     source_strike_plan = strike_plan
@@ -843,7 +846,8 @@ def build_director() -> dict[str, Any]:
             candidates = classify_candidates(source_strike_plan, source_execution_queue, sandbox, paper_ledger)
             stageable, auto_paper, event_capped, approval_only, research_watch, hard_blocked, near_miss = split_candidates(candidates)
 
-    scored_tickets = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
+    reported_scored_tickets = int(((performance.get("closedMetrics") or {}).get("scoredCount")) or 0)
+    scored_tickets = int(((strategy_lab.get("overall") or {}).get("scoredCount")) or 0)
     remaining_for_promotion = max(0, PROMOTION_TARGET - scored_tickets)
     auto_paper_stageable = [candidate for candidate in stageable if candidate.get("paperAutoSelected")]
     operator_routable_stageable = [
@@ -930,6 +934,7 @@ def build_director() -> dict[str, Any]:
             )
 
     for milestone in (authority.get("decision") or {}).get("nextMilestones") or []:
+        milestone = re.sub(r"collect \d+ more scored paper outcomes", f"collect {remaining_for_promotion} more qualified paper outcomes", milestone)
         if milestone not in next_actions:
             next_actions.append(milestone)
 
@@ -965,6 +970,8 @@ def build_director() -> dict[str, Any]:
             "capitalNearMiss": len(near_miss),
             "scoredTickets": scored_tickets,
             "remainingForPromotion": remaining_for_promotion,
+            "reportedScoredTickets": reported_scored_tickets,
+            "qualifiedEvidenceAvailable": bool(strategy_lab.get("overall")),
         },
         "authorityLevel": (authority.get("decision") or {}).get("authorityLevel"),
         "authorityWarnings": (authority.get("decision") or {}).get("warnings") or [],

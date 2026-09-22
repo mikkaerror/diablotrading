@@ -47,6 +47,34 @@ class InfernoReportingSummaryTests(unittest.TestCase):
 
         self.assertEqual(generated_at, "2026-06-08T23:02:41-05:00")
 
+    def test_failed_account_attempt_is_unavailable_even_when_recent(self) -> None:
+        now = datetime.fromisoformat("2026-09-22T13:00:00-06:00")
+        payload = {"ok": False, "verdict": "reauthorization-required", "generatedAt": now.isoformat()}
+        with patch.object(summary, "load_json", return_value=payload):
+            row = summary.account_freshness_entry("account", Path("account.json"), now=now)
+        self.assertEqual(row["status"], "unavailable")
+        self.assertIsNone(row["generatedAt"])
+        self.assertEqual(row["lastAttemptAt"], now.isoformat())
+
+    def test_failed_attempt_retains_explicit_last_good_date_but_not_availability(self) -> None:
+        now = datetime.fromisoformat("2026-09-22T13:00:00-06:00")
+        payload = {"ok": False, "verdict": "error", "generatedAt": now.isoformat(),
+                   "lastSuccessfulAt": "2026-09-14T12:00:00-06:00"}
+        with patch.object(summary, "load_json", return_value=payload):
+            row = summary.account_freshness_entry("account", Path("account.json"), now=now)
+        self.assertEqual(row["status"], "unavailable")
+        self.assertEqual(row["generatedAt"], payload["lastSuccessfulAt"])
+        self.assertGreater(row["ageHours"], 24)
+
+    def test_successful_account_uses_observation_date_and_zero_is_valid(self) -> None:
+        now = datetime.fromisoformat("2026-09-22T13:00:00-06:00")
+        payload = {"ok": True, "verdict": "healthy", "generatedAt": now.isoformat(),
+                   "sourceDataAsOf": "2026-09-14T12:00:00-06:00", "totalCash": 0}
+        with patch.object(summary, "load_json", return_value=payload):
+            row = summary.account_freshness_entry("account", Path("account.json"), now=now)
+        self.assertTrue(row["available"])
+        self.assertEqual(row["status"], "stale")
+
     def test_tos_running_but_not_visible_gets_precise_attach_only_wording(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

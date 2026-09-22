@@ -97,6 +97,12 @@ def safe_artifacts() -> dict:
 
 
 class EvidenceGoalLoopTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.market_signature_original = loop.market_evidence_signature
+        market = patch.object(loop, "market_evidence_signature", return_value=None)
+        market.start()
+        self.addCleanup(market.stop)
+
     def test_cycle_refreshes_promotion_evidence_lineage_after_strategy_lab(self) -> None:
         names = [name for name, _argv in loop.CYCLE_COMMANDS]
 
@@ -448,7 +454,7 @@ class EvidenceGoalLoopTests(unittest.TestCase):
         self.assertEqual(payload["actionability"], {"ready": False, "reasons": []})
         self.assertEqual(len(calls), len(loop.PRECHECK_COMMANDS))
 
-    def test_due_scenario_review_bypasses_duplicate_skip(self) -> None:
+    def test_due_scenario_review_does_not_repeat_unchanged_work(self) -> None:
         artifacts = safe_artifacts()
         artifacts["scenarioEvidence"]["counts"]["open"] = 1
         artifacts["scenarioEvidence"]["observations"] = [
@@ -481,15 +487,15 @@ class EvidenceGoalLoopTests(unittest.TestCase):
             now=NOW,
         )
 
-        self.assertEqual(payload["verdict"], "no-op")
-        self.assertEqual(payload["iterationCount"], 1)
+        self.assertEqual(payload["verdict"], "skipped-duplicate-work")
+        self.assertEqual(payload["iterationCount"], 0)
         self.assertIn("due scenario review", payload["actionability"]["reasons"])
         self.assertEqual(
             len(calls),
-            len(loop.PRECHECK_COMMANDS) + len(loop.CYCLE_COMMANDS),
+            len(loop.PRECHECK_COMMANDS),
         )
 
-    def test_due_isolated_settlement_bypasses_duplicate_skip(self) -> None:
+    def test_due_isolated_settlement_does_not_repeat_unchanged_work(self) -> None:
         artifacts = safe_artifacts()
         artifacts["fastPaper"]["openSlate"] = [
             {"ticker": "QCOM", "exitEligibleDate": NOW.date().isoformat()}
@@ -514,13 +520,51 @@ class EvidenceGoalLoopTests(unittest.TestCase):
             now=NOW,
         )
 
-        self.assertEqual(payload["iterationCount"], 1)
+        self.assertEqual(payload["iterationCount"], 0)
         self.assertIn(
             "due isolated fast-paper settlement",
             payload["actionability"]["reasons"],
         )
 
-    def test_operator_ready_candidate_bypasses_duplicate_skip(self) -> None:
+    def test_unchanged_due_work_waits_but_new_market_rows_resume_immediately(self) -> None:
+        artifacts = safe_artifacts()
+        artifacts["fastPaper"]["openSlate"] = [{"ticker": "QCOM", "exitEligibleDate": NOW.date().isoformat()}]
+        signature = loop.work_signature(loop.progress_snapshot(artifacts, now=NOW), now=NOW)
+        state = {"cadence": {"nextCheckAt": "2026-06-22T17:00:00-06:00"}, "runs": [{
+            "generatedAt": "2026-06-22T12:30:00-06:00", "workSignature": signature,
+            "verificationPassed": True, "valueClass": "no-op", "marketEvidenceSignature": "same-bars"}]}
+        def run(market):
+            with patch.object(loop, "market_evidence_signature", return_value=market):
+                return loop.build_goal_loop(command_runner=lambda name, argv, timeout_seconds: {"name": name, "ok": True},
+                    artifact_loader=lambda: artifacts, state_loader=lambda: state, now=NOW)
+        for value in ["same-bars", None]:
+            result = run(value)
+            self.assertEqual(result["iterationCount"], 0)
+            self.assertEqual(result["commandsExecuted"], len(loop.PRECHECK_COMMANDS))
+            self.assertEqual(result["cadence"]["nextCheckAt"], state["cadence"]["nextCheckAt"])
+        self.assertEqual(run("later-quote")["iterationCount"], 1)
+
+    def test_expired_explicit_gate_is_not_extended_by_recent_skipped_check(self) -> None:
+        state = {"cadence": {"nextCheckAt": NOW.isoformat()}, "runs": [{
+            "generatedAt": "2026-06-22T12:59:00-06:00", "workSignature": "same",
+            "verificationPassed": True, "valueClass": "skipped"}]}
+        gate = loop._cadence_gate(state, signature="same", now=NOW, fallback_cooldown_minutes=60)
+        self.assertFalse(gate["blocked"])
+
+    def test_market_signature_ignores_wrapper_rebuild_and_missing_data(self) -> None:
+        # Call the real helper: the normal fixture isolates live local inputs.
+        original = self.market_signature_original
+        payload = {"generatedAt": "first", "rows": [{"symbol": "QCOM", "underlyingPrice": 100}]}
+        with patch.object(loop, "load_json_file", return_value=payload):
+            first = original()
+            payload["generatedAt"] = "second"
+            self.assertEqual(first, original())
+            payload["rows"][0]["underlyingPrice"] = 101
+            self.assertNotEqual(first, original())
+        with patch.object(loop, "load_json_file", return_value={"generatedAt": "third", "status": "error"}):
+            self.assertIsNone(original())
+
+    def test_operator_ready_candidate_does_not_repeat_unchanged_work(self) -> None:
         artifacts = safe_artifacts()
         artifacts["paperDirector"]["verdict"] = "auto-paper-selected"
         artifacts["paperDirector"]["counts"]["autoPaperSelected"] = 1
@@ -544,7 +588,7 @@ class EvidenceGoalLoopTests(unittest.TestCase):
             now=NOW,
         )
 
-        self.assertEqual(payload["iterationCount"], 1)
+        self.assertEqual(payload["iterationCount"], 0)
         self.assertIn("auto-paper candidate", payload["actionability"]["reasons"])
 
     def test_work_signature_tracks_research_tickers_but_not_open_scenario_count(self) -> None:

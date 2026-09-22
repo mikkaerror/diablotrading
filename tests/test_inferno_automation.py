@@ -9,6 +9,7 @@ logic we rely on before any desktop automation is allowed to move.
 """
 
 import unittest
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -357,7 +358,12 @@ class ExportShortcutTests(unittest.TestCase):
         _save_mock,
     ) -> None:
         """The bridge should still emit a usable artifact when TOS refuses file export."""
-        report = run_export_bridge(dry_run=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            statement = Path(tmp) / "statement.json"
+            statement.write_text('{"positions": []}')
+            with patch("inferno_tos_export_bridge.ACCOUNT_STATEMENT_FILE", statement), \
+                 patch("inferno_tos_export_bridge.ACCOUNT_STATEMENT_TEXT_FILE", Path(tmp) / "missing.txt"):
+                report = run_export_bridge(dry_run=False)
         self.assertTrue(report["ok"])
         self.assertTrue(report["artifactDetected"])
         self.assertEqual(report["status"], "triggered")

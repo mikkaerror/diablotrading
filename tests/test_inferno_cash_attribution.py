@@ -14,6 +14,11 @@ from inferno_config import local_now
 class InfernoCashAttributionTests(unittest.TestCase):
     """Verify cash reconciliation never fabricates realized trading profit."""
 
+    def setUp(self) -> None:
+        allowlist = patch("inferno_cash_attribution.account_suffix_allowed", side_effect=lambda suffix: str(suffix) == "8499")
+        allowlist.start()
+        self.addCleanup(allowlist.stop)
+
     def test_cash_decrease_stays_unattributed_without_transaction_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

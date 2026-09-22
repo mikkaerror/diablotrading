@@ -185,6 +185,28 @@ def _freshness_entry(
     }
 
 
+def account_freshness_entry(label: str, path: Path, *, now: datetime) -> dict[str, Any]:
+    """Keep failed fetch attempts separate from usable broker observations."""
+    payload = load_json(path)
+    available = payload.get("ok") is True and payload.get("verdict") in {"healthy", "attention"}
+    observed = (
+        live_account_source_timestamp(payload) if path == LIVE_ACCOUNT_SYNC_FILE
+        else payload.get("sourceDataAsOf") or payload.get("lastSuccessfulAt") or payload.get("generatedAt")
+    ) if available else payload.get("lastSuccessfulAt")
+    age = age_hours(observed, now=now)
+    return {
+        "label": label,
+        "path": str(path),
+        "generatedAt": observed,
+        "ageHours": round(age, 2) if age is not None else None,
+        "status": freshness_status(observed, max_age_hours=8, now=now) if available else ("unavailable" if payload else "missing"),
+        "available": available,
+        "sourceStatus": payload.get("verdict"),
+        "lastAttemptAt": payload.get("lastAttemptAt") or payload.get("generatedAt"),
+        "lastSuccessfulAt": observed,
+    }
+
+
 def build_freshness_panel(*, now: datetime | None = None) -> dict[str, Any]:
     """Build the shared freshness panel for command-center and email reports."""
     current = now or local_now()
@@ -209,8 +231,8 @@ def build_freshness_panel(*, now: datetime | None = None) -> dict[str, Any]:
             now=current,
             status=market_open_options_status(schwab_daily_ops_timestamp, now=current),
         ),
-        _freshness_entry("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
-        _freshness_entry("live account sync", LIVE_ACCOUNT_SYNC_FILE, max_age_hours=8, now=current),
+        account_freshness_entry("Schwab account sync", SCHWAB_ACCOUNT_SYNC_FILE, now=current),
+        account_freshness_entry("live account sync", LIVE_ACCOUNT_SYNC_FILE, now=current),
         _freshness_entry("doctor", DOCTOR_TEXT_FILE, max_age_hours=8, now=current),
         _freshness_entry(
             "morning email",
@@ -224,12 +246,14 @@ def build_freshness_panel(*, now: datetime | None = None) -> dict[str, Any]:
     ]
     stale = [row for row in rows if row["status"] == "stale"]
     missing = [row for row in rows if row["status"] == "missing"]
+    unavailable = [row for row in rows if row["status"] == "unavailable"]
     return {
         "generatedAt": current.isoformat(),
         "rows": rows,
         "staleCount": len(stale),
         "missingCount": len(missing),
-        "ok": not stale and not missing,
+        "unavailableCount": len(unavailable),
+        "ok": not stale and not missing and not unavailable,
         "latestMorningEmailSent": bool(morning_event.get("emailSent")),
         "latestMorningEmailAt": morning_event.get("generatedAt"),
     }

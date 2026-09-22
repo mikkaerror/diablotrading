@@ -15,6 +15,30 @@ import inferno_model_command_center as command_center
 class InfernoModelCommandCenterTests(unittest.TestCase):
     """Protect the shared model brain from drifting or losing queue state."""
 
+    def test_build_reuses_one_read_per_path_and_invalidates_next_build(self) -> None:
+        from collections import Counter
+        from copy import deepcopy
+        reads = Counter()
+        generation = ["first"]
+        def changing_source(path):
+            reads[path] += 1
+            if path == command_center.SCHWAB_ACCOUNT_SYNC_FILE:
+                return {"generatedAt": generation[0], "verdict": "healthy", "netLiquidatingValue": 100}
+            return {}
+        with patch.object(command_center, "load_json_file", side_effect=changing_source), \
+             patch.object(command_center, "save_command_center"), \
+             patch.object(command_center, "ensure_command_center_dirs"), \
+             patch.object(command_center, "load_active_missions", return_value=[]), \
+             patch.object(command_center, "load_notes", return_value=[]):
+            first = command_center.build_command_center()
+            first_counts = deepcopy(reads)
+            generation[0] = "second"
+            second = command_center.build_command_center()
+        self.assertEqual(max(first_counts.values()), 1)
+        self.assertEqual(reads[command_center.SCHWAB_ACCOUNT_SYNC_FILE], 2)
+        self.assertEqual(first["systemStatus"]["schwabAccountSync"]["generatedAt"], "first")
+        self.assertEqual(second["systemStatus"]["schwabAccountSync"]["generatedAt"], "second")
+
     def test_reporting_map_separates_compact_command_from_deep_report_map(self) -> None:
         compact = next(item for item in command_center.REPORTING_MAP if item["lane"] == "command")
         deep_map = next(item for item in command_center.REPORTING_MAP if item["lane"] == "report-map")

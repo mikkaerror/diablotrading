@@ -252,20 +252,25 @@ def load_env_file(path: Path) -> None:
 def acquire_run_lock() -> Any:
     ensure_dirs()
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lock_handle = LOCK_FILE.open("w", encoding="utf-8")
+    lock_handle = LOCK_FILE.open("a+", encoding="utf-8")
+    acquired = False
     try:
         try:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = True
         except BlockingIOError as exc:
             raise PipelineLockActive("another inferno pipeline run is already active") from exc
+        lock_handle.seek(0)
+        lock_handle.truncate(0)
         lock_handle.write(json.dumps({"pid": os.getpid(), "startedAt": datetime.now().astimezone().isoformat()}))
         lock_handle.flush()
         yield
     finally:
         try:
-            lock_handle.seek(0)
-            lock_handle.truncate(0)
-            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+            if acquired:
+                lock_handle.seek(0)
+                lock_handle.truncate(0)
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
         finally:
             lock_handle.close()
 
@@ -920,6 +925,7 @@ def download_history_with_retries(
                 progress=False,
                 auto_adjust=True,
                 threads=False,
+                timeout=20,
             )
             if history is not None and not history.empty:
                 if isinstance(history.columns, pd.MultiIndex):
@@ -3081,7 +3087,8 @@ def main() -> int:
         failure_email_sent = False
         provider_failure = provider_failure_payload(exc)
         try:
-            failure_email_sent = send_failure_email(str(exc), updater_results)
+            if not args.skip_email:
+                failure_email_sent = send_failure_email(str(exc), updater_results)
         except Exception:  # noqa: BLE001
             failure_email_sent = False
         append_log(

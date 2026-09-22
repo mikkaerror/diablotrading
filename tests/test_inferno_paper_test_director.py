@@ -147,8 +147,8 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             "blockedTickets": [],
         }
         authority = {"decision": {"authorityLevel": "paper-evidence-only", "warnings": [], "nextMilestones": []}}
-        performance = {"closedMetrics": {"scoredCount": 1}, "deskVerdict": {"level": "evidence-building"}}
-        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}]
+        performance = {"closedMetrics": {"scoredCount": 3}, "deskVerdict": {"level": "evidence-building"}}
+        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}, {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
         self.assertEqual(payload["verdict"], "auto-paper-selected")
@@ -158,6 +158,9 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["approvalOnly"], 0)
         self.assertEqual(payload["counts"]["hardBlocked"], 1)
         self.assertEqual(payload["autoPaperSlate"][0]["ticker"], "WSC")
+        self.assertEqual(payload["counts"]["scoredTickets"], 1)
+        self.assertEqual(payload["counts"]["reportedScoredTickets"], 3)
+        self.assertEqual(payload["counts"]["remainingForPromotion"], 29)
         self.assertEqual(payload["autoPaperSlate"][0]["eventTicketCount"], 0)
         self.assertEqual(payload["autoPaperSlate"][0]["eventId"], "WSC|2026-07-08")
         self.assertEqual(payload["hardBlockedSlate"][0]["ticker"], "PRIM")
@@ -207,7 +210,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
         }
         authority = {"decision": {"authorityLevel": "paper-evidence-only", "warnings": [], "nextMilestones": []}}
         performance = {"closedMetrics": {"scoredCount": 5}, "deskVerdict": {"level": "evidence-building"}}
-        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}]
+        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}, {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
         self.assertEqual(payload["verdict"], "operator-paper-candidates")
@@ -236,7 +239,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             {"closedMetrics": {"scoredCount": 1}},
             {"items": []},
             {"items": []},
-        ]
+         {"overall": {"scoredCount": 1}}]
         mock_classify_candidates.return_value = [
             {
                 "ticker": "FLR",
@@ -353,7 +356,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             ],
         }
 
-        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}]
+        mock_load_json_file.side_effect = [snapshot, approval_queue, execution_queue, sandbox, authority, performance, {}, {"items": []}, {"overall": {"scoredCount": 1}}]
         mock_load_strike_plan.return_value = (dead_primary_plan, False)
         mock_build_execution_queue.return_value = expanded_queue
         mock_build_strike_plan_from_queue.return_value = expanded_plan
@@ -420,7 +423,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             performance,
             strategy_pricing,
             {"items": []},
-        ]
+         {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
 
@@ -478,7 +481,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             performance,
             strategy_pricing,
             {"items": []},
-        ]
+         {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
 
@@ -563,7 +566,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             performance,
             {"items": [clean_iren]},
             {"items": []},
-        ]
+         {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
 
@@ -668,7 +671,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             performance,
             strategy_pricing,
             ledger,
-        ]
+         {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
 
@@ -748,7 +751,7 @@ class InfernoPaperTestDirectorTests(unittest.TestCase):
             {"closedMetrics": {"scoredCount": 2}, "deskVerdict": {"level": "evidence-building"}},
             {"items": []},
             ledger,
-        ]
+         {"overall": {"scoredCount": 1}}]
 
         payload = build_director()
 
