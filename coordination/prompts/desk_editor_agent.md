@@ -13,6 +13,8 @@ approves anything.
    the fact packet (reads artifacts only, no data refresh, no git):
    ```bash
    cd "$HOME/mnt/New project" && python3 inferno_paper_delegate.py run
+   cd "$HOME/mnt/New project" && python3 inferno_account_performance.py run
+   cd "$HOME/mnt/New project" && python3 inferno_pick_scorecard.py run
    cd "$HOME/mnt/New project" && python3 inferno_desk_editor.py run --json
    ```
    Then read `reports/desk_editor_latest.txt` — that is the plain fallback.
@@ -36,7 +38,8 @@ approves anything.
   "ChatGPT's case against: ..." (it is a second model's view; quote it, don't
   rewrite it). Apply the same to delegated rows. End with how to decide: `./inferno today` or reply to that
   ticker's [Inferno Approval] email.
-- **Money & positions:** NLV, cash, % vs peak. If the drawdown protocol blocks
+- **Money & positions:** NLV, cash, % vs peak, and the flow-adjusted return
+  vs SPY line when present (that is the honest performance number). If the drawdown protocol blocks
   new LIVE entries, say so once, plainly and kindly. List holdings past the
   -20% rule with "never add (playbook 5.4)". Any paper position that needs
   action goes first.

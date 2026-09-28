@@ -77,6 +77,23 @@ class PolicyTests(unittest.TestCase):
         wide = plan_item(blocks=["ACN261002P00182500 spread is wide at 44%"])
         self.assertEqual(decide(queue_item(), wide, 10.0, {})["rule"], "soft-blocks")
 
+    def test_family_answered_at_event_level(self):
+        items = []
+        for e in range(30):
+            for _ in range(3):  # duplicate rows per event must not inflate evidence
+                items.append({"ticker": f"X{e}", "expiration": "2026-10-02", "strategy": "LONG_STRADDLE",
+                              "outcome": {"status": "closed", "estimatedReturnOnRisk": -0.6 + (e % 3) * 0.1}})
+        d = decide(queue_item(), plan_item(), 10.0, {"items": items})
+        self.assertEqual((d["action"], d["rule"]), ("reject", "family-answered"))
+        self.assertEqual(d["family"]["events"], 30)
+
+    def test_family_with_ci_crossing_zero_not_rejected(self):
+        items = [{"ticker": f"X{e}", "expiration": "d", "strategy": "LONG_STRADDLE",
+                  "outcome": {"status": "closed", "estimatedReturnOnRisk": (1.0 if e % 2 else -1.1)}}
+                 for e in range(40)]
+        d = decide(queue_item(), plan_item(), 10.0, {"items": items})
+        self.assertEqual(d["action"], "approve")
+
     def test_ack_status(self):
         self.assertFalse(ack_status({})[0])
         self.assertFalse(ack_status({"active": False, "scope": "paper-only"})[0])

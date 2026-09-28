@@ -1472,5 +1472,84 @@
       "recommender",
       "codex"
     ]
+  },
+  {
+    "id": "mission-8dbd7dc2",
+    "createdAt": "2026-09-28T10:12:49.390668-06:00",
+    "updatedAt": "2026-09-28T10:12:49.390668-06:00",
+    "title": "Audit desk research quality and repair measurement gaps",
+    "body": "Codex: source-backed whole-desk audit of knowledge coverage, realized return attribution, provenance, temporal validation, strategy comparison and research productivity. Implement reporting/data-adapter repairs and read-only audit with tests; preserve evaluator thresholds, production selection, risk constants, universe, ticket decisions, broker authority and Claude-owned editor/digest. Freeze evidence and distinguish software progress from predictive gains.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "research-audit",
+      "measurement",
+      "provenance",
+      "research-only"
+    ]
+  },
+  {
+    "id": "mission-f3c6d081",
+    "createdAt": "2026-09-28T16:17:49.729389+00:00",
+    "updatedAt": "2026-09-28T16:17:49.729389+00:00",
+    "title": "S2: route defined-risk short premium into paper (0/60 forward records)",
+    "body": "docs/DESK_AUDIT_2026-09-28.md S2. The only positive backward signal (+0.20R, 65 events, CI [0.007,0.36]) has no paper path. Route cap-fitting defined-risk condors/put-credit spreads from the director construction watchlist into paper tickets under existing gates so the forward SHORT_PREMIUM_DEFINED campaign accrues. Model wing cost. Delegate (inferno_paper_delegate.py) will approve them by its rules once they appear in the approval queue. No risk-constant or authority change.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "audit",
+      "strategy",
+      "short-premium",
+      "paper"
+    ]
+  },
+  {
+    "id": "mission-ac4730da",
+    "createdAt": "2026-09-28T16:17:52.633413+00:00",
+    "updatedAt": "2026-09-28T16:17:52.633413+00:00",
+    "title": "M2: drawdown stepper on flow-adjusted high-water with outlier rejection",
+    "body": "docs/DESK_AUDIT_2026-09-28.md M2. Stored peakNlv 3516.60 (2026-08-15) is not in nlv_history (max 1669.91). inferno_account_performance.py publishes twrDrawdownCurrent (-29.4%) and peakIntegrity. Supersedes/extends the deposit-aware drawdown mission: consume TWR drawdown, reject unsupported peaks, operator ack for the switch.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "audit",
+      "capital",
+      "drawdown",
+      "measurement"
+    ]
+  },
+  {
+    "id": "mission-8446a238",
+    "createdAt": "2026-09-28T16:17:54.452942+00:00",
+    "updatedAt": "2026-09-28T16:17:54.452942+00:00",
+    "title": "M5+M6: exit-aware outcome scoring and entry feature snapshots",
+    "body": "docs/DESK_AUDIT_2026-09-28.md M5/M6. 100% of shadow outcomes are hold-to-expiry intrinsic; score also under playbook exits (post-event next open, take-profit tiers, time stop) and report both. Store ivRank, IV, implied move, DTE, readiness on every shadow/paper record at entry (ivRank present 0/1025, implied move 0/1025) so the iv-cheap counterfactual can run. Report stats at event level (M4).",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "audit",
+      "measurement",
+      "outcomes",
+      "features"
+    ]
+  },
+  {
+    "id": "mission-fad7825f",
+    "createdAt": "2026-09-28T16:17:57.330522+00:00",
+    "updatedAt": "2026-09-28T16:17:57.330522+00:00",
+    "title": "A1/A2/O1/O2: score saturation, shadow dedupe, module retirement",
+    "body": "docs/DESK_AUDIT_2026-09-28.md. Readiness: 87% of rows at 90-100, non-monotonic; use within-day percentile before thresholds. Long-term score: 8 names tie at 9.99 cap; top-5 churns 100% in 3 weeks. Cap shadow inserts to one per event per structure. Retire/archive 33 silent + 26 stale skills via artifact lifecycle.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "normal",
+    "tags": [
+      "audit",
+      "scores",
+      "ops"
+    ]
   }
 ]

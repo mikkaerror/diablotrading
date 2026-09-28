@@ -112,8 +112,24 @@ def money_section(data_dir: Path, now: datetime) -> dict[str, Any]:
         "fromPeakPct": round((nlv / peak - 1.0) * 100, 1) if nlv is not None and peak else None,
         "ageHours": None if age is None else round(age, 1),
         "fresh": age is not None and age <= 36.0,
+        "performance": _performance(data_dir),
         "drawdownLevel": drawdown.get("level"),
         "newLiveEntriesAllowed": drawdown.get("newEntriesAllowed"),
+    }
+
+
+def _performance(data_dir: Path) -> dict[str, Any] | None:
+    perf = _load(data_dir / "inferno_account_performance.json")
+    if perf.get("verdict") != "measured":
+        return None
+    bench = perf.get("benchmark") or {}
+    return {
+        "twr": perf.get("twrSinceStart"),
+        "twrDrawdownCurrent": perf.get("twrDrawdownCurrent"),
+        "spy": bench.get("return"),
+        "accountSameWindow": bench.get("accountTwrSameWindow"),
+        "window": perf.get("window"),
+        "peakSupported": (perf.get("peakIntegrity") or {}).get("supported"),
     }
 
 
@@ -378,8 +394,19 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
     lines.append(f"MONEY{stale}")
     lines.append(
         f"NLV {_money(money['nlv'])} | cash {_money(money['cash'])}"
-        + (f" | {money['fromPeakPct']:+.1f}% vs peak {_money(money['peakNlv'])}" if money["fromPeakPct"] is not None else "")
+        + (f" | {money['fromPeakPct']:+.1f}% vs peak {_money(money['peakNlv'])}"
+           if money["fromPeakPct"] is not None and (money.get("performance") or {}).get("peakSupported") is not False
+           else "")
     )
+    perf = money.get("performance")
+    if perf:
+        spy = "" if perf["spy"] is None else f" vs SPY {perf['spy'] * 100:+.1f}%"
+        lines.append(
+            f"Flow-adjusted return since {perf['window'][0]}: {perf['twr'] * 100:+.1f}%{spy} | "
+            f"drawdown from high-water {perf['twrDrawdownCurrent'] * 100:+.1f}%"
+        )
+        if perf["peakSupported"] is False:
+            lines.append("Note: the drawdown stepper's stored peak is not supported by NLV history (under review).")
     if money.get("newLiveEntriesAllowed") is False:
         lines.append(f"Drawdown protocol: {money.get('drawdownLevel')} — no new LIVE entries. Paper practice is fine.")
     lines.append("")

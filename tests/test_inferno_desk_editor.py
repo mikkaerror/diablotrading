@@ -142,6 +142,16 @@ class DeskEditorTests(unittest.TestCase):
         _write(self.data, "inferno_paper_delegate.json", {"generatedAt": OLD, "applied": [{"ticker": "X"}]})
         self.assertEqual(build_desk_editor(self.data, self.reports, now=NOW)["delegated"], [])
 
+    def test_performance_line(self):
+        _write(self.data, "inferno_account_performance.json", {
+            "verdict": "measured", "twrSinceStart": -0.267, "twrDrawdownCurrent": -0.294,
+            "window": ["2026-06-17", "2026-09-25"],
+            "benchmark": {"return": 0.041, "accountTwrSameWindow": -0.267},
+            "peakIntegrity": {"supported": False}})
+        text = desk_editor_text(build_desk_editor(self.data, self.reports, now=NOW))
+        self.assertIn("Flow-adjusted return since 2026-06-17: -26.7% vs SPY +4.1%", text)
+        self.assertIn("stored peak is not supported", text)
+
     def test_long_term_parse(self):
         rows = long_term_section(self.reports)
         self.assertEqual([r["ticker"] for r in rows], ["DBX", "GNRC"])

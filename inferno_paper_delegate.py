@@ -24,7 +24,10 @@ Policy (paper evidence first; slots go to questions not yet answered):
   REJECT   max loss is more than REJECT_CAP_MULTIPLE x the effective paper
            cap (no cap-fit variant is plausible), OR this ticker+strategy has
            already answered the question in shadow (>= SHADOW_ANSWERED_MIN
-           closed with avg R <= SHADOW_ANSWERED_MAX_R).
+           closed with avg R <= SHADOW_ANSWERED_MAX_R), OR the whole strategy
+           family is answered at the EVENT level (>= FAMILY_MIN_EVENTS distinct
+           ticker/expiration events whose bootstrap 95% upper bound on mean R
+           is below zero). Events, not rows: one event can carry 20+ rows.
   HOLD     anything else (wide spreads, stale price, open ticket, missing or
            stale plan, cap miss within reach of a cap-fit variant).
 """
@@ -54,6 +57,9 @@ REJECT_CAP_MULTIPLE = 3.0
 SHADOW_ANSWERED_MIN = 15
 SHADOW_ANSWERED_MAX_R = -0.5
 MAX_APPROVALS_PER_RUN = 5
+FAMILY_MIN_EVENTS = 30
+BOOTSTRAP_RESAMPLES = 2000
+BOOTSTRAP_SEED = 20260928
 CAP_LABELS = {"over single-ticket cap", "over daily loss cap"}
 
 CITATIONS = [
@@ -112,6 +118,27 @@ def shadow_history(shadow: dict[str, Any], ticker: str, strategy: str | None) ->
     return {"closed": len(values), "avgR": round(sum(values) / len(values), 3)}
 
 
+def family_event_evidence(shadow: dict[str, Any], strategy: str | None) -> dict[str, Any]:
+    """Event-level mean R with a seeded bootstrap 95% interval for one strategy."""
+    import random
+
+    events: dict[tuple, list[float]] = {}
+    for item in shadow.get("items") or []:
+        if item.get("strategy") != strategy:
+            continue
+        outcome = item.get("outcome") or {}
+        r_value = _num(outcome.get("estimatedReturnOnRisk"))
+        if outcome.get("status") == "closed" and r_value is not None:
+            events.setdefault((item.get("ticker"), item.get("expiration")), []).append(r_value)
+    means = [sum(v) / len(v) for v in events.values()]
+    if not means:
+        return {"events": 0, "meanR": None, "ci95": None}
+    rng = random.Random(BOOTSTRAP_SEED)
+    boots = sorted(sum(rng.choices(means, k=len(means))) / len(means) for _ in range(BOOTSTRAP_RESAMPLES))
+    lo, hi = boots[int(0.025 * BOOTSTRAP_RESAMPLES)], boots[int(0.975 * BOOTSTRAP_RESAMPLES) - 1]
+    return {"events": len(means), "meanR": round(sum(means) / len(means), 3), "ci95": [round(lo, 3), round(hi, 3)]}
+
+
 def decide(
     queue_item: dict[str, Any],
     plan_item: dict[str, Any] | None,
@@ -149,6 +176,15 @@ def decide(
         return out(
             "reject", "shadow-answered",
             f"{ticker} {strategy} already {history['closed']} shadow closes at avg {history['avgR']:+.2f}R",
+            **extra,
+        )
+    family = family_event_evidence(shadow, strategy)
+    extra["family"] = family
+    if family["events"] >= FAMILY_MIN_EVENTS and family["ci95"] and family["ci95"][1] < 0:
+        return out(
+            "reject", "family-answered",
+            f"{strategy} across {family['events']} shadow events averages {family['meanR']:+.2f}R "
+            f"(95% CI {family['ci95'][0]:+.2f} to {family['ci95'][1]:+.2f})",
             **extra,
         )
     if max_loss is not None and cap and max_loss > REJECT_CAP_MULTIPLE * cap:
