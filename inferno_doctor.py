@@ -130,6 +130,7 @@ AI_BASKET_REFRESH_FILE = ROOT / "data" / "inferno_ai_basket_refresh.json"
 AI_BASKET_DATA_CONTRACT_FILE = ROOT / "data" / "inferno_ai_basket_data_contract.json"
 SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
+DESK_EDITOR_FILE = ROOT / "data" / "inferno_desk_editor.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
 EVIDENCE_GOAL_LOOP_LABEL = "io.diablotrading.inferno-evidence-goal-loop"
@@ -699,6 +700,28 @@ def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple
         f"{report.get('importedRows', 0)} imported | {report.get('closedRows', 0)} closed | "
         f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched | "
         f"{outcome} | accepted progress {accepted_progress if accepted_progress is not None else '-'}",
+    )
+
+
+def desk_editor_status(report: dict) -> tuple[bool, str]:
+    """Check packet freshness, source alerts and the reporting-only contract."""
+    if not report:
+        return False, "missing"
+    try:
+        fresh = recent_or_today(str(report.get("generatedAt") or ""), max_age_hours=36)
+    except (TypeError, ValueError):
+        fresh = False
+    safe = (
+        report.get("stage") == "desk-editor-research-only"
+        and report.get("researchOnly") is True
+        and all(report.get(key) is False for key in (
+            "promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed"
+        ))
+    )
+    alerts = report.get("alerts") or []
+    return fresh and safe and not alerts, (
+        f"{report.get('headline') or 'no headline'} | fresh={fresh} | "
+        f"reporting-only={safe} | source alerts={len(alerts)}"
     )
 
 
@@ -3018,6 +3041,11 @@ def main() -> int:
     basket_contract_ok, basket_contract_detail = ai_basket_data_contract_status(ai_basket_contract)
     lines.append(summarize_status("AI basket data contract", basket_contract_ok, basket_contract_detail))
     if not basket_contract_ok:
+        warnings += 1
+
+    editor_ok, editor_detail = desk_editor_status(load_json_file(DESK_EDITOR_FILE) or {})
+    lines.append(summarize_status("Desk Editor", editor_ok, editor_detail))
+    if not editor_ok:
         warnings += 1
 
     action_pulse = load_json_file(ACTION_PULSE_FILE) or {}

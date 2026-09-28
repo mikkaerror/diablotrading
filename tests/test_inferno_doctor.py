@@ -33,6 +33,7 @@ from inferno_doctor import (
     paper_mark_to_market_status,
     paper_test_director_status,
     action_pulse_status,
+    desk_editor_status,
     research_cycle_status,
     schwab_chain_diff_status,
     schwab_chain_history_status,
@@ -49,6 +50,20 @@ from inferno_doctor import (
 
 class InfernoDoctorCycleTests(unittest.TestCase):
     """Verify the doctor respects the active operating cycle across midnight."""
+
+    def test_desk_editor_freshness_sources_and_authority(self) -> None:
+        report = {"generatedAt": datetime.now().astimezone().isoformat(),
+                  "stage": "desk-editor-research-only", "researchOnly": True,
+                  "promotable": False, "authorityChanged": False,
+                  "liveTradingAllowed": False, "brokerSubmitAllowed": False, "alerts": []}
+        self.assertTrue(desk_editor_status(report)[0])
+        self.assertFalse(desk_editor_status({})[0])
+        for key, value in (("generatedAt", "2000-01-01"), ("alerts", ["missing account"]),
+                           ("researchOnly", False), ("promotable", True),
+                           ("authorityChanged", True), ("liveTradingAllowed", True),
+                           ("brokerSubmitAllowed", True)):
+            with self.subTest(key=key):
+                self.assertFalse(desk_editor_status({**report, key: value})[0])
 
     def test_intentional_email_skip_is_healthy_but_delivery_failure_is_not(self) -> None:
         now = datetime.fromisoformat("2026-09-22T13:00:00-06:00")

@@ -15,6 +15,21 @@ import inferno_model_command_center as command_center
 class InfernoModelCommandCenterTests(unittest.TestCase):
     """Protect the shared model brain from drifting or losing queue state."""
 
+    def test_desk_editor_is_mapped_and_summarized(self) -> None:
+        row = next(row for row in command_center.REPORTING_MAP if row["lane"] == "desk-editor")
+        self.assertEqual(row["owner"], "claude")
+        self.assertEqual(row["artifact"], "reports/desk_editor_latest.txt")
+        packet = {"headline": "No decisions today", "researchOnly": True, "promotable": False,
+                  "authorityChanged": False, "alerts": ["stale strike plan"]}
+        with patch.object(command_center, "load_json_file", side_effect=lambda p: packet if p == command_center.DESK_EDITOR_FILE else {}), \
+             patch.object(command_center, "save_command_center"), \
+             patch.object(command_center, "ensure_command_center_dirs"), \
+             patch.object(command_center, "load_active_missions", return_value=[]), \
+             patch.object(command_center, "load_notes", return_value=[]):
+            result = command_center.build_command_center()
+        for key, value in packet.items():
+            self.assertEqual(result["systemStatus"]["deskEditor"][key], value)
+
     def test_build_reuses_one_read_per_path_and_invalidates_next_build(self) -> None:
         from collections import Counter
         from copy import deepcopy

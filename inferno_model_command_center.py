@@ -43,6 +43,7 @@ MODEL_COMMAND_CENTER_TEXT_FILE = REPORTS_DIR / "model_command_center_latest.txt"
 MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE = REPORTS_DIR / "model_command_center_onboard_latest.txt"
 WHILE_AWAY_PACKET_FILE = DATA_DIR / "inferno_while_away_packet.json"
 
+DESK_EDITOR_FILE = DATA_DIR / "inferno_desk_editor.json"
 DEPLOY_PREFLIGHT_FILE = DATA_DIR / "inferno_deploy_preflight.json"
 OPS_MAINTENANCE_FILE = DATA_DIR / "inferno_ops_maintenance.json"
 LIVE_POSITION_REVIEW_FILE = DATA_DIR / "inferno_live_position_review.json"
@@ -165,6 +166,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "Is the desk broken?",
         "artifact": "reports/doctor_latest.txt",
         "owner": "operator",
+    },
+    {
+        "lane": "desk-editor",
+        "question": "What facts should the morning decision email use?",
+        "artifact": "reports/desk_editor_latest.txt",
+        "owner": "claude",
     },
     {
         "lane": "market-open-refresh-handoff",
@@ -1164,6 +1171,7 @@ def build_command_center() -> dict[str, Any]:
         next_actions.append("No explicit next actions were found; review the latest artifacts manually.")
 
     system_status = {
+        "deskEditor": summarize_artifact(DESK_EDITOR_FILE, keys=("stage", "headline", "generatedAt", "alerts", "researchOnly", "promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed")),
         "deployPreflight": summarize_artifact(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),
         "opsMaintenance": summarize_artifact(OPS_MAINTENANCE_FILE, keys=("ok", "generatedAt")),
         "liveAccountSync": summarize_artifact(LIVE_ACCOUNT_SYNC_FILE, keys=("verdict", "message", "generatedAt", "matchedSuffix")),
@@ -1757,6 +1765,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
         [
             "",
             "System status:",
+        f"- Desk Editor: {(status.get('deskEditor') or {}).get('headline') or 'missing'}",
             f"- Deploy preflight: {status_value(status.get('deployPreflight') or {})}",
             f"- Live account sync: {status_value(status.get('liveAccountSync') or {})}",
             f"- Schwab account sync: {status_value(status.get('schwabAccountSync') or {})}",

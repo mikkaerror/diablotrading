@@ -124,6 +124,7 @@ Generated artifacts beat durable docs when they disagree.
 | Current supervisor picture | `reports/model_command_center_latest.txt` |
 | One-line desk verdict | `reports/central_command_latest.txt` |
 | Compact watchlist research priorities | `reports/watchlist_brief_latest.txt` |
+| Desk Editor morning facts (Claude-owned; reporting only) | `reports/desk_editor_latest.txt` |
 | Health check | `reports/doctor_latest.txt` |
 | Formula integrity | `reports/math_verify_latest.txt` |
 | Secret hygiene | `reports/secret_hygiene_latest.txt` |
