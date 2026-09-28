@@ -1,0 +1,43 @@
+{
+  "stage": "capex-tape-research-input",
+  "researchOnly": true,
+  "updatedAt": "2026-09-28",
+  "reviewAfter": "2026-10-31",
+  "note": "Top-down 'tap' for the Capex Flow lane. Update after each hyperscaler earnings season (late Jan, late Apr, late Jul, late Oct). Every figure carries its source. Guidance ranges are stored as low/high; midpoint is used.",
+  "spenders": {
+    "MSFT": {
+      "priorYearCapex": 64.551, "priorYearLabel": "FY2025 (Jun)",
+      "lastYearCapex": 115.948, "lastYearLabel": "FY2026 (Jun)", "lastYearOcf": 182.935, "lastYearFcf": 66.987,
+      "guidanceLow": 175.0, "guidanceHigh": 175.0, "guidanceLabel": "2026 run-rate, lease-accounting adjusted",
+      "guidanceDirection": "held", "fcfPositive": true, "externalFunding": "none reported",
+      "sources": ["FMP annual cash-flow statement FY2026", "https://www.tmtfinance.com/intel/2026-hyperscaler-capex-tops-us700bn-analysis"]
+    },
+    "GOOG": {
+      "priorYearCapex": 52.535, "priorYearLabel": "FY2024",
+      "lastYearCapex": 91.447, "lastYearLabel": "FY2025", "lastYearOcf": 164.713, "lastYearFcf": 73.266,
+      "guidanceLow": 195.0, "guidanceHigh": 205.0, "guidanceLabel": "FY2026",
+      "guidanceDirection": "raised", "fcfPositive": false, "externalFunding": "~$100bn debt; ~$80bn equity incl. underwritten offering and ATM",
+      "sources": ["FMP annual cash-flow statement FY2025", "https://www.tmtfinance.com/intel/2026-hyperscaler-capex-tops-us700bn-analysis", "https://valueaddvc.com/ai-spending"]
+    },
+    "AMZN": {
+      "priorYearCapex": 82.999, "priorYearLabel": "FY2024",
+      "lastYearCapex": 131.819, "lastYearLabel": "FY2025", "lastYearOcf": 139.514, "lastYearFcf": 7.695,
+      "guidanceLow": 220.0, "guidanceHigh": 220.0, "guidanceLabel": "FY2026",
+      "guidanceDirection": "raised", "fcfPositive": false, "externalFunding": "TTM free cash flow negative in Q2 2026",
+      "sources": ["FMP annual cash-flow statement FY2025", "https://www.tmtfinance.com/intel/2026-hyperscaler-capex-tops-us700bn-analysis", "https://valueaddvc.com/ai-spending"]
+    },
+    "META": {
+      "priorYearCapex": 37.256, "priorYearLabel": "FY2024",
+      "lastYearCapex": 69.691, "lastYearLabel": "FY2025", "lastYearOcf": 115.8, "lastYearFcf": 46.109,
+      "guidanceLow": 130.0, "guidanceHigh": 145.0, "guidanceLabel": "FY2026",
+      "guidanceDirection": "raised", "fcfPositive": false, "externalFunding": "$24.9bn new debt; buybacks suspended; partner-financed data centers",
+      "sources": ["FMP annual cash-flow statement FY2025", "https://www.tmtfinance.com/intel/2026-hyperscaler-capex-tops-us700bn-analysis", "https://valueaddvc.com/ai-spending"]
+    }
+  },
+  "outlookSignals": {
+    "nextYearDirection": "higher",
+    "evidence": "Alphabet signalled a further increase in 2027; Amazon says capacity constraints likely persist through 2027; Meta declined 2027 guidance; Microsoft expects to stay FCF positive.",
+    "marketReaction": "Alphabet sold off on its July 2026 report; investors scrutinising capex returns.",
+    "sources": ["https://www.tmtfinance.com/intel/2026-hyperscaler-capex-tops-us700bn-analysis", "https://www.cnbc.com/2026/07/28/hyperscalers-face-higher-capex-scrutiny-after-alphabet-report-panned.html"]
+  }
+}

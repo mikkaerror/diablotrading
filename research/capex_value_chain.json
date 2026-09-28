@@ -1,0 +1,198 @@
+{
+  "stage": "capex-value-chain-research-input",
+  "researchOnly": true,
+  "updatedAt": "2026-09-28",
+  "reviewAfter": "2026-12-31",
+  "method": "Analyst-assigned layer from tracker industry labels plus issuer roles in research/industry_roles.json. 'order' is how directly hyperscaler capex dollars reach the layer (1 = first-order order book, 2 = second-order, 3 = indirect). Funding: paid-supplier gets paid by the spender; capital-dependent needs capital markets to build; regulated-or-contracted earns via rate base or PPAs. Revenue exposure per issuer is NOT verified; treat as a hypothesis until issuer filings are checked.",
+  "layers": {
+    "compute": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "NVDA",
+        "AMD",
+        "AVGO",
+        "MRVL",
+        "ARM",
+        "ALAB",
+        "MPWR"
+      ]
+    },
+    "memory-storage": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "STX",
+        "WDC"
+      ]
+    },
+    "networking-optics": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "ANET",
+        "CIEN",
+        "LITE",
+        "COHR",
+        "CRDO",
+        "AAOI",
+        "FN",
+        "CSCO",
+        "CLFD",
+        "APH",
+        "GLW",
+        "TEL",
+        "POET"
+      ]
+    },
+    "servers-systems": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "DELL",
+        "SMCI",
+        "HPE",
+        "SNX"
+      ]
+    },
+    "semicap-packaging": {
+      "funding": "paid-supplier",
+      "order": 2,
+      "tickers": [
+        "ASML",
+        "AMAT",
+        "LRCX",
+        "KLAC",
+        "ACMR",
+        "AEHR",
+        "AXTI",
+        "AMKR",
+        "ASX",
+        "GFS"
+      ]
+    },
+    "power-cooling-equipment": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "VRT",
+        "ETN",
+        "GEV",
+        "NVT",
+        "HUBB",
+        "MOD",
+        "TT",
+        "CARR",
+        "JCI",
+        "SPXC",
+        "CMI",
+        "GNRC",
+        "EMR",
+        "ENS"
+      ]
+    },
+    "construction-electrical": {
+      "funding": "paid-supplier",
+      "order": 1,
+      "tickers": [
+        "FIX",
+        "EME",
+        "PWR",
+        "MTZ",
+        "MYRG",
+        "PRIM",
+        "STRL",
+        "DY",
+        "ACM",
+        "J",
+        "FLR",
+        "GVA",
+        "TPC",
+        "AGX",
+        "WSC",
+        "CAT"
+      ]
+    },
+    "power-generation": {
+      "funding": "regulated-or-contracted",
+      "order": 2,
+      "tickers": [
+        "CEG",
+        "VST",
+        "NEE",
+        "DUK",
+        "SO",
+        "D",
+        "AEE",
+        "XEL",
+        "POR",
+        "AES",
+        "CWEN",
+        "ORA",
+        "FLNC",
+        "ENB"
+      ]
+    },
+    "nuclear-fuel": {
+      "funding": "capital-dependent",
+      "order": 3,
+      "tickers": [
+        "OKLO",
+        "SMR",
+        "NNE",
+        "BWXT",
+        "LTBR",
+        "CCJ",
+        "LEU",
+        "UEC",
+        "UUUU"
+      ]
+    },
+    "developers-neoclouds": {
+      "funding": "capital-dependent",
+      "order": 2,
+      "tickers": [
+        "CRWV",
+        "NBIS",
+        "IREN",
+        "CIFR",
+        "APLD",
+        "CLSK",
+        "HIVE",
+        "GDS",
+        "VNET",
+        "DOCN"
+      ]
+    },
+    "datacenter-reits": {
+      "funding": "capital-dependent",
+      "order": 2,
+      "tickers": [
+        "DLR",
+        "EQIX",
+        "IRM"
+      ]
+    },
+    "materials": {
+      "funding": "paid-supplier",
+      "order": 3,
+      "tickers": [
+        "FCX",
+        "MP",
+        "USAR",
+        "ECL"
+      ]
+    },
+    "spenders": {
+      "funding": "spender",
+      "order": 0,
+      "tickers": [
+        "MSFT",
+        "AMZN",
+        "GOOG",
+        "META",
+        "ORCL"
+      ]
+    }
+  }
+}

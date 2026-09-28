@@ -261,6 +261,22 @@ def second_opinions(data_dir: Path, now: datetime) -> dict[str, str]:
     return {row.get("ticker"): row.get("challenge") for row in payload.get("items") or [] if row.get("challenge")}
 
 
+def capex_flow_section(data_dir: Path) -> dict[str, Any] | None:
+    flow = _load(data_dir / "inferno_capex_flow.json")
+    if not flow.get("regime"):
+        return None
+    r = flow["regime"]
+    top = [n for n in flow.get("names") or [] if n.get("action") == "BUY"][:3]
+    return {
+        "regime": r.get("regime"),
+        "growth": r.get("growth"),
+        "fcfPositive": r.get("fcfPositive"),
+        "spenders": r.get("spenders"),
+        "tapeStale": r.get("tapeStale"),
+        "top": [{"ticker": n["ticker"], "layer": n["layer"], "instrument": n["instrument"]} for n in top],
+    }
+
+
 def evidence_section(data_dir: Path) -> dict[str, Any]:
     analytics = _load(data_dir / "inferno_performance_analytics.json")
     shadow = _load(data_dir / "inferno_shadow_evidence.json")
@@ -363,6 +379,7 @@ def build_desk_editor(
         "delegated": delegated_section(data_dir, now),
         "positions": positions_section(data_dir),
         "evidence": evidence_section(data_dir),
+        "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
         "longTerm": long_term_section(reports_dir),
         "citations": CITATIONS,
@@ -458,6 +475,18 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
     for row in evidence["shadow"]:
         lines.append(f"- shadow {_pretty(row['strategy'])}: {row['closed']} closed | win {_pct(row['winRate'])} | avg {_r(row['avgR'])}")
     lines.append("")
+
+    flow = payload.get("capexFlow")
+    if flow:
+        growth = "n/a" if flow["growth"] is None else f"{flow['growth'] * 100:+.0f}%"
+        lines.append("CAPEX FLOW")
+        lines.append(
+            f"Tap: {flow['regime']} (spender capex {growth} guided; FCF-positive {flow['fcfPositive']}/{flow['spenders']})"
+            + (" - tape needs an earnings-season update" if flow["tapeStale"] else "")
+        )
+        for row in flow["top"]:
+            lines.append(f"- {row['ticker']} [{row['layer']}]: {row['instrument']}")
+        lines.append("")
 
     if payload["longTerm"]:
         lines.append("LONG-TERM LANE")

@@ -30,6 +30,10 @@ class ScorecardTests(unittest.TestCase):
         self.assertEqual(c["picks"]["eventReady"], ["E"])
         self.assertEqual(c["spy"], 100)
 
+    def test_extra_capex_flow_lane(self):
+        c = cohort_from_snapshot(snap("2026-01-01", {"A": 10, "B": 5}, ["A"]), extra_picks={"capexFlow": ["B", "ZZ"]})
+        self.assertEqual(c["picks"]["capexFlow"], ["B"])
+
     def test_append_only_first_write_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "c.jsonl"

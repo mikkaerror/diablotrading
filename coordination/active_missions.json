@@ -1551,5 +1551,21 @@
       "scores",
       "ops"
     ]
+  },
+  {
+    "id": "mission-fef61224",
+    "createdAt": "2026-09-28T16:33:06.142117+00:00",
+    "updatedAt": "2026-09-28T16:33:06.142117+00:00",
+    "title": "D1: issuer fundamentals for the Capex Flow lane (SEC EDGAR, Mac host)",
+    "body": "docs/CAPEX_FLOW_STRATEGY_2026-09-28.md D1. Build a host-side fetcher of SEC EDGAR companyfacts (free; blocked from both sandboxes, so run on the Mac via launchd) for the 106 names in research/capex_value_chain.json: quarterly revenue, YoY growth and its acceleration, RPO/backlog where reported, capex, OCF, share count change. Write data/inferno_issuer_fundamentals.json with provenance and fail-closed partial-run protection (basket decision #2). Claude will add revenue acceleration and dilution to the capex-flow score after it lands. Research only.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "capex-flow",
+      "fundamentals",
+      "edgar",
+      "data"
+    ]
   }
 ]

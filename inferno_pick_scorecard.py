@@ -35,7 +35,7 @@ OUTPUT_FILE = DATA_DIR / "inferno_pick_scorecard.json"
 TEXT_FILE = REPORTS_DIR / "pick_scorecard_latest.txt"
 HORIZONS = {"21s": 30, "63s": 91, "126s": 182}
 EXIT_TOLERANCE_DAYS = 7
-LANES = ("longTerm", "eventReady")
+LANES = ("longTerm", "eventReady", "capexFlow")
 
 
 def _num(value: Any) -> float | None:
@@ -46,7 +46,12 @@ def _num(value: Any) -> float | None:
     return number if number > 0 else None
 
 
-def cohort_from_snapshot(snapshot: dict[str, Any], spy_close: float | None = None, source: str = "") -> dict[str, Any] | None:
+def cohort_from_snapshot(
+    snapshot: dict[str, Any],
+    spy_close: float | None = None,
+    source: str = "",
+    extra_picks: dict[str, list[str]] | None = None,
+) -> dict[str, Any] | None:
     stamp = str(snapshot.get("generatedAt") or "")[:10]
     try:
         day = date.fromisoformat(stamp)
@@ -71,6 +76,7 @@ def cohort_from_snapshot(snapshot: dict[str, Any], spy_close: float | None = Non
         "picks": {
             "longTerm": [t for t in (snapshot.get("longTermTickers") or []) if t in prices][:5],
             "eventReady": [row["ticker"] for row in event_ready],
+            **{lane: [t for t in picks if t in prices][:5] for lane, picks in (extra_picks or {}).items()},
         },
         "prices": prices,
         "spy": spy_close,
@@ -181,7 +187,14 @@ def build_pick_scorecard(data_dir: Path = DATA_DIR, record: bool = True) -> dict
                 spy = _num((exposure.get("marketRegime") or {}).get("spyClose"))
         except (OSError, ValueError):
             pass
-        latest = cohort_from_snapshot(snapshot, spy, source="data/latest_snapshot.json")
+        extra = {}
+        try:
+            flow = json.loads((data_dir / "inferno_capex_flow.json").read_text(encoding="utf-8"))
+            if flow.get("asOf") == str(snapshot.get("generatedAt", ""))[:10]:
+                extra["capexFlow"] = flow.get("topPicks") or []
+        except (OSError, ValueError):
+            pass
+        latest = cohort_from_snapshot(snapshot, spy, source="data/latest_snapshot.json", extra_picks=extra)
     except (OSError, ValueError):
         pass
     if record and latest:

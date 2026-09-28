@@ -152,6 +152,16 @@ class DeskEditorTests(unittest.TestCase):
         self.assertIn("Flow-adjusted return since 2026-06-17: -26.7% vs SPY +4.1%", text)
         self.assertIn("stored peak is not supported", text)
 
+    def test_capex_flow_section(self):
+        _write(self.data, "inferno_capex_flow.json", {
+            "regime": {"regime": "accelerating-stretched", "growth": 0.79, "fcfPositive": 1, "spenders": 4, "tapeStale": False},
+            "names": [{"ticker": "CRDO", "layer": "networking-optics", "action": "BUY", "instrument": "shares (core)"},
+                      {"ticker": "X", "layer": "l", "action": "AVOID", "instrument": "none"}]})
+        text = desk_editor_text(build_desk_editor(self.data, self.reports, now=NOW))
+        self.assertIn("Tap: accelerating-stretched (spender capex +79% guided; FCF-positive 1/4)", text)
+        self.assertIn("- CRDO [networking-optics]: shares (core)", text)
+        self.assertNotIn("- X [", text)
+
     def test_long_term_parse(self):
         rows = long_term_section(self.reports)
         self.assertEqual([r["ticker"] for r in rows], ["DBX", "GNRC"])

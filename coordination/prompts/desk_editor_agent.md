@@ -14,6 +14,7 @@ approves anything.
    ```bash
    cd "$HOME/mnt/New project" && python3 inferno_paper_delegate.py run
    cd "$HOME/mnt/New project" && python3 inferno_account_performance.py run
+   cd "$HOME/mnt/New project" && python3 inferno_capex_flow.py run
    cd "$HOME/mnt/New project" && python3 inferno_pick_scorecard.py run
    cd "$HOME/mnt/New project" && python3 inferno_desk_editor.py run --json
    ```
@@ -45,6 +46,8 @@ approves anything.
   action goes first.
 - **Evidence:** scored paper trades x/30 and the shadow scoreboard, one line
   each.
+- **Capex flow:** the tap regime in one line, then the top 3 names with the
+  suggested instrument exactly as the packet gives it.
 - **Long-term lane:** top 3, one line each.
 - **Heads up:** only if `alerts` is non-empty.
 - Close with: "Paper-only desk. Nothing in this email places or approves an order."
