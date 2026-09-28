@@ -8,6 +8,7 @@ from pathlib import Path
 
 from inferno_capex_flow import (
     build_capex_flow,
+    entry_timing,
     capex_flow_text,
     instrument_for,
     relative_strength,
@@ -77,6 +78,29 @@ class NameTests(unittest.TestCase):
         self.assertIn("earnings in 3d", near)
         self.assertNotIn("straddle", rich + cheap + near)
         self.assertEqual(instrument_for({}, "AVOID", "paid-supplier"), "none")
+
+
+class TimingAndVolTests(unittest.TestCase):
+    def test_entry_states(self):
+        self.assertEqual(entry_timing({"atrPercent": 3, "distanceToSupportPct": 2, "distanceToResistancePct": 9})["state"], "pullback")
+        self.assertEqual(entry_timing({"atrPercent": 3, "distanceToSupportPct": 6, "distanceToResistancePct": 0.5, "rvol": 1.6})["state"], "breakout")
+        self.assertEqual(entry_timing({"atrPercent": 2, "distanceToSupportPct": 12, "distanceToResistancePct": 5})["state"], "extended")
+        self.assertEqual(entry_timing({"atrPercent": 2, "distanceToSupportPct": 12, "atrZScore": 2, "rvol": 2})["state"], "exhaustion")
+        self.assertEqual(entry_timing({})["state"], "neutral")
+
+    def test_vol_edge_drives_instrument(self):
+        rich = {"volClass": "rich", "ivToRv": 1.5, "liveLiquid": True}
+        self.assertIn("put spread", instrument_for({"daysUntilEarnings": 30}, "BUY", "paid-supplier", rich))
+        wide = {"volClass": "rich", "ivToRv": 1.5, "liveLiquid": False}
+        text = instrument_for({"daysUntilEarnings": 30}, "BUY", "paid-supplier", wide)
+        self.assertIn("too wide", text)
+        self.assertNotIn("put spread", text)
+        cheap = {"volClass": "cheap", "ivToRv": 0.8, "liveLiquid": True}
+        self.assertIn("call spread", instrument_for({"daysUntilEarnings": 30}, "BUY", "paid-supplier", cheap))
+        ext = instrument_for({}, "BUY", "paid-supplier", None, {"state": "extended"})
+        self.assertIn("start 1/3 size", ext)
+        exh = instrument_for({}, "BUY", "paid-supplier", None, {"state": "exhaustion"})
+        self.assertIn("no new entry today", exh)
 
 
 class BuildTests(unittest.TestCase):

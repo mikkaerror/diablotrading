@@ -35,7 +35,7 @@ OUTPUT_FILE = DATA_DIR / "inferno_pick_scorecard.json"
 TEXT_FILE = REPORTS_DIR / "pick_scorecard_latest.txt"
 HORIZONS = {"21s": 30, "63s": 91, "126s": 182}
 EXIT_TOLERANCE_DAYS = 7
-LANES = ("longTerm", "eventReady", "capexFlow")
+LANES = ("longTerm", "eventReady", "capexFlow", "capexFlowTimed")
 
 
 def _num(value: Any) -> float | None:
@@ -192,6 +192,7 @@ def build_pick_scorecard(data_dir: Path = DATA_DIR, record: bool = True) -> dict
             flow = json.loads((data_dir / "inferno_capex_flow.json").read_text(encoding="utf-8"))
             if flow.get("asOf") == str(snapshot.get("generatedAt", ""))[:10]:
                 extra["capexFlow"] = flow.get("topPicks") or []
+                extra["capexFlowTimed"] = flow.get("timedPicks") or []
         except (OSError, ValueError):
             pass
         latest = cohort_from_snapshot(snapshot, spy, source="data/latest_snapshot.json", extra_picks=extra)

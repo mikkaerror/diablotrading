@@ -1567,5 +1567,37 @@
       "edgar",
       "data"
     ]
+  },
+  {
+    "id": "mission-66e34762",
+    "createdAt": "2026-09-28T16:51:18.579268+00:00",
+    "updatedAt": "2026-09-28T16:51:18.579268+00:00",
+    "title": "Schwab chains for Capex Flow names + avgIV placeholder bug",
+    "body": "docs/DESK_PLAYBOOK_EVIDENCE_2026-09-28.md \u00a74/\u00a77. inferno_schwab_options.json captures 12 symbols; Capex Flow BUY/WATCH names (data/inferno_capex_flow.json names with action BUY/WATCH) have no chain, so instrument choice falls back to ivRank. Add them to the capture list (respect rate limits). Also sideStats.avgImpliedVolatility averages -999 placeholders (HIVE -137.9, TE -26.0): exclude non-positive/implausible vols and add a regression test. inferno_vol_edge.py already filters placeholders at the contract level.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "schwab",
+      "options",
+      "capex-flow",
+      "data-quality"
+    ]
+  },
+  {
+    "id": "mission-0131d3de",
+    "createdAt": "2026-09-28T16:51:20.133081+00:00",
+    "updatedAt": "2026-09-28T16:51:20.133081+00:00",
+    "title": "Live trade journal: realised P/L from Schwab transactions",
+    "body": "Transaction ledger shows 8 TRADE rows 2026-09-10..09-21 (fees 0.65/contract, so options) normalised to symbol CURRENCY_USD with no instrument detail; realizedOptionsProfitKnown=False. Keep the instrument (underlying, put/call, strike, expiry, qty, price) read-only, pair opens/closes into round trips, and publish realised P/L per trade and per strategy with fees. This is the only measure of the operator's actual live trading edge. Read-only; no order endpoints.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "schwab",
+      "measurement",
+      "journal",
+      "profitability"
+    ]
   }
 ]

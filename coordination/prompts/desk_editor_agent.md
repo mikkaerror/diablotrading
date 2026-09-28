@@ -14,6 +14,7 @@ approves anything.
    ```bash
    cd "$HOME/mnt/New project" && python3 inferno_paper_delegate.py run
    cd "$HOME/mnt/New project" && python3 inferno_account_performance.py run
+   cd "$HOME/mnt/New project" && python3 inferno_vol_edge.py run
    cd "$HOME/mnt/New project" && python3 inferno_capex_flow.py run
    cd "$HOME/mnt/New project" && python3 inferno_pick_scorecard.py run
    cd "$HOME/mnt/New project" && python3 inferno_desk_editor.py run --json

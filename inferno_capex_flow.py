@@ -55,6 +55,7 @@ RS_POINTS_CAP = 20.0
 IV_RICH, IV_CHEAP = 60.0, 30.0
 EARNINGS_CAUTION_DAYS = 7
 BUY_SCORE, WATCH_SCORE = 60.0, 45.0
+PULLBACK_ATR, EXTENDED_ATR, BREAKOUT_RVOL = 1.0, 3.5, 1.3
 RS_MIN_DAYS, RS_MAX_DAYS = 15, 100
 TOP_N = 5
 
@@ -125,27 +126,71 @@ def relative_strength(cohorts: list[dict[str, Any]], today_prices: dict[str, flo
     return {t: r - mid for t, r in rets.items()}, (today - date.fromisoformat(base["date"])).days
 
 
-def instrument_for(row: dict[str, Any], action: str, funding: str) -> str:
+def entry_timing(row: dict[str, Any]) -> dict[str, Any]:
+    """Trend/fade entry state. Buy strength, but not at any price.
+
+    pullback   up-trend and within PULLBACK_ATR of support: preferred entry
+    breakout   within 1% of resistance on RVOL >= BREAKOUT_RVOL: strength entry
+    extended   >= EXTENDED_ATR above support: start small or wait
+    exhaustion extended + ATR z >= 1.5 + RVOL spike: trim-watch for tactical
+               holdings (a fade flag for exits, never a short signal)
+    """
+    atr = _num(row.get("atrPercent"))
+    support = _num(row.get("distanceToSupportPct"))
+    resistance = _num(row.get("distanceToResistancePct"))
+    rvol = _num(row.get("rvol")) or 0.0
+    atr_z = _num(row.get("atrZScore")) or 0.0
+    units = round(support / atr, 2) if atr and support is not None else None
+    state = "neutral"
+    if units is not None and units >= EXTENDED_ATR:
+        state = "exhaustion" if atr_z >= 1.5 and rvol >= BREAKOUT_RVOL else "extended"
+    elif resistance is not None and resistance <= 1.0 and rvol >= BREAKOUT_RVOL:
+        state = "breakout"
+    elif units is not None and units <= PULLBACK_ATR:
+        state = "pullback"
+    return {"state": state, "atrAboveSupport": units}
+
+
+def instrument_for(row: dict[str, Any], action: str, funding: str, vol: dict[str, Any] | None = None,
+                   timing: dict[str, Any] | None = None) -> str:
     if action not in {"BUY", "WATCH"}:
         return "none"
-    iv = _num(row.get("ivRank"))
+    vol = vol or {}
     days = _num(row.get("daysUntilEarnings"))
     near_earnings = days is not None and 0 <= days <= EARNINGS_CAUTION_DAYS
+    vol_class = vol.get("volClass")
+    if vol_class in {"rich", "cheap", "fair"}:
+        rich, cheap = vol_class == "rich", vol_class == "cheap"
+        liquid = bool(vol.get("liveLiquid"))
+        basis = f"IV/RV x{vol.get('ivToRv')}"
+    else:
+        iv = _num(row.get("ivRank"))
+        rich, cheap = iv is not None and iv >= IV_RICH, iv is not None and iv <= IV_CHEAP
+        liquid = None
+        basis = "ivRank proxy; no chain captured"
+    state = (timing or {}).get("state")
     if action == "WATCH":
-        if iv is not None and iv >= IV_RICH and not near_earnings and funding == "paid-supplier":
-            return "optional: sell a defined-risk put spread at support (30-45 DTE) - paid to wait for confirmation"
+        if rich and not near_earnings and funding == "paid-supplier" and liquid is not False:
+            return f"optional: sell a defined-risk put spread at support (30-45 DTE) - paid to wait [{basis}]"
         return "wait for trend confirmation"
     parts = ["shares (core; add on strength, never average down)"]
-    if iv is not None and iv >= IV_RICH and not near_earnings:
-        parts.append("or enter via defined-risk put spread at support (30-45 DTE)")
-    elif iv is not None and iv <= IV_CHEAP:
-        parts.append("paper-test: call spread 60-120 DTE")
+    if state == "extended":
+        parts[0] = "shares: start 1/3 size, add on a pullback toward support (extended)"
+    elif state == "exhaustion":
+        parts[0] = "no new entry today (exhaustion); trim-watch if already held"
+    if liquid is False:
+        parts.append(f"options too wide to trade live [{basis}]")
+    elif rich and not near_earnings:
+        parts.append(f"or enter via defined-risk put spread at support (30-45 DTE) [{basis}]")
+    elif cheap:
+        parts.append(f"paper-test: call spread 60-120 DTE [{basis}]")
     if near_earnings:
         parts.append(f"earnings in {int(days)}d: half size or wait")
     return "; ".join(parts)
 
 
-def score_name(row: dict[str, Any], layer: dict[str, Any], regime: dict[str, Any], rs: float | None) -> dict[str, Any]:
+def score_name(row: dict[str, Any], layer: dict[str, Any], regime: dict[str, Any], rs: float | None,
+               vol: dict[str, Any] | None = None) -> dict[str, Any]:
     trend_label = str(row.get("trend") or "")
     points = 50.0 + TREND_POINTS.get(trend_label, 0)
     reasons = [f"trend {trend_label or 'n/a'}"]
@@ -177,14 +222,17 @@ def score_name(row: dict[str, Any], layer: dict[str, Any], regime: dict[str, Any
         action = "WATCH"
     else:
         action = "PASS"
+    timing = entry_timing(row)
     return {
         "ticker": row.get("ticker"),
+        "entryTiming": timing,
+        "vol": vol,
         "layer": layer["name"],
         "order": layer["order"],
         "funding": layer["funding"],
         "score": score,
         "action": action,
-        "instrument": instrument_for(row, action, layer["funding"]),
+        "instrument": instrument_for(row, action, layer["funding"], vol, timing),
         "price": _num(row.get("price")),
         "ivRank": _num(row.get("ivRank")),
         "daysUntilEarnings": row.get("daysUntilEarnings"),
@@ -214,11 +262,12 @@ def build_capex_flow(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DI
         cohorts = []
     rs_map, rs_days = relative_strength(cohorts, prices, today)
 
+    vol_names = _load(data_dir / "inferno_vol_edge.json").get("names") or {}
     names = []
     for ticker, layer in by_ticker.items():
         if layer["funding"] == "spender" or ticker not in rows:
             continue
-        names.append(score_name(rows[ticker], layer, regime, rs_map.get(ticker)))
+        names.append(score_name(rows[ticker], layer, regime, rs_map.get(ticker), vol_names.get(ticker)))
     names.sort(key=lambda n: (-n["score"], -(n["relativeStrength"] or 0)))
     spenders_rs = [rs_map[t] for t, l in by_ticker.items() if l["funding"] == "spender" and t in rs_map]
     layer_summary = {}
@@ -243,6 +292,8 @@ def build_capex_flow(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DI
         "customerMomentum": None if not spenders_rs else round(sum(spenders_rs) / len(spenders_rs), 4),
         "relativeStrengthDays": rs_days,
         "topPicks": [n["ticker"] for n in names if n["action"] == "BUY"][:TOP_N],
+        "timedPicks": [n["ticker"] for n in names if n["action"] == "BUY"
+                       and n["entryTiming"]["state"] in {"pullback", "breakout"}][:TOP_N],
         "layers": layer_summary,
         "names": names,
         "citations": [
@@ -274,10 +325,12 @@ def capex_flow_text(p: dict[str, Any]) -> str:
     if not shown:
         lines.append("- nothing clears the bar today")
     for n in shown:
-        lines.append(f"- {n['action']:5} {n['ticker']:5} {n['score']:5.1f} [{n['layer']}] {', '.join(n['reasons'])}")
+        lines.append(f"- {n['action']:5} {n['ticker']:5} {n['score']:5.1f} [{n['layer']}] {', '.join(n['reasons'])}"
+                     f" | entry {n['entryTiming']['state']}")
         lines.append(f"        -> {n['instrument']}")
     lines.append("")
-    lines.append("Research only. Scored forward by the pick scorecard (lane capexFlow). No orders placed.")
+    lines.append(f"Entry-timed picks (pullback/breakout): {', '.join(p.get('timedPicks') or []) or 'none'}")
+    lines.append("Research only. Scored forward by the pick scorecard (lanes capexFlow, capexFlowTimed). No orders placed.")
     return "\n".join(lines) + "\n"
 
 
