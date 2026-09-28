@@ -311,3 +311,9 @@ permanent retention; no automatic pruning). Supported persistence writes capture
 immediately; daily refresh sweeps remaining saved sources. Doctor and command
 center expose `reports/decision_archive_latest.txt`. It performs no ticket or
 broker action and is not a promotion input. [Archive contract](DECISION_ARCHIVE.md).
+
+The research audit also diagnoses the existing short-premium collection funnel
+from alternative pricing through source-reconciled, reported-cost paper events.
+Its state hash distinguishes new evidence from repeated reports and exposes the
+existing protocol deadline without changing it. The archive captures rejected
+alternative proposals and redacted broker transaction legs as versioned sources.

@@ -154,7 +154,9 @@ the archive before its command-center handoff; immediate hooks capture supported
 writes between sweeps. No new email or separate scheduled job is introduced.
 
 The archive makes repeated work visible and avoids duplicate archive versions.
-It does not yet stop legacy simulation producers from creating cross-day rows.
-Changing experiment generation and migrating performance consumers to shared
-identities are separate, testable repairs; they must preserve existing outcomes
-and distinguish deliberate entry/exit variants from redundant replays.
+Shadow producers now suppress repeated contract/protocol experiments; fast
+simulations suppress unchanged quote/entry inputs. Legacy rows remain intact.
+Different exit protocols remain separate experiments, never independent
+confirmations merely because they have separate IDs. Redacted broker transaction
+versions and rejected alternative-pricing proposals are also captured. See
+[EVIDENCE_LOOP_REPAIRS_2026-09-28.md](EVIDENCE_LOOP_REPAIRS_2026-09-28.md).

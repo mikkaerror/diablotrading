@@ -37,6 +37,20 @@ class ArchiveTests(unittest.TestCase):
         with sqlite3.connect(self.directory/'archive.sqlite3') as db:
             return db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
 
+    def test_rejected_alternatives_archived_without_approving_or_losing_reason(self):
+        path = self.root / 'inferno_strategy_alternative_pricing.json'
+        rows = [{'ticker':'TEST', 'recommendedStrategy':'SHORT_PREMIUM_DEFINED', 'candidateStrategyRank':1,
+                 'status':'failed', 'reason':'no usable quotes'}]
+        archive_written_evidence(path, json.dumps({'items': rows}).encode())
+        saved = archive.show(self.directory, 1)
+        self.assertEqual(saved['sourceRecord']['reason'], 'no usable quotes')
+        self.assertEqual(saved['sourceRecord']['status'], 'failed')
+        rows[0]['status'] = 'priced'
+        rows[0]['reason'] = None
+        archive_written_evidence(path, json.dumps({'items': rows}).encode())
+        self.assertEqual(self.count('versions'), 2)
+        self.assertTrue(archive.verify(self.directory)['ok'])
+
     def test_broker_ids_scoped_to_account_and_corrections_versioned(self):
         path = self.root / 'inferno_schwab_transaction_ledger.json'
         rows = [{'accountSuffix': '1234', 'transactionId': 'A', 'netAmount': 10},

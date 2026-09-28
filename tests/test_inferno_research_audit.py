@@ -14,6 +14,55 @@ from tests.test_inferno_fill_economics import recorded
 
 
 class ResearchAuditTests(unittest.TestCase):
+    def test_forward_funnel_has_one_first_block_per_candidate_and_no_authority(self):
+        arm = 'SHORT_PREMIUM_DEFINED'
+        base = {'recommendedStrategy': arm, 'ticker': 'TEST', 'status': 'priced',
+                'strikePlan': {'legs': [{'symbol': 'TEST_CALL'}]}, 'optimizerPassed': True,
+                'paperRiskPassed': True, 'combinedPassed': True}
+        rows = [dict(base, status='failed', reason='missing quotes'),
+                dict(base, strikePlan={}), dict(base, optimizerPassed=False),
+                dict(base, paperRiskPassed=False), dict(base, combinedPassed=False), base,
+                dict(base, recommendedStrategy='CALL_DEBIT_SPREAD')]
+        sources = {'alternativePricing': {'items': rows}, 'paper': {'items': []},
+                   'shortPremium': {'forwardCampaign': {'timeboxEnd': '2026-10-05', 'distinctEvents': 0}}}
+        before = copy.deepcopy(sources)
+        from datetime import date
+        result = audit.forward_collection_status(sources, [], today=date(2026,9,28))
+        self.assertEqual(result['latestBatchCandidates'], 6)
+        self.assertEqual(sum(result['firstBlockingStageCounts'].values()), 6)
+        self.assertEqual(result['firstBlockingStageCounts']['research-ready-not-approved'], 1)
+        self.assertEqual(result['daysRemaining'], 7)
+        self.assertEqual(result['campaignReportedCostEvents'], 0)
+        self.assertFalse(result['eligibleUniverseChanged'])
+        self.assertFalse(result['evaluatorChanged'])
+        self.assertEqual(sources, before)
+        later = audit.forward_collection_status(sources, [], today=date(2026,9,29))
+        self.assertEqual(result['meaningfulStateSha256'], later['meaningfulStateSha256'])
+        expired = audit.forward_collection_status(sources, [], today=date(2026,10,6))
+        self.assertEqual(expired['phase'], 'expired')
+        self.assertNotEqual(result['meaningfulStateSha256'], expired['meaningfulStateSha256'])
+
+    def test_forward_unknowns_and_report_refresh_are_not_new_evidence(self):
+        missing = audit.forward_collection_status({}, [])
+        self.assertIsNone(missing['latestBatchCandidates'])
+        self.assertIsNone(missing['campaignPaperRows'])
+        self.assertEqual(missing['phase'], 'deadline-unknown')
+        sources = {'alternativePricing': {'items': []}, 'paper': {'items': []}}
+        first = audit.build_research_audit(sources=sources)
+        again = audit.build_research_audit(sources=sources, previous=first)
+        self.assertFalse(again['forwardCollection']['meaningfulStateChanged'])
+        self.assertFalse(again['acceptedPromotionProgress'])
+
+    def test_forward_cost_count_uses_fill_reconciliation_not_study_claim(self):
+        sources = {'paper': {'items': [{'ticketId': 'one', 'campaignArm': 'SHORT_PREMIUM_DEFINED'}]}}
+        records = [{'ticketId':'one','eventId':'TEST|2026-09-28', 'provenance': {'pnlReconciliation': {'netPnl': None}}}]
+        result = audit.forward_collection_status(sources, records)
+        self.assertEqual(result['campaignFillReconciledEvents'], 1)
+        self.assertEqual(result['campaignReportedCostEvents'], 0)
+        records[0]['provenance']['pnlReconciliation']['netPnl'] = 0
+        result = audit.forward_collection_status(sources, records * 2)
+        self.assertEqual(result['campaignReportedCostEvents'], 1)
+
     def test_missing_evidence_is_unknown_not_zero_or_clean(self):
         report = audit.build_research_audit(sources={})
         self.assertIsNone(report['metrics']['qualifiedPaperEvents'])

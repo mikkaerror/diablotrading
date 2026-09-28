@@ -217,6 +217,7 @@ def archive_written_evidence(path: Path, raw: bytes) -> None:
         "inferno_fast_paper_ledger.json", "inferno_scenario_evidence.json",
         "inferno_approval_queue.json", "inferno_strike_plan.json", "operator_decisions.csv",
         "inferno_schwab_transaction_ledger.json",
+        "inferno_strategy_alternative_pricing.json",
     }
     if Path(path).name not in names:
         return

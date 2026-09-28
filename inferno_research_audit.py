@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections import Counter
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,8 @@ SOURCES = {
     'shortPremium': 'inferno_short_premium_study.json',
     'cash': 'inferno_cash_attribution.json',
     'loop': 'inferno_evidence_goal_loop.json',
+    'alternativePricing': 'inferno_strategy_alternative_pricing.json',
+    'brokerTransactions': 'inferno_schwab_transaction_ledger.json',
 }
 CITATIONS = [
     'docs/MODEL_RESEARCH_GUIDELINES.md',
@@ -56,6 +60,73 @@ def load_sources(directory: Path = DATA_DIR) -> tuple[dict, dict]:
     return sources, receipts
 
 
+def forward_collection_status(sources: dict, qualified: list[dict], *, today: date | None = None) -> dict:
+    """Diagnose the existing campaign's funnel; never change its evaluator/gates."""
+    today = today or local_now().date()
+    def campaign(row):
+        labels = [row.get(k) for k in ('strategy', 'recommendedStrategy', 'arm', 'campaignArm')]
+        labels.append((row.get('strikePlan') or {}).get('strategy'))
+        return 'SHORT_PREMIUM_DEFINED' in labels
+    pricing = sources.get('alternativePricing')
+    paper = sources.get('paper')
+    candidates = [row for row in (pricing or {}).get('items') or [] if campaign(row)]
+    stages, reasons = Counter(), Counter()
+    for row in candidates:
+        plan = row.get('strikePlan') or {}
+        if row.get('status') != 'priced':
+            stage = 'data-or-pricing-unavailable'
+            reasons[str(row.get('reason') or row.get('status') or 'unspecified-pricing-failure')] += 1
+        elif not plan.get('legs'):
+            stage = 'construction-missing'
+        elif row.get('optimizerPassed') is not True:
+            stage = 'construction-or-economics-blocked'
+            reasons.update(plan.get('optimizerBlocks') or ['optimizer-not-passed'])
+        elif row.get('paperRiskPassed') is not True:
+            stage = 'risk-blocked'
+            reasons.update((row.get('riskVerdict') or {}).get('blocks') or ['risk-not-passed'])
+        elif row.get('combinedPassed') is not True:
+            stage = 'combined-gate-unconfirmed'
+        else:
+            stage = 'research-ready-not-approved'
+        stages[stage] += 1
+    tickets = [row for row in (paper or {}).get('items') or [] if campaign(row)]
+    ids = {row.get('ticketId') for row in tickets if row.get('ticketId')}
+    reconciled = [row for row in qualified if row.get('ticketId') in ids]
+    costs_known = [row for row in reconciled if ((row.get('provenance') or {}).get('pnlReconciliation') or {}).get('netPnl') is not None]
+    forward = (sources.get('shortPremium') or {}).get('forwardCampaign') or {}
+    try:
+        end = date.fromisoformat(forward.get('timeboxEnd') or '')
+        remaining = (end - today).days
+    except ValueError:
+        remaining = None
+    missing = [key for key in ('alternativePricing', 'paper', 'shortPremium') if not sources.get(key)]
+    phase = 'deadline-unknown' if remaining is None else 'expired' if remaining < 0 else 'active'
+    result = {
+        'protocol': 'docs/SHORT_PREMIUM_PREREG_2026-07-07.md',
+        'deadline': forward.get('timeboxEnd'), 'daysRemaining': remaining, 'phase': phase,
+        'sourceMissing': missing,
+        'latestBatchCandidates': len(candidates) if pricing else None,
+        'latestBatchDistinctNames': len({r.get('ticker') for r in candidates if r.get('ticker')}) if pricing else None,
+        'firstBlockingStageCounts': dict(sorted(stages.items())) if pricing else None,
+        'blockingReasons': dict(reasons.most_common()),
+        'campaignPaperRows': len(tickets) if paper else None,
+        'campaignFillReconciledEvents': len({r['eventId'] for r in reconciled}) if paper else None,
+        'campaignReportedCostEvents': len({r['eventId'] for r in costs_known}) if paper else None,
+        'studyReportedEvents': forward.get('distinctEvents'),
+        'eligibleUniverseChanged': False, 'evaluatorChanged': False,
+        'limitations': [
+            'Latest pricing batch is not coverage of the entire eligible universe.',
+            'Funnel uses the first failed stage; simultaneous later blockers may also exist.',
+            'A priced candidate is not approval, a fill, a fixed-exit outcome or independent evidence.',
+            'Fill reconciliation and reported costs alone do not establish compliance with every registered protocol rule.',
+            'The existing deadline and evaluator are observed, not extended or replaced.',
+        ],
+    }
+    state = {k: v for k, v in result.items() if k != 'daysRemaining'}
+    result['meaningfulStateSha256'] = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+    return result
+
+
 def build_research_audit(*, sources: dict | None = None, fill_source: dict | None = None,
                          receipts: dict | None = None, previous: dict | None = None) -> dict[str, Any]:
     if sources is None:
@@ -75,6 +146,10 @@ def build_research_audit(*, sources: dict | None = None, fill_source: dict | Non
     forward = (sources.get('shortPremium') or {}).get('forwardCampaign') or {}
     cash = (sources.get('cash') or {}).get('realizedOptionsProfit') or {}
     loop = sources.get('loop') or {}
+    collection = forward_collection_status(sources, qualified)
+    collection['meaningfulStateChanged'] = collection['meaningfulStateSha256'] != ((previous or {}).get('forwardCollection') or {}).get('meaningfulStateSha256')
+    broker = sources.get('brokerTransactions') or {}
+    broker_summary = broker.get('transactionSummary') or {}
     metrics = {
         'qualifiedPaperFills': len(qualified) if 'paper' not in missing else None,
         'qualifiedPaperEvents': len({r['eventId'] for r in qualified}) if 'paper' not in missing else None,
@@ -96,6 +171,9 @@ def build_research_audit(*, sources: dict | None = None, fill_source: dict | Non
         'realizedOptionsProfitKnown': cash.get('known'),
         'lastRunPromotionEvidenceDelta': (loop.get('progressDelta') or {}).get('promotionEvidenceDelta'),
         'fullRunAcceptanceRate': (loop.get('economics') or {}).get('fullRunAcceptanceRate'),
+        'brokerOptionLegs': broker_summary.get('optionLegCount'),
+        'brokerMatchedContractNetCash': (broker_summary.get('closedContractCashReconciliation') or {}).get('matchedNetCash'),
+        'brokerEvidenceRetainedAfterFailure': broker.get('retainedPriorEvidence', False) if broker else None,
     }
     gaps = []
     def gap(key, area, observation, next_step):
@@ -114,6 +192,12 @@ def build_research_audit(*, sources: dict | None = None, fill_source: dict | Non
         gap('issuer-evidence', 'knowledge', 'Issuer-level evidence is due for part of the tracked universe.', 'Prioritize dated issuer sources for actionable and portfolio-relevant names; record contrary evidence and a falsifier.')
     if forward.get('distinctEvents') == 0:
         gap('short-premium-forward', 'strategy', 'Backward short-premium results have no forward event sample.', 'Collect quoted wings, bid/ask execution costs and fixed-exit outcomes under existing gates; backward proxies cannot authorize trading.')
+    if collection['latestBatchCandidates'] and not (collection['firstBlockingStageCounts'] or {}).get('research-ready-not-approved'):
+        gap('forward-collection-blocked', 'operations', f"All {collection['latestBatchCandidates']} latest campaign candidates stop before the combined research gate: {collection['firstBlockingStageCounts']}.", 'Repair source coverage first; record construction failures. Any proposed gate or protocol change requires a separate measured review; do not approve tickets to manufacture a sample.')
+    if collection['phase'] == 'expired' or (collection['daysRemaining'] is not None and collection['daysRemaining'] <= 7 and not collection['campaignReportedCostEvents']):
+        gap('forward-protocol-deadline', 'measurement', f"Existing campaign deadline {collection['deadline']}; reported-cost campaign events={collection['campaignReportedCostEvents']}.", 'Record an expired or underfilled experiment honestly; do not restart its clock or relabel historical simulations as forward outcomes.')
+    if broker and not broker.get('ok'):
+        gap('broker-evidence-refresh', 'returns', 'The latest broker transaction read is not healthy; retained facts are older evidence.', 'Restore the read-only source; do not treat a new report timestamp as a new broker observation.')
     if cash.get('known') is not True:
         gap('account-attribution', 'returns', 'Realized options profit is not source-proven.', 'Reconcile lots, costs, external flows and valuation dates before claiming account alpha or sweepable profit.')
     # These limitations are structural until an independently reviewed protocol changes.
@@ -131,6 +215,7 @@ def build_research_audit(*, sources: dict | None = None, fill_source: dict | Non
         'liveTradingAllowed': False, 'brokerSubmitAllowed': False,
         'verdict': 'measurement-gaps-open', 'gapCount': len(gaps),
         'metrics': metrics, 'gaps': gaps, 'sourceReceipts': receipts or {},
+        'forwardCollection': collection,
         'sourceMissing': missing, 'metricDeltaSincePreviousAudit': delta,
         'acceptedPromotionProgress': False, 'citations': CITATIONS,
         'limitations': [
@@ -146,6 +231,11 @@ def research_audit_text(payload: dict) -> str:
     lines = ['Inferno research measurement audit', '', f"Generated: {payload.get('generatedAt')}",
              f"Verdict: {payload.get('verdict')} | open gaps: {payload.get('gapCount')}", '', 'Measurements:']
     lines.extend(f'- {key}: {value if value is not None else "unknown"}' for key, value in payload.get('metrics', {}).items())
+    collection = payload.get('forwardCollection') or {}
+    lines.extend(['', 'Existing forward campaign:',
+                  f"- Latest candidate stages: {collection.get('firstBlockingStageCounts')}",
+                  f"- Paper rows: {collection.get('campaignPaperRows')} | fill-reconciled events: {collection.get('campaignFillReconciledEvents')} | reported-cost events: {collection.get('campaignReportedCostEvents')}",
+                  f"- Deadline: {collection.get('deadline')} | days remaining: {collection.get('daysRemaining')} | meaningful state changed: {collection.get('meaningfulStateChanged')}"])
     lines.extend(['', 'Research backlog:'])
     lines.extend(f"- [{r['area']}] {r['observation']} Next: {r['nextStep']}" for r in payload.get('gaps', []))
     lines.extend(['', 'Limits:', *[f'- {s}' for s in payload.get('limitations', [])]])

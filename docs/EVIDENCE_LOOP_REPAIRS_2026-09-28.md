@@ -57,3 +57,35 @@ Normalized transaction snapshots now enter the append-only archive, keyed by
 account suffix and broker transaction ID. No raw description, account number,
 account hash or token is added to the archive. Corrections append new versions;
 a rolling API lookback no longer erases previously captured transaction history.
+
+## Forward collection: reuse the registered experiment
+
+The short-premium campaign already has a dated protocol in
+`SHORT_PREMIUM_PREREG_2026-07-07.md` and a 2026-10-05 deadline. Creating another
+campaign would duplicate work. The existing daily research audit now separates
+pricing, construction/economics, risk, combined-gate readiness, campaign paper
+rows, source-reconciled events and reported-cost events. It records the first
+blocking stage per candidate; simultaneous later blockers can also exist.
+
+The current saved batch contains 40 candidates: 31 have no usable pricing and
+nine fail construction/economics; none passes the combined gate. There are no
+campaign paper rows or reported-cost events. This is a collection bottleneck,
+not proof that the strategy works or fails. The batch is not the full universe.
+The deadline is surfaced without extending it. A future restart or evaluator
+revision must be registered separately; historical simulations cannot be relabeled
+forward evidence. The current study's permissive record normalization (including
+unknown event dates and default-zero friction) also needs a separate measured
+review before its confirmation labels can be trusted as protocol compliance.
+No campaign evaluator, thresholds, universe or routing changes are made here.
+
+The alternative-pricing artifact now joins the append-only archive, including
+unpriced and rejected proposals and their source reasons. Research audit source
+hashes identify the observed inputs. The collection-state fingerprint excludes
+report timestamps and remaining-day countdowns, so rerunning unchanged evidence
+is visibly not a new collection result; crossing the existing deadline is a state
+change. This diagnostic does not alter scheduler cadence or email delivery.
+
+Next useful acquisition work is to explain the 31 missing option-chain cases
+using existing read-only coverage tools. The nine construction failures warrant
+research with frozen rules and counterexamples, not threshold relaxation. Fee
+capture for the one existing qualified paper event remains a separate source gap.

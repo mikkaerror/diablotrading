@@ -36,6 +36,7 @@ SOURCES = {
     'inferno_strike_plan.json': ('proposal', 'items'),
     'operator_decisions.csv': ('decision-log', None),
     'inferno_schwab_transaction_ledger.json': ('broker-transaction', 'transactions'),
+    'inferno_strategy_alternative_pricing.json': ('alternative-proposal', 'items'),
 }
 VOLATILE = {'generatedAt', 'updatedAt', 'refreshedAt', 'lastAttemptAt', 'lastSuccessfulAt'}
 TABLES = ('objects', 'snapshots', 'versions', 'annotations', 'captures')
@@ -145,10 +146,13 @@ def identity(row: dict, fallback: str) -> tuple[str, str]:
 def summary(row: dict, lane: str) -> dict:
     verdict = row.get('riskVerdict') if isinstance(row.get('riskVerdict'), dict) else {}
     reasons = {key: row[key] for key in ('rationale', 'note', 'reason', 'decisionReason', 'blockReasons', 'intentBlocks', 'researchNotes', 'notes') if row.get(key)}
-    for key in ('reasons', 'hardFails', 'warnings', 'checks'):
+    for key in ('reasons', 'blocks', 'hardFails', 'warnings', 'checks'):
         if verdict.get(key):
             reasons['risk.' + key] = verdict[key]
     plan = row.get('strikePlan') if isinstance(row.get('strikePlan'), dict) else {}
+    for key in ('optimizerBlocks', 'optimizerWarnings'):
+        if plan.get(key):
+            reasons['construction.' + key] = plan[key]
     outcome = row.get('outcome') if isinstance(row.get('outcome'), dict) else {}
     return {
         'lane': lane, 'sourceStatus': row.get('action') or row.get('approvalStatus') or row.get('status') or row.get('intentStatus'),
@@ -195,6 +199,8 @@ def ingest(db: sqlite3.Connection, envelope: dict) -> tuple[int, int]:
         rid = row.get('ticketId') or row.get('observationId') or row.get('id') or row.get('token')
         if lane == 'broker-transaction':
             rid = canonical([row.get('accountSuffix'), row.get('transactionId')]) if row.get('transactionId') else digest(canonical(row).encode())
+        if lane == 'alternative-proposal':
+            rid = canonical([row.get('ticker'), row.get('recommendedStrategy'), row.get('candidateStrategyRank')])
         if lane == 'decision-log':
             rid = f'csv-row:{index}'
         if not rid:

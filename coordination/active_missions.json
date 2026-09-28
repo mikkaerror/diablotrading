@@ -1619,11 +1619,11 @@
   {
     "id": "mission-3079ead4",
     "createdAt": "2026-09-28T15:31:05.674948-06:00",
-    "updatedAt": "2026-09-28T15:31:05.674948-06:00",
+    "updatedAt": "2026-09-28T15:47:54.658544-06:00",
     "title": "Complete evidence loop: dedupe, transaction provenance and forward protocol",
-    "body": "Codex: suppress repeated shadow experiments and stale-input fast simulations without rewriting history; preserve all broker transfer-item instruments and expose reconciliation gaps; register and monitor a fixed forward research protocol with immutable entry features. No ticket decisions, risk/authority changes or cloud/local migration. Ownership and off-device destination await explicit operator input.",
+    "body": "Completed three scoped repairs: immutable experiment dedupe and entry features; complete redacted broker transfer provenance with bounded cash reconciliation and archive history; daily existing-protocol collection funnel plus rejected-proposal archive. No new campaign or gate/evaluator changes. Cloud/local owner and off-device backup destination remain separately pending operator choices; no migration or external upload performed.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [
       "automation",
