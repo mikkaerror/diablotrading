@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from inferno_desk_editor import build_desk_editor, desk_editor_text
-from inferno_second_opinion import ask_model, build_second_opinion, candidate_facts
+from inferno_second_opinion import ask_model, build_second_opinion, candidate_facts, pick_model
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
 
@@ -35,7 +35,9 @@ class SecondOpinionTests(unittest.TestCase):
 
     def test_items_and_desk_editor_quote(self):
         payload = build_second_opinion(
-            self.data, env={"OPENAI_API_KEY": "k"}, asker=lambda f, k, m: f"{f['ticker']} risk is $1510", now=NOW)
+            self.data, env={"OPENAI_API_KEY": "k"}, asker=lambda f, k, m: f"{f['ticker']} risk is $1510", now=NOW,
+            model_lister=lambda k: ["gpt-6-sol", "gpt-6-luna", "gpt-4o-mini-transcribe"])
+        self.assertEqual(payload["model"], "gpt-6-luna")
         self.assertEqual(payload["items"], [{"ticker": "ACN", "challenge": "ACN risk is $1510"}])
         (self.data / "inferno_second_opinion.json").write_text(json.dumps(payload))
         editor = build_desk_editor(self.data, self.data, now=NOW)
@@ -45,9 +47,21 @@ class SecondOpinionTests(unittest.TestCase):
     def test_network_failure_is_contained(self):
         def boom(*_):
             raise urllib.error.URLError("down")
-        payload = build_second_opinion(self.data, env={"OPENAI_API_KEY": "k"}, asker=boom, now=NOW)
+        payload = build_second_opinion(self.data, env={"OPENAI_API_KEY": "k", "INFERNO_SECOND_OPINION_MODEL": "m"},
+                                       asker=boom, now=NOW)
         self.assertEqual(payload["status"], "unavailable")
         self.assertEqual(payload["items"], [])
+
+    def test_pick_model(self):
+        self.assertEqual(pick_model(["gpt-6-astra", "gpt-6-luna", "gpt-4o-mini-transcribe"]), "gpt-6-luna")
+        self.assertEqual(pick_model(["x-large", "y-mini", "z-mini-tts"]), "y-mini")
+        self.assertIsNone(pick_model(["whisper-1", "gpt-4o-mini-transcribe"]))
+
+    def test_model_list_failure_contained(self):
+        def boom(_):
+            raise urllib.error.URLError("down")
+        payload = build_second_opinion(self.data, env={"OPENAI_API_KEY": "k"}, now=NOW, model_lister=boom)
+        self.assertEqual(payload["status"], "unavailable")
 
     def test_ask_model_parses_and_trims(self):
         class Resp(io.BytesIO):

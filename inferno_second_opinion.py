@@ -32,7 +32,11 @@ from inferno_desk_editor import DATA_DIR, decisions_section
 SECOND_OPINION_STAGE = "second-opinion-research-only"
 SECOND_OPINION_FILE = DATA_DIR / "inferno_second_opinion.json"
 API_URL = os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
-DEFAULT_MODEL = "gpt-4.1-mini"
+MODELS_URL = os.environ.get("OPENAI_MODELS_URL", "https://api.openai.com/v1/models")
+# No hard-coded model: names change. Unless INFERNO_SECOND_OPINION_MODEL is set,
+# pick the cheapest-tier text model the account actually has.
+MODEL_PREFERENCE = ("luna", "nano", "mini")
+MODEL_EXCLUDE = ("transcribe", "tts", "audio", "realtime", "image", "embedding", "search", "moderation", "whisper", "dall")
 MAX_WORDS = 35
 TIMEOUT_SECONDS = 30
 
@@ -48,6 +52,23 @@ def candidate_facts(decision: dict[str, Any]) -> dict[str, Any]:
     keys = ("ticker", "strategy", "expiration", "maxLoss", "breakevens", "daysUntilEarnings",
             "readiness", "riskBlocks", "tickerShadow", "strategyShadow")
     return {key: decision.get(key) for key in keys}
+
+
+def pick_model(model_ids: list[str]) -> str | None:
+    """Cheapest-tier chat model by name hint; newest-looking id wins ties."""
+    usable = [m for m in model_ids if not any(word in m.lower() for word in MODEL_EXCLUDE)]
+    for hint in MODEL_PREFERENCE:
+        matches = sorted((m for m in usable if hint in m.lower()), reverse=True)
+        if matches:
+            return matches[0]
+    return None
+
+
+def list_models(api_key: str, opener=urllib.request.urlopen) -> list[str]:
+    request = urllib.request.Request(MODELS_URL, headers={"Authorization": f"Bearer {api_key}"})
+    with opener(request, timeout=TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return [row.get("id", "") for row in payload.get("data") or [] if row.get("id")]
 
 
 def ask_model(facts: dict[str, Any], api_key: str, model: str, opener=urllib.request.urlopen) -> str:
@@ -75,6 +96,7 @@ def build_second_opinion(
     env: dict[str, str] | None = None,
     asker=ask_model,
     now: datetime | None = None,
+    model_lister=list_models,
 ) -> dict[str, Any]:
     env = env if env is not None else dict(os.environ)
     now = now or datetime.now().astimezone()
@@ -85,7 +107,7 @@ def build_second_opinion(
         "promotable": False,
         "authorityChanged": False,
         "advisoryOnly": True,
-        "model": env.get("INFERNO_SECOND_OPINION_MODEL", DEFAULT_MODEL),
+        "model": env.get("INFERNO_SECOND_OPINION_MODEL", "").strip() or None,
         "status": "ok",
         "items": [],
         "citations": ["coordination/prompts/desk_editor_agent.md", "inferno_desk_editor.decisions_section"],
@@ -98,6 +120,16 @@ def build_second_opinion(
     if not api_key:
         payload["status"] = "no-key"
         return payload
+    if not payload["model"]:
+        try:
+            payload["model"] = pick_model(model_lister(api_key))
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, OSError) as exc:
+            payload["status"] = "unavailable"
+            payload["errors"] = [f"model list: {type(exc).__name__}"]
+            return payload
+        if not payload["model"]:
+            payload["status"] = "no-model"
+            return payload
     for decision in decisions:
         try:
             challenge = asker(candidate_facts(decision), api_key, payload["model"])
