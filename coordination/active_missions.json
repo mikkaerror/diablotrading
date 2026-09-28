@@ -1455,5 +1455,22 @@
       "multi-agent",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-47948730",
+    "createdAt": "2026-09-28T04:13:36.562951+00:00",
+    "updatedAt": "2026-09-28T04:13:36.562951+00:00",
+    "title": "Deposit-aware drawdown + cash-landing split recommender",
+    "body": "Operator expects a raise/large cash payment soon. (1) Drawdown stepper in inferno_capital_scaling uses raw NLV vs peakNlv; a deposit would lift NLV above peak-30% and clear 'pause' with no trading improvement. Make drawdown deposit-aware (subtract net external deposits since peak, from the Schwab transaction ledger / deposit plan), with tests. (2) Build a research-only recommender (capital-scaling pattern, operator ack file) that proposes how a lump sum splits across long-term accumulation lane, cash reserve, and a fixed options risk budget until the 30-outcome gate passes. Operator chooses the percentages; the desk enforces them. No risk-constant edits, no authority change.",
+    "owner": "codex",
+    "status": "todo",
+    "priority": "high",
+    "tags": [
+      "capital",
+      "drawdown",
+      "deposit",
+      "recommender",
+      "codex"
+    ]
   }
 ]

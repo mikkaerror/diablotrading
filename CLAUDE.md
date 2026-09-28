@@ -216,6 +216,10 @@ explicit click, is fixed:
 
 **Always requires explicit operator approval:**
   - Approving / rejecting any paper ticket (operator runs `./inferno today`)
+    — EXCEPTION (operator-delegated 2026-09-27): `inferno_paper_delegate.py run`
+    may approve/reject PAPER queue items by its fixed rules while
+    `data/inferno_paper_delegation_ack.json` is active (scope paper-only).
+    No other approval path is delegated.
   - Ack-ing or revoking the capital-scaling formula
   - Touching `liveTradingAllowed` / `brokerSubmitAllowed` (still hard-coded)
   - Any change to risk policy constants
@@ -242,7 +246,8 @@ that costs money or moves discipline.
   `inferno_risk_*`, `inferno_doctor.py`, `inferno_model_command_center.py`
   without surfacing the lane-cross to the user first.
 - **Don't** approve, reject, or close any paper ticket on the user's
-  behalf. Surface decisions; the operator clicks the buttons.
+  behalf, except through `inferno_paper_delegate.py run` under the active
+  paper-only delegation ack (see §8). Never close tickets; never touch live.
 - **Don't** leave git locks behind. A desktop-linked Claude session runs in
   a VM that cannot unlink files, so every git command (even `git status`)
   can strand a zero-byte `.git/index.lock` / `HEAD.lock` / `tmp_obj_*` —

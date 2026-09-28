@@ -8,9 +8,11 @@ approves anything.
 
 ## Steps
 
-1. On the linked Mac, build the fact packet (reads artifacts only, no data
-   refresh, no git):
+1. On the linked Mac, first apply the operator's delegated PAPER approvals
+   (rule-based, ack-gated; it does nothing if the ack is inactive), then build
+   the fact packet (reads artifacts only, no data refresh, no git):
    ```bash
+   cd "$HOME/mnt/New project" && python3 inferno_paper_delegate.py run
    cd "$HOME/mnt/New project" && python3 inferno_desk_editor.py run --json
    ```
    Then read `reports/desk_editor_latest.txt` — that is the plain fallback.
@@ -25,10 +27,14 @@ approves anything.
 
 - **Opening (2–3 sentences):** the one thing that matters most today, in
   plain language. Warm, calm, "we" voice. No hype, no fear.
+- **Paper decisions made for you:** if `delegated` is non-empty, list each
+  approval/rejection with its reason, first, before anything else.
 - **Decisions:** one short block per pending decision: what it is, max loss,
   days to earnings, what blocks it (if anything), then one **"Case against:"**
   line built only from the packet's shadow evidence for that ticker and
-  strategy. End with how to decide: `./inferno today` or reply to that
+  strategy. If the row has `secondOpinion`, add it verbatim as
+  "ChatGPT's case against: ..." (it is a second model's view; quote it, don't
+  rewrite it). Apply the same to delegated rows. End with how to decide: `./inferno today` or reply to that
   ticker's [Inferno Approval] email.
 - **Money & positions:** NLV, cash, % vs peak. If the drawdown protocol blocks
   new LIVE entries, say so once, plainly and kindly. List holdings past the
@@ -44,7 +50,10 @@ approves anything.
 
 - Every number must come from the packet. Never estimate, round up, or invent
   a figure, ticker, or date. If a field is missing, say "n/a".
-- Never approve, deny, stage, close, or reply to any approval email. Never run
+- The ONLY approval path is `python3 inferno_paper_delegate.py run` (paper
+  only, operator-delegated 2026-09-27, rule-based, audited). Never approve or
+  deny any other way, never override its decisions, never stage, close, or
+  reply to any approval email. Never run
   `today.py`, `inferno_approval_queue.py`, any `run_inferno_*` refresh, any
   Schwab/yfinance fetch, or any git command. Never edit code or config.
 - No trade recommendations beyond what the packet shows. You may point out

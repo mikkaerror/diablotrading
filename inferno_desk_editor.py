@@ -218,6 +218,33 @@ def positions_section(data_dir: Path) -> dict[str, Any]:
     }
 
 
+def delegated_section(data_dir: Path, now: datetime) -> list[dict[str, Any]]:
+    """Paper approvals/rejections Claude applied under the operator's ack (last 24h)."""
+    payload = _load(data_dir / "inferno_paper_delegate.json")
+    age = _age_hours(payload.get("generatedAt"), now)
+    if not payload or age is None or age > 24:
+        return []
+    reasons = {d.get("ticker"): d for d in payload.get("decisions") or []}
+    return [
+        {
+            "ticker": row.get("ticker"),
+            "status": row.get("status"),
+            "rule": row.get("rule"),
+            "reason": (reasons.get(row.get("ticker")) or {}).get("reason"),
+        }
+        for row in payload.get("applied") or []
+    ]
+
+
+def second_opinions(data_dir: Path, now: datetime) -> dict[str, str]:
+    """ChatGPT devil's-advocate lines (advisory) from the last 24h, by ticker."""
+    payload = _load(data_dir / "inferno_second_opinion.json")
+    age = _age_hours(payload.get("generatedAt"), now)
+    if not payload or age is None or age > 24:
+        return {}
+    return {row.get("ticker"): row.get("challenge") for row in payload.get("items") or [] if row.get("challenge")}
+
+
 def evidence_section(data_dir: Path) -> dict[str, Any]:
     analytics = _load(data_dir / "inferno_performance_analytics.json")
     shadow = _load(data_dir / "inferno_shadow_evidence.json")
@@ -287,6 +314,9 @@ def headline(payload: dict[str, Any]) -> str:
     count = len(payload["decisions"])
     losers = [h for h in payload["positions"]["live"] if h["lossRule"]]
     parts = [f"{count} decision{'s' if count != 1 else ''} today" if count else "No decisions today"]
+    if payload.get("delegated"):
+        approved = sum(1 for row in payload["delegated"] if row["status"] == "approved")
+        parts.append(f"{approved} paper approval(s) made for you")
     if payload["positions"]["paperActions"]:
         parts.append(f"{len(payload['positions']['paperActions'])} paper position(s) need action")
     if losers:
@@ -314,12 +344,17 @@ def build_desk_editor(
         "brokerSubmitAllowed": False,
         "money": money_section(data_dir, now),
         "decisions": decisions_section(data_dir),
+        "delegated": delegated_section(data_dir, now),
         "positions": positions_section(data_dir),
         "evidence": evidence_section(data_dir),
         "alerts": alerts_section(data_dir, now),
         "longTerm": long_term_section(reports_dir),
         "citations": CITATIONS,
     }
+    opinions = second_opinions(data_dir, now)
+    for row in payload["decisions"] + payload["delegated"]:
+        if row.get("ticker") in opinions:
+            row["secondOpinion"] = opinions[row["ticker"]]
     payload["headline"] = headline(payload)
     return payload
 
@@ -349,6 +384,14 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
         lines.append(f"Drawdown protocol: {money.get('drawdownLevel')} — no new LIVE entries. Paper practice is fine.")
     lines.append("")
 
+    if payload.get("delegated"):
+        lines.append("PAPER DECISIONS CLAUDE MADE (your delegation; paper only)")
+        for row in payload["delegated"]:
+            lines.append(f"- {row['ticker']} {row['status']}: {row['reason']}")
+            if row.get("secondOpinion"):
+                lines.append(f"  ChatGPT's case against: {row['secondOpinion']}")
+        lines.append("")
+
     lines.append("DECISIONS")
     if not payload["decisions"]:
         lines.append("Nothing waiting on you.")
@@ -367,6 +410,8 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             against.append(f"strategy shadow win {_pct(ss['winRate'])}, avg {_r(ss['avgR'])} over {ss['closed']}")
         if against:
             lines.append(f"  Evidence: {'; '.join(against)}")
+        if d.get("secondOpinion"):
+            lines.append(f"  ChatGPT's case against: {d['secondOpinion']}")
         lines.append(f"  Decide: ./inferno today, or reply to the {d['ticker']} [Inferno Approval] email")
     lines.append("")
 

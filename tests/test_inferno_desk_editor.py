@@ -129,6 +129,19 @@ class DeskEditorTests(unittest.TestCase):
             "1 decision today | 1 paper position(s) need action | 1 holding(s) past the -20% rule | data needs a refresh",
         )
 
+    def test_delegated_section(self):
+        _write(self.data, "inferno_paper_delegate.json", {
+            "generatedAt": FRESH,
+            "decisions": [{"ticker": "ACN", "reason": "priced, fresh"}],
+            "applied": [{"ticker": "ACN", "status": "approved", "rule": "clean-paper"}],
+        })
+        payload = build_desk_editor(self.data, self.reports, now=NOW)
+        self.assertEqual(payload["delegated"][0]["status"], "approved")
+        self.assertIn("1 paper approval(s) made for you", payload["headline"])
+        self.assertIn("PAPER DECISIONS CLAUDE MADE", desk_editor_text(payload))
+        _write(self.data, "inferno_paper_delegate.json", {"generatedAt": OLD, "applied": [{"ticker": "X"}]})
+        self.assertEqual(build_desk_editor(self.data, self.reports, now=NOW)["delegated"], [])
+
     def test_long_term_parse(self):
         rows = long_term_section(self.reports)
         self.assertEqual([r["ticker"] for r in rows], ["DBX", "GNRC"])
