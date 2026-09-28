@@ -10,6 +10,9 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_trade_evidence import normalized_outcome, strategy_family
+from inferno_strategy_lab import closed_trade_records
+from inferno_paper_execution import paper_event_id
+from inferno_paper_provenance import finite, parse_execution_timestamp
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs, load_json_file
 
 
@@ -19,7 +22,6 @@ EXPECTANCY_LEDGER_FILE = DATA_DIR / "inferno_expectancy_ledger.json"
 EXPECTANCY_LEDGER_TEXT_FILE = REPORTS_DIR / "expectancy_ledger_latest.txt"
 STAGE = "expectancy-ledger-research-only"
 BOOTSTRAP_SAMPLES = 2000
-MIN_PROMOTION_SAMPLE = 30
 
 
 def _percentile(values: list[float], pct: float) -> float | None:
@@ -28,17 +30,6 @@ def _percentile(values: list[float], pct: float) -> float | None:
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * pct)))
     return round(ordered[index], 6)
-
-
-def _bootstrap_mean_ci(values: list[float], seed: int = 17) -> dict[str, float | None]:
-    if not values:
-        return {"lower": None, "upper": None}
-    rng = random.Random(seed)
-    means = []
-    for _ in range(BOOTSTRAP_SAMPLES):
-        sample = [values[rng.randrange(len(values))] for _ in values]
-        means.append(sum(sample) / len(sample))
-    return {"lower": _percentile(means, 0.025), "upper": _percentile(means, 0.975)}
 
 
 def _max_drawdown(values: list[float]) -> float | None:
@@ -53,11 +44,28 @@ def _max_drawdown(values: list[float]) -> float | None:
 
 
 def _stats(records: list[dict[str, Any]]) -> dict[str, Any]:
-    net_r = [row["netREstimate"] for row in records if row.get("netREstimate") is not None]
-    gross_r = [row["grossR"] for row in records if row.get("grossR") is not None]
+    dated = [(parse_execution_timestamp(row.get("reviewedAt")), row) for row in records]
+    chronology_known = all(stamp is not None for stamp, _ in dated)
+    if chronology_known:
+        records = [row for _, row in sorted(dated, key=lambda pair: pair[0])]
+    net_r = [finite(row.get("netREstimate")) for row in records if finite(row.get("netREstimate")) is not None]
+    gross_r = [finite(row.get("grossR")) for row in records if finite(row.get("grossR")) is not None]
     wins = [value for value in net_r if value > 0]
     losses = [value for value in net_r if value < 0]
-    ci = _bootstrap_mean_ci(net_r)
+    clusters = defaultdict(list)
+    for row in records:
+        value = finite(row.get("netREstimate"))
+        if value is not None:
+            clusters[row.get("eventId") or "unknown-event"].append(value)
+    ci = {"lower": None, "upper": None}
+    if len(clusters) >= 2:
+        groups = list(clusters.values())
+        rng = random.Random(17)
+        means = []
+        for _ in range(BOOTSTRAP_SAMPLES):
+            sample = [value for _ in groups for value in groups[rng.randrange(len(groups))]]
+            means.append(sum(sample) / len(sample))
+        ci = {"lower": _percentile(means, .025), "upper": _percentile(means, .975)}
     return {
         "count": len(records),
         "scoredCount": len(net_r),
@@ -70,7 +78,8 @@ def _stats(records: list[dict[str, Any]]) -> dict[str, Any]:
         "averageLossNetR": round(sum(losses) / len(losses), 6) if losses else None,
         "expectancyNetR": round(sum(net_r) / len(net_r), 6) if net_r else None,
         "expectancyNetR95": ci,
-        "maxDrawdownNetR": _max_drawdown(net_r),
+        "maxDrawdownNetR": _max_drawdown(net_r) if chronology_known else None,
+        "drawdownBasis": "chronological-summed-trade-R" if chronology_known else "unavailable-missing-outcome-time",
         "estimatedFrictionDollars": round(
             sum(row.get("estimatedFrictionDollars") or 0.0 for row in records), 2
         ),
@@ -81,11 +90,16 @@ def build_expectancy_ledger(
     *,
     paper: dict[str, Any] | None = None,
     shadow: dict[str, Any] | None = None,
+    fill_source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sources = {
         "paper": paper if paper is not None else (load_json_file(PAPER_LEDGER_FILE) or {}),
         "shadow": shadow if shadow is not None else (load_json_file(SHADOW_LEDGER_FILE) or {}),
     }
+    if paper is not None and fill_source is None:
+        fill_source = {"status": "not-supplied", "rows": []}
+    # Use the existing qualifier; this report neither changes nor replaces it.
+    admitted = {row["ticketId"]: row for row in closed_trade_records(sources["paper"].get("items") or [], fill_source)}
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for source, payload in sources.items():
@@ -100,9 +114,35 @@ def build_expectancy_ledger(
             outcome = normalized_outcome(item)
             if outcome.get("grossPnlDollars") is None:
                 continue
+            qualified = admitted.get(ticket_id) if source == "paper" else None
+            evidence_class = "source-reconciled-paper-fill" if qualified else ("unverified-paper-estimate" if source == "paper" else "shadow-proxy")
+            if qualified:
+                # The qualifier supplies fill-adjusted risk and fee semantics.
+                provenance = qualified["provenance"]
+                basis = provenance["pnlBasis"]
+                economics = provenance["pnlReconciliation"]
+                net_known = economics.get("netPnl") is not None
+                outcome.update({
+                    "maxLossDollars": qualified["maxLoss"],
+                    "grossPnlDollars": economics["grossPnl"],
+                    "grossR": round(economics["grossPnl"] / qualified["maxLoss"], 6),
+                    "netREstimate": qualified["returnOnRisk"] if net_known else None,
+                    "netPnlEstimateDollars": qualified["estimatedPnl"] if net_known else None,
+                    "frictionSource": basis,
+                    "estimatedFrictionDollars": economics.get("totalFees"),
+                    "frictionRealized": net_known,
+                })
+            else:
+                basis = "modeled-net" if outcome.get("frictionSource") != "unavailable" else "gross-costs-unknown"
+                if basis == "gross-costs-unknown":
+                    outcome["netREstimate"] = None
+                    outcome["netPnlEstimateDollars"] = None
             records.append(
                 {
                     "source": source,
+                    "evidenceClass": evidence_class,
+                    "returnBasis": basis,
+                    "eventId": paper_event_id(item),
                     "ticketId": ticket_id,
                     "ticker": item.get("ticker"),
                     "family": strategy_family(item),
@@ -111,31 +151,29 @@ def build_expectancy_ledger(
                         if (item.get("riskVerdict") or {}).get("passed") is True
                         else "risk-failed"
                     ),
-                    "reviewedAt": (item.get("outcome") or {}).get("reviewedAt"),
+                    "reviewedAt": qualified["reviewedAt"] if qualified else (item.get("outcome") or {}).get("reviewedAt"),
                     **outcome,
                 }
             )
 
-    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
-        grouped[(record["source"], record["family"], record["admissibility"])].append(record)
+        grouped[(record["source"], record["family"], record["admissibility"], record["evidenceClass"], record["returnBasis"])].append(record)
     rows = []
-    for (source, family, admissibility), items in sorted(grouped.items()):
+    for (source, family, admissibility, evidence_class, basis), items in sorted(grouped.items()):
         stats = _stats(items)
-        lower = (stats.get("expectancyNetR95") or {}).get("lower")
         rows.append(
             {
                 "source": source,
                 "family": family,
                 "admissibility": admissibility,
                 **stats,
-                "promotionEvidenceEligible": bool(
-                    source == "paper"
-                    and admissibility == "risk-passed"
-                    and stats["scoredCount"] >= MIN_PROMOTION_SAMPLE
-                    and lower is not None
-                    and lower > 0
-                ),
+                "evidenceClass": evidence_class,
+                "returnBasis": basis,
+                "distinctEvents": len({row["eventId"] for row in items}),
+                "sourceReconciledCount": len(items) if evidence_class == "source-reconciled-paper-fill" else 0,
+                # Only the strategy lab / authority controller evaluates promotion.
+                "promotionEvidenceEligible": False,
             }
         )
 
@@ -150,13 +188,20 @@ def build_expectancy_ledger(
         "brokerSubmitAllowed": False,
         "counts": {
             "records": len(records),
+            "sourceReconciledPaper": sum(row["evidenceClass"] == "source-reconciled-paper-fill" for row in records),
+            "unverifiedPaper": sum(row["evidenceClass"] == "unverified-paper-estimate" for row in records),
+            "reportedNetPaperFills": sum(row["evidenceClass"] == "source-reconciled-paper-fill" and row.get("netREstimate") is not None for row in records),
+            "netEstimatesAvailable": sum(row.get("netREstimate") is not None for row in records),
             "paper": sum(1 for row in records if row["source"] == "paper"),
             "shadow": sum(1 for row in records if row["source"] == "shadow"),
         },
         "families": rows,
         "records": records,
         "reminders": [
-            "Net R subtracts modeled friction when realized fills are unavailable.",
+            "Source-reconciled fills, unverified paper estimates and shadow proxies are separate populations.",
+            "Unknown costs leave net return unavailable; modeled friction is not realized net performance.",
+            "Confidence intervals are event-clustered descriptive intervals, not selection-adjusted evidence of edge.",
+            "Drawdown is the ordered sum of trade R, not account drawdown or a capital-weighted portfolio return.",
             "Shadow outcomes never count toward promotion.",
             "Risk-failed shadow structures are diagnostics, not tradable expectancy.",
             "Kelly sizing remains disabled until credible paper-family evidence exists.",
@@ -178,7 +223,8 @@ def render(payload: dict[str, Any]) -> str:
         ci = row.get("expectancyNetR95") or {}
         lines.append(
             f"- {row.get('source')} | {row.get('family')} | {row.get('admissibility')} | "
-            f"n={row.get('scoredCount')} | "
+            f"{row.get('evidenceClass')} | {row.get('returnBasis')} | "
+            f"records={row.get('count')} | net-scored={row.get('scoredCount')} | events={row.get('distinctEvents')} | "
             f"win={row.get('winRate')} | grossR={row.get('averageGrossR')} | "
             f"netR={row.get('expectancyNetR')} | 95% [{ci.get('lower')}, {ci.get('upper')}] | "
             f"DD={row.get('maxDrawdownNetR')} | promotion={row.get('promotionEvidenceEligible')}"

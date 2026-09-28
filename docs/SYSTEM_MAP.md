@@ -286,3 +286,17 @@ git diff --check
 
 Use tighter targeted tests first when iterating, but do not ship a meaningful
 change without the broader verification pass.
+
+### Research measurement audit
+
+`./inferno research-audit` builds a read-only cross-desk measurement report from
+saved paper/shadow evidence, calibration, issuer research, short-premium study,
+cash attribution and loop economics. `inferno_research_audit.py` writes
+`data/inferno_research_audit.json` and `reports/research_audit_latest.txt`; doctor
+and command center summarize unresolved gaps. The existing daily refresh runs it
+before the command center. Source hashes and observed deltas do not imply new
+validated outcomes. It sends no mail and is not a trading or promotion gate.
+`inferno_research_records.py` adapts canonical shadow `items` for retrospective
+walk-forward/factor diagnostics. See
+[measurement audit](RESEARCH_MEASUREMENT_AUDIT_2026-09-28.md) for limitations and
+prospective evaluation requirements.

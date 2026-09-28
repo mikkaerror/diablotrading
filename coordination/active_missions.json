@@ -1476,11 +1476,11 @@
   {
     "id": "mission-8dbd7dc2",
     "createdAt": "2026-09-28T10:12:49.390668-06:00",
-    "updatedAt": "2026-09-28T10:12:49.390668-06:00",
+    "updatedAt": "2026-09-28T10:30:20.934687-06:00",
     "title": "Audit desk research quality and repair measurement gaps",
-    "body": "Codex: source-backed whole-desk audit of knowledge coverage, realized return attribution, provenance, temporal validation, strategy comparison and research productivity. Implement reporting/data-adapter repairs and read-only audit with tests; preserve evaluator thresholds, production selection, risk constants, universe, ticket decisions, broker authority and Claude-owned editor/digest. Freeze evidence and distinguish software progress from predictive gains.",
+    "body": "Completed whole-desk research-quality audit and authorized measurement repairs. New research-audit report exposes 9 evidence gaps with source hashes and deltas; canonical loader and expectancy provenance/cost fixes validated by 2201 full tests. See docs/RESEARCH_MEASUREMENT_AUDIT_2026-09-28.md. Research-only; no risk, ticket, deployment or authority changes. Future qualified evidence and operator-reviewed policy changes remain separate work.",
     "owner": "codex",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [
       "research-audit",

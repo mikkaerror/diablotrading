@@ -79,6 +79,7 @@ CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
     {"command": "today", "description": "open the one-letter operator decision screen"},
     {"command": "paper-capture", "description": "make a read-only paperMoney fill worksheet"},
     {"command": "record-fill", "description": "record one operator-supplied paperMoney fill and refresh scoring"},
+    {"command": "research-audit", "description": "measure research quality, returns coverage and unresolved evidence gaps"},
     {"command": "doctor", "description": "run the full health check"},
     {"command": "preflight", "description": "check reporting readiness without refreshing data"},
     {"command": "usage", "description": "build the low-context handoff packet"},
@@ -873,6 +874,8 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--refresh", action="store_true")
     status_parser.add_argument("--full", action="store_true", help="include command, schedule, and metric diagnostics")
     subparsers.add_parser("onboard")
+    audit_parser = subparsers.add_parser("research-audit")
+    audit_parser.add_argument("action", nargs="?", default="run", choices=["run", "status"])
     subparsers.add_parser("doctor")
     preflight_parser = subparsers.add_parser("preflight")
     preflight_parser.add_argument("--max-age-hours", type=float)
@@ -1046,6 +1049,10 @@ def main() -> int:
     if command == "schedule":
         print(render_schedule_status(build_schedule_status()))
         return 0
+
+    if command == "research-audit":
+        result = run_passthrough_command(["python3", "inferno_research_audit.py", args.action], timeout_seconds=120)
+        return int(result.get("returncode", 1))
 
     if command == "doctor":
         result = run_passthrough_command(["python3", "inferno_doctor.py"], timeout_seconds=600)

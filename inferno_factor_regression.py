@@ -6,11 +6,11 @@ What it does:
     Fits a multi-feature logistic regression ``P(win | x) = σ(β·x + b)``
     over one-hot-encoded feature buckets from the shadow ledger. Returns
     per-coefficient point estimates and bootstrap 95% confidence
-    intervals. A coefficient whose CI excludes zero is a feature the
-    desk has statistical evidence is moving the win probability.
+    intervals. A coefficient whose CI excludes zero is an in-sample association under
+    this model, not a causal effect or validated future win probability.
 
-    This is the multi-factor signal combiner — the Renaissance-style
-    aggregator that turns N weak signals into one calibrated probability.
+    These retrospective fits are exploratory; calibration and predictive
+    value require separate prospective validation with entry-time features.
 
 What it does NOT do:
     - Use external ML libraries. Hand-rolled gradient descent only;
@@ -338,19 +338,9 @@ def build_design_matrix(
 
 
 def _default_shadow_loader() -> list[dict[str, Any]]:
-    path = DATA_DIR / "inferno_shadow_evidence.json"
-    if not path.exists():
-        return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    rows: list[Any] = []
-    if isinstance(payload, dict):
-        rows = payload.get("records") or payload.get("entries") or payload.get("rows") or []
-    elif isinstance(payload, list):
-        rows = payload
-    return [r for r in rows if isinstance(r, dict)]
+    from inferno_research_records import load_shadow_records
+
+    return load_shadow_records(DATA_DIR / "inferno_shadow_evidence.json")
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +367,8 @@ def build_factor_regression(
             "generatedAt": local_now().isoformat(),
             "stage": FACTOR_REGRESSION_STAGE,
             "diagnosticOnly": True,
+            "outOfSampleValidated": False,
+            "evidenceBasis": "retrospective-shadow-diagnostic",
             "researchOnly": True,
             "promotable": False,
             "verdict": "no-evidence",
@@ -448,7 +440,7 @@ def build_factor_regression(
         verdict = "no-features"
         narrative = (
             f"{n} closed records but no usable features (all constant). "
-            "Add variety to the paper test set."
+            "Preserve entry-time feature observations for future diagnostics."
         )
     elif n < MIN_REGRESSION_SAMPLES:
         verdict = "insufficient"
@@ -459,8 +451,8 @@ def build_factor_regression(
     elif positive and negative:
         verdict = "edges-mixed"
         narrative = (
-            f"{len(positive)} feature(s) significantly increase P(win); "
-            f"{len(negative)} significantly decrease it. {len(inconclusive)} inconclusive."
+            f"{len(positive)} feature(s) have positive in-sample associations; "
+            f"{len(negative)} have negative in-sample associations. {len(inconclusive)} inconclusive."
         )
     elif positive:
         verdict = "positive-edges"
@@ -473,19 +465,21 @@ def build_factor_regression(
         names = ", ".join(c["feature"] for c in negative[:5])
         narrative = (
             f"{len(negative)} feature(s) carry significant negative coefficient: {names}. "
-            "Avoiding these buckets is itself an edge."
+            "A prospective comparison is required before acting on these associations."
         )
     else:
         verdict = "no-significant-features"
         narrative = (
-            "No feature's 95% CI excludes zero. Either the regression isn't "
-            "powerful enough yet, or the features genuinely carry no signal."
+            "No feature's 95% CI excludes zero. This fit does not resolve whether "
+            "these features predict later outcomes."
         )
 
     return {
         "generatedAt": local_now().isoformat(),
         "stage": FACTOR_REGRESSION_STAGE,
         "diagnosticOnly": True,
+        "outOfSampleValidated": False,
+        "evidenceBasis": "retrospective-shadow-diagnostic",
         "researchOnly": True,
         "promotable": False,
         "verdict": verdict,
@@ -520,6 +514,8 @@ def factor_regression_text(payload: dict[str, Any]) -> str:
         "Inferno Factor Regression (research-only)",
         "",
         f"Generated: {payload.get('generatedAt')}",
+        "Validation scope: retrospective shadow diagnostic; not prospective or selection-adjusted proof of edge.",
+        "Legacy settlement timing, repeated events and prediction-time feature provenance require separate audit.",
         f"Method: {payload.get('method')}  λ={payload.get('l2Lambda')}  "
         f"η={payload.get('learningRate')}  iters={payload.get('iterationsUsed')}/{payload.get('maxIterations')}",
         f"Verdict: {payload.get('verdict')}",

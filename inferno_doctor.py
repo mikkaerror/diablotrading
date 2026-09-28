@@ -130,6 +130,7 @@ AI_BASKET_REFRESH_FILE = ROOT / "data" / "inferno_ai_basket_refresh.json"
 AI_BASKET_DATA_CONTRACT_FILE = ROOT / "data" / "inferno_ai_basket_data_contract.json"
 SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
+RESEARCH_AUDIT_FILE = ROOT / "data" / "inferno_research_audit.json"
 DESK_EDITOR_FILE = ROOT / "data" / "inferno_desk_editor.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
 ACTION_PULSE_LABEL = "io.diablotrading.inferno-action-pulse"
@@ -700,6 +701,24 @@ def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple
         f"{report.get('importedRows', 0)} imported | {report.get('closedRows', 0)} closed | "
         f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched | "
         f"{outcome} | accepted progress {accepted_progress if accepted_progress is not None else '-'}",
+    )
+
+
+def research_audit_status(report: dict) -> tuple[bool, str]:
+    """Report evidence gaps without mistaking an audit refresh for resolution."""
+    if not report:
+        return False, "missing"
+    try:
+        fresh = recent_or_today(str(report.get("generatedAt") or ""), max_age_hours=36)
+    except (ValueError, TypeError):
+        fresh = False
+    safe = report.get("stage") == "research-audit-research-only" and report.get("researchOnly") is True and all(
+        report.get(key) is False for key in ("promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed"))
+    metrics = report.get("metrics") or {}
+    gaps = report.get("gapCount")
+    return fresh and safe and gaps == 0 and not report.get("sourceMissing"), (
+        f"{gaps} open gaps | qualified events={metrics.get('qualifiedPaperEvents')} | "
+        f"reported-cost fills={metrics.get('paperFillsWithReportedCosts')} | fresh={fresh} | reporting-only={safe}"
     )
 
 
@@ -3042,6 +3061,11 @@ def main() -> int:
     basket_contract_ok, basket_contract_detail = ai_basket_data_contract_status(ai_basket_contract)
     lines.append(summarize_status("AI basket data contract", basket_contract_ok, basket_contract_detail))
     if not basket_contract_ok:
+        warnings += 1
+
+    audit_ok, audit_detail = research_audit_status(load_json_file(RESEARCH_AUDIT_FILE) or {})
+    lines.append(summarize_status("Research measurement audit", audit_ok, audit_detail))
+    if not audit_ok:
         warnings += 1
 
     editor_ok, editor_detail = desk_editor_status(load_json_file(DESK_EDITOR_FILE) or {})

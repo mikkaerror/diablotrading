@@ -6,12 +6,13 @@ What it does:
     Splits each strategy's chronologically-ordered R-unit stream into a
     *training half* and a *testing half*. Computes Wilson lower bound and
     bootstrap mean CI on each half independently, then reports whether the
-    training-half edge survives in the testing half. Survival is the only
-    honest sign of a real edge; everything else is in-sample illusion.
+    training-half edge survives in the testing half. This is a retrospective
+    row split, not a registered prospective test or proof of edge.
 
 What it does NOT do:
     - Anything live. Anything that promotes authority.
-    - Mix train and test data in any computation.
+    - Purge shared events across halves or adjust for repeated strategy trials.
+      The tolerance uses the pooled standard deviation of both halves.
 
 Strict contract: research-only, diagnostic-only, never promotable. This
 module's job is to *demote* claims, not to promote them.
@@ -51,11 +52,9 @@ on small sample sizes where assumptions of normality are unsafe.
 ## Why this matters for an options desk
 
 Edge claims that come from a single backtest are nearly always overfit.
-The only way to know if an edge is real is to set aside data the
-strategy has not seen and check whether it still wins. Walk-forward is
-the cheapest, hardest-to-fool version of that check. If a strategy can't
-survive a single chronological split, it certainly can't survive the
-market.
+A chronological diagnostic can expose instability, but repeated events,
+legacy outcome timing and missing prediction-time features limit this one.
+A prospective, event-separated test with fixed baselines is still required.
 
 CLI::
 
@@ -177,19 +176,9 @@ def classify_walk_forward(
 
 
 def _default_shadow_loader() -> list[dict[str, Any]]:
-    path = DATA_DIR / "inferno_shadow_evidence.json"
-    if not path.exists():
-        return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    rows: list[Any] = []
-    if isinstance(payload, dict):
-        rows = payload.get("records") or payload.get("entries") or payload.get("rows") or []
-    elif isinstance(payload, list):
-        rows = payload
-    return [r for r in rows if isinstance(r, dict)]
+    from inferno_research_records import load_shadow_records
+
+    return load_shadow_records(DATA_DIR / "inferno_shadow_evidence.json")
 
 
 def chronologically_ordered_by_strategy(
@@ -319,8 +308,8 @@ def build_walk_forward(
     elif no_edge:
         verdict = "no-edge-detected"
         narrative = (
-            f"All {len(no_edge)} strategy/strategies are no-edge in both halves. "
-            "The paper loop has not yet produced a candidate."
+            f"{len(no_edge)} strategy/strategies have non-positive means in both halves. "
+            "These are retrospective shadow estimates; they do not establish paper performance."
         )
     else:
         verdict = "insufficient-overall"
@@ -333,6 +322,8 @@ def build_walk_forward(
         "generatedAt": local_now().isoformat(),
         "stage": WALK_FORWARD_STAGE,
         "diagnosticOnly": True,
+        "outOfSampleValidated": False,
+        "evidenceBasis": "retrospective-shadow-diagnostic",
         "researchOnly": True,
         "promotable": False,
         "verdict": verdict,
@@ -362,6 +353,8 @@ def walk_forward_text(payload: dict[str, Any]) -> str:
         "Inferno Walk-Forward (research-only)",
         "",
         f"Generated: {payload.get('generatedAt')}",
+        "Validation scope: retrospective shadow diagnostic; not prospective or selection-adjusted proof of edge.",
+        "Legacy settlement timing, repeated events and prediction-time feature provenance require separate audit.",
         f"Method: {payload.get('method')}  tolerance={payload.get('toleranceSigma')}σ̂",
         f"Verdict: {payload.get('verdict')}",
         f"Strategies: {payload.get('strategyCount')}  "
