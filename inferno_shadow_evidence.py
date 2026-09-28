@@ -41,6 +41,8 @@ SHADOW_EVIDENCE_VERSION = 1
 DEFAULT_LIMIT = 50
 
 
+from inferno_research_identity import SHADOW_PROTOCOL, experiment_key, entry_features
+
 def number(value: Any, default: float = 0.0) -> float:
     """Safely coerce loose plan values into floats for research metrics."""
     try:
@@ -227,6 +229,8 @@ def build_shadow_entry(
 
     return {
         "ticketId": ticket_id,
+        "researchProtocol": SHADOW_PROTOCOL,
+        "entryFeatureSnapshot": entry_features(item),
         "createdAt": now.isoformat(),
         "tradeDate": now.date().isoformat(),
         "sourceStrikePlanGeneratedAt": strike_plan_generated_at,
@@ -273,11 +277,25 @@ def build_shadow_entry(
 
 def merge_shadow_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any]]) -> tuple[dict[str, Any], int]:
     """Merge new shadow rows into an existing ledger without losing outcomes."""
-    updated_items = compact_shadow_items(ledger.get("items", []))
+    # Never compact or rewrite legacy observations during ingestion.
+    updated_items = list(ledger.get("items", []))
+    case_index = {}
+    for index, row in enumerate(updated_items):
+        if row.get("status") == "shadow-open":
+            case = experiment_key(row, SHADOW_PROTOCOL)
+            if case:
+                case_index.setdefault(case, index)
+    suppressed = 0
     inserted = 0
     existing_by_key = {shadow_ticket_key(item): index for index, item in enumerate(updated_items)}
     existing_ids = {item.get("ticketId") for item in updated_items}
     for entry in new_entries:
+        case = experiment_key(entry, SHADOW_PROTOCOL) if entry.get("status") == "shadow-open" else None
+        if case and case in case_index:
+            # The original entry economics/features and outcome remain frozen.
+            # The full latest strike-plan observation is already archived separately.
+            suppressed += 1
+            continue
         key = shadow_ticket_key(entry)
         if key in existing_by_key:
             index = existing_by_key[key]
@@ -288,6 +306,8 @@ def merge_shadow_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any
         existing_by_key[key] = len(updated_items)
         existing_ids.add(entry.get("ticketId"))
         updated_items.append(entry)
+        if case:
+            case_index[case] = len(updated_items) - 1
         inserted += 1
 
     updated = {
@@ -298,6 +318,8 @@ def merge_shadow_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any
         "stage": "shadow-evidence-research-only",
         "count": len(updated_items),
         "items": updated_items,
+        "duplicateExperimentsSuppressed": suppressed,
+        "dedupePolicy": "one-contract-exposure-per-hold-to-expiration-protocol; legacy rows retained",
     }
     return updated, inserted
 

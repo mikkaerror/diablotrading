@@ -1615,5 +1615,21 @@
       "provenance",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-3079ead4",
+    "createdAt": "2026-09-28T15:31:05.674948-06:00",
+    "updatedAt": "2026-09-28T15:31:05.674948-06:00",
+    "title": "Complete evidence loop: dedupe, transaction provenance and forward protocol",
+    "body": "Codex: suppress repeated shadow experiments and stale-input fast simulations without rewriting history; preserve all broker transfer-item instruments and expose reconciliation gaps; register and monitor a fixed forward research protocol with immutable entry features. No ticket decisions, risk/authority changes or cloud/local migration. Ownership and off-device destination await explicit operator input.",
+    "owner": "codex",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "automation",
+      "dedupe",
+      "measurement",
+      "forward-research"
+    ]
   }
 ]

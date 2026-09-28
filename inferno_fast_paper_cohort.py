@@ -64,6 +64,8 @@ BACKLOG_LIMIT = 8
 EXPLORATORY_FAST_COHORT = "exploratory-fast"
 
 
+from inferno_research_identity import FAST_PROTOCOL, entry_features, novel_fast_entries
+
 def number(value: Any, default: float = 0.0) -> float:
     """Coerce a loose numeric field without throwing."""
     try:
@@ -299,6 +301,8 @@ def build_fast_entry(candidate: dict[str, Any], *, now: datetime) -> dict[str, A
     )
     return {
         "ticketId": ticket_id,
+        "researchProtocol": FAST_PROTOCOL,
+        "entryFeatureSnapshot": entry_features(item),
         "createdAt": now.isoformat(),
         "tradeDate": trade_date.isoformat(),
         "exitEligibleDate": next_market_session(trade_date).isoformat(),
@@ -606,6 +610,8 @@ def build_fast_paper_cohort(
     capacity = max(0, min(target_trades, MAX_OPEN_PAPER_TICKETS - len(existing_open)))
     selected: list[dict[str, Any]] = []
     pool: list[dict[str, Any]] = []
+    inserted: list[dict[str, Any]] = []
+    duplicate_inputs_suppressed = 0
     backlog: list[dict[str, Any]] = []
     bootstrap: dict[str, Any] = bootstrap_override or {}
     strike_plan: dict[str, Any] = strike_plan_override or {}
@@ -638,8 +644,7 @@ def build_fast_paper_cohort(
         )
         backlog = backlog_slate(pool, selected)
         new_entries = [build_fast_entry(item, now=now) for item in selected]
-        existing_ids = {str(item.get("ticketId") or "") for item in ledger.get("items") or []}
-        inserted = [item for item in new_entries if str(item.get("ticketId") or "") not in existing_ids]
+        inserted, duplicate_inputs_suppressed = novel_fast_entries(ledger.get("items") or [], new_entries)
         ledger = {
             **ledger,
             "version": 1,
@@ -669,9 +674,7 @@ def build_fast_paper_cohort(
         for item in current_open
         if not is_isolated_fast_simulation(item)
     ]
-    opened_ids = {
-        build_fast_entry(item, now=now).get("ticketId") for item in selected
-    } if selected else set()
+    opened_ids = {item.get("ticketId") for item in inserted}
 
     if closed_ids and opened_ids:
         verdict = "cycled-and-seeded"
@@ -714,6 +717,7 @@ def build_fast_paper_cohort(
         "targetDailyTrades": target_trades,
         "marketSession": is_market_session(now.date()),
         "scanPerformed": bool(bootstrap or strike_plan),
+        "duplicateInputsSuppressed": duplicate_inputs_suppressed,
         "counts": {
             "bootstrapProposals": len(bootstrap.get("proposals") or []),
             "priceableCandidates": len(pool),
