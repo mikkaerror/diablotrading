@@ -1439,5 +1439,21 @@
       "thresholds",
       "research-only"
     ]
+  },
+  {
+    "id": "mission-ff87b9a2",
+    "createdAt": "2026-09-28T03:51:17.139183+00:00",
+    "updatedAt": "2026-09-28T03:51:17.139183+00:00",
+    "title": "Desk Editor: one morning decision email",
+    "body": "Claude owns inferno_desk_editor.py (research-only fact packet), inferno_email_digest.py, and coordination/prompts/desk_editor_agent.md (scheduled Claude agent, weekdays 07:20 MT, sends one plain-text email via Gmail, never approves). Codex: wire desk_editor into doctor + command center; add INFERNO_EMAIL_MODE=full|editor (default full) and approval-email dedupe; write cloud/local ledger ownership recommendation. Operator opts into editor mode after a trial week.",
+    "owner": "shared",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [
+      "desk-editor",
+      "email",
+      "multi-agent",
+      "research-only"
+    ]
   }
 ]
