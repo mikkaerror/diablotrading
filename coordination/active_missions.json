@@ -1599,5 +1599,21 @@
       "journal",
       "profitability"
     ]
+  },
+  {
+    "id": "mission-d3673734",
+    "createdAt": "2026-09-28T11:36:30.026714-06:00",
+    "updatedAt": "2026-09-28T11:51:44.331151-06:00",
+    "title": "Build running immutable decision and evidence archive",
+    "body": "Implemented running immutable local archive with source capture hooks, 4217-record initial import, idempotent repeat, exposure grouping, searchable history, recorded reasons, append-only corrections, verified backup/recovery, doctor/command center and existing daily schedule integration. Full 2242 tests pass. See docs/DECISION_ARCHIVE.md. No ticket actions, risk/authority/evaluator changes or cloud migration; source files preserved.",
+    "owner": "codex",
+    "status": "completed",
+    "priority": "high",
+    "tags": [
+      "archive",
+      "recordkeeping",
+      "provenance",
+      "research-only"
+    ]
   }
 ]

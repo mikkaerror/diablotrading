@@ -363,6 +363,8 @@ def _log_decision(
             ]
         )
 
+    from inferno_decision_archive import capture_saved_file
+    capture_saved_file(DECISIONS_LOG)
 
 def _prompt_decision_journal() -> tuple[str, str]:
     """Two-field journal prompt fired only on approve.
@@ -410,9 +412,9 @@ def _reject_via_queue(ticker: str) -> int:
 
 
 def _prompt(message: str) -> str:
-    """Single-character prompt that strips and lowercases."""
+    """Read operator input, preserving any optional rationale verbatim."""
     try:
-        return input(message).strip().lower()
+        return input(message).strip()
     except EOFError:
         return "q"
 
@@ -431,8 +433,13 @@ def run_one(item: dict) -> str:
     if item.get("operatorRoute") == "manual-paperMoney-entry":
         prompt = "    acknowledge manual paperMoney route? [y]es / [s]kip / [q]uit: "
     else:
-        prompt = "    paper-trade this? [y]es / [n]o / [s]kip / [q]uit: "
-    answer = _prompt(prompt)
+        prompt = "    paper-trade this? [y]es / [n]o / [s]kip / [q]uit (optional: s reason): "
+    raw_answer = _prompt(prompt).strip()
+    answer = raw_answer.lower()
+    pass_reason = ""
+    parts = raw_answer.split(maxsplit=1)
+    if len(parts) == 2 and parts[0].lower() in ("n", "no", "reject", "s", "skip"):
+        answer, pass_reason = parts[0].lower(), parts[1]
     elapsed = f"{(_dt.datetime.now() - t_start).total_seconds():.1f}"
     if answer in ("y", "yes"):
         if item.get("operatorRoute") == "manual-paperMoney-entry":
@@ -470,18 +477,18 @@ def run_one(item: dict) -> str:
     if answer in ("n", "no", "reject"):
         rc = _reject_via_queue(ticker)
         if rc == 0:
-            _log_decision(ticker, "reject", "via today.py", seconds_to_decide=elapsed)
+            _log_decision(ticker, "reject", "via today.py", rationale=pass_reason, seconds_to_decide=elapsed)
             print(f"    -> rejected {ticker}")
             return "reject"
         _log_decision(
-            ticker, "reject-failed", f"queue rc={rc}", seconds_to_decide=elapsed
+            ticker, "reject-failed", f"queue rc={rc}", rationale=pass_reason, seconds_to_decide=elapsed
         )
         print(f"    -> rejection queue returned {rc}; check inferno_approval_queue status")
         return "reject-failed"
     if answer in ("q", "quit"):
         return "quit"
     # "s", "skip", "" -- defer, no change to queue
-    _log_decision(ticker, "skip", "via today.py", seconds_to_decide=elapsed)
+    _log_decision(ticker, "skip", "via today.py", rationale=pass_reason, seconds_to_decide=elapsed)
     print(f"    -> skipped {ticker} (will reappear tomorrow)")
     return "skip"
 

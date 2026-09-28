@@ -1289,7 +1289,8 @@ def build_text_report(plan: dict[str, Any]) -> str:
 
 def save_strike_plan(plan: dict[str, Any]) -> dict[str, str]:
     ensure_dirs()
-    STRIKE_PLAN_FILE.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    from inferno_io import atomic_write_json
+    atomic_write_json(STRIKE_PLAN_FILE, plan)
     STRIKE_PLAN_TEXT_FILE.write_text(build_text_report(plan), encoding="utf-8")
     return {
         "json": str(STRIKE_PLAN_FILE),

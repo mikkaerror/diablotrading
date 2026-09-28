@@ -43,6 +43,7 @@ MODEL_COMMAND_CENTER_TEXT_FILE = REPORTS_DIR / "model_command_center_latest.txt"
 MODEL_COMMAND_CENTER_ONBOARD_TEXT_FILE = REPORTS_DIR / "model_command_center_onboard_latest.txt"
 WHILE_AWAY_PACKET_FILE = DATA_DIR / "inferno_while_away_packet.json"
 
+DECISION_ARCHIVE_FILE = DATA_DIR / "inferno_decision_archive.json"
 RESEARCH_AUDIT_FILE = DATA_DIR / "inferno_research_audit.json"
 DESK_EDITOR_FILE = DATA_DIR / "inferno_desk_editor.json"
 DEPLOY_PREFLIGHT_FILE = DATA_DIR / "inferno_deploy_preflight.json"
@@ -167,6 +168,12 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "question": "Is the desk broken?",
         "artifact": "reports/doctor_latest.txt",
         "owner": "operator",
+    },
+    {
+        "lane": "decision-archive",
+        "question": "What did we observe, decide or pass over, why, and what changed later?",
+        "artifact": "reports/decision_archive_latest.txt",
+        "owner": "codex",
     },
     {
         "lane": "research-audit",
@@ -1178,6 +1185,7 @@ def build_command_center() -> dict[str, Any]:
         next_actions.append("No explicit next actions were found; review the latest artifacts manually.")
 
     system_status = {
+        "decisionArchive": summarize_artifact(DECISION_ARCHIVE_FILE, keys=("stage", "verdict", "generatedAt", "counts", "integrity", "missingSources", "sourceErrors")),
         "researchAudit": summarize_artifact(RESEARCH_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "gapCount", "metrics", "sourceMissing")),
         "deskEditor": summarize_artifact(DESK_EDITOR_FILE, keys=("stage", "headline", "generatedAt", "alerts", "researchOnly", "promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed")),
         "deployPreflight": summarize_artifact(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),

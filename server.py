@@ -382,7 +382,8 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                     return
 
             queue["updatedAt"] = datetime.now().astimezone().isoformat()
-            APPROVAL_QUEUE_FILE.write_text(json.dumps(queue, indent=2), encoding="utf-8")
+            from inferno_io import atomic_write_json
+            atomic_write_json(APPROVAL_QUEUE_FILE, queue)
 
             from inferno_execution_clerk import build_execution_queue, save_execution_queue
 

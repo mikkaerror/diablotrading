@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import tempfile
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -136,6 +137,7 @@ def atomic_write_text(
         retries=retries,
         delay_seconds=delay_seconds,
     )
+    archive_written_evidence(path, content.encode(encoding))
 
 
 def atomic_copy_file(
@@ -202,3 +204,35 @@ def append_text(
         retries=retries,
         delay_seconds=delay_seconds,
     )
+
+
+def archive_written_evidence(path: Path, raw: bytes) -> None:
+    """Observe only persisted decision/evidence files; never alter writer semantics.
+
+    Pass the bytes just written, rather than rereading a path another process
+    may have replaced. A durable pending capture survives archive DB failures.
+    """
+    names = {
+        "inferno_paper_execution_ledger.json", "inferno_shadow_evidence.json",
+        "inferno_fast_paper_ledger.json", "inferno_scenario_evidence.json",
+        "inferno_approval_queue.json", "inferno_strike_plan.json", "operator_decisions.csv",
+    }
+    if Path(path).name not in names:
+        return
+    try:
+        from inferno_decision_archive import capture_bytes
+        capture_bytes(Path(path), raw)
+    except Exception as exc:
+        # The primary write already succeeded. Never retry or replay a decision.
+        print(f"Decision archive capture pending/failed for {Path(path).name}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        try:
+            from datetime import datetime, timezone
+            directory = Path(path).parent / "decision_archive"
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            event = json.dumps({"recordedAt": datetime.now(timezone.utc).isoformat(), "source": Path(path).name,
+                                "error": f"{type(exc).__name__}: {exc}"}) + "\n"
+            fd = os.open(directory / "capture_failures.jsonl", os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w") as handle:
+                handle.write(event); handle.flush(); os.fsync(handle.fileno())
+        except OSError as journal_error:
+            print(f"Decision archive failure journal unavailable: {journal_error}", file=sys.stderr)

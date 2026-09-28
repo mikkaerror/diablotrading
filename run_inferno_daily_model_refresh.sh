@@ -172,6 +172,7 @@ echo "16/18 Capital launch snapshot"
 run_advisory "capital launch check" python3 inferno_central_command.py capital-check --deployable-cash 0
 
 echo "17/20 Model command center"
+run_advisory "decision archive" python3 inferno_decision_archive.py run
 run_advisory "research measurement audit" python3 inferno_research_audit.py run
 run_advisory "model command center" python3 inferno_model_command_center.py build
 

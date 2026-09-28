@@ -300,3 +300,14 @@ validated outcomes. It sends no mail and is not a trading or promotion gate.
 walk-forward/factor diagnostics. See
 [measurement audit](RESEARCH_MEASUREMENT_AUDIT_2026-09-28.md) for limitations and
 prospective evaluation requirements.
+
+### Historical decision archive
+
+`./inferno archive` captures and searches an append-only local history of paper,
+shadow, fast-simulation, scenario, approval-state, strike-proposal and operator-log
+sources. Exact compressed snapshots, source hashes, recorded reasons, corrections
+and contract-exposure grouping live under `data/decision_archive/` (private,
+permanent retention; no automatic pruning). Supported persistence writes capture
+immediately; daily refresh sweeps remaining saved sources. Doctor and command
+center expose `reports/decision_archive_latest.txt`. It performs no ticket or
+broker action and is not a promotion input. [Archive contract](DECISION_ARCHIVE.md).

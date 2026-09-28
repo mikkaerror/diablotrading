@@ -130,6 +130,7 @@ AI_BASKET_REFRESH_FILE = ROOT / "data" / "inferno_ai_basket_refresh.json"
 AI_BASKET_DATA_CONTRACT_FILE = ROOT / "data" / "inferno_ai_basket_data_contract.json"
 SECRET_HYGIENE_FILE = ROOT / "data" / "inferno_secret_hygiene.json"
 RESEARCH_CYCLE_FILE = ROOT / "data" / "inferno_research_cycle.json"
+DECISION_ARCHIVE_FILE = ROOT / "data" / "inferno_decision_archive.json"
 RESEARCH_AUDIT_FILE = ROOT / "data" / "inferno_research_audit.json"
 DESK_EDITOR_FILE = ROOT / "data" / "inferno_desk_editor.json"
 ACTION_PULSE_FILE = ROOT / "data" / "inferno_action_pulse.json"
@@ -702,6 +703,30 @@ def paper_fill_ingest_status(report: dict, now: datetime | None = None) -> tuple
         f"{report.get('rejectedRows', 0)} rejected | {unmatched} unmatched | "
         f"{outcome} | accepted progress {accepted_progress if accepted_progress is not None else '-'}",
     )
+
+
+def decision_archive_status(report: dict, directory: Path | None = None) -> tuple[bool, str]:
+    if not report:
+        return False, "missing; run ./inferno archive run"
+    try:
+        fresh = recent_or_today(str(report.get("generatedAt") or ""), max_age_hours=36)
+    except (TypeError, ValueError):
+        fresh = False
+    safe = report.get("researchOnly") is True and all(report.get(k) is False for k in
+        ("promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed"))
+    counts = report.get("counts") or {}
+    ok = fresh and safe and report.get("stage") == "decision-archive-research-only" and report.get("verdict") == "healthy" and (report.get("integrity") or {}).get("ok") is True
+    if directory is not None:
+        try:
+            pending = len(list((directory / "pending").glob("*.capture")))
+            incomplete = len(list((directory / "pending").glob(".writing-*")))
+            failed = (directory / "capture_failures.jsonl").exists()
+            ok = ok and not pending and not incomplete and not failed
+            counts = {**counts, "pendingCaptures": pending}
+        except OSError:
+            ok = False
+    return ok, (f"{counts.get('sourceRecords')} archived source records | {counts.get('versions')} versions | "
+                f"missing rationale={counts.get('recordsWithoutReason')} | pending={counts.get('pendingCaptures')} | fresh={fresh}")
 
 
 def research_audit_status(report: dict) -> tuple[bool, str]:
@@ -3061,6 +3086,11 @@ def main() -> int:
     basket_contract_ok, basket_contract_detail = ai_basket_data_contract_status(ai_basket_contract)
     lines.append(summarize_status("AI basket data contract", basket_contract_ok, basket_contract_detail))
     if not basket_contract_ok:
+        warnings += 1
+
+    archive_ok, archive_detail = decision_archive_status(load_json_file(DECISION_ARCHIVE_FILE) or {}, ROOT / "data" / "decision_archive")
+    lines.append(summarize_status("Decision archive", archive_ok, archive_detail))
+    if not archive_ok:
         warnings += 1
 
     audit_ok, audit_detail = research_audit_status(load_json_file(RESEARCH_AUDIT_FILE) or {})
