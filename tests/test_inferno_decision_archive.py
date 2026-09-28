@@ -37,6 +37,18 @@ class ArchiveTests(unittest.TestCase):
         with sqlite3.connect(self.directory/'archive.sqlite3') as db:
             return db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
 
+    def test_broker_ids_scoped_to_account_and_corrections_versioned(self):
+        path = self.root / 'inferno_schwab_transaction_ledger.json'
+        rows = [{'accountSuffix': '1234', 'transactionId': 'A', 'netAmount': 10},
+                {'accountSuffix': '5678', 'transactionId': 'A', 'netAmount': 20},
+                {'accountSuffix': '1234', 'transactionId': 'B', 'netAmount': 30}]
+        archive.capture_bytes(path, json.dumps({'transactions': rows}).encode())
+        rows[0]['netAmount'] = 11
+        result = archive.capture_bytes(path, json.dumps({'transactions': list(reversed(rows))}).encode())
+        self.assertEqual(result['newVersions'], 1)
+        self.assertEqual(self.count('versions'), 4)
+        self.assertTrue(archive.verify(self.directory)['ok'])
+
     def test_exact_replay_adds_no_snapshot_or_version(self):
         row = ticket(); before = copy.deepcopy(row)
         self.assertEqual(self.capture([row]), {'newSnapshots': 1, 'newVersions': 1})

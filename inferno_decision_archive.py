@@ -35,6 +35,7 @@ SOURCES = {
     'inferno_approval_queue.json': ('approval-state', 'items'),
     'inferno_strike_plan.json': ('proposal', 'items'),
     'operator_decisions.csv': ('decision-log', None),
+    'inferno_schwab_transaction_ledger.json': ('broker-transaction', 'transactions'),
 }
 VOLATILE = {'generatedAt', 'updatedAt', 'refreshedAt', 'lastAttemptAt', 'lastSuccessfulAt'}
 TABLES = ('objects', 'snapshots', 'versions', 'annotations', 'captures')
@@ -192,6 +193,8 @@ def ingest(db: sqlite3.Connection, envelope: dict) -> tuple[int, int]:
         lane = SOURCES[source][0]
         # IDs only join within their source. CSV row ordinals preserve identical repeated entries.
         rid = row.get('ticketId') or row.get('observationId') or row.get('id') or row.get('token')
+        if lane == 'broker-transaction':
+            rid = canonical([row.get('accountSuffix'), row.get('transactionId')]) if row.get('transactionId') else digest(canonical(row).encode())
         if lane == 'decision-log':
             rid = f'csv-row:{index}'
         if not rid:

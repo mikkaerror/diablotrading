@@ -14,6 +14,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -69,15 +70,16 @@ def text(value: Any, default: str = "") -> str:
 
 def number(value: Any, default: float | None = None) -> float | None:
     """Parse a broker number without pretending malformed values are zero."""
-    if value is None:
+    if value is None or isinstance(value, bool):
         return default
     if isinstance(value, (int, float)):
-        return float(value)
+        return float(value) if math.isfinite(value) else default
     raw = text(value).replace("$", "").replace(",", "")
     if not raw:
         return default
     try:
-        return float(raw)
+        parsed = float(raw)
+        return parsed if math.isfinite(parsed) else default
     except ValueError:
         return default
 
@@ -171,21 +173,34 @@ def safe_api_error_message(exc: SchwabAccountAPIError, *, resource: str) -> str:
     return f"Schwab {resource} API {status_code}; no transaction data was accepted."
 
 
-def first_transfer_item(raw: dict[str, Any]) -> dict[str, Any]:
-    """Return only the first structured transfer item, never its description."""
-    rows = raw.get("transferItems")
-    if not isinstance(rows, list):
-        return {}
-    for item in rows:
-        if isinstance(item, dict):
-            return item
-    return {}
+def normalize_transfer_item(item: dict[str, Any], index: int) -> dict[str, Any]:
+    """Retain every leg/fee using a field allowlist, without allocating cash."""
+    instrument = item.get("instrument") if isinstance(item.get("instrument"), dict) else {}
+    def first_value(*keys):
+        return next((item[k] for k in keys if item.get(k) is not None), None)
+    return {
+        "sourceIndex": index,
+        "symbol": text(instrument.get("symbol") or item.get("symbol")).upper() or None,
+        "assetType": text(instrument.get("assetType") or item.get("assetType")).upper() or None,
+        "underlyingSymbol": text(instrument.get("underlyingSymbol")).upper() or None,
+        "putCall": text(instrument.get("putCall")).upper() or None,
+        "expirationDate": text(instrument.get("expirationDate")) or None,
+        "strikePrice": rounded(instrument.get("strikePrice")),
+        "quantity": rounded(first_value("amount", "quantity")),
+        "price": rounded(item.get("price")),
+        "cost": rounded(item.get("cost"), 2),
+        "fee": rounded(first_value("fee", "fees"), 2),
+        "feeType": text(item.get("feeType")).upper() or None,
+        "positionEffect": text(item.get("positionEffect")).upper() or None,
+    }
 
 
 def normalize_transaction(raw: dict[str, Any], *, account_suffix_value: str) -> dict[str, Any]:
     """Normalize one broker transaction without retaining sensitive payload fields."""
-    item = first_transfer_item(raw)
-    instrument = item.get("instrument") if isinstance(item.get("instrument"), dict) else {}
+    transfers = [normalize_transfer_item(item, index) for index, item in enumerate(raw.get("transferItems") or [])
+                 if isinstance(item, dict)]
+    securities = [item for item in transfers if item.get("assetType") not in {None, "CURRENCY"}]
+    item = securities[0] if len(securities) == 1 else transfers[0] if len(transfers) == 1 else {}
     transaction_id = text(raw.get("activityId") or raw.get("transactionId") or raw.get("id"))
     occurred_at = text(raw.get("time") or raw.get("transactionDate") or raw.get("date"))
     return {
@@ -197,11 +212,14 @@ def normalize_transaction(raw: dict[str, Any], *, account_suffix_value: str) -> 
         "transactionType": text(raw.get("type") or raw.get("transactionType")).upper() or None,
         "status": text(raw.get("status")).upper() or None,
         "netAmount": rounded(raw.get("netAmount"), 2),
-        "symbol": text(instrument.get("symbol") or item.get("symbol")).upper() or None,
-        "assetType": text(instrument.get("assetType") or item.get("assetType")).upper() or None,
-        "quantity": rounded(item.get("amount") or item.get("quantity"), 4),
-        "price": rounded(item.get("price"), 4),
-        "fee": rounded(item.get("fee") or item.get("fees"), 2),
+        "symbol": item.get("symbol"),
+        "assetType": "MULTI_ASSET" if len(securities) > 1 else item.get("assetType"),
+        "quantity": item.get("quantity"),
+        "price": item.get("price"),
+        "fee": item.get("fee"),
+        "transferItems": transfers,
+        "normalizationVersion": 2,
+        "cashBasis": "one parent netAmount; transfer items never added to net cash",
         "descriptionPresent": bool(text(raw.get("description"))),
         "source": "schwab-transaction-api",
     }
@@ -210,6 +228,78 @@ def normalize_transaction(raw: dict[str, Any], *, account_suffix_value: str) -> 
 def transaction_sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
     """Return a deterministic oldest-first key for redacted transaction rows."""
     return (text(row.get("occurredAt")), text(row.get("accountSuffix")), text(row.get("transactionId")))
+
+
+def closed_contract_cash_reconciliation(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Reconcile only balanced single-security transaction groups; never allocate fees.
+
+    This is a bounded-window cash diagnostic, not tax-lot accounting or proof of
+    account completeness. Multi-security parents require a separate allocation.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    excluded = 0
+    ambiguous_contracts = set()
+    for row in rows:
+        items = row.get("transferItems") or []
+        securities = [item for item in items if item.get("assetType") != "CURRENCY"]
+        if len(securities) == 1 and securities[0].get("assetType") == "OPTION":
+            leg = securities[0]
+            key = (row.get("accountSuffix"), leg.get("symbol"))
+            groups.setdefault(key, []).append(row)
+        elif any(item.get("assetType") == "OPTION" for item in items):
+            excluded += 1
+            ambiguous_contracts.update((row.get("accountSuffix"), item.get("symbol")) for item in items if item.get("assetType") == "OPTION")
+    matched, unresolved = [], []
+    for (suffix, symbol), group in sorted(groups.items(), key=lambda entry: str(entry[0])):
+        balance, gross, net, ids = 0.0, 0.0, 0.0, []
+        problem = "multi-security-parent-needs-allocation" if (suffix, symbol) in ambiguous_contracts else None
+        def chronological(row):
+            try:
+                parsed = datetime.fromisoformat(row.get("occurredAt") or "")
+                return parsed.timestamp() if parsed.tzinfo else float("-inf")
+            except ValueError:
+                return float("-inf")
+        for row in sorted(group, key=chronological):
+            if problem:
+                break
+            items = row["transferItems"]
+            leg = next(item for item in items if item.get("assetType") == "OPTION")
+            qty, cash = number(leg.get("quantity")), number(row.get("netAmount"))
+            costs = [number(item.get("cost")) for item in items]
+            try:
+                observed = datetime.fromisoformat(row.get("occurredAt") or "")
+                time_ok = observed.tzinfo is not None
+            except ValueError:
+                time_ok = False
+            if not symbol or not row.get("transactionId") or row["transactionId"] in ids or not time_ok or row.get("status") != "VALID" or row.get("transactionType") != "TRADE":
+                problem = "missing-or-ambiguous-transaction-identity-status-time"; break
+            if qty is None or qty == 0 or cash is None or any(cost is None for cost in costs):
+                problem = "missing-quantity-or-source-cost"; break
+            if any(item.get("assetType") == "CURRENCY" and not item.get("feeType") for item in items):
+                problem = "unallocated-currency-item"; break
+            if abs(sum(costs) - cash) > .011:
+                problem = "transfer-costs-do-not-reconcile-to-parent-cash"; break
+            effect = leg.get("positionEffect")
+            if effect == "OPENING" and balance * qty >= 0:
+                balance += qty
+            elif effect == "CLOSING" and balance * qty < 0 and abs(qty) <= abs(balance) + 1e-8:
+                balance += qty
+            else:
+                problem = "unmatched-close-or-conflicting-position-effect"; break
+            gross += leg["cost"]; net += cash; ids.append(row["transactionId"])
+        if not problem and abs(balance) > 1e-8:
+            problem = "open-quantity-remains-in-window"
+        identity = {"accountSuffix": suffix, "symbol": symbol}
+        if problem:
+            unresolved.append({**identity, "reason": problem})
+        else:
+            matched.append({**identity, "transactionIds": ids, "grossCash": round(gross, 2),
+                            "reportedCosts": round(gross - net, 2), "netCash": round(net, 2)})
+    return {"matchedContractGroups": matched, "unresolvedContractGroups": unresolved,
+            "excludedMultiSecurityTransactions": excluded,
+            "matchedNetCash": round(sum(item["netCash"] for item in matched), 2) if matched else None,
+            "accountProfitKnown": False, "sweepEligible": False,
+            "basis": "balanced opening/closing quantities and broker transfer costs reconciled to each parent; not independent trade count, tax lots or complete account profit"}
 
 
 def summarize_transactions(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -228,13 +318,20 @@ def summarize_transactions(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if amount is not None:
             rows_with_net_amount += 1
             net_amount += amount
-        if text(row.get("assetType")).upper() == "OPTION":
+        if text(row.get("assetType")).upper() == "OPTION" or any(
+                item.get("assetType") == "OPTION" for item in row.get("transferItems") or []):
             option_rows += 1
+    option_legs = [item for row in rows for item in row.get("transferItems") or [] if item.get("assetType") == "OPTION"]
     return {
         "transactionCount": len(rows),
         "rowsWithNetAmount": rows_with_net_amount,
         "netAmountAcrossWindow": round(net_amount, 2) if rows_with_net_amount else None,
         "optionTransactionCount": option_rows,
+        "optionLegCount": len(option_legs),
+        "closedContractCashReconciliation": closed_contract_cash_reconciliation(rows),
+        "optionLegsMissingPositionEffect": sum(not item.get("positionEffect") for item in option_legs),
+        "optionLegsMissingQuantityOrPrice": sum(item.get("quantity") is None or item.get("price") is None for item in option_legs),
+        "rowsWithoutTransferProvenance": sum("transferItems" not in row for row in rows),
         "transactionTypes": dict(sorted(types.items())),
         "statuses": dict(sorted(statuses.items())),
         "realizedOptionsProfitKnown": False,
@@ -288,6 +385,25 @@ def finish_report(
     for suffix, payload in rows_by_suffix:
         matched_suffixes.append(suffix)
         normalized.extend(normalize_transaction(row, account_suffix_value=suffix) for row in transaction_rows(payload))
+    # An API duplicate must not count cash twice. Conflicting versions require review.
+    unique, seen, duplicates, conflicts = [], {}, 0, []
+    for row in normalized:
+        key = (row["accountSuffix"], row["transactionId"])
+        if not key[1]:
+            unique.append(row)
+        elif key not in seen:
+            seen[key] = row
+            unique.append(row)
+        elif seen[key] == row:
+            duplicates += 1
+        else:
+            conflicts.append({"accountSuffix": key[0], "transactionId": key[1]})
+    report["duplicateTransactionsSuppressed"] = duplicates
+    report["conflictingTransactionIds"] = conflicts
+    if conflicts:
+        report.update(verdict="conflicting-transactions", message="Conflicting records share a broker transaction ID; prior ledger retained.")
+        return report
+    normalized = unique
     report["matchedSuffixes"] = sorted(set(matched_suffixes))
     report["transactions"] = sorted(normalized, key=transaction_sort_key)
     report["transactionSummary"] = summarize_transactions(report["transactions"])
@@ -467,8 +583,20 @@ def csv_row(transaction: dict[str, Any]) -> dict[str, Any]:
 def save_schwab_transaction_ledger(report: dict[str, Any]) -> None:
     """Persist the safe report and replace CSV only after a complete read."""
     ensure_dirs()
-    atomic_write_json(SCHWAB_TRANSACTION_LEDGER_FILE, report)
-    atomic_write_text(SCHWAB_TRANSACTION_LEDGER_TEXT_FILE, render_schwab_transaction_ledger(report))
+    persisted = dict(report)
+    if not report.get("ok") and SCHWAB_TRANSACTION_LEDGER_FILE.exists():
+        try:
+            previous = json.loads(SCHWAB_TRANSACTION_LEDGER_FILE.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            previous = {}
+        if previous.get("ok") or previous.get("retainedPriorEvidence"):
+            for key in ("transactions", "transactionSummary", "window", "matchedSuffixes"):
+                persisted[key] = previous.get(key)
+            persisted["retainedPriorEvidence"] = True
+            persisted["evidenceGeneratedAt"] = previous.get("evidenceGeneratedAt") or previous.get("generatedAt")
+            persisted["evidenceSourceStatus"] = previous.get("evidenceSourceStatus") or previous.get("sourceStatus")
+    atomic_write_json(SCHWAB_TRANSACTION_LEDGER_FILE, persisted)
+    atomic_write_text(SCHWAB_TRANSACTION_LEDGER_TEXT_FILE, render_schwab_transaction_ledger(persisted))
     if report.get("ok") and report.get("sourceStatus") in {"api", "fixture"}:
         rows = [csv_row(item) for item in report.get("transactions") or []]
         lines: list[str] = []
@@ -509,6 +637,10 @@ def render_schwab_transaction_ledger(report: dict[str, Any]) -> str:
         f"- Rows with net amount: {summary.get('rowsWithNetAmount', 0)}",
         f"- Net amount across window: {money(summary.get('netAmountAcrossWindow'))}",
         f"- Option rows: {summary.get('optionTransactionCount', 0)}",
+        f"- Option legs: {summary.get('optionLegCount', 0)}; missing position effect: {summary.get('optionLegsMissingPositionEffect', 0)}",
+        f"- Matched closed-contract cash: {money((summary.get('closedContractCashReconciliation') or {}).get('matchedNetCash'))}; not complete account profit",
+        f"- Duplicate transaction rows suppressed: {report.get('duplicateTransactionsSuppressed', 0)}",
+        f"- Prior evidence retained after failed attempt: {bool(report.get('retainedPriorEvidence'))}; evidence time: {report.get('evidenceGeneratedAt') or report.get('generatedAt')}",
         f"- Types: {', '.join(f'{key}={value}' for key, value in (summary.get('transactionTypes') or {}).items()) or '-'}",
         "- Realized options P/L remains unknown; net cash is not lot-level P/L proof.",
         "",

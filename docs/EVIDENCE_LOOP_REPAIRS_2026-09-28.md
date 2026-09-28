@@ -34,3 +34,26 @@ from the operator. Until answered, no ledger migration, sender/inbox cutover,
 cloud deployment, paper-budget change or external upload occurs. Local source
 repairs apply when the existing jobs import the updated modules. Pure replay
 checks and isolated tests do not write runtime ledgers.
+
+## Broker transaction provenance
+
+The old normalizer kept only the first transfer item. The current API response
+puts currency/fee items ahead of option legs, hiding eight option transactions.
+The adapter now retains an explicit redacted allowlist for every transfer item,
+including signed quantity, position effect, instrument, cost and fee type.
+Parent cash is counted once; exact duplicate broker IDs are suppressed within an
+account, while conflicting versions block replacement for review. Failed refreshes
+retain the last good JSON/CSV with explicit stale-evidence timestamps.
+
+Only single-security parent transactions with valid IDs, dated opening/closing
+quantities, all reported costs and exact parent-cash reconciliation enter the
+balanced-contract diagnostic. Open quantities, unmatched closes, missing costs,
+canceled records and multi-security allocation gaps stay unresolved. No fee
+allocation or tax-lot convention is invented. Four matched contract groups in the
+2026-09-28 read reconcile to $64.35 net cash. These are not four independent
+strategy events, a complete account return, or sweepable capital.
+
+Normalized transaction snapshots now enter the append-only archive, keyed by
+account suffix and broker transaction ID. No raw description, account number,
+account hash or token is added to the archive. Corrections append new versions;
+a rolling API lookback no longer erases previously captured transaction history.
