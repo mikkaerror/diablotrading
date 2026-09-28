@@ -6,6 +6,7 @@ from inferno_authority_controller import authority_text, build_authority_manifes
 from inferno_broker_preview import build_broker_preview, preview_text, save_broker_preview
 from inferno_capital_allocator import allocator_text, build_capital_allocator, save_capital_allocator
 from inferno_cloud_state import persist_cloud_artifacts, restore_cloud_artifacts
+from inferno_email_digest import build_strike_digest, verbose_requested
 from inferno_exposure_analytics import build_exposure_analytics, exposure_text, save_exposure_analytics
 from inferno_paper_execution import ledger_summary, record_from_strike_plan
 from inferno_performance_analytics import build_performance_analytics, analytics_text, save_performance_analytics
@@ -73,22 +74,32 @@ def main() -> int:
     print(authority_report)
     print(allocator_report)
     print(sandbox_report)
-    sent = send_strike_plan_email(
-        plan,
-        ledger_text="\n\n".join(
-            [
-                ledger_text,
-                shadow_report,
-                analytics_report,
-                strategy_lab_report,
-                exposure_report,
-                preview_report,
-                authority_report,
-                allocator_report,
-                sandbox_report,
-            ]
-        ),
+    full_appendix = "\n\n".join(
+        [
+            ledger_text,
+            shadow_report,
+            analytics_report,
+            strategy_lab_report,
+            exposure_report,
+            preview_report,
+            authority_report,
+            allocator_report,
+            sandbox_report,
+        ]
     )
+    if verbose_requested():
+        sent = send_strike_plan_email(plan, ledger_text=full_appendix)
+    else:
+        digest = build_strike_digest(
+            plan,
+            ledger=ledger_result["ledger"],
+            shadow=shadow,
+            analytics=analytics,
+            authority=authority,
+            sandbox=sandbox,
+        )
+        print(digest)
+        sent = send_strike_plan_email(plan, body=digest)
     persist_report = persist_cloud_artifacts()
     if persist_report.get("enabled"):
         print(

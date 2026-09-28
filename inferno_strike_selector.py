@@ -1297,11 +1297,16 @@ def save_strike_plan(plan: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def send_strike_plan_email(plan: dict[str, Any], ledger_text: str | None = None) -> bool:
+def send_strike_plan_email(
+    plan: dict[str, Any],
+    ledger_text: str | None = None,
+    body: str | None = None,
+) -> bool:
+    """Email the strike plan. ``body`` (e.g. the compact digest) replaces the default report."""
     if not smtp_configured():
         return False
-    brief = build_text_report(plan)
-    if ledger_text:
+    brief = body if body else build_text_report(plan)
+    if ledger_text and not body:
         brief = f"{brief}\n\n{ledger_text}".rstrip() + "\n"
     payload = {
         "brief": brief,
