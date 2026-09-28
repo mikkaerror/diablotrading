@@ -53,8 +53,8 @@ def build_approval_token(ticker: str, generated_at: str | None) -> str:
     """Build a deterministic short token for one queue item.
 
     The token is stable for the same ticker + queue generation time, which
-    makes it safe to embed into reply emails and reports while still expiring
-    naturally on the next queue rebuild.
+    makes it safe to embed into reply emails and reports. Matching pending
+    requests retain their token when the queue is rebuilt.
     """
     digest = hashlib.sha1(
         f"inferno-approval|{(generated_at or '').strip()}|{ticker.strip().upper()}".encode("utf-8")
@@ -74,6 +74,59 @@ def _reply_commands_for(item: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def approval_event_key(item: dict, generated_at: str = "") -> str:
+    """Identity for notification dedupe; never an eligibility or authority input.
+
+    New rows carry the source event date. Legacy rows can infer it from their
+    own dated countdown; unknown events share a conservative daily bucket.
+    """
+    if item.get("approvalEventKey"):
+        return str(item["approvalEventKey"])
+    for key in ("nextEarnings", "eventDate", "earningsDate"):
+        value = str(item.get(key) or "").strip()
+        try:
+            return "earnings:" + date.fromisoformat(value[:10]).isoformat()
+        except ValueError:
+            pass
+    try:
+        stamp = datetime.fromisoformat(str(item.get("generatedAt") or generated_at))
+        days = float(item["daysUntilEarnings"])
+        if days.is_integer() and 0 <= days < 365:
+            return "earnings:" + (stamp.date() + timedelta(days=int(days))).isoformat()
+    except (ValueError, TypeError, KeyError, OverflowError):
+        pass
+    return "unknown-event"
+
+
+def reuse_pending_tokens(queue: dict, previous: dict) -> dict:
+    """Keep a live pending reply usable across refreshes of the same request.
+
+    Completed decisions are not carried forward or modified. A different event
+    or proposed route gets a fresh token so an old email cannot approve it.
+    """
+    previous = ensure_queue_tokens(previous)
+    old_items = {str(item.get("ticker") or "").upper(): item
+                 for item in previous.get("items", [])
+                 if item.get("approvalStatus") == "pending"}
+    for item in queue.get("items", []):
+        old = old_items.get(str(item.get("ticker") or "").upper())
+        if not old or item.get("approvalStatus") != "pending":
+            continue
+        event = approval_event_key(item, str(queue.get("generatedAt") or ""))
+        same_request = event == approval_event_key(old, str(previous.get("generatedAt") or ""))
+        same_request = same_request and all(item.get(k) == old.get(k) for k in
+                                           ("setupRec", "primaryRoute", "secondaryRoute"))
+        if event == "unknown-event":
+            same_request = same_request and str(item.get("generatedAt"))[:10] == str(old.get("generatedAt"))[:10]
+        if same_request:
+            for key in ("approvalToken", "generatedAt", "pendingSince"):
+                if old.get(key):
+                    item[key] = old[key]
+            # Freeze identity before reusing the original timestamp/countdown.
+            item["approvalEventKey"] = event
+    return ensure_queue_tokens(queue)
+
+
 def ensure_queue_tokens(queue: dict) -> dict:
     """Stamp every queue item with a deterministic approval token and shortcuts.
 
@@ -87,7 +140,9 @@ def ensure_queue_tokens(queue: dict) -> dict:
             continue
         item["ticker"] = ticker
         item.setdefault("generatedAt", generated_at)
-        item["approvalToken"] = build_approval_token(ticker, str(item.get("generatedAt") or generated_at))
+        if not item.get("approvalToken"):
+            item["approvalToken"] = build_approval_token(ticker, str(item.get("generatedAt") or generated_at))
+        item["approvalToken"] = str(item["approvalToken"]).strip().upper()
         commands = _reply_commands_for(item)
         item["replyApprove"] = commands["approve"]
         item["replyDeny"] = commands["deny"]

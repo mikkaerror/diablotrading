@@ -119,6 +119,10 @@ def error_detail(exc: Exception) -> str:
 
 def repair_morning_email(*, force: bool = False) -> dict[str, Any]:
     """Send the latest built snapshot if today's dawn cycle missed its email."""
+    from inferno_email_policy import suppress_routine_email
+
+    if suppress_routine_email("morning"):
+        return {"attempted": False, "ok": True, "status": "suppressed-editor-mode"}
     ops_status = load_json_file(OPS_STATUS_FILE) or {}
     snapshot = load_json_file(SNAPSHOT_FILE) or {}
     if not ops_status:

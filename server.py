@@ -217,6 +217,10 @@ def html_from_payload(payload: dict[str, Any]) -> str:
 
 
 def send_email(payload: dict[str, Any], subject: str = "Morning Conviction Brief") -> bool:
+    from inferno_email_policy import suppress_subject
+
+    if suppress_subject(subject, payload):
+        return False
     settings = smtp_settings()
     if not smtp_configured():
         return False

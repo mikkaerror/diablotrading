@@ -562,8 +562,14 @@ def save_action_pulse(payload: dict[str, Any]) -> None:
 def send_action_pulse(payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
     """Send one action-pulse email with phase/day dedupe."""
     load_env_file(SMTP_ENV_FILE)
+    from inferno_email_policy import email_mode, is_failure_alert, suppress_routine_email
+
+    if suppress_routine_email("action-pulse", payload):
+        return {"attempted": False, "sent": False, "status": "suppressed-editor-mode"}
     state = load_state()
     key = sent_key(text(payload.get("phase"), "manual"))
+    if email_mode() == "editor" and is_failure_alert(payload):
+        key += ":failure"
     if key in state.get("sentByKey", {}) and not force:
         return {
             "attempted": False,

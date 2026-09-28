@@ -106,6 +106,7 @@ include_inline_secrets = sys.argv[2] == "true"
 payload = {
     "PROJECT_ID": os.environ["PROJECT_ID"],
     "TZ": os.environ["TIME_ZONE"],
+    "INFERNO_EMAIL_MODE": os.environ.get("INFERNO_EMAIL_MODE", "full"),
     "SMTP_HOST": os.environ["SMTP_HOST"],
     "SMTP_PORT": os.environ["SMTP_PORT"],
     "SMTP_FROM": os.environ["SMTP_FROM"],

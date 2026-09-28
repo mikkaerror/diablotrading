@@ -6,6 +6,7 @@ from inferno_authority_controller import authority_text, build_authority_manifes
 from inferno_broker_preview import build_broker_preview, preview_text, save_broker_preview
 from inferno_capital_allocator import allocator_text, build_capital_allocator, save_capital_allocator
 from inferno_cloud_state import persist_cloud_artifacts, restore_cloud_artifacts
+from inferno_email_policy import suppress_routine_email
 from inferno_email_digest import build_strike_digest, verbose_requested
 from inferno_exposure_analytics import build_exposure_analytics, exposure_text, save_exposure_analytics
 from inferno_paper_execution import ledger_summary, record_from_strike_plan
@@ -108,7 +109,10 @@ def main() -> int:
             f"{len(persist_report.get('missing', []))} missing, ok={persist_report.get('ok')}"
         )
     print(f"Strike email sent: {'yes' if sent else 'no'}")
-    return 0 if sent else 1
+    suppressed = suppress_routine_email("strike", plan)
+    if suppressed:
+        print("Strike email delivery: suppressed-editor-mode")
+    return 0 if sent or suppressed else 1
 
 
 if __name__ == "__main__":

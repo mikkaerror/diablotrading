@@ -28,6 +28,8 @@ CLOUD_STATE_TEXT_FILE = REPORTS_DIR / "cloud_state_latest.txt"
 
 DEFAULT_CLOUD_STATE_PREFIX = "diablotrading-state"
 DEFAULT_ARTIFACT_PATHS = [
+    "data/inferno_approval_queue.json",
+    "data/inferno_approval_dispatch_state.json",
     "data/inferno_paper_execution_ledger.json",
     "data/inferno_fast_paper_cohort.json",
     "data/inferno_fast_paper_ledger.json",

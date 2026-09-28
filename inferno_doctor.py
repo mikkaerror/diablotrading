@@ -739,6 +739,7 @@ def action_pulse_status(report: dict) -> tuple[bool, str]:
         "sent",
         "already-sent",
         "not-requested",
+        "suppressed-editor-mode",
     }
     ok = fresh and sent_or_not_requested
     detail = (

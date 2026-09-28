@@ -2330,6 +2330,7 @@ def build_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
                 "setupRec": row["setupRec"],
                 "readiness": row["readiness"],
                 "daysUntilEarnings": row["daysUntilEarnings"],
+                "nextEarnings": row.get("nextEarnings"),
                 "signalTrigger": row["signalTrigger"],
                 "primaryRoute": row["rec1"],
                 "secondaryRoute": row["rec2"],
@@ -2354,13 +2355,42 @@ def build_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
-    queue = build_approval_queue(payload)
+    from inferno_approval_queue import reuse_pending_tokens
+
+    queue = reuse_pending_tokens(build_approval_queue(payload), load_json_file(APPROVAL_QUEUE_FILE) or {})
     atomic_write_json(APPROVAL_QUEUE_FILE, queue)
     return queue
 
 
 def append_log(entry: dict[str, Any]) -> None:
     append_text(LOG_FILE, json.dumps(entry) + "\n")
+
+
+def deliver_morning_email(payload: dict[str, Any], *, skip_email: bool = False) -> dict[str, Any]:
+    """Delivery outcome only; callers always save the complete reports first."""
+    from inferno_email_policy import suppress_routine_email
+
+    suppressed = suppress_routine_email("morning", payload)
+    outcome = {
+        "emailSent": False, "emailError": None,
+        "emailSkipped": bool(skip_email or suppressed),
+        "emailSkipReason": "skip-email-flag" if skip_email else ("editor-mode" if suppressed else None),
+        "approvalDispatch": {"ok": True, "status": "skipped"},
+    }
+    if not skip_email and smtp_configured():
+        try:
+            if not suppressed:
+                outcome["emailSent"] = send_email(payload)
+        except Exception as exc:  # noqa: BLE001
+            outcome["emailError"] = str(exc)
+        else:
+            try:
+                from inferno_approval_dispatch import dispatch_pending_approval_prompts
+
+                outcome["approvalDispatch"] = dispatch_pending_approval_prompts()
+            except Exception as exc:  # noqa: BLE001
+                outcome["approvalDispatch"] = {"ok": False, "status": "dispatch-failed", "error": str(exc)}
+    return outcome
 
 
 def send_failure_email(error_message: str, updater_results: list[dict[str, Any]]) -> bool:
@@ -3004,25 +3034,12 @@ def main() -> int:
                                      "\nIndividual quote quality and trade gates remain separate.\n")
             write_payload(payload)
 
-            email_sent = False
-            email_error = None
-            approval_dispatch = {"ok": True, "status": "skipped"}
-            if not args.skip_email and smtp_configured():
-                try:
-                    email_sent = send_email(payload)
-                except Exception as exc:  # noqa: BLE001
-                    email_error = str(exc)
-                else:
-                    try:
-                        from inferno_approval_dispatch import dispatch_pending_approval_prompts
-
-                        approval_dispatch = dispatch_pending_approval_prompts()
-                    except Exception as exc:  # noqa: BLE001
-                        approval_dispatch = {"ok": False, "status": "dispatch-failed", "error": str(exc)}
-
-            payload["approvalDispatch"] = approval_dispatch
-            email_skipped = bool(args.skip_email)
-            email_skip_reason = "skip-email-flag" if email_skipped else None
+            delivery = deliver_morning_email(payload, skip_email=args.skip_email)
+            email_sent = delivery["emailSent"]
+            email_error = delivery["emailError"]
+            email_skipped = delivery["emailSkipped"]
+            email_skip_reason = delivery["emailSkipReason"]
+            payload["approvalDispatch"] = delivery["approvalDispatch"]
             write_ops_status(
                 payload,
                 updater_results,
@@ -3153,6 +3170,10 @@ def send_morning_brief() -> dict:
     from inferno_config import local_now
     from server import send_email, smtp_configured
 
+    from inferno_email_policy import suppress_routine_email
+
+    if suppress_routine_email("morning"):
+        return {"status": "suppressed-editor-mode", "sent": False}
     print("[DIABLO] Inferno Dispatch - Morning Brief Initiated")
 
     if not smtp_configured():

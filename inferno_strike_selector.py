@@ -1303,6 +1303,10 @@ def send_strike_plan_email(
     body: str | None = None,
 ) -> bool:
     """Email the strike plan. ``body`` (e.g. the compact digest) replaces the default report."""
+    from inferno_email_policy import suppress_routine_email
+
+    if suppress_routine_email("strike", plan):
+        return False
     if not smtp_configured():
         return False
     brief = body if body else build_text_report(plan)
@@ -1310,6 +1314,9 @@ def send_strike_plan_email(
         brief = f"{brief}\n\n{ledger_text}".rstrip() + "\n"
     payload = {
         "brief": brief,
+        "ok": plan.get("ok"),
+        "error": plan.get("error"),
+        "errors": plan.get("errors"),
         "sourceLabel": "Inferno Strike Plan",
         "rows": [],
         "longTermRows": [],

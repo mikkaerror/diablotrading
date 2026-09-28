@@ -10,17 +10,20 @@ without copy/paste friction.
 Safety contract:
 - coordination only; cannot place trades or broaden broker authority
 - sends only to the configured operator inbox
-- deduplicates by queue token so maintenance sweeps stay quiet
+- deduplicates by pending token and ticker/event/Denver day
 """
 
 import argparse
+import fcntl
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import json
 import smtplib
 from email.message import EmailMessage
 from typing import Any
 
 from inferno_io import atomic_write_json, atomic_write_text
-from inferno_approval_queue import ensure_queue_tokens, load_queue
+from inferno_approval_queue import approval_event_key, ensure_queue_tokens, load_queue
 from inferno_config import local_now
 from inferno_decision_brief import build_decision_briefs
 from server import DATA_DIR, REPORTS_DIR, SMTP_ENV_FILE, ensure_dirs, load_env_file, smtp_configured, smtp_settings
@@ -38,10 +41,10 @@ def load_state() -> dict[str, Any]:
         return {"sentByToken": {}}
     try:
         payload = json.loads(APPROVAL_DISPATCH_STATE_FILE.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return {"sentByToken": {}}
-    if not isinstance(payload, dict):
-        return {"sentByToken": {}}
+    except (OSError, ValueError) as exc:
+        raise ValueError("Approval dispatch history unreadable; refusing duplicate-prone delivery") from exc
+    if not isinstance(payload, dict) or any(not isinstance(payload.get(key, {}), dict) for key in ("sentByToken", "sentByEventDay")):
+        raise ValueError("Approval dispatch history invalid; refusing duplicate-prone delivery")
     payload.setdefault("sentByToken", {})
     return payload
 
@@ -179,6 +182,18 @@ def send_operator_email(subject: str, text: str, html: str) -> None:
 
 
 def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
+    """Serialize dispatchers sharing this state file; never bypass the daily cap."""
+    lock = APPROVAL_DISPATCH_STATE_FILE.with_suffix(".lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with lock.open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            return _dispatch_pending_approval_prompts(force=force)
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
     """Send unsent approval prompts for the current queue."""
     load_env_file(SMTP_ENV_FILE)
     queue = ensure_queue_tokens(load_queue())
@@ -211,15 +226,24 @@ def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
         for brief in briefs_payload.get("briefs") or []
         if brief.get("ticker")
     }
-    state = load_state()
+    try:
+        state = load_state()
+    except ValueError as exc:
+        report.update({"ok": False, "status": "state-unreadable", "error": str(exc)})
+        save_report(report)
+        return report
     sent_by_token = state.setdefault("sentByToken", {})
-    current_tokens = {str(item.get("approvalToken") or "") for item in pending}
-    state["sentByToken"] = {
-        token: payload
-        for token, payload in sent_by_token.items()
-        if token in current_tokens
-    }
-    sent_by_token = state["sentByToken"]
+    today = local_now().astimezone(ZoneInfo("America/Denver")).date().isoformat()
+    sent_by_event_day = state.setdefault("sentByEventDay", {})
+    # Upgrade legacy successful sends conservatively, even without event metadata.
+    legacy_tickers_today = set()
+    for entry in sent_by_token.values():
+        try:
+            day = datetime.fromisoformat(entry["sentAt"]).astimezone(ZoneInfo("America/Denver")).date().isoformat()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if day == today and not entry.get("eventKey"):
+            legacy_tickers_today.add(str(entry.get("ticker") or "").upper())
 
     try:
         for item in pending:
@@ -228,11 +252,20 @@ def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
             if not token:
                 report["skipped"].append({"ticker": ticker, "approvalToken": token, "reason": "missing-token"})
                 continue
+            event = approval_event_key(item, str(queue.get("generatedAt") or ""))
+            day_key = json.dumps([ticker, event, today], separators=(",", ":"))
+            if day_key in sent_by_event_day or ticker in legacy_tickers_today:
+                report["skipped"].append({"ticker": ticker, "approvalToken": token, "reason": "already-requested-today"})
+                continue
             if not force and token in sent_by_token:
                 report["skipped"].append({"ticker": ticker, "approvalToken": token, "reason": "already-sent"})
                 continue
             brief = brief_map.get(ticker)
             subject = build_prompt_subject(item)
+            # Reserve before SMTP: an uncertain outcome must not trigger duplicate
+            # approvals on retry. A failure remains visible in the report.
+            sent_by_event_day[day_key] = {"approvalToken": token, "status": "reserved", "date": today}
+            save_state(state)
             send_operator_email(
                 subject,
                 build_prompt_text(item, brief),
@@ -244,8 +277,11 @@ def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
                 "subject": subject,
                 "sentAt": local_now().isoformat(),
                 "queueGeneratedAt": queue.get("generatedAt"),
+                "eventKey": event,
             }
             sent_by_token[token] = entry
+            sent_by_event_day[day_key]["status"] = "sent"
+            save_state(state)
             report["sent"].append(entry)
     except Exception as exc:  # noqa: BLE001
         report.update({"ok": False, "status": "send-failed", "error": str(exc)})
@@ -267,7 +303,7 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI args for approval dispatch."""
     parser = argparse.ArgumentParser(description="Send one reply-friendly approval email per pending ticker.")
     parser.add_argument("command", nargs="?", default="dispatch", choices=["dispatch", "status"])
-    parser.add_argument("--force", action="store_true", help="Resend prompts even if the token already dispatched.")
+    parser.add_argument("--force", action="store_true", help="Resend a pending token on a later day; never bypass ticker/event/day dedupe.")
     return parser.parse_args()
 
 
