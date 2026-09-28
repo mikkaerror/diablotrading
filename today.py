@@ -177,7 +177,7 @@ def _drawdown_banner_if_needed() -> str | None:
     cap_mult = dd.get("capMultiplier")
     mult_str = f"{cap_mult:.2f}x" if isinstance(cap_mult, (int, float)) else "?"
     allows = dd.get("newEntriesAllowed", True)
-    if level in ("paused", "step-3-paused"):
+    if level in ("pause", "paused", "step-3-paused"):  # capital_scaling emits "pause"
         verb = "PAUSED — no new entries until NLV recovers above peak − 30%"
     elif level == "step-2-quarter":
         verb = f"step-2-quarter: cap × {mult_str}, new entries " + ("ok" if allows else "blocked")

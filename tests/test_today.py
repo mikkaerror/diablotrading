@@ -187,5 +187,20 @@ class TodayCandidatesTests(unittest.TestCase):
         self.assertIn("no broker action was taken", output.getvalue())
 
 
+
+class TodayDrawdownBannerTests(unittest.TestCase):
+    def test_capital_scaling_pause_level_shows_paused_banner(self) -> None:
+        payload = {"drawdownState": {"level": "pause", "drawdownFraction": 0.7513,
+                                      "capMultiplier": 0.0, "newEntriesAllowed": False}}
+        with patch.object(today, "_load_json", return_value=payload):
+            banner = today._drawdown_banner_if_needed()
+        self.assertIn("PAUSED", banner)
+        self.assertIn("75.1%", banner)
+
+    def test_normal_level_is_silent(self) -> None:
+        with patch.object(today, "_load_json", return_value={"drawdownState": {"level": "normal"}}):
+            self.assertIsNone(today._drawdown_banner_if_needed())
+
+
 if __name__ == "__main__":
     unittest.main()
