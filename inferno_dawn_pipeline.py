@@ -10,6 +10,27 @@ import time
 from pathlib import Path
 
 DEFAULT_TIMEOUT_SECONDS = 900
+FOLLOW_UP_TIMEOUT_SECONDS = 600
+
+
+def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None) -> list[list[str]]:
+    """Advisory morning jobs that run after the bounded refresh, never fatal.
+
+    The Desk Editor email is sent from here because launchd runs this file
+    directly (cloud scheduled agents cannot see the repo). The mailer has its
+    own weekday window and once-a-day dedupe, so the 10-minute safety
+    interval does not resend. Skipped when the caller asked for no email.
+    """
+    environ = os.environ if environ is None else environ
+    if "--skip-email" in argv or "--cloud-native" in argv:
+        return []
+    if environ.get("INFERNO_DESK_EDITOR_MAIL", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return []
+    here = Path(__file__).resolve().parent
+    return [
+        [sys.executable, str(here / "inferno_second_opinion.py"), "run"],
+        [sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"],
+    ]
 
 
 def run_bounded(command: list[str], *, timeout_seconds: float) -> int:
@@ -34,7 +55,7 @@ def run_bounded(command: list[str], *, timeout_seconds: float) -> int:
 
 
 def main() -> int:
-    """Run the existing pipeline under a finite wall-clock budget; no email here."""
+    """Run the existing pipeline under a finite wall-clock budget, then advisory follow-ups."""
     from inferno_config import local_now
     from inferno_io import atomic_write_json
     from server import DATA_DIR
@@ -60,6 +81,12 @@ def main() -> int:
     })
     if code == 124:
         print(f"Dawn refresh exceeded {timeout:g}s; job stopped and lock released.", file=sys.stderr)
+    for command in follow_up_commands(sys.argv[1:]):
+        if Path(command[1]).exists():
+            try:
+                run_bounded(command, timeout_seconds=FOLLOW_UP_TIMEOUT_SECONDS)
+            except Exception as exc:  # noqa: BLE001 - advisory only
+                print(f"Follow-up {Path(command[1]).name} failed: {exc}", file=sys.stderr)
     return code
 
 

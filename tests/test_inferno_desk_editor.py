@@ -118,6 +118,18 @@ class DeskEditorTests(unittest.TestCase):
         self.assertEqual([a["ticker"] for a in positions["paperActions"]], ["PL"])
         self.assertIn("never add", desk_editor_text(self.payload))
 
+    def test_empty_sync_falls_back_to_nlv_history_and_flags_reauth(self):
+        _write(self.data, "inferno_live_account_sync.json", {
+            "generatedAt": FRESH, "ok": False, "netLiquidatingValue": None,
+            "schwabAccountVerdict": "reauthorization-required",
+        })
+        (self.data / "nlv_history.csv").write_text(
+            "timestamp,date,nlv,cash\n2026-09-27T00:31:33+00:00,2026-09-26,845.85,249.33\n", encoding="utf-8")
+        payload = build_desk_editor(self.data, self.reports, NOW)
+        self.assertEqual(payload["money"]["nlv"], 845.85)
+        self.assertEqual(payload["money"]["source"], "nlv history")
+        self.assertTrue(any("Schwab login expired" in a for a in payload["alerts"]))
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

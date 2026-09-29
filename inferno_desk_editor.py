@@ -97,17 +97,43 @@ def _pretty(strategy: Any) -> str:
 
 # ---------------------------------------------------------------- sections
 
+def _last_nlv_row(data_dir: Path) -> dict[str, Any] | None:
+    path = data_dir / "nlv_history.csv"
+    try:
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except OSError:
+        return None
+    if len(lines) < 2:
+        return None
+    header = lines[0].split(",")
+    for raw in reversed(lines[1:]):
+        row = dict(zip(header, raw.split(",")))
+        nlv = _num(row.get("nlv"))
+        if nlv is not None:
+            return {"nlv": nlv, "cash": _num(row.get("cash")), "timestamp": row.get("timestamp")}
+    return None
+
+
 def money_section(data_dir: Path, now: datetime) -> dict[str, Any]:
     sync = _load(data_dir / "inferno_live_account_sync.json")
     state = _load(data_dir / "inferno_capital_scaling_state.json")
     scaling = _load(data_dir / "inferno_capital_scaling.json")
     nlv = _num(sync.get("netLiquidatingValue"))
-    peak = _num(state.get("peakNlv"))
+    cash = _num(sync.get("totalCash"))
     age = _age_hours(_stamp(sync), now)
+    source = "broker sync"
+    if nlv is None:
+        # Sync can be "fresh" but empty (e.g. Schwab token rejected). Fall back
+        # to the last recorded NLV and let the age say how old it is.
+        last = _last_nlv_row(data_dir)
+        if last:
+            nlv, cash, age, source = last["nlv"], last["cash"], _age_hours(last["timestamp"], now), "nlv history"
+    peak = _num(state.get("peakNlv"))
     drawdown = scaling.get("drawdownState") or {}
     return {
         "nlv": nlv,
-        "cash": _num(sync.get("totalCash")),
+        "cash": cash,
+        "source": source,
         "peakNlv": peak,
         "fromPeakPct": round((nlv / peak - 1.0) * 100, 1) if nlv is not None and peak else None,
         "ageHours": None if age is None else round(age, 1),
@@ -302,6 +328,12 @@ def evidence_section(data_dir: Path) -> dict[str, Any]:
 
 def alerts_section(data_dir: Path, now: datetime) -> list[str]:
     alerts = []
+    sync = _load(data_dir / "inferno_live_account_sync.json")
+    if sync and sync.get("ok") is False:
+        if str(sync.get("schwabAccountVerdict") or "").startswith("reauth"):
+            alerts.append("Schwab login expired - re-sign in on the Mac: python3 inferno_schwab_oauth.py restart")
+        else:
+            alerts.append(f"broker account sync blocked: {sync.get('message') or 'no detail'}")
     for label, name, max_age in FRESHNESS_CHECKS:
         path = data_dir / name
         if not path.exists():
