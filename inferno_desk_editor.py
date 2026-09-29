@@ -323,6 +323,24 @@ def evidence_section(data_dir: Path) -> dict[str, Any]:
         "promotionSample": PROMOTION_SAMPLE,
         "paperExpectancyR": closed.get("expectancyPerDollarRisk"),
         "shadow": rows,
+        "shortPremium": _short_premium_forward(data_dir),
+    }
+
+
+def _short_premium_forward(data_dir: Path) -> dict[str, Any] | None:
+    ledger = _load(data_dir / "inferno_short_premium_shadow.json")
+    summary = ledger.get("summary") or {}
+    if not summary:
+        return None
+    return {
+        "verdict": summary.get("verdict"),
+        "events": summary.get("distinctEvents", 0),
+        "names": summary.get("distinctNames", 0),
+        "open": summary.get("openEvents", 0),
+        "meanR": summary.get("meanNetR"),
+        "exBestR": summary.get("meanNetR_exTwoBest"),
+        "frictionDollars": summary.get("meanEntryFrictionDollars"),
+        "timeboxEnd": summary.get("timeboxEnd"),
     }
 
 
@@ -506,6 +524,14 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
     lines.append(f"Scored paper trades: {evidence['scoredPaper']}/{evidence['promotionSample']}")
     for row in evidence["shadow"]:
         lines.append(f"- shadow {_pretty(row['strategy'])}: {row['closed']} closed | win {_pct(row['winRate'])} | avg {_r(row['avgR'])}")
+    sp = evidence.get("shortPremium")
+    if sp:
+        result = "" if sp["meanR"] is None else f" | mean {_r(sp['meanR'])}, ex-two-best {_r(sp['exBestR'])}"
+        friction = "" if sp["frictionDollars"] is None else f" | entry friction ${sp['frictionDollars']:.0f}/fly"
+        lines.append(
+            f"- short-premium forward (iron fly shadow): {sp['events']}/60 events, {sp['names']}/40 names, "
+            f"{sp['open']} open{result}{friction} | time-box {sp['timeboxEnd']}"
+        )
     lines.append("")
 
     flow = payload.get("capexFlow")

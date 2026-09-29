@@ -130,6 +130,15 @@ class DeskEditorTests(unittest.TestCase):
         self.assertEqual(payload["money"]["source"], "nlv history")
         self.assertTrue(any("Schwab login expired" in a for a in payload["alerts"]))
 
+    def test_short_premium_forward_line(self):
+        _write(self.data, "inferno_short_premium_shadow.json", {"summary": {
+            "verdict": "forward-awaiting-short-premium-records", "distinctEvents": 0, "distinctNames": 0,
+            "openEvents": 1, "meanNetR": None, "meanEntryFrictionDollars": 472.5, "timeboxEnd": "2027-02-28"}})
+        payload = build_desk_editor(self.data, self.reports, NOW)
+        text = desk_editor_text(payload)
+        self.assertIn("short-premium forward (iron fly shadow): 0/60 events, 0/40 names, 1 open", text)
+        self.assertIn("entry friction $472/fly", text)
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

@@ -10,7 +10,8 @@ packet the agent would have read.
 
 Order of work (each step non-fatal; failures are listed in the email):
   1. paper delegate (the ONLY approval path; paper-only, ack-gated, audited)
-  2. research views: account performance, vol edge, capex flow, pick scorecard
+  2. research views: account performance, vol edge, capex flow, pick scorecard,
+     short-premium shadow (prereg v2 forward collector)
   3. build the Desk Editor packet and render desk_editor_text
   4. send once per local weekday via the existing .env.smtp settings
 
@@ -45,6 +46,7 @@ PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("vol edge", ["inferno_vol_edge.py", "run"]),
     ("capex flow", ["inferno_capex_flow.py", "run"]),
     ("pick scorecard", ["inferno_pick_scorecard.py", "run"]),
+    ("short-premium shadow", ["inferno_short_premium_shadow.py", "run"]),
 )
 
 Runner = Callable[[list[str]], tuple[int, str]]
