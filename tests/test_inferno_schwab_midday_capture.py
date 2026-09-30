@@ -22,11 +22,11 @@ class ChainCoverageTests(unittest.TestCase):
         sources = {ops.SNAPSHOT_FILE: {'rows': rows}, ops.LIVE_ACCOUNT_SYNC_FILE: {'positions': [{'symbol': 'HELD'}]}}
         with patch.object(ops, 'local_now', return_value=NOW), patch.object(ops, 'load_json_file', side_effect=lambda p: sources.get(p, {})):
             symbols = ops.default_symbol_universe(limit=12)
-        self.assertEqual(symbols, [f'E{i:02}' for i in range(15)])
+        self.assertEqual(symbols, [f'E{i:02}' for i in range(15)] + ['LATE', 'OLD'])
         with patch.object(options, 'load_schwab_access_token', return_value=None), patch.object(options, 'summarize_chain', side_effect=lambda s, p: {'symbol': s}):
             report = options.build_report(symbols, fixture_payloads={s: {} for s in symbols}, symbol_limit=len(symbols))
-        self.assertEqual(len(report['rows']), 15)
-        self.assertEqual(report['captureSymbolLimit'], 15)
+        self.assertEqual(len(report['rows']), 17)
+        self.assertEqual(report['captureSymbolLimit'], 17)
         self.assertTrue(report['researchOnly'])
 
     def test_default_limit_still_applies_without_explicit_coverage_expansion(self):
@@ -54,18 +54,19 @@ class ChainCoverageTests(unittest.TestCase):
 
     def test_capture_receipt_and_duplicate_suppression_without_paper_actions(self):
         chain = {'status': 'ok', 'rows': [{'symbol': 'XYZ', 'status': 'ok', 'quoteSessionIsRegular': True}]}
-        with tempfile.TemporaryDirectory() as tmp, patch.object(midday, 'CAPTURE_FILE', Path(tmp) / 'capture.json'), patch.object(midday, 'CAPTURE_TEXT_FILE', Path(tmp) / 'capture.txt'), patch.object(ops, 'load_schwab_env'), patch.object(ops, 'default_symbol_universe', return_value=['XYZ']), patch.object(ops, 'live_chain_report', return_value=chain) as fetch, patch.object(ops, 'save_ops_report'), patch('inferno_short_premium_shadow.run', return_value={'lastRun': {'added': 1}, 'summary': {}}) as shadow:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(midday, 'CAPTURE_FILE', Path(tmp) / 'capture.json'), patch.object(midday, 'CAPTURE_TEXT_FILE', Path(tmp) / 'capture.txt'), patch.object(ops, 'load_schwab_env'), patch.object(ops, 'default_symbol_universe', return_value=['XYZ']), patch.object(ops, 'live_chain_report', return_value=chain) as fetch, patch.object(ops, 'save_ops_report'), patch('inferno_short_premium_shadow.run', return_value={'lastRun': {'added': 1}, 'summary': {}}) as shadow, patch('inferno_earnings_runner.run', return_value={'lastRun': {}, 'scoreboard': {}}) as runner:
             result = midday.run_capture(now=NOW)
             again = midday.run_capture(now=NOW)
         self.assertEqual(result['status'], 'captured')
         self.assertEqual(again, result)
         self.assertEqual(fetch.call_count, 1)
         self.assertEqual(shadow.call_count, 1)
+        self.assertEqual(runner.call_count, 1)
         self.assertFalse(result['liveTradingAllowed'])
         self.assertFalse(result['brokerSubmitAllowed'])
 
     def test_failure_is_persisted_and_shadow_not_run(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(midday, 'CAPTURE_FILE', Path(tmp) / 'capture.json'), patch.object(midday, 'CAPTURE_TEXT_FILE', Path(tmp) / 'capture.txt'), patch.object(ops, 'load_schwab_env'), patch.object(ops, 'default_symbol_universe', return_value=['XYZ']), patch.object(ops, 'live_chain_report', side_effect=RuntimeError('token expired')), patch('inferno_short_premium_shadow.run') as shadow:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(midday, 'CAPTURE_FILE', Path(tmp) / 'capture.json'), patch.object(midday, 'CAPTURE_TEXT_FILE', Path(tmp) / 'capture.txt'), patch.object(ops, 'load_schwab_env'), patch.object(ops, 'default_symbol_universe', return_value=['XYZ']), patch.object(ops, 'live_chain_report', side_effect=RuntimeError('token expired')), patch('inferno_short_premium_shadow.run') as shadow, patch('inferno_earnings_runner.run', return_value={'lastRun': {}, 'scoreboard': {}}) as runner:
             result = midday.run_capture(now=NOW)
             saved = midday.load_json_file(midday.CAPTURE_FILE)
         self.assertEqual(saved['status'], 'failed')
@@ -76,3 +77,24 @@ class ChainCoverageTests(unittest.TestCase):
         from inferno_doctor import schwab_midday_capture_status
         self.assertFalse(schwab_midday_capture_status({'status': 'captured', 'marketDate': '2026-10-12'}, now=NOW)[0])
         self.assertTrue(schwab_midday_capture_status({'status': 'captured', 'marketDate': '2026-10-13'}, now=NOW)[0])
+
+    def test_four_coverage_tiers_deduplicate_and_keep_previous_reports(self):
+        snapshot={'rows':[{'ticker':'TOMORROW','nextEarnings':'2026-10-14'},
+                          {'ticker':'DAY10','nextEarnings':'2026-10-23'},
+                          {'ticker':'DAY11','nextEarnings':'2026-10-24'},
+                          {'ticker':'NEWDATE','nextEarnings':'2027-01-01'}]}
+        runner={'calendar':{'NEWDATE':{'earnings':'2026-10-12'}},
+                'reported':{'FRIDAY|2026-10-09':{'earnings':'2026-10-09'}},
+                'records':[{'ticker':'OPEN','status':'open'},{'ticker':'CLOSED','status':'closed'},
+                           {'ticker':'TOMORROW','status':'open'}]}
+        tiers=ops.capture_priority_tiers(snapshot,runner,[{'ticker':'CALL'},{'ticker':'OPEN'}],today=date(2026,10,13))
+        self.assertEqual(tiers['reporting1to10Days'],['TOMORROW','DAY10'])
+        self.assertEqual(tiers['reportedLast2Sessions'],['NEWDATE','FRIDAY'])
+        self.assertEqual(tiers['openRunnerRecords'],['OPEN'])
+        self.assertEqual(tiers['operatorCalls'],['CALL'])
+
+    def test_recent_reporting_window_uses_market_holidays(self):
+        rows=[{'ticker':'FRIDAY','nextEarnings':'2026-09-04'},
+              {'ticker':'THURSDAY','nextEarnings':'2026-09-03'}]
+        tiers=ops.capture_priority_tiers({'rows':rows},{},[],today=date(2026,9,8))
+        self.assertEqual(tiers['reportedLast2Sessions'],['FRIDAY','THURSDAY'])

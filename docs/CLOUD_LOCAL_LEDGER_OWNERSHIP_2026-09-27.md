@@ -1,6 +1,6 @@
 # Cloud/local ledger ownership — 2026-09-27
 
-Status: implementation authorized by D5/D6 on 2026-09-30; frozen reconciliation complete, deployment verification in progress. The proposal below is retained as the migration design. See the operating-plan log and outputs/ledger-cutover-2026-09-30 for execution receipts.
+Status: D5/D6 cutover active. Frozen reconciliation is complete; the Mac is canonical and both cloud jobs run the verified read-only image. Cloud execution diablotrading-strikes-v4sqd verified the canonical snapshot, one qualified outcome, the $2,000 paper cap and denied paper mutation. The proposal below is retained as the migration design. See the operating-plan log and outputs/ledger-cutover-2026-09-30 for execution receipts.
 
 ## Recommendation
 

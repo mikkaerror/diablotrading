@@ -40,23 +40,27 @@ def run_capture(*, now=None):
     save_capture(report)  # a crash cannot leave the previous day's success looking current
     try:
         from inferno_schwab_daily_ops import (load_schwab_env, default_symbol_universe, live_chain_report,
-            build_ops_report, save_ops_report, earnings_window_symbols, schwab_symbol_limit)
+            build_ops_report, save_ops_report, load_capture_priorities, schwab_symbol_limit)
         from inferno_short_premium_shadow import run as run_shadow
+        from inferno_earnings_runner import run as run_runner
         load_schwab_env()
         symbols = default_symbol_universe()
-        earnings = earnings_window_symbols(load_json_file(SNAPSHOT_FILE) or {}, today=now.astimezone(MARKET_TZ).date())
+        tiers = load_capture_priorities(today=now.astimezone(MARKET_TZ).date())
+        earnings = [symbol for symbols in tiers.values() for symbol in symbols]
         chain = live_chain_report(symbols, symbol_limit=max(schwab_symbol_limit(), len(symbols)))
         save_ops_report(build_ops_report(chain, symbols=symbols))
         fetched = {r.get('symbol') for r in chain.get('rows', []) if r.get('status') == 'ok'}
         regular = {r.get('symbol') for r in chain.get('rows', []) if r.get('status') == 'ok' and r.get('quoteSessionIsRegular') is True}
-        report.update(symbolsRequested=symbols, earningsWindowSymbols=earnings,
+        report.update(symbolsRequested=symbols, coverageTiers=tiers, earningsWindowSymbols=earnings,
                       missingEarningsChains=sorted(set(earnings) - fetched),
                       nonRegularEarningsChains=sorted(set(earnings) - regular),
                       sourceStatus=chain.get('status'), errors=chain.get('errors') or [])
         if chain.get('status') not in {'ok', 'partial-error'}:
             raise RuntimeError(f"chain capture did not succeed: {chain.get('status')}")
         shadow = run_shadow()  # unchanged v2 capture/skip/settlement rules; shadow ledger only
-        report.update(status='captured' if chain.get('status') == 'ok' else 'partial-error',
+        runner = run_runner()  # unchanged prereg; consume midday entry/exit quotes now
+        report.update(runnerLastRun=runner.get("lastRun"), runnerScoreboard=runner.get("scoreboard"),
+                      status='captured' if chain.get('status') == 'ok' else 'partial-error',
                       v2LastRun=shadow.get('lastRun'), v2Summary=shadow.get('summary'))
     except Exception as exc:
         report.update(status='failed', error=f'{type(exc).__name__}: {exc}',

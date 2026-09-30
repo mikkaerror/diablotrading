@@ -9,3 +9,7 @@ The Mac runs the existing strike cycle after dawn and before the delegate. A sec
 Cloud jobs restore one complete hash-verified canonical snapshot or stop. They never publish protected state or send approval/strike emails. Immutable snapshot files precede a generation-checked current pointer. Publication rechecks input hashes to reject mixed snapshots. Restore validation finishes before replacing any files. Cloud-only legacy objects remain archived and are not the canonical source.
 
 The lifecycle test uses temporary files only and the real risk, approval, staging, fill-ingest and lineage functions. It proves one-host consistency, not broker fills or trading edge. Source hashes and the real 1/30 count must stay unchanged through cutover. Rollback must not restore an old mutable ledger over later operator decisions.
+
+## Deployment receipt
+
+Canonical snapshot 8e8c1055240b0367aa543bacff7f8d77258db079e663a700e50a11605adcc884; immutable cloud image sha256:903d9cfa305364eda873dd32d46ac615a85ccea9b8f923925a26430380931e1c. Execution diablotrading-strikes-v4sqd passed source restore, qualified=1, D6=2000 and denied-ledger-write checks. Nine local services resumed; cloud schedulers resumed only after that check. The auditor remained active. Dawn staging skips nights/weekends and unchanged input hashes; publication resolves gcloud explicitly under launchd PATH. Archive and runtime state are private local artifacts, not committed account data.

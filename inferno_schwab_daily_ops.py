@@ -258,7 +258,7 @@ def top_priority_slate(payload: dict[str, Any], *, n: int = DEFAULT_PRIORITY_SLA
 
 
 def earnings_window_symbols(snapshot: dict[str, Any], *, today: date | None = None) -> list[str]:
-    """Prioritize existing snapshot names 1-7 days out; never add universe members."""
+    """Prioritize existing snapshot names 1-10 days out, including T-1 exits."""
     today = today or local_now().astimezone(ZoneInfo("America/New_York")).date()
     upcoming = []
     for row in snapshot.get("rows") or []:
@@ -268,9 +268,57 @@ def earnings_window_symbols(snapshot: dict[str, Any], *, today: date | None = No
             continue  # undated/stale daysUntilEarnings is not event evidence
         days = (earnings - today).days
         symbol = clean_symbol(row.get("ticker") or row.get("symbol"))
-        if symbol and 1 <= days <= 7:
+        if symbol and 1 <= days <= 10:
             upcoming.append((days, symbol))
     return list(dict.fromkeys(symbol for _, symbol in sorted(upcoming)))
+
+
+EARNINGS_RUNNER_FILE = DATA_DIR / "inferno_earnings_runner.json"
+OPERATOR_EARNINGS_CALLS_FILE = DATA_DIR / "operator_earnings_calls.csv"
+
+
+def capture_priority_tiers(snapshot, runner, calls, *, today=None):
+    """Coverage only: fixed ordering; no prereg entry/exit or eligibility edits."""
+    from inferno_market_calendar import previous_market_session
+    today = today or local_now().astimezone(ZoneInfo("America/New_York")).date()
+    last = previous_market_session(today)
+    recent_days = {last, previous_market_session(last)}
+    reported = []
+    def consider(symbol, value):
+        try: event_date = date.fromisoformat(str(value)[:10])
+        except ValueError: return
+        if event_date in recent_days:
+            reported.append((event_date.isoformat(), clean_symbol(symbol)))
+    for row in snapshot.get("rows", []):
+        for field in ("nextEarnings", "lastEarnings", "earningsDate"):
+            consider(row.get("ticker") or row.get("symbol"), row.get(field))
+    for ticker, row in (runner.get("calendar") or {}).items():
+        consider(ticker, row.get("earnings"))
+    for key in ("reported", "runnerWatch"):
+        for event, row in (runner.get(key) or {}).items():
+            ticker, _, event_date = event.partition("|")
+            consider(row.get("ticker") or ticker, row.get("earnings") or event_date)
+    tiers = {
+        "reporting1to10Days": earnings_window_symbols(snapshot, today=today),
+        "reportedLast2Sessions": [symbol for _, symbol in sorted(reported, reverse=True)],
+        "openRunnerRecords": [r.get("ticker") for r in runner.get("records", []) if r.get("status") == "open"],
+        "operatorCalls": [r.get("ticker") for r in calls],
+    }
+    seen = set()
+    for key, values in tiers.items():
+        clean = []
+        for value in values:
+            symbol = clean_symbol(value)
+            if symbol and symbol not in seen:
+                seen.add(symbol); clean.append(symbol)
+        tiers[key] = clean
+    return tiers
+
+
+def load_capture_priorities(snapshot=None, *, today=None):
+    from inferno_earnings_runner import load_calls
+    return capture_priority_tiers(snapshot if snapshot is not None else (load_json_file(SNAPSHOT_FILE) or {}),
+        load_json_file(EARNINGS_RUNNER_FILE) or {}, load_calls(OPERATOR_EARNINGS_CALLS_FILE), today=today)
 
 
 def default_symbol_universe(limit: int | None = None) -> list[str]:
@@ -289,9 +337,10 @@ def default_symbol_universe(limit: int | None = None) -> list[str]:
     execution = load_json_file(EXECUTION_QUEUE_FILE) or {}
     approval = load_json_file(APPROVAL_QUEUE_FILE) or {}
     watchlist = load_json_file(WATCHLIST_INPUT_FILE) or {}
-    earnings_symbols = earnings_window_symbols(snapshot)
+    tiers = load_capture_priorities(snapshot)
+    priority_symbols = [symbol for symbols in tiers.values() for symbol in symbols]
     symbols = (
-        earnings_symbols
+        priority_symbols
         + symbols_from_positions(live_sync)
         + symbols_from_payload(
             paper_director,
@@ -309,7 +358,7 @@ def default_symbol_universe(limit: int | None = None) -> list[str]:
         + top_priority_slate(snapshot)
         + symbols_from_payload(watchlist, ("tickers", "symbols", "watchlist"))
     )
-    effective_limit = max(limit if limit is not None else schwab_symbol_limit(), len(earnings_symbols))
+    effective_limit = max(limit if limit is not None else schwab_symbol_limit(), len(priority_symbols))
     return unique_symbols(symbols, limit=effective_limit)
 
 
