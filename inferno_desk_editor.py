@@ -421,8 +421,24 @@ def _short_premium_forward(data_dir: Path) -> dict[str, Any] | None:
     }
 
 
+SCHWAB_REFRESH_DAYS = 7
+SCHWAB_WARN_DAYS = 2.0
+
+
+def schwab_login_days_left(token_file: Path, now: datetime) -> float | None:
+    """Days until the 7-day Schwab refresh window closes. Reads timestamps only."""
+    token = _load(token_file)
+    issued = token.get("refresh_token_issued_at") or token.get("token_obtained_at")
+    age = _age_hours(issued, now)
+    return None if age is None else round(SCHWAB_REFRESH_DAYS - age / 24.0, 1)
+
+
 def alerts_section(data_dir: Path, now: datetime) -> list[str]:
     alerts = []
+    days_left = schwab_login_days_left(data_dir.parent / ".secrets" / "schwab_token.json", now)
+    if days_left is not None and 0 < days_left <= SCHWAB_WARN_DAYS:
+        alerts.append(f"Schwab login runs out in {days_left:.1f} days - re-sign in on the Mac: "
+                      "python3 inferno_schwab_oauth.py restart")
     sync = _load(data_dir / "inferno_live_account_sync.json")
     if sync and sync.get("ok") is False:
         if str(sync.get("schwabAccountVerdict") or "").startswith("reauth"):

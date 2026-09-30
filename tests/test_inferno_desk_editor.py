@@ -183,6 +183,16 @@ class DeskEditorTests(unittest.TestCase):
         self.assertIn("GNRC 10-28", text)
         self.assertIn("inferno_earnings_runner.py call", text)
 
+    def test_schwab_login_countdown(self):
+        from inferno_desk_editor import alerts_section, schwab_login_days_left
+        secrets = self.data.parent / ".secrets"
+        secrets.mkdir()
+        _write(secrets, "schwab_token.json", {"refresh_token_issued_at": "2026-09-23T07:20:00+00:00"})
+        self.assertEqual(schwab_login_days_left(secrets / "schwab_token.json", NOW), 2.0)
+        self.assertTrue(any("Schwab login runs out in 2.0 days" in a for a in alerts_section(self.data, NOW)))
+        _write(secrets, "schwab_token.json", {"refresh_token_issued_at": "2026-09-27T07:20:00+00:00"})
+        self.assertFalse(any("Schwab login" in a for a in alerts_section(self.data, NOW)))
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))
