@@ -171,6 +171,18 @@ class DeskEditorTests(unittest.TestCase):
         self.assertIn("ENTER DELL Iron Fly exp 2026-10-16: NET CREDIT LIMIT, DAY @ 6.6", text)
         self.assertEqual(payload["orderCards"]["expired"], 1)
 
+    def test_earnings_campaign_block(self):
+        board = {a: {"label": l, "open": 0, "closed": 0, "unscored": 0, "mean": None, "winRate": None}
+                 for a, l in (("A", "run-up"), ("B", "runner"), ("C", "your calls"))}
+        board["B"].update({"closed": 4, "mean": 0.12, "winRate": 0.5})
+        _write(self.data, "inferno_earnings_runner.json", {"scoreboard": board, "records": [],
+               "upcoming": [{"ticker": "GNRC", "earnings": "2026-10-28", "days": 12}]})
+        text = desk_editor_text(build_desk_editor(self.data, self.reports, NOW))
+        self.assertIn("EARNINGS RUNNER CAMPAIGN", text)
+        self.assertIn("- B runner: 4 closed, 0 open, win 50%, mean +12%", text)
+        self.assertIn("GNRC 10-28", text)
+        self.assertIn("inferno_earnings_runner.py call", text)
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

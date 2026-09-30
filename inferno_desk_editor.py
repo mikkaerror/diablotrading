@@ -238,6 +238,20 @@ def decisions_section(data_dir: Path) -> list[dict[str, Any]]:
     return decisions
 
 
+def earnings_section(data_dir: Path) -> dict[str, Any] | None:
+    ledger = _load(data_dir / "inferno_earnings_runner.json")
+    if not ledger.get("scoreboard"):
+        return None
+    records = ledger.get("records") or []
+    today = datetime.now().astimezone().date().isoformat()
+    return {
+        "scoreboard": ledger["scoreboard"],
+        "upcoming": ledger.get("upcoming") or [],
+        "newToday": [r for r in records if r.get("enteredOn") == today],
+        "closedToday": [r for r in records if r.get("exitOn") == today and r.get("status") == "closed"],
+    }
+
+
 def live_book_section(data_dir: Path) -> dict[str, Any] | None:
     officer = _load(data_dir / "inferno_live_book_officer.json")
     if not officer.get("book"):
@@ -497,6 +511,7 @@ def build_desk_editor(
         "delegated": delegated_section(data_dir, now),
         "positions": positions_section(data_dir),
         "liveBook": live_book_section(data_dir),
+        "earnings": earnings_section(data_dir),
         "evidence": evidence_section(data_dir),
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
@@ -598,6 +613,21 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             lines.append(f"- {h['symbol']} {_money(h['markValue'])} ({h['plPercent']:+.1f}%){flag}" if h["plPercent"] is not None else f"- {h['symbol']} {_money(h['markValue'])}")
         for a in positions["paperActions"]:
             lines.append(f"- paper {a['ticker']}: {a['verdict']} — {a['reason']}")
+        lines.append("")
+
+    earn = payload.get("earnings")
+    if earn:
+        lines.append("EARNINGS RUNNER CAMPAIGN (paper/shadow; reports/earnings_runner_latest.txt)")
+        for arm, sb in earn["scoreboard"].items():
+            res = "" if sb["mean"] is None else f", win {sb['winRate'] * 100:.0f}%, mean {sb['mean'] * 100:+.0f}%"
+            lines.append(f"- {arm} {sb['label']}: {sb['closed']} closed, {sb['open']} open{res}")
+        for r in earn["newToday"]:
+            lines.append(f"  new: {r['arm']} {r['ticker']} {_pretty(r['structure'])} exp {r['expiration']} @ {r['entry']}")
+        for r in earn["closedToday"]:
+            lines.append(f"  closed: {r['arm']} {r['ticker']} {r['returnOnDebit'] * 100:+.0f}% ({r['exitHow']})")
+        if earn["upcoming"]:
+            lines.append("Reporting within 14 days: " + ", ".join(f"{u['ticker']} {u['earnings'][5:]}" for u in earn["upcoming"][:6]))
+        lines.append('Make a call: python3 inferno_earnings_runner.py call TICKER up|down "why"')
         lines.append("")
 
     book = payload.get("liveBook")

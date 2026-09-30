@@ -128,11 +128,26 @@ The operator is the only one who keys an order. Make that step one screen.
 Done when: a staged ticket goes approve → card → keyed → fill recorded →
 qualified without Mikka opening any other report.
 
-### W4 — Chain coverage for short-premium v2 (Codex, due 2026-10-12)
-Already filed as a mission. Earnings-window names (1–7 days out) first in
-the capture list, limit raised so they fit, plus a second capture
-12:30–14:00 ET. Read-only fetches. Don't touch v2 gates/structure/skips.
-Done when: the week of 10/13 shows ≥ 10 v2 records captured.
+### W4 — Chain coverage for earnings season (Codex, due 2026-10-12)
+Capture-list priority, in order (read-only fetches, raise the limit so they fit):
+1. names reporting in 1–10 days (short-premium v2 needs 1–7; Earnings Runner
+   arm A needs 3–10 and a capture on the day before the report);
+2. names that reported in the last 2 trading days (arm B entries);
+3. symbols with an open Earnings Runner record (exits need daily quotes);
+4. tickers in `data/operator_earnings_calls.csv` (arm C);
+5. everything else.
+Plus a second capture 12:30–14:00 ET (the 09:35 tape has the widest spreads).
+Don't touch any prereg's gates/structure/skips.
+Done when: the week of 10/13 shows ≥ 10 v2 records and ≥ 10 runner-campaign records.
+
+### W7 — Earnings Runner Campaign (Claude — built 2026-09-30)
+Mikka asked to play earnings. Pre-registered in
+`docs/EARNINGS_RUNNER_PREREG_2026-09-30.md`; collector
+`inferno_earnings_runner.py` (arms A run-up, B runner, C Mikka's calls),
+scored separately, full crossing, never estimated. Morning email carries the
+scoreboard and `python3 inferno_earnings_runner.py call TICKER up|down "why"`.
+Depends on W4 for coverage and on W0 before any arm can become real paper
+tickets. Read-out mid-Nov.
 
 ### W5 — Email consolidation (Claude, after 3 good mornings, ~2026-10-03)
 If the Mac Desk Editor lands 9/30, 10/1, 10/2: set `INFERNO_EMAIL_MODE=editor`
@@ -186,3 +201,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Mikka answered: D5 = Mac owns tickets/approvals/fills; D6 = $2,000 paper single-ticket cap (paper only). Recorded in coordination/operator_acks/2026-09-30_ledger_cutover.json. W0 unblocked.
 - 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
 - 2026-09-30 Claude: W6 built — inferno_live_book_officer.py. Binding tier now (never add under water §5.4, -20% rule, operator holds never sold by the desk); "if signed" tier from research/conviction_plan_draft.json (survival test 7%, 200-day rule, thesis checks after each earnings, deposit routing) shown but not enforced until data/inferno_conviction_plan_ack.json is active. Desk Editor gets a LIVE BOOK block; mailer runs it daily. Next thesis check: IREN 2026-11-06.
+- 2026-09-30 Claude: W7 built — Earnings Runner Campaign pre-registered (0df51c2) and collecting; W4 capture priorities extended for it.
