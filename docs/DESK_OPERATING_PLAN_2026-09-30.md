@@ -56,7 +56,7 @@ any risk constant.
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **open — W1** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **open — W2** |
-| **Fill clerk** (60-second order card + fill capture) | Claude | **open — W3** |
+| **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **open — W4, due 10/12** |
 | Live-book risk officer (report-only exit plans) | Claude | open — W6, blocked on D1 |
 
@@ -184,3 +184,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: W2.5 done (5305569) — Desk Editor shows lineage 1/30 as truth and a 30-day funnel.
 - 2026-09-30 Claude: found the split brain (Mac ledger frozen since 09-07; cloud stages from its own GCS queue). Added W0, D5, D6. W3 (fill clerk) waits for W0 — cards are pointless against a ledger nobody stages into.
 - 2026-09-30 Mikka answered: D5 = Mac owns tickets/approvals/fills; D6 = $2,000 paper single-ticket cap (paper only). Recorded in coordination/operator_acks/2026-09-30_ledger_cutover.json. W0 unblocked.
+- 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
