@@ -57,7 +57,7 @@ any risk constant.
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **W0 active on Mac; cloud read-only deployment verified** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
-| **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
+| **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 complete; hosted Inferno CI green on main** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **W4 installed at 13:00 ET; runner coverage tested; 10/13 evidence pending** |
 | Live-book risk officer (report-only exit plans) | `inferno_live_book_officer.py` (Claude) | built; "if signed" rules wait for D1 |
@@ -189,7 +189,7 @@ never stages. Blocked until Mikka answers D1.
 - **D2** Second opinion: fund an OpenAI key (cents/day) or retire it.
 - **D3** Commit to keying ~3 paper orders a week once W3 cards exist
   (≈ 5 minutes each). This is what actually moves 1/30.
-- **D4** Merge `agent/storage-hygiene` → main and push once CI is green.
+- **D4** Completed 2026-09-30: integrated `agent/storage-hygiene` history published to main after branch CI passed; hosted main CI passed on bf73e00.
 - **D5** Approve the ledger cutover: the Mac owns paper tickets, approvals and
   fills; the cloud strike job becomes read-only research. (Recommended.)
 - **D6** Paper single-ticket cap after cutover: keep the Mac's $2,000 paper
@@ -218,3 +218,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex W0 deployment verified: canonical snapshot 8e8c1055240b0367aa543bacff7f8d77258db079e663a700e50a11605adcc884 published with generation precondition; immutable cloud image sha256:903d9cfa305364eda873dd32d46ac615a85ccea9b8f923925a26430380931e1c deployed to dawn and strikes. Cloud smoke execution diablotrading-strikes-v4sqd succeeded: same snapshot, qualified=1, D6=2000, ledger mutation denied. Mac source hashes unchanged at activation; nine local services resumed, cloud schedules resumed after verification, auditor never paused. No real approvals, fills or ticket closes performed by Codex. Conflicting/cloud-only histories remain archived, not imported.
 
 - 2026-09-30 Codex W4 extension: priority tiers now cover reports 1–10 days ahead (including T−1), reports in the last two NYSE sessions (including saved runner calendar/history when the snapshot rolls forward), open runner records, and operator-call CSV tickers; remaining coverage follows. The cap expands to the deduplicated union of tiers 1–4. Midday capture is installed at 13:00 ET / 11:00 Denver and immediately invokes both unchanged collectors so runner exits use that tape. Focused coverage/collector tests passed; future October collection targets remain unverified. W2 remains locally tested/integrated but main CI cannot be verified until GitHub write access is restored; W1 still needs the real five-session dawn target and nightly boundary audit.
+
+- 2026-09-30 Codex W2 complete: restored Git SSH access using the existing Mac Keychain identity and a GitHub-specific persistent SSH configuration. Verified authentication without a loaded agent and a real branch push. Hosted Inferno CI passed on the integrated branch (run 36669527241), then on main at bf73e00 (run 36669637845: https://github.com/mikkaerror/diablotrading/actions/runs/36669637845). Main contains the tested W0/W2/W1/W4 implementation and integrated Claude work. W1 and W4 future evidence targets remain pending; no ticket decisions, risk settings or live/broker flags changed during this access repair.
