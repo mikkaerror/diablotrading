@@ -13,7 +13,8 @@ DEFAULT_TIMEOUT_SECONDS = 900
 FOLLOW_UP_TIMEOUT_SECONDS = 600
 
 
-def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None) -> list[list[str]]:
+def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None,
+                       dawn_ok: bool = True) -> list[list[str]]:
     """Advisory morning jobs that run after the bounded refresh, never fatal.
 
     The Desk Editor email is sent from here because launchd runs this file
@@ -29,13 +30,17 @@ def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None) -
     here = Path(__file__).resolve().parent
     # The second opinion runs inside the mailer, after its once-a-day check,
     # so a paid API is never called on every 10-minute safety tick.
-    return [[sys.executable, str(here / "inferno_mac_paper_cycle.py"), "--phase", "pre-delegate"],
-            [sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"]]
+    mailer = [sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"]
+    if not dawn_ok:
+        # A failed refresh must not stage paper tickets on stale inputs, but the
+        # morning email still goes out and says what failed.
+        return [mailer]
+    return [[sys.executable, str(here / "inferno_mac_paper_cycle.py"), "--phase", "pre-delegate"], mailer]
 
 
-def run_bounded(command: list[str], *, timeout_seconds: float) -> int:
+def run_bounded(command: list[str], *, timeout_seconds: float, env: dict[str, str] | None = None) -> int:
     """Reap a stalled job and its process group without deleting its lock file."""
-    process = subprocess.Popen(command, start_new_session=True)
+    process = subprocess.Popen(command, start_new_session=True, env=env)
     try:
         return process.wait(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
@@ -81,10 +86,11 @@ def main() -> int:
     })
     if code == 124:
         print(f"Dawn refresh exceeded {timeout:g}s; job stopped and lock released.", file=sys.stderr)
-    for command in (follow_up_commands(sys.argv[1:]) if code == 0 else []):
+    follow_env = {**os.environ, "INFERNO_DAWN_EXIT_CODE": str(code)}
+    for command in follow_up_commands(sys.argv[1:], dawn_ok=code == 0):
         if Path(command[1]).exists():
             try:
-                run_bounded(command, timeout_seconds=FOLLOW_UP_TIMEOUT_SECONDS)
+                run_bounded(command, timeout_seconds=FOLLOW_UP_TIMEOUT_SECONDS, env=follow_env)
             except Exception as exc:  # noqa: BLE001 - advisory only
                 print(f"Follow-up {Path(command[1]).name} failed: {exc}", file=sys.stderr)
     return code

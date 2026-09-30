@@ -85,9 +85,24 @@ def already_sent(state: dict[str, Any], now: datetime) -> bool:
     return now.date().isoformat() in (state.get("sentByDate") or {})
 
 
-def run_pipeline(runner: Runner = _default_runner) -> list[dict[str, Any]]:
+PAPER_STEPS = {"paper delegate", "canonical paper cycle", "paper order cards"}
+
+
+def dawn_exit_code(environ: dict[str, str] | None = None) -> int:
+    try:
+        return int((os.environ if environ is None else environ).get("INFERNO_DAWN_EXIT_CODE", "0"))
+    except ValueError:
+        return 0
+
+
+def run_pipeline(runner: Runner = _default_runner, dawn_code: int = 0) -> list[dict[str, Any]]:
     results = []
+    if dawn_code:
+        results.append({"step": "dawn refresh", "ok": False,
+                        "detail": f"failed (exit {dawn_code}); paper approvals and staging skipped today, numbers may be stale"})
     for label, cmd in PIPELINE_STEPS:
+        if dawn_code and label in PAPER_STEPS:
+            continue
         if not (ROOT / cmd[0]).exists():
             results.append({"step": label, "ok": False, "detail": "module missing"})
             continue
@@ -157,7 +172,7 @@ def deliver(
     if not force and already_sent(state, now):
         return {"status": "already-sent", "sent": False}
 
-    steps = run_pipeline(runner) if not dry_run else []
+    steps = run_pipeline(runner, dawn_exit_code()) if not dry_run else []
     if builder is None:
         from inferno_desk_editor import build_desk_editor, save_desk_editor
 

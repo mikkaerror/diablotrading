@@ -103,6 +103,15 @@ class DawnFollowUpTests(unittest.TestCase):
         names = [Path(cmd[1]).name for cmd in dawn.follow_up_commands(["--automation"], {})]
         self.assertEqual(names, ["inferno_mac_paper_cycle.py", "inferno_desk_editor_mailer.py"])
 
+    def test_failed_dawn_still_mails_but_never_stages(self):
+        names = [Path(cmd[1]).name for cmd in dawn.follow_up_commands(["--automation"], {}, dawn_ok=False)]
+        self.assertEqual(names, ["inferno_desk_editor_mailer.py"])
+        ran = []
+        steps = mailer.run_pipeline(lambda cmd: ran.append(cmd[0]) or (0, ""), dawn_code=124)
+        self.assertFalse(any(c in ran for c in ("inferno_paper_delegate.py", "inferno_mac_paper_cycle.py")))
+        self.assertEqual(steps[0]["step"], "dawn refresh")
+        self.assertIn("exit 124", steps[0]["detail"])
+
     def test_skip_email_and_cloud_and_env_disable(self):
         self.assertEqual(dawn.follow_up_commands(["--skip-email"], {}), [])
         self.assertEqual(dawn.follow_up_commands(["--cloud-native"], {}), [])
