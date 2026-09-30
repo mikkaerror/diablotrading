@@ -23,6 +23,29 @@ from inferno_promotion_evidence_lineage import build_promotion_evidence_lineage
 
 
 class OwnershipTests(unittest.TestCase):
+    def setUp(self):
+        # A Cowork copy can contain the real Mac receipt. Tests must never use
+        # that receipt, its host paths, or a deployed cloud job's environment.
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+        ack = root / 'operator_ack.json'
+        ack.write_text(json.dumps({'decisions': {
+            'D5_ledgerOwner': {'answer': 'mac'},
+            'D6_paperSingleTicketCapDollars': {'answer': 2000}}}))
+        for name, value in [('ROOT', root), ('STATE_FILE', root / 'ownership.json'), ('ACK_FILE', ack)]:
+            stack.enter_context(patch.object(owner, name, value))
+        stack.enter_context(patch.dict(os.environ, {
+            'CLOUD_RUN_JOB': '', 'K_SERVICE': '', 'INFERNO_DESK_HOST_ROLE': ''}))
+
+    def test_copied_canonical_receipt_cannot_grant_another_host_write_access(self):
+        owner.STATE_FILE.write_text(json.dumps({'status': 'active', 'owner': 'mac',
+            'canonicalRoot': '/another-host/canonical-checkout', 'hostname': 'another-host'}))
+        with patch.object(snapshots.subprocess, 'run') as run:
+            with self.assertRaisesRegex(PermissionError, 'designated canonical Mac checkout'):
+                snapshots.publish('example-bucket')
+            run.assert_not_called()
+
     @patch.dict(os.environ, {'INFERNO_DESK_HOST_ROLE': 'cloud-research'})
     def test_cloud_blocks_paper_queue_fill_and_delegate_before_writes(self):
         import inferno_paper_delegate as delegate

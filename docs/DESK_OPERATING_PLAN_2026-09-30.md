@@ -177,7 +177,7 @@ never stages. Blocked until Mikka answers D1.
 **Codex:**
 1. W1: five dawn sessions + the boundary audit to close it.
 2. W2: main CI green.
-3. W0 follow-up: `tests.test_inferno_ledger_ownership` assumes the canonical Mac path and errors in the Cowork VM copy. Make it portable (inject the root) so both hosts run a clean suite.
+3. W0 follow-up complete: ownership tests inject temporary root, receipt and acknowledgement paths; copied Mac receipts and cloud host variables cannot contaminate fixtures. The real wrong-host guard remains tested.
 4. D4: once CI is green, fast-forward main to `agent/storage-hygiene` and push (Mikka runs the push).
 
 **Mikka:** D2 (second opinion: fund or retire), D3 (key ~3 paper orders/week once cards appear), the cash-payment plan when the amount is known.
@@ -241,3 +241,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude (late): W0 landed (Codex). Fixed a regression from it: a failed dawn refresh now still sends the email but skips all paper steps (ee9f97c). Wrote docs/DESK_ROSTER_AND_RUNBOOK.md (roster, preregs, the operator's week, failure playbook). Next-session list added above.
 
 - 2026-09-30 Codex W2 complete: restored Git SSH access using the existing Mac Keychain identity and a GitHub-specific persistent SSH configuration. Verified authentication without a loaded agent and a real branch push. Hosted Inferno CI passed on the integrated branch (run 36669527241), then on main at bf73e00 (run 36669637845: https://github.com/mikkaerror/diablotrading/actions/runs/36669637845). Main contains the tested W0/W2/W1/W4 implementation and integrated Claude work. W1 and W4 future evidence targets remain pending; no ticket decisions, risk settings or live/broker flags changed during this access repair.
+
+- 2026-09-30 Codex W0 follow-up: reproduced the Cowork copied-receipt failure in the unconfigured-publisher test. Isolated all ownership fixtures with temporary root/receipt/ack paths and host environment, while adding explicit wrong-host publication refusal coverage. No production guard or authority setting changed.

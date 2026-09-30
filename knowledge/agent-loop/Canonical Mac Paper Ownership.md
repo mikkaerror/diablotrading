@@ -13,3 +13,5 @@ The lifecycle test uses temporary files only and the real risk, approval, stagin
 ## Deployment receipt
 
 Canonical snapshot 8e8c1055240b0367aa543bacff7f8d77258db079e663a700e50a11605adcc884; immutable cloud image sha256:903d9cfa305364eda873dd32d46ac615a85ccea9b8f923925a26430380931e1c. Execution diablotrading-strikes-v4sqd passed source restore, qualified=1, D6=2000 and denied-ledger-write checks. Nine local services resumed; cloud schedulers resumed only after that check. The auditor remained active. Dawn staging skips nights/weekends and unchanged input hashes; publication resolves gcloud explicitly under launchd PATH. Archive and runtime state are private local artifacts, not committed account data.
+
+Ownership tests must inject root, receipt and acknowledgement paths and clear deployment host variables. A copied active Mac receipt correctly denies a VM caller before an unrelated assertion can run. Preserve that production denial; isolate fixtures instead of weakening the guard.
