@@ -155,6 +155,12 @@ Depends on W4 for coverage and on W0 before any arm can become real paper
 tickets. Read-out mid-Nov.
 
 ### W5 — Email consolidation (Claude, after 3 good mornings, ~2026-10-03)
+
+**Away delivery follow-up (mission-dd311684):** implementation complete. Approval
+dispatch and action pulses skip active away windows even with force-send, retain
+reports and preserve delivery/approval history. Chief has no email sender; its
+named shared-email route is guarded. Full W5 consolidation still requires the
+three-good-mornings criterion below.
 If the Mac Desk Editor lands 9/30, 10/1, 10/2: set `INFERNO_EMAIL_MODE=editor`
 (routine morning/strike/pulse suppressed; failures still alert) and retire
 the "paper candidate brief" Cowork task (the Desk Editor covers it).
@@ -296,3 +302,5 @@ monthly attribution. Unknown positions remain unclassified. Contract and handoff
 - 2026-09-30 Codex queue reconciliation: marked the stale W0, W2 and duplicate transaction-regression missions done against deployment/test receipts; W1 and both W4 missions remain in progress for their real future-session acceptance targets. W9 implementation is on main with CI green (36735132458), independent review still pending. Next bounded research work is the assigned friction-model proposal; production economics unchanged.
 
 - 2026-09-30 Codex friction proposal (mission-1d80e7de): frozen research comparison and seven regressions plus full isolated verification pass. Reproduced 2.93x quoted/model cost in five paper call spreads, but all 104 quoted paper entries are already natural; blanket entry charge would double-count. Friction-field substitution leaves all 12 scenario scorecards unchanged. Runtime repair remains pending explicit P/L basis, versioned economics and independent/operator review; no production outcome, gate or authority changed. See `FRICTION_MODEL_PROPOSAL_2026-09-30.md`.
+
+- 2026-09-30 Codex away delivery (mission-dd311684): approval dispatch and action pulse skip active operator away windows, including force sends and action-pulse failures; Mountain calendar date is checked at delivery time. Reports persist, sent history and approval reservations remain untouched, and current-queue/dedupe behavior resumes on return. Chief has no SMTP sender and its heartbeat already forbids email; shared SMTP guards its named route. Desk Editor summary and separate watchdog remain available. 50 focused tests and full isolated CI-profile verification passed; no real mail, ticket decisions, away-state edits, risk or authority changes.

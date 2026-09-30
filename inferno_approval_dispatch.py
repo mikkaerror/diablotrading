@@ -201,7 +201,8 @@ def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
 
 def _dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
     """Send unsent approval prompts for the current queue."""
-    load_env_file(SMTP_ENV_FILE)
+    from inferno_email_policy import suppress_away_email
+
     queue = ensure_queue_tokens(load_queue())
     pending = [
         item for item in queue.get("items", [])
@@ -218,9 +219,17 @@ def _dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]
         "sent": [],
         "skipped": [],
     }
+    if suppress_away_email("approval"):
+        report.update(status="suppressed-away-mode", skippedCount=len(pending),
+                      skipped=[{"ticker": item.get("ticker"),
+                                "approvalToken": item.get("approvalToken"),
+                                "reason": "away-mode"} for item in pending])
+        save_report(report)
+        return report
     if not pending:
         save_report(report)
         return report
+    load_env_file(SMTP_ENV_FILE)
     if not smtp_configured():
         report.update({"ok": False, "status": "smtp-not-configured"})
         save_report(report)

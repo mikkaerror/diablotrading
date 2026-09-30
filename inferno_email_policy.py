@@ -2,7 +2,24 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Any
+from zoneinfo import ZoneInfo
+
+from inferno_away import is_away
+from inferno_config import local_now
+
+
+def suppress_away_email(kind: str, *, today: date | None = None) -> bool:
+    """Read the operator window at delivery time, using the desk's calendar day.
+
+    These senders stay quiet even for failures/forced sends. The Desk Editor's
+    short away summary and independent watchdog alerts keep their own delivery.
+    This check never changes the away window or any approval/delivery state.
+    """
+    return kind in {"approval", "desk-chief", "action-pulse"} and is_away(
+        today or local_now().astimezone(ZoneInfo("America/Denver")).date()
+    )
 
 
 def email_mode() -> str:
@@ -35,6 +52,12 @@ def suppress_routine_email(kind: str, payload: dict[str, Any] | None = None) -> 
 
 def suppress_subject(subject: str, payload: dict[str, Any]) -> bool:
     """Guard shared SMTP entry points, leaving other mail (especially alerts) alone."""
+    # The Chief currently has no sender. Keep its named shared-SMTP route quiet
+    # too, without adding a new delivery path or changing Chief authority.
+    for prefix, kind in (("[Inferno Approval]", "approval"),
+                         ("[Inferno Desk Chief]", "desk-chief")):
+        if subject.startswith(prefix) and suppress_away_email(kind):
+            return True
     if any(word in subject.lower() for word in ("failure", "exception", "alert")):
         return False
     if subject == "Morning Conviction Brief" or "Hell Market Morning Brief" in subject:

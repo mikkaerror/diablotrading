@@ -561,6 +561,10 @@ def save_action_pulse(payload: dict[str, Any]) -> None:
 
 def send_action_pulse(payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
     """Send one action-pulse email with phase/day dedupe."""
+    from inferno_email_policy import suppress_away_email
+
+    if suppress_away_email("action-pulse"):
+        return {"attempted": False, "sent": False, "status": "suppressed-away-mode"}
     load_env_file(SMTP_ENV_FILE)
     from inferno_email_policy import email_mode, is_failure_alert, suppress_routine_email
 

@@ -76,7 +76,7 @@ Roles to fill (research: Claude Doc "Inferno Desk Org Chart", https://claude.ai/
 1. **Execution quality (TCA):** built Sep 30 (`inferno_fill_quality.py`; report `reports/fill_quality_latest.txt`). After each paperMoney fill, also note the mid TOS showed: `python3 inferno_fill_quality.py mid <ticket> --entry-mid <mid>` (the order card prints it). Verdict on the model's friction needs 5 fills with a fill-time mid.
 2. **Attribution:** the monthly close split by sleeve and strategy (Claude). Codex sleeve metadata now persists on live positions and observation history; unknown assignments stay unclassified. See `docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
 3. **Four-eyes rule**: implemented in CLAUDE.md §8 and `inferno_boundary_audit.py`; independent Claude co-sign remains required. Nightly command and exact review/ack schemas: `docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
-4. **Away mode** for trips (Claude).
+4. **Away mode** for trips: built (Claude); approval/action-pulse delivery suppression completed by Codex. Chief remains email-free.
 5. **Second opinion (D2):** fund an OpenAI key or retire it.
 
 Processes to add:
@@ -85,3 +85,12 @@ Processes to add:
 
 ### Going away
 Before a trip: `python3 inferno_away.py on START END --note "where"`. The morning email turns into a short summary, paper approvals pause, and deposits wait in cash. Back early: `python3 inferno_away.py off`. The first email back lists anything left to do.
+
+Approval dispatch and action-pulse sends report `suppressed-away-mode` during the
+inclusive away window, using the current Mountain date. Force-send flags cannot
+bypass it. Reports still refresh; skipped sends never reserve approval tokens or
+advance delivery history. Delivery resumes from the current queue and existing
+dedupe rules after the window ends or `off`. The Desk Chief has no SMTP sender
+and its heartbeat forbids email; its named shared-email route is guarded too.
+The short Desk Editor email and independent watchdog alerts keep their existing
+delivery. Away checks do not change ticket decisions or trading authority.
