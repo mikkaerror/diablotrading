@@ -157,6 +157,20 @@ class DeskEditorTests(unittest.TestCase):
         self.assertIn("1/30 qualified paper fills (+2 intrinsic estimate(s), no credit)", text)
         self.assertIn("2 proposed -> 1 blocked, 0 rejected -> 1 staged -> 1 closed", text)
 
+    def test_order_cards_lead_the_email(self):
+        _write(self.data, "inferno_paper_order_cards.json", {"cards": [
+            {"kind": "enter", "ticker": "DELL", "strategy": "IRON_FLY", "expiration": "2026-10-16",
+             "orderType": "NET CREDIT LIMIT, DAY", "limit": 6.6, "dontChasePast": 6.25,
+             "recordCommand": "python3 inferno_record_fill.py abc --entry <p> --contracts 1"},
+            {"kind": "expired", "ticker": "MOD"},
+        ]})
+        payload = build_desk_editor(self.data, self.reports, NOW)
+        self.assertTrue(payload["headline"].startswith("1 paper order to key"))
+        text = desk_editor_text(payload)
+        self.assertLess(text.index("KEY THESE IN PAPERMONEY"), text.index("DECISIONS"))
+        self.assertIn("ENTER DELL Iron Fly exp 2026-10-16: NET CREDIT LIMIT, DAY @ 6.6", text)
+        self.assertEqual(payload["orderCards"]["expired"], 1)
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

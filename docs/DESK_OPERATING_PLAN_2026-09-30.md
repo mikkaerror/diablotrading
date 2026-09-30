@@ -56,9 +56,9 @@ any risk constant.
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
-| **Fill clerk** (60-second order card + fill capture) | Claude | **open — W3** |
+| **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **W4 implementation tested; schedule install and 10/13 evidence pending** |
-| Live-book risk officer (report-only exit plans) | Claude | open — W6, blocked on D1 |
+| Live-book risk officer (report-only exit plans) | `inferno_live_book_officer.py` (Claude) | built; "if signed" rules wait for D1 |
 
 ## 3. Workstreams
 
@@ -140,7 +140,7 @@ If the Mac Desk Editor lands 9/30, 10/1, 10/2: set `INFERNO_EMAIL_MODE=editor`
 the "paper candidate brief" Cowork task (the Desk Editor covers it).
 Needs Mikka's OK in chat before flipping.
 
-### W6 — Live-book risk officer (Claude, after D1)
+### W6 — Live-book risk officer (Claude — built 2026-09-30; enforcement after D1)
 Report-only weekly hold / trim / exit review of live holdings against
 `docs/TRADE_MANAGEMENT_PLAYBOOK.md` and the Conviction Plan. Never sells,
 never stages. Blocked until Mikka answers D1.
@@ -190,3 +190,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex W1: weekly creation-cohort funnel wired into lineage, research audit, doctor and command center. Recorded fills use paperExecution, qualification uses lineage. Answered families stay in shadow; one primary per ticker favors passing constructions. Added full-cross iron flies through the unchanged v2 constructor with SHORT_PREMIUM_DEFINED arm and delegate-only automated approval. Size-only failures can retry one lot or narrower call verticals with full policy reevaluation; mixed failures remain blocked. Dawn research observations are deduplicated and cannot stage tickets. Acceptance remains pending five real dawn sessions averaging >=3 and independent green nightly boundary audits; W0 remains a separate prerequisite for the canonical ledger. No caps, gates, universe or live authority changed.
 
 - 2026-09-30 Codex W4: earnings dates 1–7 days out now lead the existing snapshot capture slate. The effective capture limit expands to fit every dated event and is propagated through the API adapter (no second truncation). Added a weekday 13:00 ET read-only capture service with window checks, duplicate suppression, failure receipts and doctor/command-center visibility. It calls the unchanged v2 shadow collector; gates, wings, structure and skip rules are untouched. Target remains >=10 v2 records during the week of 10/13; code/tests cannot establish future collection. Scheduler installation follows integration into the canonical Mac checkout.
+- 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
+- 2026-09-30 Claude: W6 built — inferno_live_book_officer.py. Binding tier now (never add under water §5.4, -20% rule, operator holds never sold by the desk); "if signed" tier from research/conviction_plan_draft.json (survival test 7%, 200-day rule, thesis checks after each earnings, deposit routing) shown but not enforced until data/inferno_conviction_plan_ack.json is active. Desk Editor gets a LIVE BOOK block; mailer runs it daily. Next thesis check: IREN 2026-11-06.

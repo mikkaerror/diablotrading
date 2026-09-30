@@ -43,6 +43,7 @@ FRESHNESS_CHECKS: tuple[tuple[str, str, float], ...] = (
     ("strike plan", "inferno_strike_plan.json", 36.0),
     ("shadow evidence", "inferno_shadow_evidence.json", 48.0),
     ("action pulse", "inferno_action_pulse.json", 36.0),
+    ("paper ledger (staging)", "inferno_paper_execution_ledger.json", 48.0),
 )
 
 CITATIONS = [
@@ -190,6 +191,14 @@ def _strategy_stats(shadow: dict[str, Any], strategy: str | None) -> dict[str, A
     return None
 
 
+def order_cards_section(data_dir: Path) -> dict[str, Any]:
+    cards = _load(data_dir / "inferno_paper_order_cards.json").get("cards") or []
+    return {
+        "actionable": [c for c in cards if c.get("kind") in {"enter", "exit"}],
+        "expired": sum(1 for c in cards if c.get("kind") == "expired"),
+    }
+
+
 def decisions_section(data_dir: Path) -> list[dict[str, Any]]:
     queue = _load(data_dir / "inferno_approval_queue.json")
     plan = _load(data_dir / "inferno_strike_plan.json")
@@ -227,6 +236,21 @@ def decisions_section(data_dir: Path) -> list[dict[str, Any]]:
             }
         )
     return decisions
+
+
+def live_book_section(data_dir: Path) -> dict[str, Any] | None:
+    officer = _load(data_dir / "inferno_live_book_officer.json")
+    if not officer.get("book"):
+        return None
+    holdings = officer.get("holdings") or []
+    return {
+        "planStatus": officer.get("planStatus"),
+        "holdsWeight": officer["book"].get("holdsWeight"),
+        "neverAdd": [h["symbol"] for h in holdings if h.get("plPercent") is not None and h["plPercent"] < 0],
+        "nextThesisCheck": officer.get("nextThesisCheck"),
+        "depositRouting": officer.get("depositRouting"),
+        "nextDeposit": officer["book"].get("nextDeposit"),
+    }
 
 
 def positions_section(data_dir: Path) -> dict[str, Any]:
@@ -400,7 +424,7 @@ def alerts_section(data_dir: Path, now: datetime) -> list[str]:
         if age is None:
             alerts.append(f"{label}: unknown age")
         elif age > max_age:
-            alerts.append(f"{label}: stale ({age:.0f}h old)")
+            alerts.append(f"{label}: stale ({age:.0f}h old)" if age < 72 else f"{label}: stale ({age / 24:.0f} days old)")
     return alerts
 
 
@@ -433,8 +457,11 @@ def long_term_section(reports_dir: Path, limit: int = LONG_TERM_LIMIT) -> list[d
 
 def headline(payload: dict[str, Any]) -> str:
     count = len(payload["decisions"])
+    keyable = len((payload.get("orderCards") or {}).get("actionable") or [])
     losers = [h for h in payload["positions"]["live"] if h["lossRule"]]
     parts = [f"{count} decision{'s' if count != 1 else ''} today" if count else "No decisions today"]
+    if keyable:
+        parts.insert(0, f"{keyable} paper order{'s' if keyable != 1 else ''} to key")
     if payload.get("delegated"):
         approved = sum(1 for row in payload["delegated"] if row["status"] == "approved")
         made = len(payload["delegated"])
@@ -465,9 +492,11 @@ def build_desk_editor(
         "liveTradingAllowed": False,
         "brokerSubmitAllowed": False,
         "money": money_section(data_dir, now),
+        "orderCards": order_cards_section(data_dir),
         "decisions": decisions_section(data_dir),
         "delegated": delegated_section(data_dir, now),
         "positions": positions_section(data_dir),
+        "liveBook": live_book_section(data_dir),
         "evidence": evidence_section(data_dir),
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
@@ -518,6 +547,18 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
         lines.append(f"Drawdown protocol: {money.get('drawdownLevel')} — no new LIVE entries. Paper practice is fine.")
     lines.append("")
 
+    cards = (payload.get("orderCards") or {}).get("actionable") or []
+    if cards:
+        lines.append("KEY THESE IN PAPERMONEY (full cards: reports/paper_order_cards_latest.txt)")
+        for c in cards:
+            if c["kind"] == "enter":
+                lines.append(f"- ENTER {c['ticker']} {_pretty(c['strategy'])} exp {c['expiration']}: "
+                             f"{c['orderType']} @ {c['limit']} (don't chase past {c['dontChasePast']})")
+            else:
+                lines.append(f"- CLOSE {c['ticker']} {_pretty(c['strategy'])}: {c['exitRule']}")
+            lines.append(f"  then: {c['recordCommand']}")
+        lines.append("")
+
     if payload.get("delegated"):
         lines.append("PAPER DECISIONS CLAUDE MADE (your delegation; paper only)")
         for row in payload["delegated"]:
@@ -557,6 +598,22 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             lines.append(f"- {h['symbol']} {_money(h['markValue'])} ({h['plPercent']:+.1f}%){flag}" if h["plPercent"] is not None else f"- {h['symbol']} {_money(h['markValue'])}")
         for a in positions["paperActions"]:
             lines.append(f"- paper {a['ticker']}: {a['verdict']} — {a['reason']}")
+        lines.append("")
+
+    book = payload.get("liveBook")
+    if book:
+        lines.append("LIVE BOOK (report only; details: reports/live_book_officer_latest.txt)")
+        if book.get("holdsWeight") is not None:
+            lines.append(f"Operator holds are {book['holdsWeight'] * 100:.0f}% of the account.")
+        if book["neverAdd"]:
+            lines.append(f"Never add while under water: {', '.join(book['neverAdd'])} (playbook 5.4).")
+        if book.get("nextThesisCheck"):
+            lines.append(f"Next thesis check: {book['nextThesisCheck']['symbol']} on {book['nextThesisCheck']['on']}.")
+        r = book.get("depositRouting")
+        if r:
+            prefix = "" if book["planStatus"] == "signed" else "If you sign the Conviction Plan, "
+            lines.append(f"{prefix}the {book['nextDeposit']} deposit goes ${r['core']:.0f} {r['coreVehicle']} / "
+                         f"${r['conviction']:.0f} {r['convictionName']}.")
         lines.append("")
 
     evidence = payload["evidence"]

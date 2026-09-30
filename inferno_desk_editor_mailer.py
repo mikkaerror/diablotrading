@@ -44,11 +44,13 @@ STEP_TIMEOUT_SECONDS = 240
 PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("paper delegate", ["inferno_paper_delegate.py", "run"]),
     ("second opinion", ["inferno_second_opinion.py", "run"]),
+    ("paper order cards", ["inferno_paper_order_card.py", "run"]),
     ("account performance", ["inferno_account_performance.py", "run"]),
     ("vol edge", ["inferno_vol_edge.py", "run"]),
     ("capex flow", ["inferno_capex_flow.py", "run"]),
     ("pick scorecard", ["inferno_pick_scorecard.py", "run"]),
     ("short-premium shadow", ["inferno_short_premium_shadow.py", "run"]),
+    ("live-book officer", ["inferno_live_book_officer.py", "run"]),
 )
 
 Runner = Callable[[list[str]], tuple[int, str]]
