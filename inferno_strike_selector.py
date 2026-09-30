@@ -437,9 +437,9 @@ def net_greek_summary(legs: list[OptionLeg]) -> dict[str, Any]:
 VERTICAL_DEBIT_MAX_WIDTH_RATIO = 0.95  # debit > 0.95 × width = guaranteed loss on fill
 
 
-def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame) -> dict[str, Any] | None:
+def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame, *, long_target: float | None = None) -> dict[str, Any] | None:
     price = number(intent.get("price"))
-    long_call_row = nearest_row(buyable(calls), price)
+    long_call_row = nearest_row(buyable(calls), price if long_target is None else long_target)
     if long_call_row is None:
         return None
     short_call_row = next_higher_row(sellable(calls), number(long_call_row.get("strike")))
@@ -922,6 +922,17 @@ def build_strike_plan_for_intent(
         "schwabOptions": schwab_options,
     }
 
+    if intent.get("arm") == "SHORT_PREMIUM_DEFINED":
+        from inferno_paper_candidate_research import iron_fly_plan
+        strategy, reason = iron_fly_plan(intent, schwab_options)
+        return {**base, "setupRec": "Iron Fly", "ok": strategy is not None,
+                "reason": reason, "strikePlan": strategy or {},
+                "nextEarnings": intent.get("nextEarnings"), "arm": "SHORT_PREMIUM_DEFINED",
+                "requiresDelegateApproval": True, "shortPremiumDefined": True,
+                "expiration": (strategy or {}).get("expiration"),
+                "orderPolicy": {"entryOrderType": "LIMIT", "timeInForce": "DAY",
+                                "requiresHumanApproval": True, "requiresBrokerPreview": True}}
+
     try:
         if number(pricing_intent.get("price")) <= 0:
             return {**base, "ok": False, "reason": "missing usable underlying price"}
@@ -992,7 +1003,7 @@ def build_strike_plan_for_intent(
         return {**base, "ok": False, "reason": f"{type(exc).__name__}: {exc}"}
 
 
-def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> list[dict[str, Any]]:
+def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str, *, apply_governor: bool = True) -> list[dict[str, Any]]:
     """Apply risk review and concentration control to raw strike-plan items."""
     annotated_plans: list[dict[str, Any]] = []
     for plan in plans:
@@ -1036,9 +1047,11 @@ def annotate_strike_plans(plans: list[dict[str, Any]], generated_at: str) -> lis
             )
         if alternatives:
             annotated["strategyAlternatives"] = alternatives
-        annotated_plans.append(annotated)
-    annotated_plans, governor = apply_setup_concentration_governor(annotated_plans)
-    return annotated_plans, governor
+        from inferno_paper_candidate_research import fit_size_only
+        annotated_plans.append(fit_size_only(annotated, generated_at))
+    if apply_governor:
+        return apply_setup_concentration_governor(annotated_plans)
+    return annotated_plans, {}
 
 
 def setup_share_counts(plans: list[dict[str, Any]]) -> dict[str, float]:
@@ -1131,13 +1144,36 @@ def build_strike_plan_from_queue(
     queue: dict[str, Any],
     limit: int | None = None,
     schwab_options_index: dict[str, dict[str, Any]] | None = None,
+    shadow_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a strike plan for an explicit queue without touching disk state."""
     items = queue.get("items", [])[: limit or MAX_DEFAULT_INTENTS]
     schwab_index = load_schwab_options_index() if schwab_options_index is None else schwab_options_index
     plans = [build_strike_plan_for_intent(item, schwab_index) for item in items]
     generated_at = local_now().isoformat()
-    plans, governor = annotate_strike_plans(plans, generated_at)
+    plans, governor = annotate_strike_plans(plans, generated_at, apply_governor=False)
+    from inferno_paper_candidate_research import answered_reason
+    shadow = shadow_evidence if shadow_evidence is not None else (load_json_file(DATA_DIR / "inferno_shadow_evidence.json") or {})
+    primaries, shadow_only, family_cache = [], [], {}
+    for plan in plans:
+        reason = answered_reason(plan, shadow, family_cache) if plan.get("ok") else None
+        if reason:
+            shadow_only.append({**plan, "shadowOnly": True, "primaryExclusionReason": reason})
+        else:
+            primaries.append(plan)
+    # One primary per ticker: the delegate's existing approval identity is ticker-scoped.
+    unique = {}
+    def rank(plan):
+        return (bool((plan.get("riskVerdict") or {}).get("passed")), bool(plan.get("ok")))
+    for plan in primaries:
+        ticker = plan.get("ticker")
+        if ticker not in unique:
+            unique[ticker] = plan
+            continue
+        winner, alternate = (plan, unique[ticker]) if rank(plan) > rank(unique[ticker]) else (unique[ticker], plan)
+        unique[ticker] = winner
+        shadow_only.append({**alternate, "shadowOnly": True, "primaryExclusionReason": "alternate-to-primary"})
+    plans, governor = apply_setup_concentration_governor(list(unique.values()))
     schwab_enriched_count = sum(1 for plan in plans if plan.get("schwabOptions"))
     return {
         "generatedAt": generated_at,
@@ -1162,12 +1198,32 @@ def build_strike_plan_from_queue(
         ),
         "concentrationGovernor": governor,
         "items": plans,
+        "shadowItems": shadow_only,
+        "answeredPrimaryExclusions": sum(p.get("primaryExclusionReason") in {"shadow-answered", "family-answered"} for p in shadow_only),
     }
 
 
 def build_strike_plan(limit: int = MAX_DEFAULT_INTENTS) -> dict[str, Any]:
     queue = load_execution_queue()
-    return build_strike_plan_from_queue(queue, limit=limit)
+    snapshot = load_json_file(SNAPSHOT_FILE) or {}
+    from inferno_execution_clerk import build_execution_queue
+    eligible_rows = []
+    for row in snapshot.get("rows", []):
+        try:
+            days = (datetime.fromisoformat(str(row.get("nextEarnings"))[:10]).date() - local_now().date()).days
+        except ValueError:
+            continue
+        if 1 <= days <= 7:
+            eligible_rows.append({**row, "setupRec": "Iron Condor", "daysUntilEarnings": days})
+    candidate_snapshot = {**snapshot, "rows": eligible_rows,
+                          "reviewQueueTickers": [r["ticker"] for r in eligible_rows]}
+    short_queue = build_execution_queue(candidate_snapshot, load_json_file(APPROVAL_QUEUE_FILE) or {}, limit_override=limit)
+    dates = {r["ticker"]: r["nextEarnings"] for r in eligible_rows}
+    short_intents = [{**i, "arm": "SHORT_PREMIUM_DEFINED", "nextEarnings": dates[i["ticker"]]}
+                     for i in short_queue.get("items", [])]
+    # Price live hypotheses first; answered primaries remain visible in shadowItems.
+    combined = {**queue, "items": short_intents + queue.get("items", [])[:limit]}
+    return build_strike_plan_from_queue(combined, limit=len(combined["items"]) or limit)
 
 
 def format_money(value: Any) -> str:
@@ -1292,6 +1348,8 @@ def save_strike_plan(plan: dict[str, Any]) -> dict[str, str]:
     from inferno_io import atomic_write_json
     atomic_write_json(STRIKE_PLAN_FILE, plan)
     STRIKE_PLAN_TEXT_FILE.write_text(build_text_report(plan), encoding="utf-8")
+    from inferno_paper_funnel import observe_run
+    observe_run(plan, STRIKE_PLAN_FILE.parent / "paper_funnel_runs.jsonl")
     return {
         "json": str(STRIKE_PLAN_FILE),
         "text": str(STRIKE_PLAN_TEXT_FILE),
@@ -1331,6 +1389,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build paper-only option strike plans from the Inferno execution queue.")
     parser.add_argument("command", nargs="?", default="build", choices=["build", "status"])
     parser.add_argument("--limit", type=int, default=MAX_DEFAULT_INTENTS, help="Maximum execution intents to price.")
+    parser.add_argument("--run-kind", choices=("manual", "dawn"), default="manual", help="Source of this run for forward funnel measurement.")
     parser.add_argument("--email", action="store_true", help="Email the strike plan after building it.")
     parser.add_argument(
         "--record-ledger",
@@ -1347,6 +1406,7 @@ def main() -> int:
         return 0
 
     plan = build_strike_plan(limit=args.limit)
+    plan["runKind"] = args.run_kind
     save_strike_plan(plan)
     ledger_text = None
     if args.record_ledger:

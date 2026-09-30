@@ -502,7 +502,7 @@ def build_shadow_evidence(
     ledger = ledger or load_shadow_evidence()
     entries = [
         build_shadow_entry(item, strike_plan.get("generatedAt"), ledger)
-        for item in strike_plan.get("items", [])
+        for item in [*strike_plan.get("items", []), *strike_plan.get("shadowItems", [])]
     ]
     merged, inserted = merge_shadow_entries(ledger, entries)
     reviewed_items, reviewed, closed, notes = review_shadow_items(merged.get("items", []))

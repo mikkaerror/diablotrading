@@ -2359,6 +2359,13 @@ def main() -> int:
     if not performance_ok:
         warnings += 1
 
+    funnel = load_json_file(DATA_DIR / "inferno_paper_funnel.json") or {}
+    funnel_ok = bool(funnel.get("researchOnly")) and in_current_service_cycle(str(funnel.get("generatedAt", "")), now=now)
+    lines.append(summarize_status("Weekly paper funnel", funnel_ok,
+        f"cohorts={len(funnel.get('weeks', []))} | dawn={funnel.get('dawnAcceptance', {})}"))
+    if not funnel_ok:
+        warnings += 1
+
     # Informational: surface the dominant block-reason bucket so the funnel
     # killer is visible at a glance. Never bumps warnings.
     block_bucket_ok, block_bucket_detail = block_reason_top_bucket_status(performance)

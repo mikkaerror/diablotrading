@@ -156,6 +156,8 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
 )
 
 
+PAPER_FUNNEL_FILE = DATA_DIR / "inferno_paper_funnel.json"
+
 REPORTING_MAP: tuple[dict[str, str], ...] = (
     {
         "lane": "handoff",
@@ -643,6 +645,8 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "artifact": "reports/morning_brief_latest.txt",
         "owner": "automation",
     },
+    {"lane": "paper-funnel", "question": "Where do weekly paper proposals stop, and how many earn credit?",
+     "artifact": "reports/paper_funnel_latest.txt", "owner": "codex"},
 )
 
 
@@ -1186,6 +1190,7 @@ def build_command_center() -> dict[str, Any]:
 
     system_status = {
         "decisionArchive": summarize_artifact(DECISION_ARCHIVE_FILE, keys=("stage", "verdict", "generatedAt", "counts", "integrity", "missingSources", "sourceErrors")),
+        "paperFunnel": summarize_artifact(PAPER_FUNNEL_FILE, keys=("generatedAt", "weeks", "promotionTruth", "dawnAcceptance")),
         "researchAudit": summarize_artifact(RESEARCH_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "gapCount", "metrics", "sourceMissing")),
         "deskEditor": summarize_artifact(DESK_EDITOR_FILE, keys=("stage", "headline", "generatedAt", "alerts", "researchOnly", "promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed")),
         "deployPreflight": summarize_artifact(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),

@@ -54,7 +54,7 @@ any risk constant.
 | Capex tape analyst | scheduled 2026-11-02 | scheduled |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
-| **Funnel fixer** (propose what can pass, sized to fit) | Codex | **open — W1** |
+| **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **open — W3** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **open — W4, due 10/12** |
@@ -186,3 +186,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Mikka answered: D5 = Mac owns tickets/approvals/fills; D6 = $2,000 paper single-ticket cap (paper only). Recorded in coordination/operator_acks/2026-09-30_ledger_cutover.json. W0 unblocked.
 
 - 2026-09-30 Codex W2: normalized UTC Z timestamps for legacy Python transaction reconciliation; installed declared research dependencies in CI (the inspected main failure was missing pandas). Exported promotionTruth.qualified from lineage to analytics, strike digest and doctor; intrinsic closes labeled estimate — no credit. Missing/nonfinite NLV now skips append, preserving historical rows. SQLite indexing has bounded retries, a durable queue receipt and explicit unavailable reports; recovery indexes once without replaying decisions. Focused controller checks and 2,286-test isolated suite passed; CI-profile preflight ready-for-ci. Research-only, no caps, gates or authority changed. Main CI verification pending push/integration; Claude retains Desk Editor ownership.
+
+- 2026-09-30 Codex W1: weekly creation-cohort funnel wired into lineage, research audit, doctor and command center. Recorded fills use paperExecution, qualification uses lineage. Answered families stay in shadow; one primary per ticker favors passing constructions. Added full-cross iron flies through the unchanged v2 constructor with SHORT_PREMIUM_DEFINED arm and delegate-only automated approval. Size-only failures can retry one lot or narrower call verticals with full policy reevaluation; mixed failures remain blocked. Dawn research observations are deduplicated and cannot stage tickets. Acceptance remains pending five real dawn sessions averaging >=3 and independent green nightly boundary audits; W0 remains a separate prerequisite for the canonical ledger. No caps, gates, universe or live authority changed.

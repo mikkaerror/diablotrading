@@ -178,7 +178,10 @@ def build_promotion_evidence_lineage(
     }
     remaining = max(0, MIN_SCORED_TRADES_FOR_PROMOTION - qualified)
 
+    from inferno_paper_funnel import weekly_funnel
+    funnel = weekly_funnel(paper_ledger, {"records": records})
     return {
+        "weeklyFunnel": funnel,
         "generatedAt": local_now().isoformat(),
         "stage": "promotion-evidence-lineage-research-only",
         "researchOnly": True,
@@ -259,6 +262,9 @@ def promotion_evidence_lineage_text(payload: dict[str, Any]) -> str:
         lines.append(f"- {reason}: {count}")
     if not (paper.get("exclusionReasons") or {}):
         lines.append("- none")
+    lines.extend(["", "Weekly funnel (creation cohorts; reasons overlap):"])
+    for row in payload.get("weeklyFunnel", []):
+        lines.append(f"- {row['week']} {row['strategy']}: {row['proposed']} proposed -> {row['blocked']} blocked -> {row['staged']} staged -> {row['filled']} filled -> {row['qualified']} qualified; reasons={row['blockedByReason']}")
     lines.extend(["", "Reminders:"])
     lines.extend(f"- {reminder}" for reminder in (payload.get("reminders") or []))
     return "\n".join(lines).rstrip() + "\n"

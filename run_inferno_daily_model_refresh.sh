@@ -117,6 +117,12 @@ else
   skip_schwab_step "Schwab option-chain tape"
 fi
 
+# Observe the first morning research slate without staging or applying decisions.
+# The afternoon refresh is deliberately excluded from dawn acceptance.
+if [[ "$(date +%H)" -lt 12 ]]; then
+  run_advisory "dawn candidate funnel" python3 inferno_strike_selector.py build --run-kind dawn
+fi
+
 echo "7/18 Formula and theory audits"
 run_advisory "TOS formula audit" python3 inferno_tos_formula_audit.py --limit "$LIMIT"
 run_advisory "TOS metric theory audit" python3 inferno_tos_metric_theory_audit.py --limit "$LIMIT"
@@ -173,6 +179,7 @@ run_advisory "capital launch check" python3 inferno_central_command.py capital-c
 
 echo "17/20 Model command center"
 run_advisory "decision archive" python3 inferno_decision_archive.py run
+run_advisory "weekly paper funnel" python3 inferno_paper_funnel.py
 run_advisory "research measurement audit" python3 inferno_research_audit.py run
 run_advisory "model command center" python3 inferno_model_command_center.py build
 
