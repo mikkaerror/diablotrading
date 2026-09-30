@@ -1,6 +1,6 @@
 # Desk Chief — operating charter
 
-Status: implemented; deployment and recurring-review verification recorded in the operating plan.
+Status: active on the canonical Mac; isolated current-source verification accepted and recurring reviews installed. Deployment receipts are recorded in the operating plan.
 Owner: Codex. Operator: Mikka. Mandate: explicit chat answers on September 30, 2026, preserved in `coordination/operator_acks/2026-09-30_desk_chief.json`.
 
 The Chief is the final reviewer for desk operations: decide what matters next, assign an accountable owner, authorize a bounded operational retry, and accept tested work. It represents the operator's recorded preferences. It cannot infer new authority from a goal, urgency, spare usage resets or an analogy to a clone.
