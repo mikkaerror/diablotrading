@@ -435,6 +435,7 @@ def schwab_login_days_left(token_file: Path, now: datetime) -> float | None:
 
 def alerts_section(data_dir: Path, now: datetime) -> list[str]:
     alerts = []
+    alerts.extend(_load(data_dir / "inferno_prereg_integrity.json").get("alerts") or [])
     days_left = schwab_login_days_left(data_dir.parent / ".secrets" / "schwab_token.json", now)
     if days_left is not None and 0 < days_left <= SCHWAB_WARN_DAYS:
         alerts.append(f"Schwab login runs out in {days_left:.1f} days - re-sign in on the Mac: "

@@ -46,6 +46,8 @@ Safety perimeter (CLAUDE.md §8): research-only, live flags off, the operator ke
 | Capex Flow lane (`docs/CAPEX_FLOW_STRATEGY_2026-09-28.md`) | pick scorecard cohorts | 30/91/182-day horizons (first: 10/08) |
 
 Changing a rule after data exists needs a new version registered before its own data.
+`inferno_prereg_integrity.py` pins each prereg doc's hash and the collector's rule constants
+(`research/prereg_registry.json`); any drift shows up as a HEADS UP line in the morning email.
 
 ## 3. The operator's week (about 30 minutes)
 
@@ -73,6 +75,5 @@ Roles to fill (see the plan's "Next session" section):
 2. **Second opinion (D2):** fund an OpenAI key or retire it.
 
 Processes to add:
-- **Prereg integrity:** a weekly hash check that frozen rules didn't change.
 - **Year-end tax review (December):** realized and unrealized losses, e.g. TE. Take it to a tax professional; the desk won't advise.
 - **Email consolidation (W5):** after 3 good mornings.

@@ -1,0 +1,40 @@
+{
+  "experiments": {
+    "short-premium-v2": {
+      "doc": "docs/SHORT_PREMIUM_PREREG_V2_2026-09-29.md",
+      "docSha256": "b35b30c66b97d55274dfc1fd68814fd59ad4bdb5de00d0df45a859ac89c25adf",
+      "module": "inferno_short_premium_shadow",
+      "constants": {
+        "MIN_DAYS_TO_EARNINGS": "1",
+        "MAX_DAYS_TO_EARNINGS": "7",
+        "MAX_DTE": "21",
+        "WING_MULTIPLE_OF_MOVE": "2.0",
+        "MAX_LOSS_TO_CREDIT": "4.0",
+        "MAX_LEG_SPREAD_PCT": "0.5",
+        "V2_TIMEBOX_END": "datetime.date(2027, 2, 28)"
+      },
+      "registeredAt": "2026-09-30T13:55:53.120400+00:00"
+    },
+    "earnings-runner-v1": {
+      "doc": "docs/EARNINGS_RUNNER_PREREG_2026-09-30.md",
+      "docSha256": "307a4045710d6c226e4a78e4e0cf63a97afb38a05b5ce081c9b3ed5dfc94054f",
+      "module": "inferno_earnings_runner",
+      "constants": {
+        "RUNUP_MIN_DAYS": "3",
+        "RUNUP_MAX_DAYS": "10",
+        "RUNUP_MAX_DTE": "21",
+        "QUIET_ATR_FRACTION": "0.5",
+        "GAP_IM_FRACTION": "0.75",
+        "GAP_MIN": "0.05",
+        "SPREAD_DTE_TARGET": "35",
+        "SPREAD_DTE_MIN": "21",
+        "SPREAD_DTE_MAX": "60",
+        "TAKE_PROFIT": "0.5",
+        "MAX_HOLD_TRADING_DAYS": "10",
+        "LONG_LEG_MAX_SPREAD": "0.25",
+        "SHORT_LEG_MAX_SPREAD": "0.5"
+      },
+      "registeredAt": "2026-09-30T13:55:53.159938+00:00"
+    }
+  }
+}

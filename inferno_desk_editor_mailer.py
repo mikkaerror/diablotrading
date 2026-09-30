@@ -42,6 +42,7 @@ SEND_WINDOW_END_HOUR = 11    # after this, a missed morning waits for tomorrow
 STEP_TIMEOUT_SECONDS = 240
 
 PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
+    ("prereg integrity", ["inferno_prereg_integrity.py", "run"]),
     ("paper delegate", ["inferno_paper_delegate.py", "run"]),
     ("canonical paper cycle", ["inferno_mac_paper_cycle.py", "--phase", "post-delegate"]),
     ("second opinion", ["inferno_second_opinion.py", "run"]),

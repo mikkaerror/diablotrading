@@ -95,7 +95,8 @@ class MailerTests(unittest.TestCase):
 
     def test_delegate_runs_first_and_is_only_approval_step(self):
         labels = [label for label, _ in mailer.PIPELINE_STEPS]
-        self.assertEqual(labels[0], "paper delegate")
+        self.assertEqual(labels[0], "prereg integrity")
+        self.assertEqual(labels[1], "paper delegate")
         self.assertIn("second opinion", labels)  # behind the once-a-day check
         cmds = " ".join(" ".join(cmd) for _, cmd in mailer.PIPELINE_STEPS)
         for forbidden in ("today.py", "run_inferno", "schwab", "approve", "stage"):
