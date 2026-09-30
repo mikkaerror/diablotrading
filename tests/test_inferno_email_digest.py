@@ -100,7 +100,7 @@ class DigestTests(unittest.TestCase):
                 {"strategy": "Straddle", "closedCount": 0},
             ]
         }
-        analytics = {"closedMetrics": {"scoredCount": 3}}
+        analytics = {"closedMetrics": {"scoredCount": 3}, "promotionTruth": {"qualified": 1, "target": 30, "estimatesNoCredit": 2}}
         authority = {"decision": {"authorityLevel": "paper-evidence-only", "liveTradingAllowed": False}}
         text = build_strike_digest(
             {"generatedAt": "2026-09-27", "items": []},
@@ -109,7 +109,7 @@ class DigestTests(unittest.TestCase):
             authority=authority,
             sandbox={"stageableCount": 0},
         )
-        self.assertIn("Paper outcomes scored: 3/30", text)
+        self.assertIn("Paper outcomes qualified: 1/30", text)
         self.assertIn("long straddle: 10 closed | win 30% | avg -0.15R", text)
         self.assertNotIn("straddle: 0 closed", text)
         self.assertIn("live submit False", text)

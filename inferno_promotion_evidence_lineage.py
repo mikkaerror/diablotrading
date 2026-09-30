@@ -93,6 +93,7 @@ def _paper_record(item: dict[str, Any], index: int, source: dict[str, Any], coun
         "exclusionReason": reason,
         "provenance": provenance,
         "reportedScorable": bool(reported_closed_trade_records([item])),
+        "outcomeLabel": "estimate — no credit" if provenance.get("state") == "intrinsic-estimate" else promotion_state,
     }
 
 
@@ -185,6 +186,15 @@ def build_promotion_evidence_lineage(
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "promotionTarget": MIN_SCORED_TRADES_FOR_PROMOTION,
+        "promotionTruth": {
+            "qualified": qualified,
+            "target": MIN_SCORED_TRADES_FOR_PROMOTION,
+            "remaining": remaining,
+            "reported": sum(bool(row.get("reportedScorable")) for row in records),
+            "estimatesNoCredit": sum(row.get("provenance", {}).get("state") == "intrinsic-estimate" for row in records),
+            "source": "promotion-evidence-lineage",
+            "basis": "source-reconciled operator-paper outcomes; sample count alone grants no authority",
+        },
         "fillSource": {key: value for key, value in source.items() if key != "rows"},
         "promotion": {
             "qualifiedPaperOutcomes": qualified,
@@ -230,6 +240,7 @@ def promotion_evidence_lineage_text(payload: dict[str, Any]) -> str:
         "",
         "Promotion truth:",
         f"- source-reconciled operator-paper outcomes: {promotion.get('qualifiedPaperOutcomes', 0)}/{payload.get('promotionTarget', 0)}",
+        f"- estimate — no credit: {(payload.get('promotionTruth') or {}).get('estimatesNoCredit', 'unavailable')}",
         "- source match proves recorded-fill consistency, not independent broker verification",
         f"- remaining for promotion: {promotion.get('remainingForPromotion', 0)}",
         f"- strategy-lab scored outcomes: {promotion.get('strategyLabScoredOutcomes', 0)}",

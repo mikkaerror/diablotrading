@@ -45,6 +45,7 @@ python3 inferno_expectancy_ledger.py build
 python3 inferno_dte_policy_analysis.py build
 python3 inferno_trading_behavior_audit.py build
 python3 inferno_strategy_lab.py build
+python3 inferno_promotion_evidence_lineage.py build
 python3 inferno_exposure_analytics.py build
 python3 inferno_broker_preview.py build
 python3 inferno_authority_controller.py build

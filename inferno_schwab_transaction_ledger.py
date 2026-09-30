@@ -255,7 +255,7 @@ def closed_contract_cash_reconciliation(rows: list[dict[str, Any]]) -> dict[str,
         problem = "multi-security-parent-needs-allocation" if (suffix, symbol) in ambiguous_contracts else None
         def chronological(row):
             try:
-                parsed = datetime.fromisoformat(row.get("occurredAt") or "")
+                parsed = datetime.fromisoformat((row.get("occurredAt") or "").replace("Z", "+00:00"))
                 return parsed.timestamp() if parsed.tzinfo else float("-inf")
             except ValueError:
                 return float("-inf")
@@ -267,7 +267,7 @@ def closed_contract_cash_reconciliation(rows: list[dict[str, Any]]) -> dict[str,
             qty, cash = number(leg.get("quantity")), number(row.get("netAmount"))
             costs = [number(item.get("cost")) for item in items]
             try:
-                observed = datetime.fromisoformat(row.get("occurredAt") or "")
+                observed = datetime.fromisoformat((row.get("occurredAt") or "").replace("Z", "+00:00"))
                 time_ok = observed.tzinfo is not None
             except ValueError:
                 time_ok = False

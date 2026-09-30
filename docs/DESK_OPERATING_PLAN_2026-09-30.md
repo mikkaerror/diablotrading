@@ -55,7 +55,7 @@ any risk constant.
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **open — W1** |
-| **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **open — W2** |
+| **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **open — W3** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **open — W4, due 10/12** |
 | Live-book risk officer (report-only exit plans) | Claude | open — W6, blocked on D1 |
@@ -184,3 +184,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: W2.5 done (5305569) — Desk Editor shows lineage 1/30 as truth and a 30-day funnel.
 - 2026-09-30 Claude: found the split brain (Mac ledger frozen since 09-07; cloud stages from its own GCS queue). Added W0, D5, D6. W3 (fill clerk) waits for W0 — cards are pointless against a ledger nobody stages into.
 - 2026-09-30 Mikka answered: D5 = Mac owns tickets/approvals/fills; D6 = $2,000 paper single-ticket cap (paper only). Recorded in coordination/operator_acks/2026-09-30_ledger_cutover.json. W0 unblocked.
+
+- 2026-09-30 Codex W2: normalized UTC Z timestamps for legacy Python transaction reconciliation; installed declared research dependencies in CI (the inspected main failure was missing pandas). Exported promotionTruth.qualified from lineage to analytics, strike digest and doctor; intrinsic closes labeled estimate — no credit. Missing/nonfinite NLV now skips append, preserving historical rows. SQLite indexing has bounded retries, a durable queue receipt and explicit unavailable reports; recovery indexes once without replaying decisions. Focused controller checks and 2,286-test isolated suite passed; CI-profile preflight ready-for-ci. Research-only, no caps, gates or authority changed. Main CI verification pending push/integration; Claude retains Desk Editor ownership.

@@ -400,7 +400,12 @@ def arm_summary(tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the current analytics package from the paper ledger."""
-    ledger = ledger or load_ledger()
+    ledger = ledger if ledger is not None else load_ledger()
+    # Import lazily: lineage reuses the pure analytics helpers, never this builder.
+    from inferno_promotion_evidence_lineage import build_promotion_evidence_lineage
+    truth = build_promotion_evidence_lineage(
+        paper_ledger=ledger, fast_ledger={}, shadow_evidence={}, strategy_lab={}
+    )["promotionTruth"]
     tickets = ledger.get("items", [])
     statuses = Counter(str(ticket.get("status") or "unknown") for ticket in tickets)
     outcomes = Counter(outcome_status(ticket) for ticket in tickets)
@@ -417,6 +422,7 @@ def build_performance_analytics(ledger: dict[str, Any] | None = None) -> dict[st
         "statusCounts": dict(statuses),
         "outcomeCounts": dict(outcomes),
         "closedMetrics": closed,
+        "promotionTruth": truth,
         "riskSummary": risk_summary(tickets),
         "liquiditySummary": liquidity_summary(tickets),
         "topBlockReasons": blocks,
@@ -477,7 +483,9 @@ def analytics_text(analytics: dict[str, Any]) -> str:
         [
             "",
             "Closed-ticket metrics:",
-            f"- scored: {closed.get('scoredCount', 0)}",
+            f"- promotion-qualified: {(analytics.get('promotionTruth') or {}).get('qualified', 'unavailable')}/{(analytics.get('promotionTruth') or {}).get('target', 30)} (lineage)",
+            f"- reported numeric outcomes (including unqualified): {closed.get('scoredCount', 0)}",
+            f"- estimate — no credit: {(analytics.get('promotionTruth') or {}).get('estimatesNoCredit', 'unavailable')}",
             f"- win rate: {closed.get('winRate')}",
             f"- expectancy: {closed.get('expectancy')}",
             f"- average gross R: {closed.get('averageGrossR')}",

@@ -158,11 +158,11 @@ def today_section(plan: dict[str, Any]) -> list[str]:
 
 def scoreboard_section(shadow: dict[str, Any], analytics: dict[str, Any] | None = None) -> list[str]:
     lines = ["EVIDENCE"]
-    closed_metrics = (analytics or {}).get("closedMetrics") or (analytics or {}).get("closed") or {}
-    scored = closed_metrics.get("scoredCount", closed_metrics.get("scored"))
-    if scored is None:
-        scored = 0
-    lines.append(f"Paper outcomes scored: {scored}/30 toward promotion review")
+    truth = (analytics or {}).get("promotionTruth") or {}
+    qualified = truth.get("qualified", "unavailable")
+    lines.append(f"Paper outcomes qualified: {qualified}/{truth.get('target', 30)} toward promotion review (lineage)")
+    if truth.get("estimatesNoCredit"):
+        lines.append(f"Intrinsic closes: {truth['estimatesNoCredit']} estimate — no credit")
     rows = [
         row
         for row in (shadow.get("strategies") or [])

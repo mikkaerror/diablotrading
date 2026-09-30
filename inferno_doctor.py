@@ -2364,12 +2364,21 @@ def main() -> int:
     block_bucket_ok, block_bucket_detail = block_reason_top_bucket_status(performance)
     lines.append(summarize_status("Top block-reason bucket", block_bucket_ok, block_bucket_detail))
 
+    lineage = load_json_file(DATA_DIR / "inferno_promotion_evidence_lineage.json") or {}
+    promotion_truth = lineage.get("promotionTruth") or {}
+    truth_ok = promotion_truth.get("qualified") is not None and in_current_service_cycle(str(lineage.get("generatedAt", "")), now=now)
+    lines.append(summarize_status("Promotion truth", truth_ok,
+        f"{promotion_truth.get('qualified', 'unavailable')}/{promotion_truth.get('target', 30)} qualified (lineage); "
+        f"{promotion_truth.get('estimatesNoCredit', 'unavailable')} estimate — no credit"))
+    if not truth_ok:
+        warnings += 1
+
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
     strategy_lab_today = in_current_service_cycle(str(strategy_lab.get("generatedAt", "")), now=now)
     strategy_lab_ok = strategy_lab_today and (strategy_lab.get("deskVerdict") or {}).get("level") is not None
     strategy_lab_detail = (
         f"{(strategy_lab.get('deskVerdict') or {}).get('level')} | "
-        f"{(strategy_lab.get('overall') or {}).get('scoredCount', 0)} scored | "
+        f"{promotion_truth.get('qualified', 'unavailable')} qualified (lineage) | "
         f"fees unknown {(strategy_lab.get('overall') or {}).get('unknownFeesCount', 'unmeasured')} | "
         f"net of reported fees {(strategy_lab.get('overall') or {}).get('netOfReportedFeesCount', 'unmeasured')}"
         if strategy_lab_ok
