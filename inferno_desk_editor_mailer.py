@@ -55,6 +55,7 @@ PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("live-book officer", ["inferno_live_book_officer.py", "run"]),
     ("deposit card", ["inferno_deposit_card.py", "run"]),
     ("earnings runner", ["inferno_earnings_runner.py", "run"]),
+    ("lifecycle board", ["inferno_lifecycle_board.py", "run"]),
 )
 
 Runner = Callable[[list[str]], tuple[int, str]]
