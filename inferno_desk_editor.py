@@ -293,13 +293,17 @@ def capex_flow_section(data_dir: Path) -> dict[str, Any] | None:
         return None
     r = flow["regime"]
     top = [n for n in flow.get("names") or [] if n.get("action") == "BUY"][:3]
+    sizing = {r["ticker"]: r for r in flow.get("sizing") or []}
     return {
         "regime": r.get("regime"),
         "growth": r.get("growth"),
         "fcfPositive": r.get("fcfPositive"),
         "spenders": r.get("spenders"),
         "tapeStale": r.get("tapeStale"),
-        "top": [{"ticker": n["ticker"], "layer": n["layer"], "instrument": n["instrument"]} for n in top],
+        "top": [{"ticker": n["ticker"], "layer": n["layer"], "instrument": n["instrument"],
+                 **({"targetWeight": sizing[n["ticker"]]["targetWeight"],
+                     "deployNowWeight": sizing[n["ticker"]]["deployNowWeight"]}
+                    if n["ticker"] in sizing else {})} for n in top],
     }
 
 
@@ -543,7 +547,10 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             + (" - tape needs an earnings-season update" if flow["tapeStale"] else "")
         )
         for row in flow["top"]:
-            lines.append(f"- {row['ticker']} [{row['layer']}]: {row['instrument']}")
+            size = ""
+            if row.get("targetWeight") is not None:
+                size = f" (sleeve target {row['targetWeight'] * 100:.0f}%, now {row['deployNowWeight'] * 100:.0f}%)"
+            lines.append(f"- {row['ticker']} [{row['layer']}]{size}: {row['instrument']}")
         lines.append("")
 
     if payload["longTerm"]:

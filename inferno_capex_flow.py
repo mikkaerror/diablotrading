@@ -31,6 +31,7 @@ by inferno_pick_scorecard.py (lane "capexFlow"). No orders, no authority.
 
 import argparse
 import json
+import math
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -58,6 +59,8 @@ BUY_SCORE, WATCH_SCORE = 60.0, 45.0
 PULLBACK_ATR, EXTENDED_ATR, BREAKOUT_RVOL = 1.0, 3.5, 1.3
 RS_MIN_DAYS, RS_MAX_DAYS = 15, 100
 TOP_N = 5
+MAX_NAME_WEIGHT = 0.30      # no single name above 30% of the capex sleeve
+ATR_TO_DAILY_SIGMA = 1.6    # same conversion inferno_vol_edge.rv_from_atr uses
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -234,11 +237,61 @@ def score_name(row: dict[str, Any], layer: dict[str, Any], regime: dict[str, Any
         "action": action,
         "instrument": instrument_for(row, action, layer["funding"], vol, timing),
         "price": _num(row.get("price")),
+        "atrPercent": _num(row.get("atrPercent")),
         "ivRank": _num(row.get("ivRank")),
         "daysUntilEarnings": row.get("daysUntilEarnings"),
         "relativeStrength": None if rs is None else round(rs, 4),
         "reasons": reasons,
     }
+
+
+def _capped_normalize(raw: dict[str, float], cap: float) -> dict[str, float]:
+    """Normalize to 1.0 with a per-name cap; excess is redistributed pro rata."""
+    weights = {k: v / sum(raw.values()) for k, v in raw.items()}
+    for _ in range(len(weights)):
+        over = {k for k, w in weights.items() if w > cap + 1e-12}
+        if not over:
+            break
+        free = {k: raw[k] for k in weights if k not in over}
+        left = 1.0 - cap * len(over)
+        weights = {**{k: cap for k in over},
+                   **({k: left * v / sum(free.values()) for k, v in free.items()} if free else {})}
+    return weights
+
+
+def risk_parity(names: list[dict[str, Any]], throttle: float, cap: float = MAX_NAME_WEIGHT) -> list[dict[str, Any]]:
+    """Inverse-volatility sleeve weights for BUY names (each name adds similar risk).
+
+    target    weight of the capex sleeve once fully built (sums to 1.0)
+    deployNow what to put on today: target x regime throttle x tranche, where
+              the tranche is 1/3 when extended, 0 on exhaustion, 1/2 inside the
+              earnings-caution window, else 1. The rest waits for a pullback.
+    Research sizing only; account-level caps and the drawdown stepper still rule.
+    """
+    # Size the top picks only (names arrive sorted by score): a small book
+    # holds a handful of names well, not thirty names badly.
+    buys = [n for n in names if n["action"] == "BUY" and (n.get("atrPercent") or 0) > 0][:TOP_N]
+    if not buys:
+        return []
+    sigma = {n["ticker"]: n["atrPercent"] / 100.0 / ATR_TO_DAILY_SIGMA * math.sqrt(252) for n in buys}
+    target = _capped_normalize({t: 1.0 / s for t, s in sigma.items()}, max(cap, 1.0 / len(buys)))
+    out = []
+    for n in buys:
+        state = n["entryTiming"]["state"]
+        days = _num(n.get("daysUntilEarnings"))
+        tranche = {"extended": 1 / 3, "exhaustion": 0.0}.get(state, 1.0)
+        if days is not None and 0 <= days <= EARNINGS_CAUTION_DAYS:
+            tranche = min(tranche, 0.5)
+        t = n["ticker"]
+        out.append({
+            "ticker": t,
+            "annualVol": round(sigma[t], 3),
+            "targetWeight": round(target[t], 4),
+            "deployNowWeight": round(target[t] * throttle * tranche, 4),
+            "tranche": round(tranche, 3),
+        })
+    out.sort(key=lambda r: -r["targetWeight"])
+    return out
 
 
 def build_capex_flow(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DIR, today: date | None = None) -> dict[str, Any]:
@@ -295,6 +348,7 @@ def build_capex_flow(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DI
         "timedPicks": [n["ticker"] for n in names if n["action"] == "BUY"
                        and n["entryTiming"]["state"] in {"pullback", "breakout"}][:TOP_N],
         "layers": layer_summary,
+        "sizing": risk_parity(names, regime["throttle"]),
         "names": names,
         "citations": [
             "Cohen & Frazzini (2008), Economic Links and Predictable Returns, JF",
@@ -328,6 +382,12 @@ def capex_flow_text(p: dict[str, Any]) -> str:
         lines.append(f"- {n['action']:5} {n['ticker']:5} {n['score']:5.1f} [{n['layer']}] {', '.join(n['reasons'])}"
                      f" | entry {n['entryTiming']['state']}")
         lines.append(f"        -> {n['instrument']}")
+    if p.get("sizing"):
+        lines.append("")
+        deployed = sum(r["deployNowWeight"] for r in p["sizing"])
+        lines.append(f"Sleeve sizing (inverse-vol, cap {int(MAX_NAME_WEIGHT * 100)}%/name; deploy now {deployed * 100:.0f}% of sleeve, rest waits for pullbacks):")
+        for r in p["sizing"]:
+            lines.append(f"- {r['ticker']:5} target {r['targetWeight'] * 100:4.1f}% | now {r['deployNowWeight'] * 100:4.1f}% | vol {r['annualVol'] * 100:.0f}%")
     lines.append("")
     lines.append(f"Entry-timed picks (pullback/breakout): {', '.join(p.get('timedPicks') or []) or 'none'}")
     lines.append("Research only. Scored forward by the pick scorecard (lanes capexFlow, capexFlowTimed). No orders placed.")

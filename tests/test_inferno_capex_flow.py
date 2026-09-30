@@ -137,5 +137,36 @@ class BuildTests(unittest.TestCase):
         self.assertIn("accelerating-stretched", capex_flow_text(p))
 
 
+class RiskParityTests(unittest.TestCase):
+    def _n(self, t, atr, score=70, state="neutral", days=40):
+        return {"ticker": t, "action": "BUY", "atrPercent": atr, "score": score,
+                "entryTiming": {"state": state}, "daysUntilEarnings": days}
+
+    def test_inverse_vol_and_cap(self):
+        from inferno_capex_flow import risk_parity
+        rows = risk_parity([self._n("LOW", 1.0), self._n("MID", 2.0), self._n("HI", 4.0),
+                            self._n("HI2", 4.0), self._n("HI3", 4.0)], throttle=1.0)
+        w = {r["ticker"]: r["targetWeight"] for r in rows}
+        self.assertAlmostEqual(sum(w.values()), 1.0, places=3)
+        self.assertLessEqual(max(w.values()), 0.3001)
+        self.assertGreater(w["MID"], w["HI"])
+
+    def test_tranches_and_throttle(self):
+        from inferno_capex_flow import risk_parity
+        rows = {r["ticker"]: r for r in risk_parity(
+            [self._n("A", 2.0, state="extended"), self._n("B", 2.0, state="exhaustion"),
+             self._n("C", 2.0, days=3), self._n("D", 2.0)], throttle=0.8)}
+        self.assertAlmostEqual(rows["A"]["deployNowWeight"], rows["A"]["targetWeight"] * 0.8 / 3, places=3)
+        self.assertEqual(rows["B"]["deployNowWeight"], 0.0)
+        self.assertAlmostEqual(rows["C"]["deployNowWeight"], rows["C"]["targetWeight"] * 0.4, places=3)
+        self.assertAlmostEqual(rows["D"]["deployNowWeight"], rows["D"]["targetWeight"] * 0.8, places=3)
+
+    def test_only_top_buys_sized(self):
+        from inferno_capex_flow import TOP_N, risk_parity
+        names = [self._n(f"T{i}", 2.0) for i in range(12)] + [{**self._n("W", 2.0), "action": "WATCH"}]
+        self.assertEqual(len(risk_parity(names, 1.0)), TOP_N)
+        self.assertEqual(risk_parity([], 1.0), [])
+
+
 if __name__ == "__main__":
     unittest.main()
