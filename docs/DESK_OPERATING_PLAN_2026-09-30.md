@@ -67,6 +67,7 @@ any risk constant.
 Each has an owner, a definition of done, and a date. Do them in this order.
 
 ### W0 — End the split brain (Codex, start now — D5 = Mac, D6 = $2,000; due 10/03)
+**Status:** complete and deployed; freeze/reconciliation, cloud read-only smoke and same-host lifecycle regression verified. Publication follow-up repaired; main CI green. Receipts: `outputs/ledger-cutover-2026-09-30/validation.json` and `outputs/desk-followup-2026-09-30/validation.json`.
 Implement the cutover in `docs/CLOUD_LOCAL_LEDGER_OWNERSHIP_2026-09-27.md`:
 1. Freeze: snapshot both ledgers + approval queues (cloud via gcloud read, Mac
    file) with hashes; no edits to either during the cutover.
@@ -106,6 +107,7 @@ average and the funnel report shows it. No threshold lowered (nightly
 boundary audit must stay green).
 
 ### W2 — Controller (Codex primary, Claude for Desk Editor; due 2026-10-03)
+**Status:** complete; controller repairs and all named surfaces verified, with main CI green. See the W2 completion entries in the Log.
 1. Fix `tests.test_inferno_schwab_transaction_ledger ...matchedNetCash` (red
    on HEAD since 9256336) and get Inferno CI green on main.
 2. One exported number: `promotionTruth.qualified` (lineage) consumed by
@@ -291,3 +293,4 @@ monthly attribution. Unknown positions remain unclassified. Contract and handoff
 - 2026-09-30 Codex W9: implemented exact-commit other-agent review plus Mikka ack checks in CLAUDE.md §8, deterministic boundary audit, nightly loop, doctor and command center. Existing Cowork nightly hygiene prompt saved and verified with stdout-only check; cadence/model/permissions preserved. 126 focused tests and full isolated CI-profile verification pass. Sleeve fields (holds/core/conviction/options), provenance and immutable observations now flow through live sync/review without changing score buckets or account facts. Safety regression catches its own governance commit awaiting Claude co-sign; no approval invented. Existing Claude TCA commits preserved during integration. No risk constant, trading gate, prereg or broker flag changed.
 
 - 2026-09-30 Claude away mode, commit 36d17e6: `python3 inferno_away.py on 2026-12-20 2026-12-28 --note "trip"` (also `off`, `status`). While away the morning email is a short summary tagged (away), only the paper delegate is paused (nothing staged that nobody can key), and shadow collectors keep running; for three days after, a welcome-back block lists deposits still in cash. Mission filed for Codex: approval/Desk Chief/action-pulse emails should check `inferno_away.is_away()`. The older while-away packet (Aug) stays as the detailed read-only packet.
+- 2026-09-30 Codex queue reconciliation: marked the stale W0, W2 and duplicate transaction-regression missions done against deployment/test receipts; W1 and both W4 missions remain in progress for their real future-session acceptance targets. W9 implementation is on main with CI green (36735132458), independent review still pending. Next bounded research work is the assigned friction-model proposal; production economics unchanged.
