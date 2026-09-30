@@ -86,6 +86,7 @@ class MailerTests(unittest.TestCase):
     def test_delegate_runs_first_and_is_only_approval_step(self):
         labels = [label for label, _ in mailer.PIPELINE_STEPS]
         self.assertEqual(labels[0], "paper delegate")
+        self.assertIn("second opinion", labels)  # behind the once-a-day check
         cmds = " ".join(" ".join(cmd) for _, cmd in mailer.PIPELINE_STEPS)
         for forbidden in ("today.py", "run_inferno", "schwab", "approve", "stage"):
             self.assertNotIn(forbidden, cmds)
@@ -100,7 +101,7 @@ class MailerTests(unittest.TestCase):
 class DawnFollowUpTests(unittest.TestCase):
     def test_follow_ups_run_by_default(self):
         names = [Path(cmd[1]).name for cmd in dawn.follow_up_commands(["--automation"], {})]
-        self.assertEqual(names, ["inferno_second_opinion.py", "inferno_desk_editor_mailer.py"])
+        self.assertEqual(names, ["inferno_desk_editor_mailer.py"])
 
     def test_skip_email_and_cloud_and_env_disable(self):
         self.assertEqual(dawn.follow_up_commands(["--skip-email"], {}), [])

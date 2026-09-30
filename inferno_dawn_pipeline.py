@@ -27,10 +27,9 @@ def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None) -
     if environ.get("INFERNO_DESK_EDITOR_MAIL", "1").strip().lower() in {"0", "false", "no", "off"}:
         return []
     here = Path(__file__).resolve().parent
-    return [
-        [sys.executable, str(here / "inferno_second_opinion.py"), "run"],
-        [sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"],
-    ]
+    # The second opinion runs inside the mailer, after its once-a-day check,
+    # so a paid API is never called on every 10-minute safety tick.
+    return [[sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"]]
 
 
 def run_bounded(command: list[str], *, timeout_seconds: float) -> int:

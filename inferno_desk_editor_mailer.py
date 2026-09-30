@@ -9,7 +9,8 @@ morning Desk Editor email is produced here, deterministically, from the same
 packet the agent would have read.
 
 Order of work (each step non-fatal; failures are listed in the email):
-  1. paper delegate (the ONLY approval path; paper-only, ack-gated, audited)
+  1. paper delegate (the ONLY approval path; paper-only, ack-gated, audited),
+     then the advisory second opinion (no-op without an API key)
   2. research views: account performance, vol edge, capex flow, pick scorecard,
      short-premium shadow (prereg v2 forward collector)
   3. build the Desk Editor packet and render desk_editor_text
@@ -42,6 +43,7 @@ STEP_TIMEOUT_SECONDS = 240
 
 PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("paper delegate", ["inferno_paper_delegate.py", "run"]),
+    ("second opinion", ["inferno_second_opinion.py", "run"]),
     ("account performance", ["inferno_account_performance.py", "run"]),
     ("vol edge", ["inferno_vol_edge.py", "run"]),
     ("capex flow", ["inferno_capex_flow.py", "run"]),
