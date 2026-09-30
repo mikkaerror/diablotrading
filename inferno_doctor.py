@@ -736,6 +736,16 @@ def decision_archive_status(report: dict, directory: Path | None = None) -> tupl
                 f"missing rationale={counts.get('recordsWithoutReason')} | pending={counts.get('pendingCaptures')} | fresh={fresh}")
 
 
+def boundary_audit_status(report: dict) -> tuple[bool, str]:
+    """Missing/stale governance evidence is never a clean boundary audit."""
+    try:
+        fresh = recent_or_today(str(report.get("generatedAt") or ""), max_age_hours=36)
+    except (ValueError, TypeError):
+        fresh = False
+    ok = fresh and report.get("ok") is True and not report.get("alerts")
+    return ok, f"{report.get('verdict', 'missing')} | alerts={len(report.get('alerts') or [])} | fresh={fresh}"
+
+
 def research_audit_status(report: dict) -> tuple[bool, str]:
     """Report evidence gaps without mistaking an audit refresh for resolution."""
     if not report:
@@ -3161,6 +3171,11 @@ def main() -> int:
     audit_ok, audit_detail = research_audit_status(load_json_file(RESEARCH_AUDIT_FILE) or {})
     lines.append(summarize_status("Research measurement audit", audit_ok, audit_detail))
     if not audit_ok:
+        warnings += 1
+
+    boundary_ok, boundary_detail = boundary_audit_status(load_json_file(ROOT / "data/inferno_boundary_audit.json") or {})
+    lines.append(summarize_status("Four-eyes boundary audit", boundary_ok, boundary_detail))
+    if not boundary_ok:
         warnings += 1
 
     chief_ok, chief_detail = desk_chief_status(load_json_file(ROOT / "data/inferno_desk_chief.json") or {})

@@ -83,6 +83,10 @@ run_step() {
   return 0
 }
 
+# Four-eyes audit is independent of data refreshes; failure stays in its report
+# and the nightly log. It never writes an approval or advances a success cursor.
+run_step "four-eyes boundary audit" "$PYTHON" inferno_boundary_audit.py
+
 # 1) data sources (research-only, read-only)
 #
 # One OAuth preflight owns the refresh. Downstream jobs reuse the resulting

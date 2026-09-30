@@ -74,8 +74,8 @@ Changing a rule after data exists needs a new version registered before its own 
 
 Roles to fill (research: Claude Doc "Inferno Desk Org Chart", https://claude.ai/code/artifact/fcbb726a-b211-4c84-8068-580735fa5c11):
 1. **Execution quality (TCA):** built Sep 30 (`inferno_fill_quality.py`; report `reports/fill_quality_latest.txt`). After each paperMoney fill, also note the mid TOS showed: `python3 inferno_fill_quality.py mid <ticket> --entry-mid <mid>` (the order card prints it). Verdict on the model's friction needs 5 fills with a fill-time mid.
-2. **Attribution:** the monthly close split by sleeve and strategy (Claude + Codex sleeve tags).
-3. **Four-eyes rule** on gates, caps and pre-registered rules (Codex writes it into CLAUDE.md; Claude co-signs).
+2. **Attribution:** the monthly close split by sleeve and strategy (Claude). Codex sleeve metadata now persists on live positions and observation history; unknown assignments stay unclassified. See `docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
+3. **Four-eyes rule**: implemented in CLAUDE.md §8 and `inferno_boundary_audit.py`; independent Claude co-sign remains required. Nightly command and exact review/ack schemas: `docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
 4. **Away mode** for trips (Claude).
 5. **Second opinion (D2):** fund an OpenAI key or retire it.
 

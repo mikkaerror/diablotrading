@@ -173,6 +173,8 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "artifact": "reports/doctor_latest.txt",
         "owner": "operator",
     },
+    {"lane": "boundary-audit", "question": "Does each safety change have peer review and Mikka approval?",
+     "artifact": "reports/boundary_audit_latest.txt", "owner": "claude"},
     {"lane": "desk-chief", "question": "Who owns the next work and is it productive?",
      "artifact": "reports/desk_chief_latest.txt", "owner": "codex"},
     {
@@ -1202,6 +1204,7 @@ def build_command_center() -> dict[str, Any]:
         "canonicalPaperCycle": summarize_artifact(DATA_DIR / "inferno_mac_paper_cycle.json", keys=("phase", "ok", "returncode", "publication")),
         "schwabMiddayCapture": summarize_artifact(SCHWAB_MIDDAY_CAPTURE_FILE, keys=("status", "generatedAt", "marketDate", "missingEarningsChains", "nonRegularEarningsChains", "v2LastRun", "error")),
         "paperFunnel": summarize_artifact(PAPER_FUNNEL_FILE, keys=("generatedAt", "weeks", "promotionTruth", "dawnAcceptance")),
+        "boundaryAudit": summarize_artifact(DATA_DIR / "inferno_boundary_audit.json", keys=("verdict", "generatedAt", "ok", "alerts", "headCommit")),
         "researchAudit": summarize_artifact(RESEARCH_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "gapCount", "metrics", "sourceMissing")),
         "deskEditor": summarize_artifact(DESK_EDITOR_FILE, keys=("stage", "headline", "generatedAt", "alerts", "researchOnly", "promotable", "authorityChanged", "liveTradingAllowed", "brokerSubmitAllowed")),
         "deployPreflight": summarize_artifact(DEPLOY_PREFLIGHT_FILE, keys=("verdict", "message", "generatedAt", "coreReady", "cloudReady", "brokerDesktopReady")),
@@ -1799,6 +1802,7 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
         [
             "",
             "System status:",
+        f"- Four-eyes boundary audit: {(status.get('boundaryAudit') or {}).get('verdict', 'missing')}",
         f"- Research measurement: {(status.get('researchAudit') or {}).get('gapCount', 'unknown')} open gaps",
         f"- Desk Editor: {(status.get('deskEditor') or {}).get('headline') or 'missing'}",
             f"- Deploy preflight: {status_value(status.get('deployPreflight') or {})}",

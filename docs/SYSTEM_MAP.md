@@ -323,3 +323,10 @@ alternative proposals and redacted broker transaction legs as versioned sources.
 `inferno_desk_chief.py` reads the shared `coordination/desk_roles.json`, mission queue, explicit operational mandate and worker artifacts. `inferno_desk_chief_runner.py` owns fixed bounded dispatch, claims, acceptance and backoff. Reports: `data/inferno_desk_chief.json` and `reports/desk_chief_latest.txt`; durable attempts/leases: `data/inferno_desk_chief_state.json`; decisions: `data/desk_chief_decisions.jsonl`. `./inferno chief status|run|verify|claim` exposes the role. Ops maintenance observes; heartbeat dispatches at the charter cadence. See `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. No path from Chief to ticket or capital approval.
 
 Canonical paper approval identity is implemented in `inferno_paper_approval_routes.py`: fresh ledger candidates publish exact-construction tokens, the delegate resolves the source candidate, and post-delegate staging rechecks the unchanged gates. Generic execution intents cannot inherit variant approvals. See `docs/W1_APPROVAL_ROUTING_AND_DAWN_REVIEW_2026-09-30.md`.
+
+Four-eyes governance: `inferno_boundary_audit.py` audits protected commits for a
+review from the other agent plus Mikka acknowledgement; nightly, doctor and
+command center expose unresolved changes. It does not create independent Claude
+receipts or trade authority. Position sleeve metadata is sourced by
+`inferno_position_sleeves.py` and retained in live sync/review and private
+`data/position_sleeve_history/`. See [[FOUR_EYES_AND_SLEEVE_ATTRIBUTION]].

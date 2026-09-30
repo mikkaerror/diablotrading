@@ -226,6 +226,33 @@ explicit click, is fixed:
   - Edits to the universe / tracker that change what tickers are eligible
   - Anything that mutates the live broker book
 
+**Four-eyes rule (operator mandate, 2026-09-30):** any change to a risk
+gate, cap, promotion threshold or pre-registered rule requires BOTH:
+
+1. A substantive review note by the **other agent** (Claude reviews Codex;
+   Codex reviews Claude), identifying the exact commit, tested effects and
+   preserved safety boundary. The author cannot self-review.
+2. Mikka's explicit OK for that same commit and review note, recorded in
+   `coordination/operator_acks/` with scope `four-eyes-change`.
+
+Do not implement a policy change in the running desk until both exist. Prepare
+and test the proposed commit in isolation first; never manufacture a review,
+operator statement or approval from silence. An operational mandate, existing
+paper delegation or earlier approval of a different commit is insufficient.
+New prereg rules additionally need a new version before its own data; neither
+signature permits rewriting an experiment after observing outcomes.
+
+Nightly audit command: `python3 inferno_boundary_audit.py`. It checks every
+commit since the fixed adoption baseline touching `SAFES` or registered prereg
+paths (including `research/prereg_registry.json`); missing/ambiguous provenance,
+uncommitted safety edits and unavailable Git history fail the audit. Unresolved
+changes never age out. All protected-file edits require evidence even when the
+author believes a diff is cosmetic. Include `Agent-Author: codex` or
+`Agent-Author: claude` in such commit messages. Exact schemas and the Claude
+nightly checklist are in `docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
+This adds governance checks only; broker/live flags stay off and paper approval
+remains exclusively on its existing delegated path.
+
 If a recurring task is sitting on this line and you're not sure which
 side it lands on: STOP, surface the question to the operator, do not
 proceed by inference.
