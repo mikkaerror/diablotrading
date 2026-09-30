@@ -1,6 +1,6 @@
 # W1 — exact-construction approval routing and dawn overlap
 
-Status: implemented; focused tests pass. Full isolated verification and deployment receipts are recorded in the operating plan.
+Status: deployed to the canonical Mac. Focused and full isolated CI checks pass; hosted branch CI passed run 36731019495. Canonical pre-delegate publication succeeded at 08:42:59 Mountain with unchanged decision/fill logs. Deployment receipts are recorded in the operating plan.
 
 ## Approval routing
 
