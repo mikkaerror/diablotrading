@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "active": true,
+  "scope": "desk-operations-only",
+  "operator": "Mikka",
+  "recordedBy": "codex, from explicit chat answers 2026-09-30",
+  "operatorAnswer": "Desk operations: priorities, task assignments, retries, and acceptance of tested work; existing paper and capital authority stays in place.",
+  "marginAnswer": "Operating efficiency: usage, cloud cost, duplicated work and progress per run.",
+  "approvedActions": [
+    "prioritize",
+    "assign-operational-work",
+    "reviewed-operational-retry",
+    "accept-verified-operational-delivery"
+  ],
+  "excludedActions": [
+    "paper-ticket-decisions",
+    "capital-decisions",
+    "live-orders",
+    "risk-or-universe-changes",
+    "autonomous-code-policy-edits",
+    "purchases",
+    "emails"
+  ],
+  "protectedSources": {
+    "inferno_config.py": "c6c9943d365be5e09901623376f52884463f3565a7a3241095c3f6336a7ecd47",
+    "inferno_risk_policy.py": "57b4b4776cdfee7d4d07ea4cd6e3db5c7890e856ddd50ff99a42a54fea705fc0",
+    "inferno_authority_controller.py": "b6f703aeca89f1da9c582b5705ceebb19b71beeda4ec0e78f4f9cd9f70728213",
+    "inferno_paper_delegate.py": "855ee8e818112e25842dd1661e87b24f4eff1e3f1d1507c9f0faefd8474b0fa0",
+    "inferno_ledger_ownership.py": "5fab517514610a9f00adcb2c428f1d3321c139b44876f30b62ff9703db42628f",
+    "inferno_short_premium_shadow.py": "9eb65d69aeec0a085273c2d73a3db9831a33be15edd4e35c35252bb2d4904e1b",
+    "inferno_earnings_runner.py": "e2d01ff679f06c9e873b38fa1e7fc9eede564114a8a5ff8c66d97c043b8557d0",
+    "inferno_desk_chief.py": "d7c4741a2fa675373584502961c67581a85fefa8aa30cfa794d5e046a25f4f25",
+    "inferno_desk_chief_runner.py": "3e21982f3eb9a8c52e541429cd991fb8e2e38c39f9361bf0b4c94e5a2691e2cb",
+    "coordination/desk_roles.json": "3099dd55d24ee54327c4bc39d974caabac83e29252a239be80f7942fd301f61b",
+    "inferno_deploy_preflight.py": "0938339cca9999423a5cffd88ffc190458912b5ff60888edcc0a20a0c3dca16a",
+    "research/prereg_registry.json": "86adaa08083447050447b5d9fbe7121776bc3ff00fae4e48b21be451c5c4ecae"
+  }
+}

@@ -502,6 +502,13 @@ def live_position_review_status(review: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def desk_chief_status(payload: dict) -> tuple[bool, str]:
+    fresh = recent_or_today(str(payload.get("generatedAt", ""))) if payload else False
+    safe = (payload.get("safety") or {}).get("passed") is True
+    counts = payload.get("roleCounts") or {}
+    return fresh and safe, f"{payload.get('verdict', 'missing')} | roles={counts} | assignments={len(payload.get('assignments') or [])} | cloud cost={'measured' if (payload.get('operatingMargin') or {}).get('cloudCostKnown') else 'unknown'}"
+
+
 def model_command_center_status(payload: dict) -> tuple[bool, str]:
     """Evaluate the shared model command center as core desk infrastructure.
 
@@ -3154,6 +3161,11 @@ def main() -> int:
     audit_ok, audit_detail = research_audit_status(load_json_file(RESEARCH_AUDIT_FILE) or {})
     lines.append(summarize_status("Research measurement audit", audit_ok, audit_detail))
     if not audit_ok:
+        warnings += 1
+
+    chief_ok, chief_detail = desk_chief_status(load_json_file(ROOT / "data/inferno_desk_chief.json") or {})
+    lines.append(summarize_status("Desk Chief operations", chief_ok, chief_detail))
+    if not chief_ok:
         warnings += 1
 
     editor_ok, editor_detail = desk_editor_status(load_json_file(DESK_EDITOR_FILE) or {})

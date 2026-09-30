@@ -10,6 +10,7 @@ Safety perimeter (CLAUDE.md §8): research-only, live flags off, the operator ke
 
 | Role | Who / what | When | Output |
 |---|---|---|---|
+| **Desk Chief** | Codex, operational authority only | 08:10 / 12:10 / 16:10 weekdays; cheap hourly observation | owned priorities, acceptance receipts, usage/cost visibility; `./inferno chief status` |
 | Data engine | Mac launchd `inferno_dawn_pipeline.py` | weekdays 06:00 (+10-min safety ticks) | fresh tracker, Schwab chains, snapshot |
 | Paper stager (canonical ledger owner) | `inferno_mac_paper_cycle.py` (Codex, W0) | after the dawn refresh | staged paper tickets, Mac ledger |
 | Paper approver | `inferno_paper_delegate.py` (rule-based, ack-gated) | inside the mailer | approvals/rejections, logged |

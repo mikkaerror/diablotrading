@@ -317,3 +317,7 @@ from alternative pricing through source-reconciled, reported-cost paper events.
 Its state hash distinguishes new evidence from repeated reports and exposes the
 existing protocol deadline without changing it. The archive captures rejected
 alternative proposals and redacted broker transaction legs as versioned sources.
+
+## Desk Chief operational supervision
+
+`inferno_desk_chief.py` reads the shared `coordination/desk_roles.json`, mission queue, explicit operational mandate and worker artifacts. `inferno_desk_chief_runner.py` owns fixed bounded dispatch, claims, acceptance and backoff. Reports: `data/inferno_desk_chief.json` and `reports/desk_chief_latest.txt`; durable attempts/leases: `data/inferno_desk_chief_state.json`; decisions: `data/desk_chief_decisions.jsonl`. `./inferno chief status|run|verify|claim` exposes the role. Ops maintenance observes; heartbeat dispatches at the charter cadence. See `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. No path from Chief to ticket or capital approval.

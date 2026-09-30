@@ -2,6 +2,10 @@
 
 The first doc a new model should read before touching the desk.
 
+## Operational coordination
+
+Before starting new operational work, run `./inferno chief status` and read its owned queue. The Chief coordinates priorities and accepts verified operational delivery under Mikka's September 30 mandate; trading authority below is unchanged. Claim assigned work using `./inferno chief claim role:<id> --owner codex` (or claude), after a Chief run has recorded it. An active lease prevents duplicate dispatch. Do not alter the Chief evaluator, mandate or protected hashes during unattended work. See `docs/DESK_CHIEF_CHARTER_2026-09-30.md`.
+
 ## Mission
 
 Run a paper-evidence-first earnings and options desk that scores short-term

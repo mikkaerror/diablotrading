@@ -73,6 +73,7 @@ WEEKDAY_CODE_LABELS = {
 }
 ALL_WEEKDAY_CODES = tuple(WEEKDAY_CODE_LABELS)
 CONTROL_COMMANDS: tuple[dict[str, str], ...] = (
+    {"command": "chief", "description": "operational oversight, owned assignments and bounded acceptance"},
     {"command": "status", "description": "show the latest command-center state"},
     {"command": "sync", "description": "run the full daily model refresh now"},
     {"command": "watchlist", "description": "show a compact research-first view of the current watchlist"},
@@ -878,6 +879,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("onboard")
     archive_parser = subparsers.add_parser("archive")
     archive_parser.add_argument("archive_args", nargs=argparse.REMAINDER)
+    chief_parser = subparsers.add_parser("chief")
+    chief_parser.add_argument("chief_args", nargs=argparse.REMAINDER)
     audit_parser = subparsers.add_parser("research-audit")
     audit_parser.add_argument("action", nargs="?", default="run", choices=["run", "status"])
     subparsers.add_parser("doctor")
@@ -1056,6 +1059,10 @@ def main() -> int:
 
     if command == "archive":
         result = run_passthrough_command(["python3", "inferno_decision_archive.py", *args.archive_args], timeout_seconds=180)
+        return int(result.get("returncode", 1))
+
+    if command == "chief":
+        result = run_passthrough_command(["python3", "inferno_desk_chief.py", *args.chief_args], timeout_seconds=300)
         return int(result.get("returncode", 1))
 
     if command == "research-audit":

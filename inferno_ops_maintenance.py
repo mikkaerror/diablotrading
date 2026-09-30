@@ -584,6 +584,8 @@ def refresh_model_command_center() -> dict[str, Any]:
     reports.
     """
     try:
+        from inferno_desk_chief import build_report as build_chief, save_report as save_chief
+        save_chief(build_chief())  # observation only; dispatch has a separate bounded cadence
         report = build_command_center()
     except Exception as exc:  # noqa: BLE001
         return {

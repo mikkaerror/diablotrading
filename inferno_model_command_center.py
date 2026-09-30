@@ -173,6 +173,8 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "artifact": "reports/doctor_latest.txt",
         "owner": "operator",
     },
+    {"lane": "desk-chief", "question": "Who owns the next work and is it productive?",
+     "artifact": "reports/desk_chief_latest.txt", "owner": "codex"},
     {
         "lane": "decision-archive",
         "question": "What did we observe, decide or pass over, why, and what changed later?",
@@ -1631,6 +1633,8 @@ def build_command_center() -> dict[str, Any]:
             metrics=headline_metrics,
             next_actions=next_actions,
         ),
+        "deskChief": {key: (load_artifact(DATA_DIR / "inferno_desk_chief.json") or {}).get(key)
+                      for key in ("generatedAt", "verdict", "roleCounts", "safety", "topPriorities", "operatingMargin")},
         "reportingMap": list(REPORTING_MAP),
         "recommendedCommands": [
             f'cd "{ROOT}"',
@@ -1976,6 +1980,11 @@ def render_command_center_text(payload: dict[str, Any]) -> str:
     for action in payload.get("nextActions") or []:
         lines.append(f"- {action}")
 
+    chief = payload.get("deskChief") or {}
+    lines.extend(["", f"Desk Chief: {chief.get('verdict', 'unverified')} | roles={chief.get('roleCounts', {})}"])
+    for task in chief.get("topPriorities") or []:
+        lines.append(f"- P{task.get('priority')} | {task.get('owner')} | {task.get('title')}")
+
     lines.extend(["", "Active missions:"])
     missions = payload.get("activeMissions") or []
     if not missions:
@@ -2057,6 +2066,7 @@ def onboard_digest(payload: dict[str, Any] | None = None) -> str:
     lines.extend([
         "",
         "Current verdict (one line each):",
+        f"- Desk Chief: {(payload.get('deskChief') or {}).get('verdict', 'unverified')} | ./inferno chief status for owned priorities",
         f"- Deploy preflight: {status_value(status.get('deployPreflight') or {})}",
         f"- Live account sync: {status_value(status.get('liveAccountSync') or {})} | "
         f"suffix {(status.get('liveAccountSync') or {}).get('matchedSuffix')}",

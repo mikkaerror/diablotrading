@@ -162,6 +162,12 @@ Report-only weekly hold / trim / exit review of live holdings against
 `docs/TRADE_MANAGEMENT_PLAYBOOK.md` and the Conviction Plan. Never sells,
 never stages. Blocked until Mikka answers D1.
 
+### W8 — Desk Chief (Codex, authorized 2026-09-30)
+
+**Status:** built and tested; recurring Chief reviews active at 08:10, 12:10 and 16:10 Mountain on weekdays. Canonical deployment verification follows in the Log. Operational mandate only: prioritize, assign, retry approved maintenance and accept tested work. Existing paper and capital authority remains unchanged. Margin means usage, cloud cost, duplicate work and accepted progress per run.
+
+Charter: `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. Roster: `coordination/desk_roles.json`. Entry: `./inferno chief status`; bounded execution: `./inferno chief run`. External jobs without receipts stay unverified. W1/W4 future evidence targets remain pending.
+
 ## Next session — Wed 2026-09-30 (start here)
 
 **First, check (5 min):**
@@ -252,3 +258,7 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex verification: read-only comparison at 07:21 found cloud current pointer and Mac snapshot both c5fcd59a0ff9f1d0ebb9263cf22f63a334c8701a34684d6059d56ed7f8337569, so a later scheduled publication recovered the earlier race. New durable retry receipts prevent that recovery from depending on another staging-input change. Integrated Claude mailer lock with these repairs; no extra email sent.
 - 2026-09-30 Claude: deposit clerk built (inferno_deposit_card.py) — DEPOSIT DAY card from the day before to 3 days after each deposit (dollar-based fractional, per Schwab's fractional shares for most US stocks/ETFs), 1/3 tranche + cash earmark when the pick is extended, `done` logs it. Deposit date now rolls forward every 14 days.
 - 2026-09-30 Claude: prereg integrity check built (inferno_prereg_integrity.py + research/prereg_registry.json): short-premium-v2 and earnings-runner-v1 pinned (doc sha256 + rule constants); drift alerts in the Desk Editor. Codex: register new versions with `python3 inferno_prereg_integrity.py register NAME` rather than editing pinned ones.
+
+- 2026-09-30 Codex W8: created Desk Chief with the operator's explicit operational-only mandate, shared role registry, stable owned assignments and leases, fixed report/verification actions, source-bound isolated acceptance, duplicate suppression and bounded backoff. Cost visibility distinguishes quota, elapsed time and actual billing. No paper/capital authority changed. Launch verification and schedule receipt follow.
+
+- 2026-09-30 Codex W8 verification: 18 focused Chief tests and isolated CI-profile preflight pass; preserved stdout and stderr so failed verification retains its actual assertion. Source-copy tests verify policy/research fixtures are included while private account/ledger state is excluded. Heartbeat inferno-desk-chief is ACTIVE on this chat at 08:10 / 12:10 / 16:10 weekdays, quiet on unchanged/non-actionable state. Current account usage observation is source-backed; cloud billing remains unknown. Canonical install and exact-main CI follow before launch is marked complete.

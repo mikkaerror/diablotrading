@@ -113,10 +113,10 @@ def run_command(args: list[str], *, timeout_seconds: int = 900) -> dict[str, Any
 def run_check(name: str, args: list[str], *, timeout_seconds: int = 900) -> dict[str, Any]:
     """Wrap a subprocess into a human-readable preflight check record."""
     result = run_command(args, timeout_seconds=timeout_seconds)
-    if result["stdout"]:
-        detail = result["stdout"]
-    elif result["stderr"]:
-        detail = result["stderr"]
+    if result["stdout"] or result["stderr"]:
+        # unittest writes failures to stderr even when fixtures print stdout.
+        # Keep both so an acceptance failure has a recoverable diagnostic.
+        detail = "\n".join(part for part in (result["stdout"], result["stderr"]) if part)
     elif result["ok"]:
         detail = "ok"
     else:
