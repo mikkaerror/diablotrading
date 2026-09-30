@@ -238,6 +238,21 @@ def decisions_section(data_dir: Path) -> list[dict[str, Any]]:
     return decisions
 
 
+def live_book_section(data_dir: Path) -> dict[str, Any] | None:
+    officer = _load(data_dir / "inferno_live_book_officer.json")
+    if not officer.get("book"):
+        return None
+    holdings = officer.get("holdings") or []
+    return {
+        "planStatus": officer.get("planStatus"),
+        "holdsWeight": officer["book"].get("holdsWeight"),
+        "neverAdd": [h["symbol"] for h in holdings if h.get("plPercent") is not None and h["plPercent"] < 0],
+        "nextThesisCheck": officer.get("nextThesisCheck"),
+        "depositRouting": officer.get("depositRouting"),
+        "nextDeposit": officer["book"].get("nextDeposit"),
+    }
+
+
 def positions_section(data_dir: Path) -> dict[str, Any]:
     review = _load(data_dir / "inferno_live_position_review.json")
     management = _load(data_dir / "inferno_trade_management.json")
@@ -481,6 +496,7 @@ def build_desk_editor(
         "decisions": decisions_section(data_dir),
         "delegated": delegated_section(data_dir, now),
         "positions": positions_section(data_dir),
+        "liveBook": live_book_section(data_dir),
         "evidence": evidence_section(data_dir),
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
@@ -582,6 +598,22 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             lines.append(f"- {h['symbol']} {_money(h['markValue'])} ({h['plPercent']:+.1f}%){flag}" if h["plPercent"] is not None else f"- {h['symbol']} {_money(h['markValue'])}")
         for a in positions["paperActions"]:
             lines.append(f"- paper {a['ticker']}: {a['verdict']} — {a['reason']}")
+        lines.append("")
+
+    book = payload.get("liveBook")
+    if book:
+        lines.append("LIVE BOOK (report only; details: reports/live_book_officer_latest.txt)")
+        if book.get("holdsWeight") is not None:
+            lines.append(f"Operator holds are {book['holdsWeight'] * 100:.0f}% of the account.")
+        if book["neverAdd"]:
+            lines.append(f"Never add while under water: {', '.join(book['neverAdd'])} (playbook 5.4).")
+        if book.get("nextThesisCheck"):
+            lines.append(f"Next thesis check: {book['nextThesisCheck']['symbol']} on {book['nextThesisCheck']['on']}.")
+        r = book.get("depositRouting")
+        if r:
+            prefix = "" if book["planStatus"] == "signed" else "If you sign the Conviction Plan, "
+            lines.append(f"{prefix}the {book['nextDeposit']} deposit goes ${r['core']:.0f} {r['coreVehicle']} / "
+                         f"${r['conviction']:.0f} {r['convictionName']}.")
         lines.append("")
 
     evidence = payload["evidence"]

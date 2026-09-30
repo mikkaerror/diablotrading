@@ -1,0 +1,15 @@
+{
+  "status": "draft-unsigned",
+  "source": "Claude Doc 'Inferno Conviction Plan' (https://claude.ai/code/artifact/6ef9230d-3913-4c5a-8720-4b85e2309417), rev 13",
+  "note": "Nothing here is enforced until Mikka signs off (plan D1). The live-book officer shows these as 'if signed' lines only.",
+  "sleeveTargets": {"core": 0.35, "conviction": 0.30, "operatorHolds": 0.15, "reserve": 0.15, "options": 0.05},
+  "singleNameMaxAtCost": 0.07,
+  "deposit": {"amount": 250, "everyDays": 14, "nextExpected": "2026-10-09", "splitWhileCashAboveReserve": {"core": 0.55, "conviction": 0.45}},
+  "coreVehicle": "SMH",
+  "thesisCards": {
+    "IREN": {"layer": "developer (hold)", "mustBeTrue": "Contracted AI/HPC capacity with creditworthy tenants, funded without heavy dilution", "breaks": "Share count up more than 20% in a year; a signed contract delayed or cancelled"},
+    "HIVE": {"layer": "developer (hold)", "mustBeTrue": "HPC revenue grows as a share of the business", "breaks": "Still mostly bitcoin mining a year from now; heavy dilution"},
+    "CLSK": {"layer": "developer (hold)", "mustBeTrue": "Power and sites convert to AI hosting contracts", "breaks": "No signed hosting contract within 12 months; heavy dilution"},
+    "TE": {"layer": "solar manufacturing (hold)", "mustBeTrue": "Factory financing closes and US-made panels win orders", "breaks": "Financing falls through; repeated guidance cuts"}
+  }
+}

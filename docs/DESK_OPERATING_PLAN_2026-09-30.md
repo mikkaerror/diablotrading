@@ -58,7 +58,7 @@ any risk constant.
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **open — W2** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **open — W4, due 10/12** |
-| Live-book risk officer (report-only exit plans) | Claude | open — W6, blocked on D1 |
+| Live-book risk officer (report-only exit plans) | `inferno_live_book_officer.py` (Claude) | built; "if signed" rules wait for D1 |
 
 ## 3. Workstreams
 
@@ -140,7 +140,7 @@ If the Mac Desk Editor lands 9/30, 10/1, 10/2: set `INFERNO_EMAIL_MODE=editor`
 the "paper candidate brief" Cowork task (the Desk Editor covers it).
 Needs Mikka's OK in chat before flipping.
 
-### W6 — Live-book risk officer (Claude, after D1)
+### W6 — Live-book risk officer (Claude — built 2026-09-30; enforcement after D1)
 Report-only weekly hold / trim / exit review of live holdings against
 `docs/TRADE_MANAGEMENT_PLAYBOOK.md` and the Conviction Plan. Never sells,
 never stages. Blocked until Mikka answers D1.
@@ -185,3 +185,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: found the split brain (Mac ledger frozen since 09-07; cloud stages from its own GCS queue). Added W0, D5, D6. W3 (fill clerk) waits for W0 — cards are pointless against a ledger nobody stages into.
 - 2026-09-30 Mikka answered: D5 = Mac owns tickets/approvals/fills; D6 = $2,000 paper single-ticket cap (paper only). Recorded in coordination/operator_acks/2026-09-30_ledger_cutover.json. W0 unblocked.
 - 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
+- 2026-09-30 Claude: W6 built — inferno_live_book_officer.py. Binding tier now (never add under water §5.4, -20% rule, operator holds never sold by the desk); "if signed" tier from research/conviction_plan_draft.json (survival test 7%, 200-day rule, thesis checks after each earnings, deposit routing) shown but not enforced until data/inferno_conviction_plan_ack.json is active. Desk Editor gets a LIVE BOOK block; mailer runs it daily. Next thesis check: IREN 2026-11-06.
