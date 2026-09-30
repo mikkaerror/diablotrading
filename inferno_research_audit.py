@@ -12,6 +12,7 @@ from typing import Any
 from inferno_config import local_now
 from inferno_io import atomic_write_json, atomic_write_text
 from inferno_paper_provenance import load_fill_source
+from inferno_paper_funnel import weekly_funnel
 from inferno_research_records import shadow_records
 from inferno_strategy_lab import closed_trade_records
 from server import DATA_DIR, REPORTS_DIR
@@ -216,6 +217,9 @@ def build_research_audit(*, sources: dict | None = None, fill_source: dict | Non
         'verdict': 'measurement-gaps-open', 'gapCount': len(gaps),
         'metrics': metrics, 'gaps': gaps, 'sourceReceipts': receipts or {},
         'forwardCollection': collection,
+        'weeklyFunnel': weekly_funnel(paper, {'records': [
+            {'recordId': r['ticketId'], 'source': 'paper-execution-ledger', 'promotionEligible': True}
+            for r in qualified]}),
         'sourceMissing': missing, 'metricDeltaSincePreviousAudit': delta,
         'acceptedPromotionProgress': False, 'citations': CITATIONS,
         'limitations': [
@@ -232,6 +236,9 @@ def research_audit_text(payload: dict) -> str:
              f"Verdict: {payload.get('verdict')} | open gaps: {payload.get('gapCount')}", '', 'Measurements:']
     lines.extend(f'- {key}: {value if value is not None else "unknown"}' for key, value in payload.get('metrics', {}).items())
     collection = payload.get('forwardCollection') or {}
+    lines.extend(['', 'Weekly paper funnel (creation cohorts; reasons overlap):'])
+    for row in payload.get('weeklyFunnel', []):
+        lines.append(f"- {row['week']} {row['strategy']}: {row['proposed']} proposed -> {row['blocked']} blocked -> {row['staged']} staged -> {row['filled']} filled -> {row['qualified']} qualified; reasons={row['blockedByReason']}")
     lines.extend(['', 'Existing forward campaign:',
                   f"- Latest candidate stages: {collection.get('firstBlockingStageCounts')}",
                   f"- Paper rows: {collection.get('campaignPaperRows')} | fill-reconciled events: {collection.get('campaignFillReconciledEvents')} | reported-cost events: {collection.get('campaignReportedCostEvents')}",

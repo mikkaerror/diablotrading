@@ -12,6 +12,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 import zlib
 from contextlib import closing
@@ -235,7 +236,7 @@ def spool_capture(source: str, raw: bytes, directory: Path, mode: str) -> None:
         raise
 
 
-def drain(directory: Path) -> dict:
+def _drain_once(directory: Path) -> dict:
     db = connect(directory)
     completed = []
     counts = {'newSnapshots': 0, 'newVersions': 0}
@@ -259,6 +260,39 @@ def drain(directory: Path) -> dict:
     finally:
         db.close()
     return counts
+
+
+def drain(directory: Path) -> dict:
+    """Retry indexing only; the durable spool is never a replay of a decision."""
+    for attempt in range(3):
+        try:
+            result = _drain_once(directory)
+            _queue_status(directory, "drained", attempt + 1)
+            return result
+        except (sqlite3.OperationalError, OSError) as exc:
+            retryable = any(word in str(exc).lower() for word in ("disk i/o", "locked", "busy", "temporarily unavailable"))
+            if retryable and attempt < 2:
+                time.sleep(.1 * (attempt + 1))
+                continue
+            _queue_status(directory, "queued-retry-required", attempt + 1, str(exc))
+            print(f"Decision archive queued; retry on writable host with ./inferno archive run: {exc}", file=sys.stderr)
+            raise
+
+
+def _queue_status(directory: Path, state: str, attempts: int, error: str | None = None) -> None:
+    """Publish recovery state independently of SQLite, including mount failures."""
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {"updatedAt": now_iso(), "state": state, "attempts": attempts,
+               "pendingCaptures": len(list((directory / "pending").glob("*.capture"))),
+               "error": error, "nextAction": "./inferno archive run" if error else None}
+    fd, name = tempfile.mkstemp(prefix=".queue-", dir=directory)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(payload, handle); handle.flush(); os.fsync(handle.fileno())
+        os.replace(name, directory / "queue_status.json")
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def capture_bytes(path: Path, raw: bytes, *, mode: str = 'persistence-observation', directory: Path | None = None) -> dict:
@@ -311,7 +345,7 @@ def verify(directory: Path) -> dict:
     return {'ok': not errors, 'errors': errors, 'headHash': previous}
 
 
-def build_decision_archive(directory: Path = ARCHIVE_DIR) -> dict:
+def _build_decision_archive(directory: Path = ARCHIVE_DIR) -> dict:
     with closing(connect(directory, readonly=True)) as db:
         counts = {t: db.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0] for t in TABLES}
         latest = list(db.execute('SELECT * FROM snapshots WHERE id IN (SELECT MAX(id) FROM snapshots GROUP BY source)'))
@@ -339,6 +373,22 @@ def build_decision_archive(directory: Path = ARCHIVE_DIR) -> dict:
                            'Local hash verification detects inconsistency, not malicious rewriting by the file owner.',
                            'Local backup is not off-device disaster recovery.'],
             'citations': ['docs/DECISION_ARCHIVE.md']}
+
+
+def build_decision_archive(directory: Path = ARCHIVE_DIR) -> dict:
+    """Surface unavailable SQLite as an actionable report, never stale success."""
+    try:
+        return _build_decision_archive(directory)
+    except (sqlite3.Error, OSError) as exc:
+        return {"generatedAt": now_iso(), "stage": ARCHIVE_STAGE, "researchOnly": True,
+                "promotable": False, "authorityChanged": False, "liveTradingAllowed": False,
+                "brokerSubmitAllowed": False, "verdict": "capture-queued-database-unavailable",
+                "counts": {"pendingCaptures": len(list((directory / "pending").glob("*.capture")))},
+                "integrity": {"ok": False, "errors": [str(exc)]}, "missingSources": [],
+                "sourceErrors": [{"error": str(exc)}], "sources": [],
+                "retention": "pending captures retained; no evidence deleted",
+                "limitations": ["Database counts and integrity unavailable.",
+                    "Retry on the writable canonical host: ./inferno archive run; never replay a ticket decision."]}
 
 
 def decision_archive_text(report: dict) -> str:
@@ -436,6 +486,8 @@ def main() -> int:
             result = backup(ARCHIVE_DIR, args.destination)
         print(json.dumps(result, indent=2)); return 0
     except (OSError, ValueError, sqlite3.Error, zlib.error) as exc:
+        if args.command in {'run', 'status'}:
+            save_decision_archive(build_decision_archive())
         print(f'Decision archive error: {exc}', file=sys.stderr); return 1
 
 

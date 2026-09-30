@@ -1395,6 +1395,22 @@ def strategy_quote_coverage_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_midday_capture_status(report: dict, *, now=None) -> tuple[bool, str]:
+    if not report:
+        return False, "no midday capture receipt yet (scheduled 13:00 ET)"
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    current = (now or local_now()).astimezone(ZoneInfo("America/New_York"))
+    expected = current.date()
+    if current.hour < 13:
+        expected -= timedelta(days=1)
+    while expected.weekday() >= 5:
+        expected -= timedelta(days=1)
+    fresh = str(report.get("marketDate") or "") >= expected.isoformat()
+    ok = fresh and report.get("status") == "captured" and not report.get("missingEarningsChains") and not report.get("nonRegularEarningsChains")
+    return ok, f"{report.get('marketDate')}: {report.get('status')} | fresh={fresh} | missing={report.get('missingEarningsChains')} | nonregular={report.get('nonRegularEarningsChains')} | {report.get('error', '')}"
+
+
 def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
     """Require safe local history collection without claiming calibration early."""
     if not report:
@@ -2359,17 +2375,38 @@ def main() -> int:
     if not performance_ok:
         warnings += 1
 
+    midday_ok, midday_detail = schwab_midday_capture_status(load_json_file(DATA_DIR / "inferno_schwab_midday_capture.json") or {})
+    lines.append(summarize_status("Midday chain capture", midday_ok, midday_detail))
+    if not midday_ok:
+        warnings += 1
+
+    funnel = load_json_file(DATA_DIR / "inferno_paper_funnel.json") or {}
+    funnel_ok = bool(funnel.get("researchOnly")) and in_current_service_cycle(str(funnel.get("generatedAt", "")), now=now)
+    lines.append(summarize_status("Weekly paper funnel", funnel_ok,
+        f"cohorts={len(funnel.get('weeks', []))} | dawn={funnel.get('dawnAcceptance', {})}"))
+    if not funnel_ok:
+        warnings += 1
+
     # Informational: surface the dominant block-reason bucket so the funnel
     # killer is visible at a glance. Never bumps warnings.
     block_bucket_ok, block_bucket_detail = block_reason_top_bucket_status(performance)
     lines.append(summarize_status("Top block-reason bucket", block_bucket_ok, block_bucket_detail))
+
+    lineage = load_json_file(DATA_DIR / "inferno_promotion_evidence_lineage.json") or {}
+    promotion_truth = lineage.get("promotionTruth") or {}
+    truth_ok = promotion_truth.get("qualified") is not None and in_current_service_cycle(str(lineage.get("generatedAt", "")), now=now)
+    lines.append(summarize_status("Promotion truth", truth_ok,
+        f"{promotion_truth.get('qualified', 'unavailable')}/{promotion_truth.get('target', 30)} qualified (lineage); "
+        f"{promotion_truth.get('estimatesNoCredit', 'unavailable')} estimate — no credit"))
+    if not truth_ok:
+        warnings += 1
 
     strategy_lab = load_json_file(STRATEGY_LAB_FILE) or {}
     strategy_lab_today = in_current_service_cycle(str(strategy_lab.get("generatedAt", "")), now=now)
     strategy_lab_ok = strategy_lab_today and (strategy_lab.get("deskVerdict") or {}).get("level") is not None
     strategy_lab_detail = (
         f"{(strategy_lab.get('deskVerdict') or {}).get('level')} | "
-        f"{(strategy_lab.get('overall') or {}).get('scoredCount', 0)} scored | "
+        f"{promotion_truth.get('qualified', 'unavailable')} qualified (lineage) | "
         f"fees unknown {(strategy_lab.get('overall') or {}).get('unknownFeesCount', 'unmeasured')} | "
         f"net of reported fees {(strategy_lab.get('overall') or {}).get('netOfReportedFeesCount', 'unmeasured')}"
         if strategy_lab_ok

@@ -24,6 +24,7 @@ from __future__ import annotations
 import csv
 import datetime as _dt
 import json
+import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -43,11 +44,11 @@ def _load(path: Path) -> dict:
 
 
 def _float(value) -> float | None:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
     try:
         v = float(value)
-        return v if v == v else None
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError):
         return None
 
@@ -57,6 +58,9 @@ def main() -> int:
     review = _load(LIVE_POSITIONS)
 
     nlv = _float(sync.get("netLiquidatingValue"))
+    if nlv is None:
+        print("nlv_history: skipped; account NLV unavailable (history unchanged)")
+        return 0
     cash = _float(sync.get("totalCash"))
     positions = review.get("positions") or []
 

@@ -93,6 +93,7 @@ def _paper_record(item: dict[str, Any], index: int, source: dict[str, Any], coun
         "exclusionReason": reason,
         "provenance": provenance,
         "reportedScorable": bool(reported_closed_trade_records([item])),
+        "outcomeLabel": "estimate — no credit" if provenance.get("state") == "intrinsic-estimate" else promotion_state,
     }
 
 
@@ -177,7 +178,10 @@ def build_promotion_evidence_lineage(
     }
     remaining = max(0, MIN_SCORED_TRADES_FOR_PROMOTION - qualified)
 
+    from inferno_paper_funnel import weekly_funnel
+    funnel = weekly_funnel(paper_ledger, {"records": records})
     return {
+        "weeklyFunnel": funnel,
         "generatedAt": local_now().isoformat(),
         "stage": "promotion-evidence-lineage-research-only",
         "researchOnly": True,
@@ -185,6 +189,15 @@ def build_promotion_evidence_lineage(
         "brokerSubmitAllowed": False,
         "liveTradingAllowed": False,
         "promotionTarget": MIN_SCORED_TRADES_FOR_PROMOTION,
+        "promotionTruth": {
+            "qualified": qualified,
+            "target": MIN_SCORED_TRADES_FOR_PROMOTION,
+            "remaining": remaining,
+            "reported": sum(bool(row.get("reportedScorable")) for row in records),
+            "estimatesNoCredit": sum(row.get("provenance", {}).get("state") == "intrinsic-estimate" for row in records),
+            "source": "promotion-evidence-lineage",
+            "basis": "source-reconciled operator-paper outcomes; sample count alone grants no authority",
+        },
         "fillSource": {key: value for key, value in source.items() if key != "rows"},
         "promotion": {
             "qualifiedPaperOutcomes": qualified,
@@ -230,6 +243,7 @@ def promotion_evidence_lineage_text(payload: dict[str, Any]) -> str:
         "",
         "Promotion truth:",
         f"- source-reconciled operator-paper outcomes: {promotion.get('qualifiedPaperOutcomes', 0)}/{payload.get('promotionTarget', 0)}",
+        f"- estimate — no credit: {(payload.get('promotionTruth') or {}).get('estimatesNoCredit', 'unavailable')}",
         "- source match proves recorded-fill consistency, not independent broker verification",
         f"- remaining for promotion: {promotion.get('remainingForPromotion', 0)}",
         f"- strategy-lab scored outcomes: {promotion.get('strategyLabScoredOutcomes', 0)}",
@@ -248,6 +262,9 @@ def promotion_evidence_lineage_text(payload: dict[str, Any]) -> str:
         lines.append(f"- {reason}: {count}")
     if not (paper.get("exclusionReasons") or {}):
         lines.append("- none")
+    lines.extend(["", "Weekly funnel (creation cohorts; reasons overlap):"])
+    for row in payload.get("weeklyFunnel", []):
+        lines.append(f"- {row['week']} {row['strategy']}: {row['proposed']} proposed -> {row['blocked']} blocked -> {row['staged']} staged -> {row['filled']} filled -> {row['qualified']} qualified; reasons={row['blockedByReason']}")
     lines.extend(["", "Reminders:"])
     lines.extend(f"- {reminder}" for reminder in (payload.get("reminders") or []))
     return "\n".join(lines).rstrip() + "\n"

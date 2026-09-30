@@ -672,6 +672,8 @@ def paper_auto_selection_decision(
     auto-paper path -- if it keeps refusing tickets that look clean, the
     reason field will tell the operator why.
     """
+    if item.get("requiresDelegateApproval") and item.get("approvalStatus") != "approved":
+        return False, "delegate-or-operator-approval-required"
     if not AUTO_PAPER_SELECTION_ENABLED:
         return False, "auto-paper-disabled-globally"
     approval_status = item.get("approvalStatus")

@@ -1003,6 +1003,7 @@ def build_report(
     *,
     token_file: Path | None = None,
     fixture_payloads: dict[str, dict[str, Any]] | None = None,
+    symbol_limit: int | None = None,
 ) -> dict[str, Any]:
     """Build a read-only Schwab option-chain report.
 
@@ -1011,7 +1012,8 @@ def build_report(
     """
     ensure_dirs()
     clean_symbols = [s.upper().strip() for s in symbols if s.strip()]
-    clean_symbols = list(dict.fromkeys(clean_symbols))[:SCHWAB_OPTIONS_SYMBOL_LIMIT]
+    effective_limit = SCHWAB_OPTIONS_SYMBOL_LIMIT if symbol_limit is None else max(1, symbol_limit)
+    clean_symbols = list(dict.fromkeys(clean_symbols))[:effective_limit]
     token = load_schwab_access_token(token_file)
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
@@ -1047,6 +1049,7 @@ def build_report(
         "status": "partial-error" if errors and rows else ("error" if errors else status),
         "configured": bool(SCHWAB_OPTIONS_ENABLED and token),
         "symbolCount": len(clean_symbols),
+        "captureSymbolLimit": effective_limit,
         "rows": rows,
         "errors": errors,
         "reminders": [

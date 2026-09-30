@@ -21,6 +21,7 @@ from inferno_strategy_alternative_scorer import (
     save_strategy_alternative_scorer,
 )
 from inferno_strategy_lab import build_strategy_lab, save_strategy_lab
+from inferno_promotion_evidence_lineage import build_promotion_evidence_lineage, save_promotion_evidence_lineage
 from inferno_strategy_replay import build_replay, save_replay
 from server import DATA_DIR, REPORTS_DIR, ensure_dirs
 
@@ -39,6 +40,7 @@ def build_research_cycle() -> dict[str, Any]:
 
     strategy_lab = build_strategy_lab()
     save_strategy_lab(strategy_lab)
+    save_promotion_evidence_lineage(build_promotion_evidence_lineage(strategy_lab=strategy_lab))
 
     replay = build_replay(shadow)
     save_replay(replay)

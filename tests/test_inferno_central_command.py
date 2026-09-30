@@ -500,6 +500,7 @@ class InfernoCentralCommandTests(unittest.TestCase):
                 "io.diablotrading.inferno-dawn-brief",
                 "io.diablotrading.inferno-watchdog",
                 "io.diablotrading.inferno-daily-model-refresh",
+                "io.diablotrading.inferno-schwab-midday",
                 "io.diablotrading.inferno-action-pulse",
                 "io.diablotrading.inferno-daily-loop",
                 "io.diablotrading.inferno-evidence-goal-loop",

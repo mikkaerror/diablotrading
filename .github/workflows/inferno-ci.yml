@@ -23,6 +23,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install research dependencies
+        run: python3 -m pip install -r requirements-cloud.txt
+
       - name: Run CI-safe deploy preflight
         run: |
           python3 inferno_deploy_preflight.py --profile ci --timeout-seconds 180
