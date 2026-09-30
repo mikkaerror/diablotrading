@@ -106,3 +106,9 @@ class OwnershipTests(unittest.TestCase):
         self.assertFalse(in_dawn_window(datetime(2026, 9, 29, 22)))
         self.assertTrue(in_dawn_window(datetime(2026, 9, 30, 7)))
         self.assertFalse(in_dawn_window(datetime(2026, 10, 3, 7)))
+
+    def test_unconfigured_checkout_cannot_publish_canonical_state(self):
+        with patch.object(snapshots, 'ownership', return_value={}), patch.object(snapshots.subprocess, 'run') as run:
+            with self.assertRaisesRegex(PermissionError, 'active Mac ownership'):
+                snapshots.publish('example-bucket')
+            run.assert_not_called()

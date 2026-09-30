@@ -6,7 +6,7 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from inferno_ledger_ownership import ROOT, PROTECTED_PATHS, require_paper_writer, approved_budget_environment
+from inferno_ledger_ownership import ROOT, PROTECTED_PATHS, require_paper_writer, approved_budget_environment, ownership
 
 PREFIX = 'canonical-paper'
 POINTER = PREFIX + '/current.json'
@@ -52,6 +52,8 @@ def restore_snapshot(bucket, root=ROOT):
 
 def publish(bucket_name):
     require_paper_writer('canonical snapshot publication')
+    if ownership().get('status') != 'active':
+        raise PermissionError('Canonical publication requires the active Mac ownership receipt')
     manifest, contents = snapshot()
     base = 'gs://' + bucket_name + '/'
     def run(*args):
