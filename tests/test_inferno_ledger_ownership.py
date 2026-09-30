@@ -98,7 +98,7 @@ class OwnershipTests(unittest.TestCase):
             now=paper.local_now(); expiration=(now.date()+timedelta(days=20)).isoformat()
             item={'ticker':'TEST','ok':True,'setupRec':'Vertical Call','approvalStatus':'pending',
                 'intentStatus':'blocked','intentBlocks':['human approval still required'],'price':100,
-                'ivRank':30,'atrPercent':3,'forecastRealizedMovePct':8,
+                'ivRank':30,'atrPercent':3,'forecastRealizedMovePct':8,'riskUnits':0.5,
                 'strikePlan':{'strategy':'CALL_DEBIT_SPREAD','expiration':expiration,'estimatedDebit':2,
                 'estimatedMaxLoss':200,'estimatedMaxProfit':300,'width':5,'liquidityNotes':[],
                 'greekSummary':{'netDelta':.5,'netGamma':.04,'netTheta':-.03,'netVega':.03,'greeksComplete':True},

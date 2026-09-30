@@ -857,12 +857,16 @@ def record_from_strike_plan(
     compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
     process_entry_allowed = compliance.get("newPaperEntriesAllowed", True)
     from inferno_ledger_ownership import ownership
-    from inferno_paper_approval_routes import apply_route_approval, queue_from_entries
+    from inferno_paper_approval_routes import apply_route_approval, apply_intent_capacity, queue_from_entries
     from inferno_approval_queue import load_queue, save_queue
     scoped = ownership().get("status") == "active"
     approvals = load_queue() if scoped else {}
-    def route(candidate):
-        return apply_route_approval(candidate, approvals, strike_plan.get("generatedAt")) if scoped else candidate
+    intent_usage = {"active": 0, "risk": 0.0}
+    def route(candidate, reserve_capacity=True):
+        if not scoped:
+            return candidate
+        resolved = apply_route_approval(candidate, approvals, strike_plan.get("generatedAt"))
+        return apply_intent_capacity(resolved, intent_usage) if reserve_capacity else resolved
     entries: list[dict[str, Any]] = []
     # A priced alternate can still supply a cap-fit variant when the primary
     # display slot was taken by an iron fly. The shadow primary stays shadow.
@@ -870,7 +874,7 @@ def record_from_strike_plan(
     candidate_sources += [(i, True) for i in strike_plan.get("shadowItems", [])
                           if i.get("primaryExclusionReason") == "alternate-to-primary"]
     for item, variants_only in candidate_sources:
-        guarded_item = {**route(item), "processEntryAllowed": process_entry_allowed}
+        guarded_item = {**route(item, reserve_capacity=not variants_only), "processEntryAllowed": process_entry_allowed}
         primary_entry = build_ledger_entry(
             guarded_item,
             strike_plan.get("generatedAt"),

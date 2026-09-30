@@ -96,3 +96,34 @@ def delegate_candidate(queue_item, ledger):
     candidate['riskVerdict'] = {**(entry.get('riskVerdict') or {}),
                                'blocks': list(entry.get('blockReasons') or [])}
     return candidate, stamp
+
+
+def apply_intent_capacity(item, usage):
+    """Reapply the clerk's unchanged capacity gates after exact approval binding.
+
+    Ticker-level intents deliberately cannot inherit these approvals, so their
+    capacity checks must run here for the individual approved constructions.
+    """
+    from inferno_execution_clerk import MAX_ACTIVE_EXECUTION_INTENTS, MAX_DAILY_RISK_UNITS
+    result = deepcopy(item)
+    if result.get('intentStatus') != 'approval-ready':
+        return result
+    try:
+        units = float(result['riskUnits'])
+    except (KeyError, TypeError, ValueError):
+        units = float('nan')
+    import math
+    reason = None
+    if not math.isfinite(units) or units <= 0:
+        reason = 'execution risk units missing or invalid'
+    elif usage['active'] >= MAX_ACTIVE_EXECUTION_INTENTS:
+        reason = 'daily active intent cap reached'
+    elif usage['risk'] + units > MAX_DAILY_RISK_UNITS:
+        reason = 'daily risk budget would be exceeded'
+    if reason:
+        result['intentStatus'] = 'blocked'
+        result['intentBlocks'] = list(result.get('intentBlocks') or []) + [reason]
+    else:
+        usage['active'] += 1
+        usage['risk'] += units
+    return result

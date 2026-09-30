@@ -184,3 +184,18 @@ class ApprovalRouteTests(unittest.TestCase):
             second=cycle.input_revision()
             self.assertNotEqual(first,second)
             self.assertEqual(second,cycle.input_revision())
+
+    def test_scoped_approvals_still_consume_clerk_count_and_risk_budgets(self):
+        clean = {'intentStatus':'approval-ready','intentBlocks':[],'riskUnits':0.6}
+        with patch('inferno_execution_clerk.MAX_ACTIVE_EXECUTION_INTENTS',1), patch('inferno_execution_clerk.MAX_DAILY_RISK_UNITS',2):
+            usage={'active':0,'risk':0.0}
+            self.assertEqual(routes.apply_intent_capacity(clean,usage)['intentStatus'],'approval-ready')
+            blocked=routes.apply_intent_capacity(clean,usage)
+            self.assertIn('daily active intent cap reached',blocked['intentBlocks'])
+            self.assertEqual(usage,{'active':1,'risk':0.6})
+        with patch('inferno_execution_clerk.MAX_ACTIVE_EXECUTION_INTENTS',3), patch('inferno_execution_clerk.MAX_DAILY_RISK_UNITS',1):
+            usage={'active':0,'risk':0.0}
+            routes.apply_intent_capacity(clean,usage)
+            self.assertIn('daily risk budget would be exceeded',routes.apply_intent_capacity(clean,usage)['intentBlocks'])
+        invalid={**clean,'riskUnits':None}
+        self.assertEqual(routes.apply_intent_capacity(invalid,{'active':0,'risk':0})['intentStatus'],'blocked')

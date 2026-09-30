@@ -34,9 +34,9 @@
     "coordination/desk_roles.json": "3099dd55d24ee54327c4bc39d974caabac83e29252a239be80f7942fd301f61b",
     "inferno_deploy_preflight.py": "0938339cca9999423a5cffd88ffc190458912b5ff60888edcc0a20a0c3dca16a",
     "research/prereg_registry.json": "86adaa08083447050447b5d9fbe7121776bc3ff00fae4e48b21be451c5c4ecae",
-    "inferno_paper_approval_routes.py": "bee0c5867ee3a7fd6108b3818346f66ba36b5129d6e3eb9b57d162d8407536eb",
+    "inferno_paper_approval_routes.py": "a19053264816399a3cae786e8be7ebc28d992995902e2eec056b2472bfb7e07e",
     "inferno_approval_queue.py": "e2d9f62fc11546713425692039cc9eb0e342fe499a0eb1aff56450a0df684024",
-    "inferno_paper_execution.py": "587923c3692a19dc2e8356d83f5da3a16e619bcfc10ef0733487287a36798f9c"
+    "inferno_paper_execution.py": "6f8313796e0dd9ceb2d78dc8b42c020cce35c371bc214d3b42ba89b5ac9c41c8"
   },
   "reviewNotes": "W1 explicit operator routing mission: exact-construction approvals; delegate decide() AST and risk constants unchanged. Reviewed Codex 2026-09-30; refreshed protected binding, not a mandate expansion."
 }
