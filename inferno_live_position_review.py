@@ -239,6 +239,7 @@ def build_position_review(
         "plOpen": position.get("plOpen"),
         "plPercent": position.get("plPercent"),
         "bucket": position.get("bucket"),
+        **{key: position.get(key) for key in ("assetType", "sleeve", "sleeveStatus", "sleeveSource", "sleeveAsOf", "sleeveSourceHashes")},
         "riskFlags": list(position.get("riskFlags") or []),
         "convictionScore": score,
         "posture": posture,

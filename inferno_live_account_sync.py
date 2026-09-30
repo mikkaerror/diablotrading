@@ -21,6 +21,7 @@ from typing import Any
 
 from inferno_config import TOS_ALLOWED_ACCOUNT_SUFFIXES, TOS_ALLOW_LIVE_READONLY, local_now
 from inferno_io import atomic_write_json, atomic_write_text
+from inferno_position_sleeves import load_context, sleeve_tag, save_history
 from inferno_reporting_summary import (
     build_tos_visibility_summary,
     normalize_tos_fallback_message,
@@ -138,6 +139,7 @@ def build_position_packet(position: dict[str, Any], snapshot_row: dict[str, Any]
     packet = {
         "symbol": text(position.get("symbol")),
         "description": text(position.get("description")),
+        "assetType": position.get("assetType"),
         "qty": position.get("qty"),
         "mark": position.get("mark"),
         "markValue": position.get("markValue"),
@@ -324,10 +326,12 @@ def build_live_account_sync(
 
     positions: list[dict[str, Any]] = []
     unmatched: list[str] = []
+    sleeve_context = load_context()
     for position in statement.get("positions") or []:
         ticker = text(position.get("symbol")).upper()
         snapshot_row = snapshot_by_ticker.get(ticker)
         packet = build_position_packet(position, snapshot_row, net_liq)
+        packet.update(sleeve_tag(position, sleeve_context, statement.get("generatedAt")))
         positions.append(packet)
         if not packet.get("trackerMatched"):
             unmatched.append(ticker)
@@ -425,7 +429,7 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
             "- "
             + f"{item.get('symbol')} qty={item.get('qty')} mv={item.get('markValue')} "
             + f"w={display_value(item.get('weightPct'))}% "
-            + f"bucket={item.get('bucket')} "
+            + f"bucket={item.get('bucket')} sleeve={item.get('sleeve') or 'unclassified'} "
             + f"priority={display_value(tracker.get('priority'))} "
             + f"ready={display_value(tracker.get('readyScore'))} "
             + f"align={tracker.get('alignmentLabel') or '-'} "
@@ -437,6 +441,7 @@ def live_account_sync_text(report: dict[str, Any]) -> str:
 def save_live_account_sync(report: dict[str, Any]) -> None:
     """Persist the live-account sync JSON and text artifacts."""
     ensure_dirs()
+    save_history(report, DATA_DIR.parent)
     atomic_write_json(LIVE_ACCOUNT_SYNC_FILE, report)
     atomic_write_text(LIVE_ACCOUNT_SYNC_TEXT_FILE, live_account_sync_text(report))
 
