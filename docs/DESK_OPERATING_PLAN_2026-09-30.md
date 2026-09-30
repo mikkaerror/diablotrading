@@ -26,6 +26,16 @@ any risk constant.
   program is already a KILL (`docs/DECISIVE_MOVE_EDGE_KILL_2026-07-07.md`), and
   the delegate rejects "shadow-answered" families. **The funnel mostly
   proposes structures we already know lose, at sizes that don't fit.**
+- **Split brain (the biggest leak).** Cloud Run `diablotrading-strikes`
+  (07:45 MT) stages paper tickets into its own ledger and approval queue in
+  `gs://ohsheetohsheet-inferno-state` (~495 tickets, $500 cap because the
+  deploy doesn't pass the paper budget). The Mac ledger has not been written
+  since **2026-09-07**, and no Mac job runs `--record-ledger`. So: the paper
+  delegate approves in the Mac queue, which the cloud never reads; Mac fill
+  imports land in a ledger the cloud never reads; and every Mac evidence
+  report (lineage 1/30, funnel) is scoring a 3-week-old snapshot. Codex
+  already wrote the fix proposal: `docs/CLOUD_LOCAL_LEDGER_OWNERSHIP_2026-09-27.md`
+  (Mac canonical, cloud read-only, reviewed cutover). It needs Mikka's go (D5).
 - Live hypotheses: (a) defined-risk short premium around earnings — backward
   lead, prereg v2 collecting (`docs/SHORT_PREMIUM_PREREG_V2_2026-09-29.md`);
   (b) Capex Flow long-horizon shares lane — pick scorecard running; (c)
@@ -43,6 +53,7 @@ any risk constant.
 | Cowork watch tasks (verdict, hygiene/boundary audit, sprint scorecard, basket, Schwab reminder, candidate brief) | Cowork desktop | working |
 | Capex tape analyst | scheduled 2026-11-02 | scheduled |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
+| **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, blocked on D5** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **open — W1** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **open — W2** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **open — W3** |
@@ -52,6 +63,23 @@ any risk constant.
 ## 3. Workstreams
 
 Each has an owner, a definition of done, and a date. Do them in this order.
+
+### W0 — End the split brain (Codex, starts the day Mikka answers D5)
+Implement the cutover in `docs/CLOUD_LOCAL_LEDGER_OWNERSHIP_2026-09-27.md`:
+1. Freeze: snapshot both ledgers + approval queues (cloud via gcloud read, Mac
+   file) with hashes; no edits to either during the cutover.
+2. Reconcile read-only: union by ticketId, flag conflicts, carry provenance.
+   Nothing that was a shadow/intrinsic estimate becomes a qualified outcome.
+3. One writer: the Mac runs the strike cycle with `--record-ledger` after the
+   dawn refresh (then the paper delegate, then the Desk Editor). The cloud
+   strike job stops writing the ledger/approval queue and stops sending
+   approval emails; it may keep publishing research/quotes.
+4. One approval inbox/dispatcher (Mac), and the delegate's approvals stage in
+   the next Mac strike cycle.
+5. Paper budget parity: the operator's D6 answer decides the cap; record it
+   with provenance. Do not change it without that answer.
+Done when: approve (delegate or Mikka) → staged in the same ledger the Desk
+Editor and lineage read → filled → qualified, on one host, with a test.
 
 ### W1 — Realign the paper funnel (Codex, due 2026-10-10)
 Goal: the tickets we propose are ones that can pass the gates and test a
@@ -121,7 +149,7 @@ never stages. Blocked until Mikka answers D1.
 
 | When | What |
 |---|---|
-| 09/30–10/03 | W2, W5 verification, Desk Editor lineage count |
+| 09/30–10/03 | D5/D6 answers → W0 cutover; W2; W5 verification |
 | 10/05 | Short-premium v1 time-box: record "expired unrun" in the verdict log |
 | 10/05–10/12 | W1, W3, W4 |
 | 10/08 | First 30-day pick-scorecard horizon (Sep 8 cohort) |
@@ -145,7 +173,13 @@ never stages. Blocked until Mikka answers D1.
 - **D3** Commit to keying ~3 paper orders a week once W3 cards exist
   (≈ 5 minutes each). This is what actually moves 1/30.
 - **D4** Merge `agent/storage-hygiene` → main and push once CI is green.
+- **D5** Approve the ledger cutover: the Mac owns paper tickets, approvals and
+  fills; the cloud strike job becomes read-only research. (Recommended.)
+- **D6** Paper single-ticket cap after cutover: keep the Mac's $2,000 paper
+  budget, or the cloud's $500 default. (Paper only; live caps unchanged.)
 
 ## 7. Log
 
 - 2026-09-30 Claude: plan written from funnel/lineage audit.
+- 2026-09-30 Claude: W2.5 done (5305569) — Desk Editor shows lineage 1/30 as truth and a 30-day funnel.
+- 2026-09-30 Claude: found the split brain (Mac ledger frozen since 09-07; cloud stages from its own GCS queue). Added W0, D5, D6. W3 (fill clerk) waits for W0 — cards are pointless against a ledger nobody stages into.
