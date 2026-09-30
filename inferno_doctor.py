@@ -2002,6 +2002,14 @@ def schwab_oauth_status(status: dict) -> tuple[bool, str]:
     )
 
 
+def canonical_publication_status(cycle: dict) -> tuple[bool, str]:
+    publication = cycle.get('publication') or {}
+    status = publication.get('status', 'unverified')
+    healthy = status in {'published', 'unchanged'} and cycle.get('ok') is True
+    return healthy, (f"status={status} | lastSuccessfulAt={publication.get('lastSuccessfulAt')} | "
+                     f"nextRetryAt={publication.get('nextRetryAt')} | error={publication.get('error')}")
+
+
 def paper_test_director_status(director: dict, reducer: dict, now: datetime) -> tuple[bool, str]:
     """Evaluate paper-test readiness with a shadow-evidence fallback.
 
@@ -2380,6 +2388,12 @@ def main() -> int:
     lines.append(summarize_status("Canonical paper owner", owner_ok,
         f"owner={owner_state.get('owner')} | status={owner_state.get('status')} | archive={owner_state.get('archive')}"))
     if not owner_ok:
+        warnings += 1
+
+    publication_ok, publication_detail = canonical_publication_status(
+        load_json_file(DATA_DIR / 'inferno_mac_paper_cycle.json') or {})
+    lines.append(summarize_status('Canonical paper publication', publication_ok, publication_detail))
+    if not publication_ok:
         warnings += 1
 
     midday_ok, midday_detail = schwab_midday_capture_status(load_json_file(DATA_DIR / "inferno_schwab_midday_capture.json") or {})

@@ -1197,6 +1197,7 @@ def build_command_center() -> dict[str, Any]:
     system_status = {
         "decisionArchive": summarize_artifact(DECISION_ARCHIVE_FILE, keys=("stage", "verdict", "generatedAt", "counts", "integrity", "missingSources", "sourceErrors")),
         "paperLedgerOwnership": summarize_artifact(LEDGER_OWNERSHIP_FILE, keys=("status", "owner", "canonicalRoot", "ackSha256", "archive", "paperBudget")),
+        "canonicalPaperCycle": summarize_artifact(DATA_DIR / "inferno_mac_paper_cycle.json", keys=("phase", "ok", "returncode", "publication")),
         "schwabMiddayCapture": summarize_artifact(SCHWAB_MIDDAY_CAPTURE_FILE, keys=("status", "generatedAt", "marketDate", "missingEarningsChains", "nonRegularEarningsChains", "v2LastRun", "error")),
         "paperFunnel": summarize_artifact(PAPER_FUNNEL_FILE, keys=("generatedAt", "weeks", "promotionTruth", "dawnAcceptance")),
         "researchAudit": summarize_artifact(RESEARCH_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "gapCount", "metrics", "sourceMissing")),

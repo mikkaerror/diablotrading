@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from inferno_ledger_ownership import ROOT, require_paper_writer, approved_budget_environment
 
@@ -24,6 +25,52 @@ def input_revision():
 
 def in_dawn_window(now):
     return now.weekday() < 5 and 6 <= now.hour < 11
+
+
+def publish_pending(state):
+    """Retry only snapshot publication; never replay staging or approvals."""
+    from inferno_config import local_now
+    from inferno_io import atomic_write_json
+    from inferno_canonical_paper_snapshot import publish, snapshot
+    require_paper_writer('canonical snapshot retry')
+    now = local_now()
+    prior = state.get('publication') or {}
+    retry_at = prior.get('nextRetryAt')
+    if prior.get('status') in {'queued', 'publishing'} and retry_at and now < datetime.fromisoformat(retry_at):
+        print(f'Canonical publication pending; retry after {retry_at}: {prior.get("error", "interrupted attempt")}')
+        return 1
+    failures = int(prior.get('consecutiveFailures', 0))
+    delay = min(3600, 300 * 2 ** min(failures, 4))
+    for attempt in range(2):
+        receipt = {'status': 'publishing', 'lastAttemptAt': now.isoformat(),
+                   'nextRetryAt': (now + timedelta(seconds=delay)).isoformat(),
+                   'consecutiveFailures': failures}
+        state['publication'] = receipt
+        state['ok'] = False
+        atomic_write_json(STATE, state)
+        try:
+            # Local comparison avoids network work when the last published facts
+            # are unchanged. Inbox bookkeeping can change without staging input.
+            revision = snapshot()[0]['revision']
+            if prior.get('status') in {'published', 'unchanged'} and prior.get('revision') == revision:
+                result = {'status': 'unchanged', 'revision': revision,
+                          'lastSuccessfulAt': prior.get('lastSuccessfulAt')}
+            else:
+                result = publish('ohsheetohsheet-inferno-state')
+        except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            if attempt == 0 and 'Canonical sources changed during publication' in str(exc):
+                continue  # rebuild a fresh immutable snapshot once after a race
+            receipt.update(status='queued', error=str(exc), consecutiveFailures=failures + 1)
+            atomic_write_json(STATE, state)
+            print(f'Canonical publication queued: {exc}; retry after {receipt["nextRetryAt"]}')
+            return 1
+        state['publication'] = {'lastSuccessfulAt': local_now().isoformat(), **result,
+                                'lastCheckedAt': local_now().isoformat(),
+                                'consecutiveFailures': 0}
+        state['ok'] = state.get('returncode', 1) == 0
+        atomic_write_json(STATE, state)
+        print(json.dumps(state['publication']))
+        return state.get('returncode', 1)
 
 
 def main():
@@ -45,20 +92,19 @@ def main():
         revision = input_revision()
         if previous.get('inputRevision') == revision:
             print('Mac paper cycle unchanged; no duplicate staging.')
-            return 0
+            return publish_pending(previous)
         # The regular cycle rechecks pricing, liquidity and risk. It never applies approval decisions.
         proc = subprocess.run(['/bin/zsh', str(ROOT/'run_inferno_strike_cycle.sh'), '--run-kind', 'dawn'],
                               cwd=ROOT, env=environment, timeout=540)
         from inferno_io import atomic_write_json
         from inferno_config import local_now
-        atomic_write_json(STATE, {'generatedAt': local_now().isoformat(), 'phase': args.phase,
+        state = {'generatedAt': local_now().isoformat(), 'phase': args.phase,
             'inputRevision': input_revision(), 'ok': proc.returncode == 0, 'returncode': proc.returncode,
             'owner': 'mac', 'canonicalRoot': str(ROOT), 'paperBudget': approved_budget_environment(),
-            'researchOnly': True, 'brokerSubmitAllowed': False, 'liveTradingAllowed': False})
+            'researchOnly': True, 'brokerSubmitAllowed': False, 'liveTradingAllowed': False}
+        atomic_write_json(STATE, state)
         # Publication is read-only with respect to ticket facts, even after an empty candidate cycle.
-        from inferno_canonical_paper_snapshot import publish
-        print(json.dumps(publish('ohsheetohsheet-inferno-state')))
-        return proc.returncode
+        return publish_pending(state)
 
 
 if __name__ == '__main__': raise SystemExit(main())

@@ -176,9 +176,9 @@ never stages. Blocked until Mikka answers D1.
 
 **Codex:**
 1. W1: five dawn sessions + the boundary audit to close it.
-2. W2: main CI green.
+2. W2 complete: main CI is green; retain the controller checks.
 3. W0 follow-up complete: ownership tests inject temporary root, receipt and acknowledgement paths; copied Mac receipts and cloud host variables cannot contaminate fixtures. The real wrong-host guard remains tested.
-4. D4: once CI is green, fast-forward main to `agent/storage-hygiene` and push (Mikka runs the push).
+4. D4 complete: tested integrated history is published on main. Ship further repairs only after focused and broader checks.
 
 **Mikka:** D2 (second opinion: fund or retire), D3 (key ~3 paper orders/week once cards appear), the cash-payment plan when the amount is known.
 
@@ -245,3 +245,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex W0 follow-up: reproduced the Cowork copied-receipt failure in the unconfigured-publisher test. Isolated all ownership fixtures with temporary root/receipt/ack paths and host environment, while adding explicit wrong-host publication refusal coverage. No production guard or authority setting changed.
 
 - 2026-09-30 Codex W1 first-dawn inspection: observed zero gate-passing candidates; iron flies wait for regular-session quotes. Found ACN/VRT proposals mislabeled as straddles despite disjoint call/put strikes. Constructor now requires the nearest common buyable strike; no common strike means no straddle, rather than invalid break-even arithmetic. Added latest-slate blocker diagnostics by strategy, separate from frozen first-dawn observations and lineage credit. Existing gates/caps and preregs unchanged; five-session acceptance remains pending.
+
+- 2026-09-30 Codex W0 first-morning repair: the 06:05 Desk Editor send receipt exists, but its pipeline notes report a canonical publication race (sources changed during upload); this is not a clean W5 morning. Local ledger successfully refreshed by 07:05. Publication now retries a source-change race once, persists queued/interrupted attempts with 5–60 minute backoff, and retries publication even when staging inputs are unchanged, without replaying staging/approvals. Doctor and command-center receipts expose publication status. Existing source-hash/generation checks and host authority guards remain intact.
