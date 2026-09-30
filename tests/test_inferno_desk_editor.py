@@ -139,6 +139,24 @@ class DeskEditorTests(unittest.TestCase):
         self.assertIn("short-premium forward (iron fly shadow): 0/60 events, 0/40 names, 1 open", text)
         self.assertIn("entry friction $472/fly", text)
 
+    def test_lineage_is_promotion_truth_and_funnel(self):
+        self.assertEqual(self.payload["evidence"]["scoredSource"], "analytics")
+        _write(self.data, "inferno_promotion_evidence_lineage.json",
+               {"promotion": {"qualifiedPaperOutcomes": 1}})
+        now_iso = datetime.now().astimezone().isoformat()
+        _write(self.data, "inferno_paper_execution_ledger.json", {"items": [
+            {"createdAt": now_iso, "status": "paper-blocked", "outcome": {"status": "not-opened"}},
+            {"createdAt": now_iso, "status": "paper-staged", "outcome": {"status": "closed"}},
+            {"createdAt": "2026-04-01T00:00:00+00:00", "status": "paper-blocked"},
+        ]})
+        payload = build_desk_editor(self.data, self.reports, NOW)
+        ev = payload["evidence"]
+        self.assertEqual((ev["scoredPaper"], ev["scoredSource"], ev["estimatesWithoutCredit"]), (1, "lineage", 2))
+        self.assertEqual(ev["funnel"]["proposed"], 2)
+        text = desk_editor_text(payload)
+        self.assertIn("1/30 qualified paper fills (+2 intrinsic estimate(s), no credit)", text)
+        self.assertIn("2 proposed -> 1 blocked, 0 rejected -> 1 staged -> 1 closed", text)
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

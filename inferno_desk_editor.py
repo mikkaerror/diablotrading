@@ -307,6 +307,33 @@ def capex_flow_section(data_dir: Path) -> dict[str, Any] | None:
     }
 
 
+def _paper_funnel(data_dir: Path, days: int = 30) -> dict[str, Any] | None:
+    ledger = _load(data_dir / "inferno_paper_execution_ledger.json")
+    items = [i for i in ledger.get("items") or [] if isinstance(i, dict)]
+    if not items:
+        return None
+    cutoff = datetime.now().astimezone().timestamp() - days * 86400
+    recent = []
+    for item in items:
+        try:
+            when = datetime.fromisoformat(str(item.get("createdAt")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if when.tzinfo is None:
+            when = when.astimezone()
+        if when.timestamp() >= cutoff:
+            recent.append(item)
+    status = [str(i.get("status") or "") for i in recent]
+    return {
+        "days": days,
+        "proposed": len(recent),
+        "blocked": sum(s == "paper-blocked" for s in status),
+        "rejected": sum(s == "paper-rejected" for s in status),
+        "staged": sum(s == "paper-staged" for s in status),
+        "closed": sum((i.get("outcome") or {}).get("status") == "closed" for i in recent),
+    }
+
+
 def evidence_section(data_dir: Path) -> dict[str, Any]:
     analytics = _load(data_dir / "inferno_performance_analytics.json")
     shadow = _load(data_dir / "inferno_shadow_evidence.json")
@@ -322,8 +349,16 @@ def evidence_section(data_dir: Path) -> dict[str, Any]:
         if (row.get("closedCount") or 0) > 0
     ]
     rows.sort(key=lambda row: -(row["closed"] or 0))
+    lineage = (_load(data_dir / "inferno_promotion_evidence_lineage.json").get("promotion") or {})
+    qualified = lineage.get("qualifiedPaperOutcomes")
+    reported = closed.get("scoredCount", 0) or 0
     return {
-        "scoredPaper": closed.get("scoredCount", 0) or 0,
+        # Lineage (source-reconciled fills) is the promotion truth; analytics
+        # also counts intrinsic-value estimates, which earn no credit.
+        "scoredPaper": qualified if qualified is not None else reported,
+        "scoredSource": "lineage" if qualified is not None else "analytics",
+        "estimatesWithoutCredit": max(0, reported - qualified) if qualified is not None else None,
+        "funnel": _paper_funnel(data_dir),
         "promotionSample": PROMOTION_SAMPLE,
         "paperExpectancyR": closed.get("expectancyPerDollarRisk"),
         "shadow": rows,
@@ -526,7 +561,16 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
 
     evidence = payload["evidence"]
     lines.append("EVIDENCE")
-    lines.append(f"Scored paper trades: {evidence['scoredPaper']}/{evidence['promotionSample']}")
+    extra = ""
+    if evidence.get("estimatesWithoutCredit"):
+        extra = f" (+{evidence['estimatesWithoutCredit']} intrinsic estimate(s), no credit)"
+    lines.append(f"Promotion evidence: {evidence['scoredPaper']}/{evidence['promotionSample']} qualified paper fills{extra}")
+    f = evidence.get("funnel")
+    if f:
+        lines.append(
+            f"Paper funnel, last {f['days']}d: {f['proposed']} proposed -> {f['blocked']} blocked, "
+            f"{f['rejected']} rejected -> {f['staged']} staged -> {f['closed']} closed"
+        )
     for row in evidence["shadow"]:
         lines.append(f"- shadow {_pretty(row['strategy'])}: {row['closed']} closed | win {_pct(row['winRate'])} | avg {_r(row['avgR'])}")
     sp = evidence.get("shortPremium")
