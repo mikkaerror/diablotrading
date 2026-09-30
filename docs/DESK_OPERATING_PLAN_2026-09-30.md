@@ -169,6 +169,17 @@ never stages. Blocked until Mikka answers D1.
 
 Charter: `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. Roster: `coordination/desk_roles.json`. Entry: `./inferno chief status`; bounded execution: `./inferno chief run`. External jobs without receipts stay unverified. W1/W4 future evidence targets remain pending.
 
+### W9 — Four-eyes governance and sleeve attribution (Codex / Claude, 2026-09-30)
+
+**Status:** implementation and tests complete; independent Claude review of governance commit
+`4249d439dc70646462012d93605e43aa8bbadcf5` and Mikka acknowledgement remain pending.
+The nightly audit intentionally reports this missing sign-off, including its own
+first installation; it does not manufacture a green receipt. No trading policy
+or prereg rule changed. The actual Cowork 21:30 task now runs the read-only check.
+Sourced sleeve tags and immutable observation history are ready for Claude's
+monthly attribution. Unknown positions remain unclassified. Contract and handoff:
+`docs/FOUR_EYES_AND_SLEEVE_ATTRIBUTION.md`.
+
 ## Next session — Wed 2026-09-30 (start here)
 
 **First, check (5 min):**
@@ -276,3 +287,5 @@ Charter: `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. Roster: `coordination/desk_rol
 - 2026-09-30 Codex W1 final gate audit: exact-construction decisions are deliberately excluded from ticker-level intents, so the clerk count and daily risk-unit budgets are rechecked explicitly after binding each approved construction at staging. Added separate regressions for count exhaustion, risk-unit exhaustion and missing units. Constants and delegate decide() remain unchanged. No approval decisions applied during deployment verification.
 
 - 2026-09-30 Claude fill quality (TCA), commit e2aab7c: `inferno_fill_quality.py` scores each recorded paperMoney fill against the staged mid/natural, flags fills past the limit or outside the staged market, and takes an operator-noted fill-time mid (`mid` command, own append-only marks file) for a clean read. Its no-fill model check found the friction model under-charges net-priced multi-leg orders: staged half-spread / modeled cost per crossing is x2.93 for call debit spreads, x3.74 for defined short premium, x0.44 for straddles. Filed as a high-priority Codex mission under the four-eyes spirit (proposal only; no constants changed). The only real fill (DELL, 1.80) sits 0.75 half-spreads better than the staged mid, so the price likely moved between staging and fill. Wired into the mailer, Desk Editor evidence and order cards. Org Chart doc corrected: the while-away packet and strategy-family attribution already existed; tally is now 11 filled / 3 partial / 0 empty.
+
+- 2026-09-30 Codex W9: implemented exact-commit other-agent review plus Mikka ack checks in CLAUDE.md §8, deterministic boundary audit, nightly loop, doctor and command center. Existing Cowork nightly hygiene prompt saved and verified with stdout-only check; cadence/model/permissions preserved. 126 focused tests and full isolated CI-profile verification pass. Sleeve fields (holds/core/conviction/options), provenance and immutable observations now flow through live sync/review without changing score buckets or account facts. Safety regression catches its own governance commit awaiting Claude co-sign; no approval invented. Existing Claude TCA commits preserved during integration. No risk constant, trading gate, prereg or broker flag changed.

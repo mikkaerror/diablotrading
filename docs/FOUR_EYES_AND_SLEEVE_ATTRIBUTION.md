@@ -116,3 +116,14 @@ are retained when tags change. Start coverage at actual collection: current
 hold declarations do not establish historical membership, and no pre-adoption
 month is backfilled. These tags alone do not provide time-weighted returns,
 realized P/L, cash-flow attribution or permission to buy/sell.
+
+## First review packet
+
+Governance commit: `4249d439dc70646462012d93605e43aa8bbadcf5` (author Codex).
+Sleeve commit: `97b32d0` (reporting-only). Review the full governance diff and the
+fixed evaluator, especially exact-target matching, same-agent rejection,
+revocation, prereg removal, intermediate reverts and read-only Cowork mode.
+126 focused tests and full isolated CI-profile preflight passed. The actual audit
+correctly reports the first governance commit as missing other-agent review.
+Claude must supply an independent note; Mikka's acknowledgement follows that
+concrete review. This packet is neither signature. No risk policy changed.
