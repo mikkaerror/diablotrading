@@ -533,6 +533,7 @@ def build_desk_editor(
         "liveBook": live_book_section(data_dir),
         "earnings": earnings_section(data_dir),
         "depositCard": _load(data_dir / "inferno_deposit_card.json") or None,
+        "lifecycle": _load(data_dir / "inferno_lifecycle_board.json") or None,
         "evidence": evidence_section(data_dir),
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
@@ -672,6 +673,18 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             tranche = "" if r.get("convictionTranche") in (None, "full") else " (1/3 now, rest on a pullback)"
             lines.append(f"{prefix}the {book['nextDeposit']} deposit goes ${r['core']:.0f} {r['coreVehicle']} / "
                          f"${r['conviction']:.0f} {r['convictionName']}{tranche}.")
+        lines.append("")
+
+    life = payload.get("lifecycle") or {}
+    if life.get("lanes"):
+        tag = "" if life.get("rulesStatus") == "signed" else "; draft rules"
+        lines.append(f"LIFECYCLE (reports/lifecycle_board_latest.txt{tag})")
+        for r in life["lanes"]:
+            if r["stage"] == "decommission":
+                continue
+            lines.append(f"- [{r['stage']}] {r['label']}: {r['evidence']}")
+        for f in life.get("flags") or []:
+            lines.append(f"  REVIEW: {f}")
         lines.append("")
 
     evidence = payload["evidence"]

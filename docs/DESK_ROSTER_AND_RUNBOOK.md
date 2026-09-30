@@ -19,6 +19,7 @@ Safety perimeter (CLAUDE.md §8): research-only, live flags off, the operator ke
 | Short-premium collector | `inferno_short_premium_shadow.py` (prereg v2) | inside the mailer | iron-fly shadow records |
 | Earnings Runner Campaign | `inferno_earnings_runner.py` (arms A/B/C) | inside the mailer | shadow records + scoreboard |
 | Live-book risk officer | `inferno_live_book_officer.py` (signed plan rules) | inside the mailer | LIVE BOOK block |
+| Strategy lifecycle manager | `inferno_lifecycle_board.py` (rules: `research/strategy_lifecycle.json`, draft until signed) | inside the mailer | LIFECYCLE block: stage, evidence, review flags per lane |
 | Deposit clerk | `inferno_deposit_card.py` | inside the mailer; shows the day before → 3 days after each deposit | "DEPOSIT DAY" card (dollar-based fractional buys you key) |
 | Desk Editor | `inferno_desk_editor_mailer.py` | ~06:10 weekdays | the one morning email |
 | Email watchdog | cloud task (Gmail only) | 07:20 weekdays | email only if the Desk Editor didn't arrive |
@@ -71,9 +72,12 @@ Changing a rule after data exists needs a new version registered before its own 
 
 ## 5. Still open
 
-Roles to fill (see the plan's "Next session" section):
-1. **Monthly close:** first-Sunday-of-month returns vs SPY and SMH, per sleeve and per campaign arm.
-2. **Second opinion (D2):** fund an OpenAI key or retire it.
+Roles to fill (research: Claude Doc "Inferno Desk Org Chart", https://claude.ai/code/artifact/fcbb726a-b211-4c84-8068-580735fa5c11):
+1. **Execution quality (TCA):** slippage vs mid/limit on every real paper fill (Claude, from the first fill).
+2. **Attribution:** the monthly close split by sleeve and strategy (Claude + Codex sleeve tags).
+3. **Four-eyes rule** on gates, caps and pre-registered rules (Codex writes it into CLAUDE.md; Claude co-signs).
+4. **Away mode** for trips (Claude).
+5. **Second opinion (D2):** fund an OpenAI key or retire it.
 
 Processes to add:
 - **Year-end tax review (December):** realized and unrealized losses, e.g. TE. Take it to a tax professional; the desk won't advise.
