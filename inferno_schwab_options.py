@@ -1230,7 +1230,13 @@ def main() -> int:
 
     fixtures = load_fixture(args.fixture) if args.fixture else None
     symbols = args.symbols or (list(fixtures.keys()) if fixtures else [])
-    report = build_report(symbols, fixture_payloads=fixtures)
+    capture_limit = None
+    if not symbols and fixtures is None:
+        from inferno_schwab_daily_ops import load_schwab_env, default_symbol_universe, schwab_symbol_limit
+        load_schwab_env()
+        symbols = default_symbol_universe()
+        capture_limit = max(schwab_symbol_limit(), len(symbols))
+    report = build_report(symbols, fixture_payloads=fixtures, symbol_limit=capture_limit)
     save_report(report)
     print(json.dumps(report, indent=2) if args.json else render_report(report))
     return 0

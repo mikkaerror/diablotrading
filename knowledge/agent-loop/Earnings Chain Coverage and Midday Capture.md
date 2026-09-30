@@ -9,3 +9,7 @@ Weekdays at 13:00 ET (11:00 America/Denver), inferno_schwab_midday_capture fetch
 Prereg v2 construction, gates, skip rules and first-event capture semantics remain unchanged. Captured chains are not automatically valid study observations. Inspect missing/nonregular chains and v2 skips independently. The acceptance criterion is at least ten actual v2 records during the week of October 13; no synthetic rows or tests count toward it.
 
 Deployment: run python3 install_inferno_schwab_midday_service.py install from the canonical Mac checkout. Inspect ./inferno schedule and reports/schwab_midday_capture_latest.txt after the first scheduled run. A loaded service is schedule evidence, not proof of a successful market-session capture.
+
+## Authorized runner extension and deployment
+
+After the W0 cutover, coverage expanded to 1–10 days before reports, the last two NYSE sessions after reports, open runner records and operator-call CSV tickers, in that order. Historical dates are read from the runner calendar/reported/runnerWatch collections as well as the current snapshot. The cap covers the deduplicated union of all four tiers. T−1 names are included even though they cannot enter arm A. The second capture immediately runs both unchanged collectors; this preserves midday exit observations before the next dawn overwrite. No prereg rules changed. The Mac LaunchAgent is installed at 13:00 ET, with first scheduled collection still to be observed.

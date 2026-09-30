@@ -55,11 +55,11 @@ any risk constant.
 | Earnings analyst (thesis-card grade the morning after each report) | cloud scheduled tasks: GNRC/TEL 10/29, MPWR 10/30, IREN 11/06, HIVE/TE 11/13, CLSK/CLFD 11/25, CRDO 12/01 | scheduled (email only) |
 | Earnings-date checker (confirm/moved dates, next 3 weeks) | cloud scheduled task, Sundays 16:47 MT | scheduled (email only) |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
-| **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **W0 code and lifecycle tested; frozen cutover deployment in progress** |
+| **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **W0 active on Mac; cloud read-only deployment verified** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
-| **Chain coverage** (earnings-window chains, midday tape) | Codex | **W4 implementation tested; schedule install and 10/13 evidence pending** |
+| **Chain coverage** (earnings-window chains, midday tape) | Codex | **W4 installed at 13:00 ET; runner coverage tested; 10/13 evidence pending** |
 | Live-book risk officer (report-only exit plans) | `inferno_live_book_officer.py` (Claude) | built; "if signed" rules wait for D1 |
 
 ## 3. Workstreams
@@ -214,3 +214,7 @@ never stages. Blocked until Mikka answers D1.
 
 - 2026-09-30 Codex W0: froze idle Mac writers and cloud dawn/strike schedulers (auditor left active); captured hashes and cloud object generations under outputs/ledger-cutover-2026-09-30. Read-only crosswalk: Mac 105, cloud 496; 88 Mac-only, 7 refresh duplicates, 10 conflicts, 479 cloud-only. Mac ledger retained byte-for-byte; all cloud rows quarantined in archive, no imported outcomes. Added canonical host guards, serialized local mutation entrypoints, immutable hash-verified cloud snapshots, generation-checked publication, cloud read-only staging/approval/email behavior, and D6 budget provenance. Isolated approve -> stage -> record entry/exit -> lineage-qualified test passes on one host; 2,326-test suite green. Deployment verification follows before schedulers resume.
 - 2026-09-30 Mikka signed D1 in chat; ack data/inferno_conviction_plan_ack.json (copy in coordination/operator_acks/). Live-book officer now labels those lines "plan rule" and the email routes the Oct 9 deposit. Sunday 19:38 MT plan review scheduled (appends a weekly section to the Conviction Plan doc and emails a summary).
+
+- 2026-09-30 Codex W0 deployment verified: canonical snapshot 8e8c1055240b0367aa543bacff7f8d77258db079e663a700e50a11605adcc884 published with generation precondition; immutable cloud image sha256:903d9cfa305364eda873dd32d46ac615a85ccea9b8f923925a26430380931e1c deployed to dawn and strikes. Cloud smoke execution diablotrading-strikes-v4sqd succeeded: same snapshot, qualified=1, D6=2000, ledger mutation denied. Mac source hashes unchanged at activation; nine local services resumed, cloud schedules resumed after verification, auditor never paused. No real approvals, fills or ticket closes performed by Codex. Conflicting/cloud-only histories remain archived, not imported.
+
+- 2026-09-30 Codex W4 extension: priority tiers now cover reports 1–10 days ahead (including T−1), reports in the last two NYSE sessions (including saved runner calendar/history when the snapshot rolls forward), open runner records, and operator-call CSV tickers; remaining coverage follows. The cap expands to the deduplicated union of tiers 1–4. Midday capture is installed at 13:00 ET / 11:00 Denver and immediately invokes both unchanged collectors so runner exits use that tape. Focused coverage/collector tests passed; future October collection targets remain unverified. W2 remains locally tested/integrated but main CI cannot be verified until GitHub write access is restored; W1 still needs the real five-session dawn target and nightly boundary audit.
