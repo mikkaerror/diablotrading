@@ -99,3 +99,10 @@ class OwnershipTests(unittest.TestCase):
             self.assertEqual(lineage['promotionTruth']['qualified'],1,lineage['records'])
             self.assertFalse(final['items'][0]['brokerSubmitAllowed'])
             self.assertFalse(final['items'][0]['liveTradingAllowed'])
+
+    def test_service_reload_at_night_cannot_stage_paper(self):
+        from datetime import datetime
+        from inferno_mac_paper_cycle import in_dawn_window
+        self.assertFalse(in_dawn_window(datetime(2026, 9, 29, 22)))
+        self.assertTrue(in_dawn_window(datetime(2026, 9, 30, 7)))
+        self.assertFalse(in_dawn_window(datetime(2026, 10, 3, 7)))

@@ -22,10 +22,18 @@ def input_revision():
     return hashlib.sha256(json.dumps(values).encode()).hexdigest()
 
 
+def in_dawn_window(now):
+    return now.weekday() < 5 and 6 <= now.hour < 11
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--phase', choices=['pre-delegate','post-delegate'], default='pre-delegate')
     args = parser.parse_args()
+    from inferno_config import local_now
+    if not in_dawn_window(local_now()):
+        print('Outside the Mac dawn window; no paper staging.')
+        return 0
     require_paper_writer('Mac strike cycle')
     environment = {**os.environ, **approved_budget_environment(), 'INFERNO_DESK_HOST_ROLE': 'mac',
                    'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ.get('PATH', '')}
@@ -35,7 +43,7 @@ def main():
         except BlockingIOError: return 0
         previous = json.loads(STATE.read_text()) if STATE.exists() else {}
         revision = input_revision()
-        if previous.get('inputRevision') == revision and previous.get('ok'):
+        if previous.get('inputRevision') == revision:
             print('Mac paper cycle unchanged; no duplicate staging.')
             return 0
         # The regular cycle rechecks pricing, liquidity and risk. It never applies approval decisions.
