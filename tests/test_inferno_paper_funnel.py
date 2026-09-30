@@ -27,6 +27,25 @@ def source():
 
 
 class PaperFunnelTests(unittest.TestCase):
+    def test_current_diagnostic_separates_data_blocks_shadow_and_missing_risk(self):
+        plan = {'generatedAt': NOW.isoformat(), 'items': [
+            {'ticker': 'A', 'arm': 'SHORT_PREMIUM_DEFINED', 'ok': False,
+             'reason': 'usable regular-session Schwab chain required',
+             'riskVerdict': {'passed': False, 'blocks': ['usable regular-session Schwab chain required']}},
+            {'ticker': 'B', 'ok': True, 'strikePlan': {'strategy': 'S'},
+             'riskVerdict': {'passed': True}, 'intentBlocks': ['human approval still required']},
+            {'ticker': 'C', 'ok': True, 'strikePlan': {'strategy': 'S'}}],
+            'shadowItems': [{'primaryExclusionReason': 'family-answered'}]}
+        before = copy.deepcopy(plan)
+        result = funnel.current_plan_diagnostic(plan)
+        self.assertEqual(result['byStrategy']['SHORT_PREMIUM_DEFINED']['blockedByReason'],
+                         {'usable regular-session Schwab chain required': 1})
+        self.assertEqual(result['byStrategy']['S']['gatePassing'], 1)
+        self.assertEqual(result['byStrategy']['S']['blocked'], 1)
+        self.assertEqual(result['shadowExclusions'], {'family-answered': 1})
+        self.assertEqual(result['sourceGeneratedAt'], NOW.isoformat())
+        self.assertEqual(plan, before)
+
     def test_weekly_counts_estimates_do_not_qualify_or_fill(self):
         rows = [
             {'ticketId': 'a', 'createdAt': '2026-09-28', 'strategy': 'S', 'status': 'paper-blocked', 'blockReasons': ['size', 'size', 'spread']},

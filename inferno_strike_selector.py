@@ -477,8 +477,17 @@ def vertical_call_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFr
 
 def straddle_plan(intent: dict[str, Any], expiration: str, calls: pd.DataFrame, puts: pd.DataFrame) -> dict[str, Any] | None:
     price = number(intent.get("price"))
-    call_row = nearest_row(buyable(calls), price)
-    put_row = nearest_row(buyable(puts), price)
+    calls, puts = buyable(calls), buyable(puts)
+    if calls.empty or puts.empty:
+        return None
+    # A straddle requires one common strike. Independently nearest contracts
+    # can form a different structure when either side of the chain is sparse.
+    common = set(calls["strike"]) & set(puts["strike"])
+    if not common:
+        return None
+    strike = min(common, key=lambda value: (abs(value - price), value))
+    call_row = nearest_row(calls[calls["strike"] == strike], price)
+    put_row = nearest_row(puts[puts["strike"] == strike], price)
     if call_row is None or put_row is None:
         return None
 

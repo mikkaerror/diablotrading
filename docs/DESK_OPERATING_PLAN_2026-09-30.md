@@ -56,7 +56,7 @@ any risk constant.
 | Earnings-date checker (confirm/moved dates, next 3 weeks) | cloud scheduled task, Sundays 16:47 MT | scheduled (email only) |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **W0 active on Mac; cloud read-only deployment verified** |
-| **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
+| **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 construction/diagnostic fixes tested; five dawn sessions + boundary audit pending** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 complete; hosted Inferno CI green on main** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
 | **Chain coverage** (earnings-window chains, midday tape) | Codex | **W4 installed at 13:00 ET; runner coverage tested; 10/13 evidence pending** |
@@ -243,3 +243,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex W2 complete: restored Git SSH access using the existing Mac Keychain identity and a GitHub-specific persistent SSH configuration. Verified authentication without a loaded agent and a real branch push. Hosted Inferno CI passed on the integrated branch (run 36669527241), then on main at bf73e00 (run 36669637845: https://github.com/mikkaerror/diablotrading/actions/runs/36669637845). Main contains the tested W0/W2/W1/W4 implementation and integrated Claude work. W1 and W4 future evidence targets remain pending; no ticket decisions, risk settings or live/broker flags changed during this access repair.
 
 - 2026-09-30 Codex W0 follow-up: reproduced the Cowork copied-receipt failure in the unconfigured-publisher test. Isolated all ownership fixtures with temporary root/receipt/ack paths and host environment, while adding explicit wrong-host publication refusal coverage. No production guard or authority setting changed.
+
+- 2026-09-30 Codex W1 first-dawn inspection: observed zero gate-passing candidates; iron flies wait for regular-session quotes. Found ACN/VRT proposals mislabeled as straddles despite disjoint call/put strikes. Constructor now requires the nearest common buyable strike; no common strike means no straddle, rather than invalid break-even arithmetic. Added latest-slate blocker diagnostics by strategy, separate from frozen first-dawn observations and lineage credit. Existing gates/caps and preregs unchanged; five-session acceptance remains pending.

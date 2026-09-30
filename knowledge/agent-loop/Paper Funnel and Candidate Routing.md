@@ -11,3 +11,5 @@ Iron flies reuse inferno_short_premium_shadow.build_iron_fly unchanged, includin
 Dawn research builds do not record tickets or approve anything. The first recorded run per date is used, so later reruns cannot inflate acceptance. Require five completed weekday sessions averaging at least three passing candidates, then independently verify the nightly boundary audit. The implementation does not declare itself done. Canonical ledger integration still depends on W0.
 
 Falsifier: passing tests without recorded dawn improvements is not evidence the funnel has improved. Stale chains, full-cross economics or unchanged caps can still yield zero candidates; diagnose the observed blocker rather than widening policy.
+
+First-dawn diagnosis: inspect contract identities before attributing an oversized proposal to the cap. A straddle requires a common call/put strike; sparse disjoint chains must fail construction. Latest-slate diagnostics never overwrite frozen dawn observations or grant approval/qualification credit. Non-regular-session iron-fly blocks remain real blocks.

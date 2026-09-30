@@ -28,6 +28,7 @@ from inferno_strike_selector import (
     load_schwab_options_index,
     load_execution_queue,
     setup_share_counts,
+    straddle_plan,
 )
 
 
@@ -40,6 +41,31 @@ def plan(ticker: str, setup: str, ok: bool = True) -> dict:
         "riskUnits": 0.9,
         "liveTradingAllowed": False,
     }
+
+
+class StraddleConstructionTests(unittest.TestCase):
+    @staticmethod
+    def chain(strikes, side):
+        return pd.DataFrame([{'strike': strike, 'contractSymbol': f'XYZ_{side}_{strike}',
+            'bid': 2.8, 'ask': 3.0, 'volume': 100, 'openInterest': 100,
+            'impliedVolatility': .3} for strike in strikes])
+
+    def test_disjoint_call_and_put_strikes_cannot_be_called_a_straddle(self):
+        self.assertIsNone(straddle_plan({'price': 177.12}, '2026-10-16',
+            self.chain([120], 'C'), self.chain([240], 'P')))
+
+    def test_sparse_chain_uses_nearest_common_strike_and_correct_break_evens(self):
+        result = straddle_plan({'price': 100}, '2026-10-16',
+            self.chain([100, 105, 110], 'C'), self.chain([105, 110], 'P'))
+        self.assertEqual([leg['strike'] for leg in result['legs']], [105, 105])
+        self.assertEqual(result['estimatedDebit'], 6)
+        self.assertEqual(result['estimatedMaxLoss'], 600)
+        self.assertEqual((result['lowerBreakEven'], result['upperBreakEven']), (99, 111))
+
+    def test_common_strike_requires_a_visible_ask_on_both_legs(self):
+        puts = self.chain([100], 'P')
+        puts['ask'] = 0
+        self.assertIsNone(straddle_plan({'price': 100}, '2026-10-16', self.chain([100], 'C'), puts))
 
 
 class SetupConcentrationGovernorTests(unittest.TestCase):

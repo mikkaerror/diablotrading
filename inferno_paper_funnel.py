@@ -72,6 +72,39 @@ def observe_run(plan, path=None):
     append_text(path, json.dumps(record) + '\n')
 
 
+def current_plan_diagnostic(plan):
+    """Explain the saved proposal slate without rewriting historical dawn counts."""
+    groups = defaultdict(lambda: {'proposed': 0, 'gatePassing': 0, 'blocked': 0, 'blockedByReason': Counter()})
+    shadow_reasons = Counter()
+    for row in plan.get('shadowItems', []):
+        shadow_reasons[row.get('primaryExclusionReason') or 'shadow-only'] += 1
+    for row in plan.get('items', []):
+        construction = row.get('strikePlan') or {}
+        strategy = construction.get('strategy') or row.get('arm') or row.get('setupRec') or 'unknown'
+        group = groups[strategy]
+        group['proposed'] += 1
+        reasons = set((row.get('riskVerdict') or {}).get('blocks') or [])
+        reasons.update(construction.get('liquidityNotes') or [])
+        reasons.update(b for b in row.get('intentBlocks', []) if 'approval' not in b.lower())
+        if not row.get('ok'):
+            reasons.add(row.get('reason') or 'construction unavailable')
+        if row.get('concentrationDemoted'):
+            reasons.add(row.get('concentrationDemotionReason') or 'setup concentration')
+        if row.get('shadowOnly'):
+            reasons.add('shadow-only')
+        if not (row.get('riskVerdict') or {}).get('passed') and not reasons:
+            reasons.add('risk evaluation missing or not passed')
+        if reasons:
+            group['blocked'] += 1
+            group['blockedByReason'].update(reasons)
+        else:
+            group['gatePassing'] += 1
+    return {'sourceGeneratedAt': plan.get('generatedAt'), 'runKind': plan.get('runKind', 'unknown'),
+            'byStrategy': {k: {**v, 'blockedByReason': dict(v['blockedByReason'])} for k, v in groups.items()},
+            'shadowExclusions': dict(shadow_reasons),
+            'basis': 'Latest saved proposal slate; not a historical dawn observation or an approval.'}
+
+
 def dawn_acceptance(runs, *, today=None):
     """Require five recorded weekdays; reruns cannot inflate the daily mean."""
     today = today or local_now().date()
@@ -105,6 +138,7 @@ def build_paper_funnel():
             'citations': ['inferno_paper_execution_ledger.json', 'inferno_promotion_evidence_lineage.py', 'paper_funnel_runs.jsonl'],
             'weeks': weekly_funnel(ledger, lineage), 'promotionTruth': lineage['promotionTruth'],
             'dawnAcceptance': dawn_acceptance(runs),
+            'currentPlanDiagnostic': current_plan_diagnostic(load_json_file(DATA_DIR / 'inferno_strike_plan.json') or {}),
             'limits': ['Creation-week cohorts, not a reconstructed transition log. Block reasons can overlap.',
                        'Only recorded fills and lineage qualification count; intrinsic closes earn no credit.']}
 
@@ -115,7 +149,12 @@ def funnel_text(report):
     for row in report['weeks']:
         lines.append(f"{row['week']} | {row['strategy']} | " + ' -> '.join(str(row[k]) for k in ('proposed','blocked','staged','filled','qualified')))
         lines.append('  blockers (overlap): ' + json.dumps(row['blockedByReason'], sort_keys=True))
-    lines += ['Dawn acceptance: ' + json.dumps(report['dawnAcceptance']), *report['limits']]
+    diagnostic = report.get('currentPlanDiagnostic', {})
+    lines += ['Latest proposal diagnostic: ' + str(diagnostic.get('sourceGeneratedAt')),
+              json.dumps(diagnostic.get('byStrategy', {}), sort_keys=True),
+              'Shadow exclusions: ' + json.dumps(diagnostic.get('shadowExclusions', {}), sort_keys=True),
+              diagnostic.get('basis', ''),
+              'Dawn acceptance: ' + json.dumps(report['dawnAcceptance']), *report['limits']]
     return '\n'.join(lines) + '\n'
 
 
