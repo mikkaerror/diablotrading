@@ -17,7 +17,8 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -256,10 +257,26 @@ def top_priority_slate(payload: dict[str, Any], *, n: int = DEFAULT_PRIORITY_SLA
     return unique_symbols([row.get("ticker") or row.get("symbol") for row in rows], limit=n)
 
 
+def earnings_window_symbols(snapshot: dict[str, Any], *, today: date | None = None) -> list[str]:
+    """Prioritize existing snapshot names 1-7 days out; never add universe members."""
+    today = today or local_now().astimezone(ZoneInfo("America/New_York")).date()
+    upcoming = []
+    for row in snapshot.get("rows") or []:
+        try:
+            earnings = date.fromisoformat(str(row.get("nextEarnings"))[:10])
+        except ValueError:
+            continue  # undated/stale daysUntilEarnings is not event evidence
+        days = (earnings - today).days
+        symbol = clean_symbol(row.get("ticker") or row.get("symbol"))
+        if symbol and 1 <= days <= 7:
+            upcoming.append((days, symbol))
+    return list(dict.fromkeys(symbol for _, symbol in sorted(upcoming)))
+
+
 def default_symbol_universe(limit: int | None = None) -> list[str]:
     """Choose the daily Schwab pull universe from the current decision slate.
 
-    Order matters: held names stay monitored first, then current paper and
+    Order matters: earnings-window names first, then held names and current paper and
     strategy-research rows get chain coverage before execution, approval,
     tracker-priority, and watchlist backfill. This changes market-data coverage
     only; it does not change eligible tickers, risk gates, authority, or broker
@@ -272,8 +289,10 @@ def default_symbol_universe(limit: int | None = None) -> list[str]:
     execution = load_json_file(EXECUTION_QUEUE_FILE) or {}
     approval = load_json_file(APPROVAL_QUEUE_FILE) or {}
     watchlist = load_json_file(WATCHLIST_INPUT_FILE) or {}
+    earnings_symbols = earnings_window_symbols(snapshot)
     symbols = (
-        symbols_from_positions(live_sync)
+        earnings_symbols
+        + symbols_from_positions(live_sync)
         + symbols_from_payload(
             paper_director,
             (
@@ -290,7 +309,8 @@ def default_symbol_universe(limit: int | None = None) -> list[str]:
         + top_priority_slate(snapshot)
         + symbols_from_payload(watchlist, ("tickers", "symbols", "watchlist"))
     )
-    return unique_symbols(symbols, limit=limit)
+    effective_limit = max(limit if limit is not None else schwab_symbol_limit(), len(earnings_symbols))
+    return unique_symbols(symbols, limit=effective_limit)
 
 
 def classify_chain_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -409,6 +429,7 @@ def build_ops_report(chain_report: dict[str, Any], *, symbols: list[str]) -> dic
         "sourceGeneratedAt": chain_report.get("generatedAt"),
         "configured": chain_report.get("configured"),
         "symbolsRequested": symbols,
+        "captureSymbolLimit": chain_report.get("captureSymbolLimit"),
         "symbolCount": len(symbols),
         "rows": rows,
         "laneCounts": summarize_lanes(rows),
@@ -489,14 +510,14 @@ def save_ops_report(payload: dict[str, Any]) -> None:
     atomic_write_text(SCHWAB_DAILY_OPS_TEXT_FILE, render_ops_report(payload))
 
 
-def live_chain_report(symbols: list[str], *, fixture: Path | None = None, skip_refresh: bool = False) -> dict[str, Any]:
+def live_chain_report(symbols: list[str], *, fixture: Path | None = None, skip_refresh: bool = False, symbol_limit: int | None = None) -> dict[str, Any]:
     """Refresh OAuth if possible, then build the latest Schwab chain report."""
     load_schwab_env()
     from inferno_schwab_options import build_report, load_fixture, save_report
 
     if fixture:
         fixtures = load_fixture(fixture)
-        report = build_report(symbols or list(fixtures.keys()), fixture_payloads=fixtures)
+        report = build_report(symbols or list(fixtures.keys()), fixture_payloads=fixtures, symbol_limit=symbol_limit)
         save_report(report)
         return report
 
@@ -520,7 +541,7 @@ def live_chain_report(symbols: list[str], *, fixture: Path | None = None, skip_r
         except Exception:  # noqa: BLE001 - chain fetch still reports if token is stale.
             pass
 
-    report = build_report(symbols)
+    report = build_report(symbols, symbol_limit=symbol_limit)
     save_report(report)
     return report
 
@@ -546,6 +567,7 @@ def main() -> int:
             symbols,
             fixture=args.fixture,
             skip_refresh=args.skip_refresh,
+            symbol_limit=max(schwab_symbol_limit(), len(symbols)),
         )
     except SchwabOAuthError as exc:
         print(str(exc), file=sys.stderr)

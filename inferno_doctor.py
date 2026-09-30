@@ -1395,6 +1395,22 @@ def strategy_quote_coverage_status(report: dict) -> tuple[bool, str]:
     return ok, detail
 
 
+def schwab_midday_capture_status(report: dict, *, now=None) -> tuple[bool, str]:
+    if not report:
+        return False, "no midday capture receipt yet (scheduled 13:00 ET)"
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    current = (now or local_now()).astimezone(ZoneInfo("America/New_York"))
+    expected = current.date()
+    if current.hour < 13:
+        expected -= timedelta(days=1)
+    while expected.weekday() >= 5:
+        expected -= timedelta(days=1)
+    fresh = str(report.get("marketDate") or "") >= expected.isoformat()
+    ok = fresh and report.get("status") == "captured" and not report.get("missingEarningsChains") and not report.get("nonRegularEarningsChains")
+    return ok, f"{report.get('marketDate')}: {report.get('status')} | fresh={fresh} | missing={report.get('missingEarningsChains')} | nonregular={report.get('nonRegularEarningsChains')} | {report.get('error', '')}"
+
+
 def schwab_chain_history_status(report: dict) -> tuple[bool, str]:
     """Require safe local history collection without claiming calibration early."""
     if not report:
@@ -2357,6 +2373,11 @@ def main() -> int:
     )
     lines.append(summarize_status("Performance analytics", performance_ok, performance_detail))
     if not performance_ok:
+        warnings += 1
+
+    midday_ok, midday_detail = schwab_midday_capture_status(load_json_file(DATA_DIR / "inferno_schwab_midday_capture.json") or {})
+    lines.append(summarize_status("Midday chain capture", midday_ok, midday_detail))
+    if not midday_ok:
         warnings += 1
 
     funnel = load_json_file(DATA_DIR / "inferno_paper_funnel.json") or {}

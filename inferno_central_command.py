@@ -109,6 +109,7 @@ LAUNCH_AGENT_SCHEDULES: tuple[tuple[str, str], ...] = (
     ("io.diablotrading.inferno-dawn-brief", "dawn brief"),
     ("io.diablotrading.inferno-watchdog", "watchdog"),
     ("io.diablotrading.inferno-daily-model-refresh", "full sync"),
+    ("io.diablotrading.inferno-schwab-midday", "read-only chains at 13:00 ET"),
     ("io.diablotrading.inferno-action-pulse", "action pulse"),
     ("io.diablotrading.inferno-daily-loop", "digest"),
     ("io.diablotrading.inferno-evidence-goal-loop", "paper evidence"),
