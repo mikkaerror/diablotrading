@@ -443,10 +443,19 @@ def run(today: date | None = None) -> dict:
     return ledger
 
 
-def record_call(ticker: str, direction: str, why: str, path: Path = CALLS_FILE) -> dict:
+def known_tickers(snapshot_path: Path = SNAPSHOT_FILE) -> set[str]:
+    return {str(r.get("ticker")).upper() for r in _load(snapshot_path).get("rows") or [] if r.get("ticker")}
+
+
+def record_call(ticker: str, direction: str, why: str, path: Path = CALLS_FILE,
+                universe: set[str] | None = None) -> dict:
     direction = direction.lower()
     if direction not in {"up", "down"}:
         raise SystemExit("direction must be up or down")
+    universe = known_tickers() if universe is None else universe
+    if universe and ticker.upper() not in universe:
+        raise SystemExit(f"{ticker.upper()} isn't in the tracker universe - nothing recorded. "
+                         "Check the symbol, or add it to the tracker first.")
     row = {"recordedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
            "ticker": ticker.upper(), "direction": direction, "why": why}
     new = not path.exists()

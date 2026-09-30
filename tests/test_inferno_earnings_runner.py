@@ -113,7 +113,9 @@ class CallsAndBoardTests(unittest.TestCase):
     def test_operator_call_builds_put_spread_and_board(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "calls.csv"
-            er.record_call("abc", "down", "guide cut", path)
+            er.record_call("abc", "down", "guide cut", path, universe={"ABC"})
+            with self.assertRaises(SystemExit):
+                er.record_call("TICKER", "up", "reason", path, universe={"ABC"})
             calls = er.load_calls(path)
         self.assertEqual(calls[0]["ticker"], "ABC")
         L = {"records": []}
@@ -124,7 +126,7 @@ class CallsAndBoardTests(unittest.TestCase):
         board = er.scoreboard(L)
         self.assertEqual((board["C"]["open"], board["A"]["closed"]), (1, 0))
         with self.assertRaises(SystemExit):
-            er.record_call("abc", "sideways", "", Path(tmp) / "x.csv")
+            er.record_call("abc", "sideways", "", Path(tmp) / "x.csv", universe={"ABC"})
 
     def test_trading_days(self):
         self.assertEqual(er.trading_days_between(date(2026, 10, 2), date(2026, 10, 9)), 5)
