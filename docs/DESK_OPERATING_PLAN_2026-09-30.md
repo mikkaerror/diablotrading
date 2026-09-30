@@ -162,6 +162,26 @@ Report-only weekly hold / trim / exit review of live holdings against
 `docs/TRADE_MANAGEMENT_PLAYBOOK.md` and the Conviction Plan. Never sells,
 never stages. Blocked until Mikka answers D1.
 
+## Next session — Thu 2026-10-01 (start here)
+
+**First, check (5 min):**
+1. Did the 06:00 Mac Desk Editor email arrive? It's the first run after the W0 cutover. Check that the paper ledger `lastSuccessfulAt` is today and that no "paper ledger stale" alert appears.
+2. ACN reports 10/01. On 10/02, see whether Earnings Runner arm B triggered (needs ACN in the chain tape; W4 tier 2).
+
+**Claude:**
+1. **Deposit clerk:** an order card for the 10/09 deposit (SMH + the named Capex Flow pick, fractional shares, tranche rule). Real-money shares that Mikka keys himself; the desk never trades.
+2. **Monthly close:** extend the Sunday review so the first Sunday of each month adds returns vs SPY/SMH, per sleeve and per campaign arm. Needs SMH/SPY in the account-performance packet.
+3. **Prereg integrity check:** hash the frozen rule blocks in each prereg doc; alert in the Desk Editor if one changes without a new version.
+4. **W5 email consolidation:** check on Friday 10/02. If 3 good mornings, ask Mikka to flip `INFERNO_EMAIL_MODE=editor` and retire the Cowork candidate brief.
+
+**Codex:**
+1. W1: five dawn sessions + the boundary audit to close it.
+2. W2: main CI green.
+3. W0 follow-up: `tests.test_inferno_ledger_ownership` assumes the canonical Mac path and errors in the Cowork VM copy. Make it portable (inject the root) so both hosts run a clean suite.
+4. D4: once CI is green, fast-forward main to `agent/storage-hygiene` and push (Mikka runs the push).
+
+**Mikka:** D2 (second opinion: fund or retire), D3 (key ~3 paper orders/week once cards appear), the cash-payment plan when the amount is known.
+
 ## 4. Calendar
 
 | When | What |
@@ -218,3 +238,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Codex W0 deployment verified: canonical snapshot 8e8c1055240b0367aa543bacff7f8d77258db079e663a700e50a11605adcc884 published with generation precondition; immutable cloud image sha256:903d9cfa305364eda873dd32d46ac615a85ccea9b8f923925a26430380931e1c deployed to dawn and strikes. Cloud smoke execution diablotrading-strikes-v4sqd succeeded: same snapshot, qualified=1, D6=2000, ledger mutation denied. Mac source hashes unchanged at activation; nine local services resumed, cloud schedules resumed after verification, auditor never paused. No real approvals, fills or ticket closes performed by Codex. Conflicting/cloud-only histories remain archived, not imported.
 
 - 2026-09-30 Codex W4 extension: priority tiers now cover reports 1–10 days ahead (including T−1), reports in the last two NYSE sessions (including saved runner calendar/history when the snapshot rolls forward), open runner records, and operator-call CSV tickers; remaining coverage follows. The cap expands to the deduplicated union of tiers 1–4. Midday capture is installed at 13:00 ET / 11:00 Denver and immediately invokes both unchanged collectors so runner exits use that tape. Focused coverage/collector tests passed; future October collection targets remain unverified. W2 remains locally tested/integrated but main CI cannot be verified until GitHub write access is restored; W1 still needs the real five-session dawn target and nightly boundary audit.
+- 2026-09-30 Claude (late): W0 landed (Codex). Fixed a regression from it: a failed dawn refresh now still sends the email but skips all paper steps (ee9f97c). Wrote docs/DESK_ROSTER_AND_RUNBOOK.md (roster, preregs, the operator's week, failure playbook). Next-session list added above.
