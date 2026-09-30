@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-09-30",
+  "recordedBy": "claude (relaying operator answers from chat)",
+  "operator": "Mikka",
+  "decisions": {
+    "D5_ledgerOwner": {
+      "answer": "mac",
+      "operatorChoice": "Mac owns it (Recommended)",
+      "meaning": "The Mac is the single writer for paper tickets, approval queue/inbox and fills. The cloud strike job stops writing the ledger/approval queue and stops approval emails; it may keep publishing research and quotes.",
+      "implements": "docs/CLOUD_LOCAL_LEDGER_OWNERSHIP_2026-09-27.md via docs/DESK_OPERATING_PLAN_2026-09-30.md W0"
+    },
+    "D6_paperSingleTicketCapDollars": {
+      "answer": 2000,
+      "operatorChoice": "$2,000 (Mac today)",
+      "scope": "paper evaluator only; live caps, daily budget, open-ticket limit, liquidity/freshness gates and drawdown rules unchanged"
+    }
+  },
+  "liveTradingAllowed": false,
+  "brokerSubmitAllowed": false,
+  "authorityChanged": false
+}
