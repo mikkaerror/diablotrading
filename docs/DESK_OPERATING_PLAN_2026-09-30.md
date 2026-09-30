@@ -84,6 +84,7 @@ Done when: approve (delegate or Mikka) → staged in the same ledger the Desk
 Editor and lineage read → filled → qualified, on one host, with a test.
 
 ### W1 — Realign the paper funnel (Codex, due 2026-10-10)
+**Status:** approval-routing repair implemented and under final verification; five real dawn sessions averaging ≥3 gate-passing candidates and independent green boundary audits remain pending. See `docs/W1_APPROVAL_ROUTING_AND_DAWN_REVIEW_2026-09-30.md`.
 Goal: the tickets we propose are ones that can pass the gates and test a
 hypothesis that is still alive.
 1. Report first: add a funnel view (proposed → blocked-by-reason → staged →
@@ -267,3 +268,5 @@ Charter: `docs/DESK_CHIEF_CHARTER_2026-09-30.md`. Roster: `coordination/desk_rol
 - 2026-09-30 Claude: seat research published (Claude Doc "Inferno Desk Org Chart": 14 seats, 9 filled / 4 partial / 1 missing). Built the strategy lifecycle board (inferno_lifecycle_board.py; draft rules in research/strategy_lifecycle.json, awaiting Mikka's sign-off). Monthly close added to the Sunday review. Next Claude: TCA log at first real fill, attribution, away mode, December tax packet. Codex: four-eyes rule in CLAUDE.md.
 
 - 2026-09-30 Codex integration: Claude committed e9a5089 during launch verification; the source fingerprint changed, so the Chief correctly required a new isolated verification (accepted, 45.2s). The next unchanged review dispatched zero actions. Both plan log entries retained during integration. The lifecycle board remains advisory and its rules remain draft.
+
+- 2026-09-30 Codex W1 approval routing: replace ticker-only decisions with exact-construction tokens for canonical primary/cap-fit/iron-fly candidates; the delegate resolves each ledger candidate and retains its unchanged policy. Fixed blocked-to-staged refresh without rewriting filled/closed outcomes, and invalidate the cycle cache on variant repricing. Gmail receipts confirm Desk Editor deliveries at 06:06:40 and 06:06:53 Mountain; only the second carries the publication race warning. Duplicate ACN decisions support overlap as the cause, but historical logs lack changed-file/PID proof. Existing mailer lock and bounded publication retries retained. Current $400 ACN spread fails unchanged economics/liquidity checks; historical $330 quote is not revived. Focused tests pass; final isolated/main verification follows.

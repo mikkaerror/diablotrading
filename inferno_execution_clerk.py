@@ -148,7 +148,7 @@ def build_execution_queue(
     updated_at = datetime.now().astimezone().isoformat()
     rows = snapshot.get("rows", [])
     rows_by_ticker = {row.get("ticker"): row for row in rows if row.get("ticker")}
-    approvals_by_ticker = {item.get("ticker"): item for item in approval_queue.get("items", []) if item.get("ticker")}
+    approvals_by_ticker = {item.get("ticker"): item for item in approval_queue.get("items", []) if item.get("ticker") and not item.get("approvalRouteKey")}
 
     intents: list[dict[str, Any]] = []
     staged_risk = 0.0

@@ -739,6 +739,9 @@ def build_ledger_entry(
 
     return {
         "ticketId": ticket_id,
+        **({"approvalRouteKey": item["approvalRouteKey"], "approvalToken": item.get("approvalToken"),
+            "approvalCandidate": {k: v for k, v in item.items() if k != "decisionCard"}}
+           if item.get("approvalRouteKey") else {}),
         "createdAt": now.isoformat(),
         "tradeDate": now.date().isoformat(),
         "sourceStrikePlanGeneratedAt": strike_plan_generated_at,
@@ -811,6 +814,15 @@ def merge_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any]]) -> 
             updated_items[index] = merge_refreshed_entry(updated_items[index], entry)
             continue
         if entry.get("ticketId") in existing_ids:
+            # The same blocked construction may become staged after its own
+            # approval. Never rewrite an opened, filled or closed outcome.
+            index = next(i for i, old in enumerate(updated_items) if old.get("ticketId") == entry.get("ticketId"))
+            old = updated_items[index]
+            if (old.get("status") in {"paper-blocked", "paper-rejected"}
+                    and (old.get("outcome") or {}).get("status") in {None, "not-opened"}
+                    and not old.get("paperExecution")):
+                updated_items[index] = {**merge_refreshed_entry(old, entry), "outcome": entry.get("outcome")}
+                existing_by_key[key] = index
             continue
         existing_by_key[key] = len(updated_items)
         existing_ids.add(entry.get("ticketId"))
@@ -844,18 +856,31 @@ def record_from_strike_plan(
     strategy_pricing = strategy_pricing or load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {"items": []}
     compliance = load_json_file(PROCESS_COMPLIANCE_FILE) or {}
     process_entry_allowed = compliance.get("newPaperEntriesAllowed", True)
+    from inferno_ledger_ownership import ownership
+    from inferno_paper_approval_routes import apply_route_approval, queue_from_entries
+    from inferno_approval_queue import load_queue, save_queue
+    scoped = ownership().get("status") == "active"
+    approvals = load_queue() if scoped else {}
+    def route(candidate):
+        return apply_route_approval(candidate, approvals, strike_plan.get("generatedAt")) if scoped else candidate
     entries: list[dict[str, Any]] = []
-    for item in strike_plan.get("items", []):
-        guarded_item = {**item, "processEntryAllowed": process_entry_allowed}
+    # A priced alternate can still supply a cap-fit variant when the primary
+    # display slot was taken by an iron fly. The shadow primary stays shadow.
+    candidate_sources = [(i, False) for i in strike_plan.get("items", [])]
+    candidate_sources += [(i, True) for i in strike_plan.get("shadowItems", [])
+                          if i.get("primaryExclusionReason") == "alternate-to-primary"]
+    for item, variants_only in candidate_sources:
+        guarded_item = {**route(item), "processEntryAllowed": process_entry_allowed}
         primary_entry = build_ledger_entry(
             guarded_item,
             strike_plan.get("generatedAt"),
             {"items": list(ledger.get("items", [])) + entries},
         )
-        entries.append(primary_entry)
+        if not variants_only:
+            entries.append(primary_entry)
         variant_item = rehearsal_variant_item(item)
         if variant_item:
-            guarded_variant = {**variant_item, "processEntryAllowed": process_entry_allowed}
+            guarded_variant = {**route(variant_item), "processEntryAllowed": process_entry_allowed}
             entries.append(
                 build_ledger_entry(
                     guarded_variant,
@@ -865,7 +890,7 @@ def record_from_strike_plan(
             )
         cap_fit_variant = cap_fit_defined_risk_variant_item(item, strategy_pricing)
         if cap_fit_variant and primary_entry.get("status") == "paper-blocked":
-            guarded_variant = {**cap_fit_variant, "processEntryAllowed": process_entry_allowed}
+            guarded_variant = {**route(cap_fit_variant), "processEntryAllowed": process_entry_allowed}
             variant_ticket_id = planned_ticket_id(guarded_variant)
             # A refresh must not reject the same already-open cap-fit ticket as
             # a duplicate of itself.  Keep every other open ticket in the
@@ -892,6 +917,10 @@ def record_from_strike_plan(
         schedule="post-open strike cycle",
     )
     save_ledger(updated)
+    if scoped:
+        current_keys = {entry.get("approvalRouteKey") for entry in entries}
+        current = [entry for entry in updated.get("items", []) if entry.get("approvalRouteKey") in current_keys]
+        save_queue(queue_from_entries(current, approvals, strike_plan.get("generatedAt")))
     return {
         "inserted": inserted,
         "total": updated.get("count", 0),

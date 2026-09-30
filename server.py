@@ -331,6 +331,7 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                 apply_reply_commands,
                 ensure_pending_since,
                 ensure_queue_tokens,
+                find_item,
             )
 
             queue = ensure_queue_tokens(
@@ -363,23 +364,18 @@ class CommandServerHandler(SimpleHTTPRequestHandler):
                     self.send_error(HTTPStatus.BAD_REQUEST, "Ticker/token and valid status are required")
                     return
 
-                updated = False
-                for item in queue.get("items", []):
-                    token_match = str(item.get("approvalToken") or "").strip().upper() == target
-                    ticker_match = str(item.get("ticker") or "").strip().upper() == target
-                    if token_match or ticker_match:
-                        item["approvalStatus"] = status
-                        if status == "pending":
-                            item.pop("decisionAt", None)
-                            item["pendingSince"] = datetime.now().astimezone().isoformat()
-                        else:
-                            item["decisionAt"] = datetime.now().astimezone().isoformat()
-                            item.pop("pendingSince", None)
-                        item.pop("expirationReason", None)
-                        updated = True
-                if not updated:
-                    self.send_error(HTTPStatus.NOT_FOUND, "Ticker was not found in the approval queue")
+                item = find_item(queue, target)
+                if item is None:
+                    self.send_error(HTTPStatus.BAD_REQUEST, "Missing or ambiguous item; use its approval token")
                     return
+                item["approvalStatus"] = status
+                if status == "pending":
+                    item.pop("decisionAt", None)
+                    item["pendingSince"] = datetime.now().astimezone().isoformat()
+                else:
+                    item["decisionAt"] = datetime.now().astimezone().isoformat()
+                    item.pop("pendingSince", None)
+                item.pop("expirationReason", None)
 
             queue["updatedAt"] = datetime.now().astimezone().isoformat()
             from inferno_io import atomic_write_json

@@ -288,9 +288,12 @@ def candidates_today() -> list[dict]:
     auto = director.get("autoPaperSlate") or []
     approval = director.get("approvalSlate") or []
     operator_routable = director.get("operatorRoutableSlate") or []
-    out = []
+    scoped = [q for q in _load_json(DATA / "inferno_approval_queue.json").get("items", [])
+              if q.get("approvalRouteKey")]
+    scoped_tickers = {q.get("ticker") for q in scoped}
+    out = [q for q in scoped if q.get("approvalStatus") == "pending"]
     for item in list(auto) + list(approval):
-        if item.get("approvalStatus") == "pending":
+        if item.get("approvalStatus") == "pending" and item.get("ticker") not in scoped_tickers:
             out.append(item)
     for item in operator_routable:
         if (
@@ -452,7 +455,7 @@ def run_one(item: dict) -> str:
             print(f"    -> recorded manual paperMoney route for {ticker}; no broker action was taken")
             return "route-confirmed"
         rationale, confidence = _prompt_decision_journal()
-        rc = _approve_via_queue(ticker)
+        rc = _approve_via_queue(item.get("approvalToken") or ticker)
         if rc == 0:
             _log_decision(
                 ticker,
@@ -475,7 +478,7 @@ def run_one(item: dict) -> str:
         print(f"    -> approval queue returned {rc}; check inferno_approval_queue status")
         return "approve-failed"
     if answer in ("n", "no", "reject"):
-        rc = _reject_via_queue(ticker)
+        rc = _reject_via_queue(item.get("approvalToken") or ticker)
         if rc == 0:
             _log_decision(ticker, "reject", "via today.py", rationale=pass_reason, seconds_to_decide=elapsed)
             print(f"    -> rejected {ticker}")

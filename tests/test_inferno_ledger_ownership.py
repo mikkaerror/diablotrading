@@ -106,11 +106,12 @@ class OwnershipTests(unittest.TestCase):
                         {'symbol':'TEST_CALL105','instruction':'SELL_TO_OPEN','optionType':'CALL','strike':105,'expiration':expiration,'bid':1,'ask':1.1}]}}
             blocked=paper.build_ledger_entry(item,now.isoformat(),{'items':[]})
             self.assertEqual(blocked['status'],'paper-blocked')
-            queue={'items':[{'ticker':'TEST','approvalStatus':'pending','approvalToken':'TESTTOKEN'}]}
-            approvals.save_queue(queue)
-            self.assertEqual(approvals.update_item(queue,'TESTTOKEN','approved'),0)
-            item.update(approvalStatus=approvals.load_queue()['items'][0]['approvalStatus'],intentStatus='approval-ready',intentBlocks=[])
-            result=paper.record_from_strike_plan({'generatedAt':now.isoformat(),'items':[item]},strategy_pricing={'items':[]})
+            plan={'generatedAt':now.isoformat(),'items':[item]}
+            paper.record_from_strike_plan(plan,strategy_pricing={'items':[]})
+            queue=approvals.load_queue()
+            self.assertEqual(len(queue['items']),1)
+            self.assertEqual(approvals.update_item(queue,queue['items'][0]['approvalToken'],'approved'),0)
+            result=paper.record_from_strike_plan(plan,strategy_pricing={'items':[]})
             ticket=result['ledger']['items'][0]
             self.assertEqual(ticket['status'],'paper-staged', ticket['blockReasons'])
             sandbox.seed_fill_log_from_stageable([ticket],now.date().isoformat())

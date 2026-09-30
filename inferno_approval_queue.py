@@ -107,11 +107,11 @@ def reuse_pending_tokens(queue: dict, previous: dict) -> dict:
     or proposed route gets a fresh token so an old email cannot approve it.
     """
     previous = ensure_queue_tokens(previous)
-    old_items = {str(item.get("ticker") or "").upper(): item
+    old_items = {(item.get("approvalRouteKey") or str(item.get("ticker") or "").upper()): item
                  for item in previous.get("items", [])
                  if item.get("approvalStatus") == "pending"}
     for item in queue.get("items", []):
-        old = old_items.get(str(item.get("ticker") or "").upper())
+        old = old_items.get(item.get("approvalRouteKey") or str(item.get("ticker") or "").upper())
         if not old or item.get("approvalStatus") != "pending":
             continue
         event = approval_event_key(item, str(queue.get("generatedAt") or ""))
@@ -143,7 +143,7 @@ def ensure_queue_tokens(queue: dict) -> dict:
         item["ticker"] = ticker
         item.setdefault("generatedAt", generated_at)
         if not item.get("approvalToken"):
-            item["approvalToken"] = build_approval_token(ticker, str(item.get("generatedAt") or generated_at))
+            item["approvalToken"] = build_approval_token(ticker + str(item.get("approvalRouteKey") or ""), str(item.get("generatedAt") or generated_at))
         item["approvalToken"] = str(item["approvalToken"]).strip().upper()
         commands = _reply_commands_for(item)
         item["replyApprove"] = commands["approve"]
@@ -281,7 +281,7 @@ def print_status(queue: dict) -> None:
     for item in items:
         print(
             f"- {item['ticker']}: {item['approvalStatus']} | token {item.get('approvalToken', '-')} | "
-            f"{item['setupRec']} | {item['readiness']}% | {item['daysUntilEarnings']}d | {item['primaryRoute']}"
+            f"{item.get('setupRec')} | max loss {item.get('estimatedMaxLoss', '-')} | family {item.get('family', '-')} | {item.get('readiness', '-')}% | {item.get('daysUntilEarnings')}d | {item.get('primaryRoute')}"
         )
 
 
@@ -298,35 +298,24 @@ def find_item(queue: dict, identifier: str) -> dict[str, Any] | None:
     for item in queue.get("items", []):
         if _normalize_identifier(item.get("approvalToken")) == needle:
             return item
-    for item in queue.get("items", []):
-        if _normalize_identifier(item.get("ticker")) == needle:
-            return item
-    return None
+    matches = [item for item in queue.get("items", []) if _normalize_identifier(item.get("ticker")) == needle]
+    return matches[0] if len(matches) == 1 and not matches[0].get("approvalRouteKey") else None
 
 
 @paper_writer
 def update_item(queue: dict, identifier: str, status: str) -> int:
-    target = _normalize_identifier(identifier)
-    updated = False
-    for item in queue.get("items", []):
-        token_match = _normalize_identifier(item.get("approvalToken")) == target
-        ticker_match = _normalize_identifier(item.get("ticker")) == target
-        if not token_match and not ticker_match:
-            continue
-        item["approvalStatus"] = status
-        item["decisionAt"] = datetime.now().astimezone().isoformat()
-        # A manual decision releases the staleness clock for the next
-        # pending cycle on this ticker.
-        if status == "pending":
-            item["pendingSince"] = item.get("pendingSince") or datetime.now().astimezone().isoformat()
-            item.pop("decisionAt", None)
-        else:
-            item.pop("pendingSince", None)
-        item.pop("expirationReason", None)
-        updated = True
-    if not updated:
-        print(f"{identifier.strip().upper()} was not found in the current approval queue.")
+    item = find_item(queue, identifier)
+    if item is None:
+        print(f"{identifier.strip().upper()} is missing or ambiguous; use an exact approval token.")
         return 1
+    item["approvalStatus"] = status
+    item["decisionAt"] = datetime.now().astimezone().isoformat()
+    if status == "pending":
+        item["pendingSince"] = item.get("pendingSince") or datetime.now().astimezone().isoformat()
+        item.pop("decisionAt", None)
+    else:
+        item.pop("pendingSince", None)
+    item.pop("expirationReason", None)
     save_queue(queue)
     refresh_execution_queue()
     print(f"{identifier.strip().upper()} marked {status}.")
@@ -533,7 +522,7 @@ def approval_reply_section(queue: dict) -> str:
     ]
     for item in pending_items:
         lines.append(
-            f"- {item['ticker']} ({item.get('readiness')}% | {item.get('daysUntilEarnings')}d): "
+            f"- {item['ticker']} ({item.get('strategy') or item.get('setupRec')} | max loss {item.get('estimatedMaxLoss', '-')} | family {item.get('family', '-')} | {item.get('daysUntilEarnings')}d): "
             f"{item.get('replyApprove')}  |  {item.get('replyDeny')}"
         )
     return "\n".join(lines).rstrip() + "\n"

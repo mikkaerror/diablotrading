@@ -118,6 +118,7 @@ def build_prompt_text(item: dict[str, Any], brief: dict[str, Any] | None) -> str
         f"Confidence: {tracker.get('confidence')}",
         f"Days to earnings: {tracker.get('daysUntilEarnings')}",
         f"Primary route: {item.get('primaryRoute')}",
+        f"Max loss: {item.get('estimatedMaxLoss', 'unpriced')} | family: {item.get('family', 'unpriced')}",
         f"Secondary route: {item.get('secondaryRoute')}",
         f"Trend: {tracker.get('trend')}",
         f"RVOL: {tracker.get('rvol')}",
@@ -258,7 +259,7 @@ def _dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]
                 report["skipped"].append({"ticker": ticker, "approvalToken": token, "reason": "missing-token"})
                 continue
             event = approval_event_key(item, str(queue.get("generatedAt") or ""))
-            day_key = json.dumps([ticker, event, today], separators=(",", ":"))
+            day_key = json.dumps([ticker, event, today] + ([item["approvalRouteKey"]] if item.get("approvalRouteKey") else []), separators=(",", ":"))
             if day_key in sent_by_event_day or ticker in legacy_tickers_today:
                 report["skipped"].append({"ticker": ticker, "approvalToken": token, "reason": "already-requested-today"})
                 continue

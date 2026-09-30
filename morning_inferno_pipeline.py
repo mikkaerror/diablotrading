@@ -2363,7 +2363,12 @@ def write_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
     if is_cloud():
         return load_json_file(APPROVAL_QUEUE_FILE) or {"items": [], "readOnly": True, "owner": "mac"}
     require_paper_writer("morning approval refresh")
-    queue = reuse_pending_tokens(build_approval_queue(payload), load_json_file(APPROVAL_QUEUE_FILE) or {})
+    previous = load_json_file(APPROVAL_QUEUE_FILE) or {}
+    queue = reuse_pending_tokens(build_approval_queue(payload), previous)
+    scoped = [item for item in previous.get("items", []) if item.get("approvalRouteKey")]
+    scoped_tickers = {item.get("ticker") for item in scoped}
+    queue["items"] = [item for item in queue["items"] if item.get("ticker") not in scoped_tickers] + scoped
+    queue["count"] = len(queue["items"])
     atomic_write_json(APPROVAL_QUEUE_FILE, queue)
     return queue
 

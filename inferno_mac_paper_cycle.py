@@ -20,6 +20,11 @@ def input_revision():
         path = ROOT/'data'/name
         if not path.exists(): raise ValueError(f'Canonical staging input missing: {name}')
         values.append(hashlib.sha256(path.read_bytes()).hexdigest())
+    # Variant repricing and routing upgrades must invalidate the staging cache.
+    # Missing optional research remains missing; this grants no eligibility.
+    for name in ('data/inferno_strategy_alternative_pricing.json', 'inferno_paper_approval_routes.py'):
+        path = ROOT/name
+        values.append(hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None)
     return hashlib.sha256(json.dumps(values).encode()).hexdigest()
 
 

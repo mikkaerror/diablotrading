@@ -217,11 +217,23 @@ def build_paper_delegate(
     ack_ok, ack_message = ack_status(ack)
     plan_age = _age_hours(plan.get("generatedAt"), now)
     by_ticker = {item.get("ticker"): item for item in plan.get("items") or []}
+    from inferno_paper_approval_routes import delegate_candidate
+    ledger = _load(data_dir / "inferno_paper_execution_ledger.json")
     decisions = []
     for item in queue.get("items") or []:
         if str(item.get("approvalStatus") or "").lower() != "pending":
             continue
-        decisions.append(decide(item, by_ticker.get(item.get("ticker")), plan_age, shadow))
+        candidate, age = by_ticker.get(item.get("ticker")), plan_age
+        evaluated_item = item
+        if item.get("approvalRouteKey"):
+            candidate, stamp = delegate_candidate(item, ledger)
+            age = _age_hours(stamp, now)
+            try:
+                days = (datetime.fromisoformat(item["nextEarnings"]).date() - now.date()).days
+                evaluated_item = {**item, "daysUntilEarnings": days}
+            except (ValueError, TypeError, KeyError):
+                candidate = None  # unknown event cannot supply delegated authority
+        decisions.append(decide(evaluated_item, candidate, age, shadow))
     approvals = [d for d in decisions if d["action"] == "approve"]
     for extra in approvals[MAX_APPROVALS_PER_RUN:]:
         extra.update(action="hold", rule="per-run-limit", reason=f"over {MAX_APPROVALS_PER_RUN} approvals this run")
