@@ -57,6 +57,16 @@ class MailerTests(unittest.TestCase):
         self.assertIn("Subject: [Inferno Desk]", self.email.read_text())
         self.assertIn("2026-09-30", json.loads(self.state.read_text())["sentByDate"])
 
+    def test_overlapping_run_backs_off(self):
+        import fcntl
+        lock = self.state.with_suffix(".lock")
+        with lock.open("a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            result = self._deliver(datetime(2026, 9, 30, 6, 5, tzinfo=MT))
+        self.assertEqual(result["status"], "busy")
+        self.assertEqual(self.sent, [])
+        self.assertTrue(self._deliver(datetime(2026, 9, 30, 6, 6, tzinfo=MT))["sent"])
+
     def test_outside_window_is_noop(self):
         result = self._deliver(datetime(2026, 9, 30, 22, 0, tzinfo=MT))
         self.assertEqual(result["status"], "outside-window")

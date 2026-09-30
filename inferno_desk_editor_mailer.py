@@ -154,7 +154,33 @@ def send_email(subject: str, body: str) -> dict[str, Any]:
     return {"sent": True, "status": "sent"}
 
 
-def deliver(
+def deliver(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Send at most one morning email, even if two runs overlap.
+
+    Sep 30: two dawn invocations ran the mailer 13 seconds apart and both
+    passed the once-a-day check before either wrote state, so the email (and
+    the delegate) ran twice. A non-blocking file lock makes the second run
+    back off; the state check happens again inside the lock.
+    """
+    if kwargs.get("dry_run"):
+        return _deliver_unlocked(*args, **kwargs)
+    import fcntl
+
+    state_path = kwargs.get("state_path", STATE_FILE)
+    lock_path = Path(state_path).with_suffix(".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {"status": "busy", "sent": False}
+        try:
+            return _deliver_unlocked(*args, **kwargs)
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _deliver_unlocked(
     now: datetime | None = None,
     *,
     force: bool = False,
