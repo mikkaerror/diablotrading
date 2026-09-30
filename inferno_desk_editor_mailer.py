@@ -90,6 +90,16 @@ def already_sent(state: dict[str, Any], now: datetime) -> bool:
 
 
 PAPER_STEPS = {"paper delegate", "canonical paper cycle", "paper order cards"}
+AWAY_PAUSED_STEPS = {"paper delegate"}  # nobody is there to key new paper tickets
+
+
+def away_today(now: datetime) -> bool:
+    try:
+        import inferno_away
+
+        return inferno_away.is_away(now.date())
+    except Exception:  # noqa: BLE001 - away mode must never break the morning email
+        return False
 
 
 def dawn_exit_code(environ: dict[str, str] | None = None) -> int:
@@ -99,13 +109,16 @@ def dawn_exit_code(environ: dict[str, str] | None = None) -> int:
         return 0
 
 
-def run_pipeline(runner: Runner = _default_runner, dawn_code: int = 0) -> list[dict[str, Any]]:
+def run_pipeline(runner: Runner = _default_runner, dawn_code: int = 0, away: bool = False) -> list[dict[str, Any]]:
     results = []
     if dawn_code:
         results.append({"step": "dawn refresh", "ok": False,
                         "detail": f"failed (exit {dawn_code}); paper approvals and staging skipped today, numbers may be stale"})
     for label, cmd in PIPELINE_STEPS:
         if dawn_code and label in PAPER_STEPS:
+            continue
+        if away and label in AWAY_PAUSED_STEPS:
+            results.append({"step": label, "ok": True, "detail": "paused (away mode)"})
             continue
         if not (ROOT / cmd[0]).exists():
             results.append({"step": label, "ok": False, "detail": "module missing"})
@@ -117,7 +130,8 @@ def run_pipeline(runner: Runner = _default_runner, dawn_code: int = 0) -> list[d
 
 def subject_for(payload: dict[str, Any], now: datetime) -> str:
     day = f"{now:%a %b} {now.day}"
-    return f"[Inferno Desk] {day} — {payload.get('headline') or 'desk update'}"
+    tag = " (away)" if (payload.get("away") or {}).get("active") else ""
+    return f"[Inferno Desk]{tag} {day} — {payload.get('headline') or 'desk update'}"
 
 
 def compose(payload: dict[str, Any], steps: list[dict[str, Any]], text_renderer: Callable[[dict[str, Any]], str]) -> str:
@@ -202,7 +216,7 @@ def _deliver_unlocked(
     if not force and already_sent(state, now):
         return {"status": "already-sent", "sent": False}
 
-    steps = run_pipeline(runner, dawn_exit_code()) if not dry_run else []
+    steps = run_pipeline(runner, dawn_exit_code(), away_today(now)) if not dry_run else []
     if builder is None:
         from inferno_desk_editor import build_desk_editor, save_desk_editor
 

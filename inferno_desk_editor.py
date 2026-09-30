@@ -502,7 +502,27 @@ def long_term_section(reports_dir: Path, limit: int = LONG_TERM_LIMIT) -> list[d
     return rows
 
 
+def _away_section(data_dir: Path, now: datetime) -> dict[str, Any] | None:
+    try:
+        import inferno_away
+    except ImportError:
+        return None
+    try:
+        return inferno_away.section(
+            now.date(), state_path=data_dir / "inferno_away.json",
+            deposit_log=data_dir / "inferno_deposit_log.jsonl",
+        )
+    except Exception:  # noqa: BLE001 - away mode must never break the morning email
+        return None
+
+
 def headline(payload: dict[str, Any]) -> str:
+    away = payload.get("away") or {}
+    if away.get("active"):
+        text = f"away through {away['active']['end']}: nothing needs you"
+        if payload["alerts"]:
+            text += f" | {len(payload['alerts'])} alert(s) worth a glance"
+        return text
     count = len(payload["decisions"])
     keyable = len((payload.get("orderCards") or {}).get("actionable") or [])
     deposit_today = bool((payload.get("depositCard") or {}).get("show"))
@@ -522,6 +542,8 @@ def headline(payload: dict[str, Any]) -> str:
         parts.append(f"{len(losers)} holding(s) past the -20% rule")
     if payload["alerts"]:
         parts.append("data needs a refresh")
+    if away.get("justBack") and away.get("depositsPending"):
+        parts.insert(0, "welcome back: deposit money to invest")
     return " | ".join(parts)
 
 
@@ -554,6 +576,7 @@ def build_desk_editor(
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
         "longTerm": long_term_section(reports_dir),
+        "away": _away_section(data_dir, now),
         "citations": CITATIONS,
     }
     opinions = second_opinions(data_dir, now)
@@ -574,10 +597,61 @@ def _pct(value: Any) -> str:
     return "-" if number is None else f"{number * 100:.0f}%"
 
 
+def away_text(payload: dict[str, Any]) -> str:
+    """Short email while the operator is away: facts and alerts, no action items."""
+    away = payload["away"]
+    window = away["active"]
+    money = payload["money"]
+    note = f" ({window['note']})" if window.get("note") else ""
+    lines = [f"Inferno Desk — {payload['headline']}", "",
+             f"AWAY MODE{note}: {window['start']} to {window['end']}. Nothing here needs you.",
+             f"The full email comes back on {away.get('returnDay')}. To end early: python3 inferno_away.py off", ""]
+    stale = "" if money["fresh"] else f" (last known, {money['ageHours']}h old)"
+    perf = money.get("performance") or {}
+    spy = "" if perf.get("spy") is None else f" vs SPY {perf['spy'] * 100:+.1f}%"
+    lines.append(f"MONEY{stale}: NLV {_money(money['nlv'])} | cash {_money(money['cash'])}"
+                 + (f" | since {perf['window'][0]} {perf['twr'] * 100:+.1f}%{spy}" if perf.get("twr") is not None else ""))
+    lines.append("")
+    lines.append("ALERTS")
+    lines.extend(f"- {a}" for a in payload["alerts"]) if payload["alerts"] else lines.append("- none")
+    losers = [h["symbol"] for h in payload["positions"]["live"] if h.get("lossRule")]
+    if losers:
+        lines.append("")
+        lines.append(f"HOLDINGS past the -20% rule: {', '.join(losers)} (plan: no adds; thesis checks still arrive by email)")
+    lines.append("")
+    lines.append("WHILE YOU'RE AWAY")
+    lines.append("- Paper approvals are paused, so nothing new is staged for you to key.")
+    waiting = len((payload.get("orderCards") or {}).get("actionable") or []) + len(payload["decisions"])
+    if waiting:
+        lines.append(f"- {waiting} paper order(s)/decision(s) are waiting; some will expire unrun, which costs nothing.")
+    sp = (payload.get("evidence") or {}).get("shortPremium")
+    if sp:
+        lines.append(f"- Short-premium shadow keeps collecting: {sp['events']}/60 events, {sp['open']} open.")
+    board = ((payload.get("earnings") or {}).get("scoreboard") or {})
+    tracked = {k: (v.get("open", 0) or 0) + (v.get("closed", 0) or 0) for k, v in board.items() if k in ("A", "B")}
+    if tracked:
+        lines.append(f"- Earnings runner shadow arms: run-up {tracked.get('A', 0)}, runner {tracked.get('B', 0)} tracked.")
+    for day in away.get("deposits") or []:
+        lines.append(f"- Deposit {day} landed in cash; it waits for you (the routing card comes back on your return).")
+    lines.append("")
+    lines.append("Paper only. Live trading and broker submit stay off.")
+    return "\n".join(lines) + "\n"
+
+
 def desk_editor_text(payload: dict[str, Any]) -> str:
     """Plain-text fallback email. The agent may rewrite it, never re-number it."""
+    away = payload.get("away") or {}
+    if away.get("active"):
+        return away_text(payload)
     money = payload["money"]
     lines = [f"Inferno Desk — {payload['headline']}", ""]
+    if away.get("justBack"):
+        lines.append(f"WELCOME BACK (away {away['justBack']['start']} to {away['justBack']['end']})")
+        if away.get("depositsPending"):
+            lines.append(f"- Deposit(s) {', '.join(away['deposits'])} are still in cash. Route them like any deposit: "
+                         "see LIVE BOOK for the core/conviction split, then python3 inferno_deposit_card.py done \"what you bought\"")
+        lines.append("- Paper approvals are running again as of this morning.")
+        lines.append("")
 
     stale = "" if money["fresh"] else f" (last known, {money['ageHours']}h old)"
     lines.append(f"MONEY{stale}")
