@@ -82,3 +82,6 @@ Roles to fill (research: Claude Doc "Inferno Desk Org Chart", https://claude.ai/
 Processes to add:
 - **Year-end tax review (December):** realized and unrealized losses, e.g. TE. Take it to a tax professional; the desk won't advise.
 - **Email consolidation (W5):** after 3 good mornings.
+
+### Going away
+Before a trip: `python3 inferno_away.py on START END --note "where"`. The morning email turns into a short summary, paper approvals pause, and deposits wait in cash. Back early: `python3 inferno_away.py off`. The first email back lists anything left to do.
