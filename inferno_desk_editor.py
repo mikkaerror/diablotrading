@@ -401,6 +401,22 @@ def evidence_section(data_dir: Path) -> dict[str, Any]:
         "paperExpectancyR": closed.get("expectancyPerDollarRisk"),
         "shadow": rows,
         "shortPremium": _short_premium_forward(data_dir),
+        "fillQuality": _fill_quality(data_dir),
+    }
+
+
+def _fill_quality(data_dir: Path) -> dict[str, Any] | None:
+    payload = _load(data_dir / "inferno_fill_quality.json")
+    summary = payload.get("summary") or {}
+    if not summary:
+        return None
+    under = [row for row in payload.get("modelCheck") or [] if row.get("read") == "model under-charges"]
+    return {
+        "fills": summary.get("fills", 0),
+        "clean": summary.get("cleanFills", 0),
+        "medianHalfSpreads": summary.get("medianHalfSpreadsVsStagedMid"),
+        "verdict": summary.get("verdict"),
+        "underCharged": [(row["strategy"], row["medianHalfSpreadToModeled"]) for row in under],
     }
 
 
@@ -709,6 +725,13 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             f"- short-premium forward (iron fly shadow): {sp['events']}/60 events, {sp['names']}/40 names, "
             f"{sp['open']} open{result}{friction} | time-box {sp['timeboxEnd']}"
         )
+    fq = evidence.get("fillQuality")
+    if fq:
+        median = "" if fq["medianHalfSpreads"] is None else f" | median {fq['medianHalfSpreads']:+.2f} half-spreads vs staged mid"
+        lines.append(f"- fill quality: {fq['fills']} fill(s), {fq['clean']} with a fill-time mid{median} | {fq['verdict']}")
+        if fq["underCharged"]:
+            worst = ", ".join(f"{_pretty(name)} x{ratio}" for name, ratio in fq["underCharged"])
+            lines.append(f"  model friction under-charges: {worst} (reports/fill_quality_latest.txt)")
     lines.append("")
 
     flow = payload.get("capexFlow")

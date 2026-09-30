@@ -47,6 +47,7 @@ PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("canonical paper cycle", ["inferno_mac_paper_cycle.py", "--phase", "post-delegate"]),
     ("second opinion", ["inferno_second_opinion.py", "run"]),
     ("paper order cards", ["inferno_paper_order_card.py", "run"]),
+    ("fill quality", ["inferno_fill_quality.py", "run"]),
     ("account performance", ["inferno_account_performance.py", "run"]),
     ("vol edge", ["inferno_vol_edge.py", "run"]),
     ("capex flow", ["inferno_capex_flow.py", "run"]),

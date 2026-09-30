@@ -162,12 +162,14 @@ def cards_text(payload: dict[str, Any]) -> str:
                          + (f" | max loss ${c['maxLossDollars']:,.0f}" if c.get("maxLossDollars") else ""))
             lines.extend(f"  - {leg}" for leg in c["legs"])
             lines.append(f"  After the fill: {c['recordCommand']}")
+            lines.append(f"  Also note the mid TOS showed: python3 inferno_fill_quality.py mid {c['ticketId']} --entry-mid <mid>")
             if not c["seeded"]:
                 lines.append("  (fill-log row not seeded yet; the next pipeline run seeds it before you can record)")
         elif c["kind"] == "exit":
             lines.append(f"CLOSE  {head}  [{c['ticketId']}]  entered @ {c.get('entryPrice')}")
             lines.append(f"  Exit plan: {c['exitRule']}")
             lines.append(f"  After the close: {c['recordCommand']}  (records the real close, so it qualifies)")
+            lines.append(f"  Also note the mid TOS showed: python3 inferno_fill_quality.py mid {c['ticketId']} --exit-mid <mid>")
         else:
             lines.append(f"EXPIRED {head}  [{c['ticketId']}] - {c['note']}")
         lines.append("")
