@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 """Paper-only execution ledger for Inferno strike tickets.
 
 This module is the safety airlock between "the desk found an options setup" and
@@ -672,7 +674,8 @@ def paper_auto_selection_decision(
     auto-paper path -- if it keeps refusing tickets that look clean, the
     reason field will tell the operator why.
     """
-    if item.get("requiresDelegateApproval") and item.get("approvalStatus") != "approved":
+    from inferno_ledger_ownership import ownership
+    if (item.get("requiresDelegateApproval") or ownership().get("status") == "active") and item.get("approvalStatus") != "approved":
         return False, "delegate-or-operator-approval-required"
     if not AUTO_PAPER_SELECTION_ENABLED:
         return False, "auto-paper-disabled-globally"
@@ -739,6 +742,9 @@ def build_ledger_entry(
         "createdAt": now.isoformat(),
         "tradeDate": now.date().isoformat(),
         "sourceStrikePlanGeneratedAt": strike_plan_generated_at,
+        "paperOwnership": {"host": __import__("platform").node(), "owner": "mac",
+                           "budgetAckSha256": __import__("os").environ.get("INFERNO_PAPER_BUDGET_ACK_SHA256"),
+                           "mode": "paper"},
         "ticker": item.get("ticker"),
         "eventId": event_id,
         **arm,
@@ -821,6 +827,7 @@ def merge_entries(ledger: dict[str, Any], new_entries: list[dict[str, Any]]) -> 
     return updated, inserted
 
 
+@paper_writer
 def record_from_strike_plan(
     strike_plan: dict[str, Any] | None = None,
     strategy_pricing: dict[str, Any] | None = None,
@@ -830,6 +837,8 @@ def record_from_strike_plan(
     Passing the in-memory strike plan is safest because it prevents accidentally
     recording stale disk data after a failed selector run.
     """
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("paper staging")
     strike_plan = strike_plan or load_strike_plan()
     ledger = load_ledger()
     strategy_pricing = strategy_pricing or load_json_file(STRATEGY_ALTERNATIVE_PRICING_FILE) or {"items": []}
@@ -950,8 +959,11 @@ def ledger_summary(ledger: dict[str, Any], limit: int = DEFAULT_LIMIT) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+@paper_writer
 def save_ledger(ledger: dict[str, Any]) -> None:
     """Persist JSON and text versions of the paper execution ledger."""
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("paper ledger write")
     ensure_dirs()
     atomic_write_json(PAPER_EXECUTION_LEDGER_FILE, ledger)
     atomic_write_text(PAPER_EXECUTION_TEXT_FILE, ledger_summary(ledger))

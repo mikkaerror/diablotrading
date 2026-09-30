@@ -1,7 +1,6 @@
 # Cloud/local ledger ownership — 2026-09-27
 
-Status: recommendation only. No deployment, ledger reconciliation, risk-policy
-change, operator decision, or authority change has been performed.
+Status: implementation authorized by D5/D6 on 2026-09-30; frozen reconciliation complete, deployment verification in progress. The proposal below is retained as the migration design. See the operating-plan log and outputs/ledger-cutover-2026-09-30 for execution receipts.
 
 ## Recommendation
 

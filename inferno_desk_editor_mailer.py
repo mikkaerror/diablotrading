@@ -43,6 +43,7 @@ STEP_TIMEOUT_SECONDS = 240
 
 PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("paper delegate", ["inferno_paper_delegate.py", "run"]),
+    ("canonical paper cycle", ["inferno_mac_paper_cycle.py", "--phase", "post-delegate"]),
     ("second opinion", ["inferno_second_opinion.py", "run"]),
     ("paper order cards", ["inferno_paper_order_card.py", "run"]),
     ("account performance", ["inferno_account_performance.py", "run"]),

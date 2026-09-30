@@ -359,6 +359,9 @@ def apply_fill_row(ticket: dict[str, Any], row: dict[str, Any]) -> tuple[dict[st
 
 def ingest_fill_log(*, operator_requested: bool = False, ticket_id: str | None = None) -> dict[str, Any]:
     """Preview by default; only explicit operator entrypoints may persist fills."""
+    if operator_requested:
+        from inferno_ledger_ownership import require_paper_writer
+        require_paper_writer("fill ingestion")
     ensure_dirs()
     ledger = load_ledger()
     rows = load_fill_rows(read_only=not operator_requested)

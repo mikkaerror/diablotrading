@@ -145,7 +145,15 @@ def restore_cloud_artifacts(paths: list[str] | None = None) -> dict[str, Any]:
 
     try:
         bucket = storage_bucket()
+        from inferno_ledger_ownership import PROTECTED_PATHS, is_cloud
+        if is_cloud():
+            from inferno_canonical_paper_snapshot import restore_snapshot
+            receipt = restore_snapshot(bucket)
+            report["canonicalRevision"] = receipt["revision"]
+            report["restored"].extend(f["path"] for f in receipt["files"])
         for path in paths:
+            if is_cloud() and path in PROTECTED_PATHS:
+                continue
             local_path = artifact_path(path)
             local_path.parent.mkdir(parents=True, exist_ok=True)
             blob = bucket.blob(object_name(path))
@@ -172,7 +180,11 @@ def persist_cloud_artifacts(paths: list[str] | None = None) -> dict[str, Any]:
 
     try:
         bucket = storage_bucket()
+        from inferno_ledger_ownership import PROTECTED_PATHS
         for path in paths:
+            if path in PROTECTED_PATHS:
+                report.setdefault("protectedSkipped", []).append(path)
+                continue
             local_path = artifact_path(path)
             if not local_path.exists():
                 report["missing"].append(path)

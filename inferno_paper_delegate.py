@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 """Delegated PAPER approvals under an explicit operator ack.
 
 On 2026-09-27 the operator explicitly delegated paper-ticket approval to
@@ -259,8 +261,11 @@ def _log_decision(path: Path, decision: dict[str, Any]) -> None:
         ])
 
 
+@paper_writer
 def apply_decisions(payload: dict[str, Any], updater=None, log_path: Path = DECISIONS_LOG) -> dict[str, Any]:
     """Apply approve/reject decisions through the approval queue. Ack required."""
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("delegated paper decision")
     if not payload["ackActive"]:
         return payload
     if updater is None:

@@ -94,7 +94,7 @@ class EmailPolicyTests(unittest.TestCase):
                          "exposure_text", "preview_text", "authority_text", "allocator_text",
                          "tos_sandbox_text", "build_text_report", "build_strike_digest"):
                 stack.enter_context(patch.object(cloud, name, return_value="saved report"))
-            stack.enter_context(patch.object(cloud, "record_from_strike_plan", return_value={"ledger": {}}))
+            stack.enter_context(patch.object(cloud, "load_ledger", return_value={"items": []}))
             stack.enter_context(patch.object(cloud, "run_morning_pipeline", return_value=0))
             send = stack.enter_context(patch.object(strike, "send_email"))
             stack.enter_context(patch("builtins.print"))

@@ -53,7 +53,7 @@ any risk constant.
 | Cowork watch tasks (verdict, hygiene/boundary audit, sprint scorecard, basket, Schwab reminder, candidate brief) | Cowork desktop | working |
 | Capex tape analyst | scheduled 2026-11-02 | scheduled |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
-| **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
+| **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **W0 code and lifecycle tested; frozen cutover deployment in progress** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
 | **Controller** (one true count, clean ledgers, CI green) | Codex + Claude | **W2 implementation tested; main CI verification pending** |
 | **Fill clerk** (60-second order card + fill capture) | Claude | **built (W3 steps 1–3); goes live when W0 makes the Mac ledger current** |
@@ -208,3 +208,5 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
 - 2026-09-30 Claude: W6 built — inferno_live_book_officer.py. Binding tier now (never add under water §5.4, -20% rule, operator holds never sold by the desk); "if signed" tier from research/conviction_plan_draft.json (survival test 7%, 200-day rule, thesis checks after each earnings, deposit routing) shown but not enforced until data/inferno_conviction_plan_ack.json is active. Desk Editor gets a LIVE BOOK block; mailer runs it daily. Next thesis check: IREN 2026-11-06.
 - 2026-09-30 Claude: W7 built — Earnings Runner Campaign pre-registered (0df51c2) and collecting; W4 capture priorities extended for it.
+
+- 2026-09-30 Codex W0: froze idle Mac writers and cloud dawn/strike schedulers (auditor left active); captured hashes and cloud object generations under outputs/ledger-cutover-2026-09-30. Read-only crosswalk: Mac 105, cloud 496; 88 Mac-only, 7 refresh duplicates, 10 conflicts, 479 cloud-only. Mac ledger retained byte-for-byte; all cloud rows quarantined in archive, no imported outcomes. Added canonical host guards, serialized local mutation entrypoints, immutable hash-verified cloud snapshots, generation-checked publication, cloud read-only staging/approval/email behavior, and D6 budget provenance. Isolated approve -> stage -> record entry/exit -> lineage-qualified test passes on one host; 2,326-test suite green. Deployment verification follows before schedulers resume.
