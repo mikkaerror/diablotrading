@@ -402,7 +402,8 @@ def headline(payload: dict[str, Any]) -> str:
     parts = [f"{count} decision{'s' if count != 1 else ''} today" if count else "No decisions today"]
     if payload.get("delegated"):
         approved = sum(1 for row in payload["delegated"] if row["status"] == "approved")
-        parts.append(f"{approved} paper approval(s) made for you")
+        made = len(payload["delegated"])
+        parts.append(f"{made} paper call{'s' if made != 1 else ''} made for you ({approved} approved)")
     if payload["positions"]["paperActions"]:
         parts.append(f"{len(payload['positions']['paperActions'])} paper position(s) need action")
     if losers:

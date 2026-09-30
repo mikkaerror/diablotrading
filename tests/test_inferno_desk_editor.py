@@ -158,7 +158,7 @@ class DeskEditorTests(unittest.TestCase):
         })
         payload = build_desk_editor(self.data, self.reports, now=NOW)
         self.assertEqual(payload["delegated"][0]["status"], "approved")
-        self.assertIn("1 paper approval(s) made for you", payload["headline"])
+        self.assertIn("1 paper call made for you (1 approved)", payload["headline"])
         self.assertIn("PAPER DECISIONS CLAUDE MADE", desk_editor_text(payload))
         _write(self.data, "inferno_paper_delegate.json", {"generatedAt": OLD, "applied": [{"ticker": "X"}]})
         self.assertEqual(build_desk_editor(self.data, self.reports, now=NOW)["delegated"], [])
