@@ -162,7 +162,7 @@ Report-only weekly hold / trim / exit review of live holdings against
 `docs/TRADE_MANAGEMENT_PLAYBOOK.md` and the Conviction Plan. Never sells,
 never stages. Blocked until Mikka answers D1.
 
-## Next session — Thu 2026-10-01 (start here)
+## Next session — Wed 2026-09-30 (start here)
 
 **First, check (5 min):**
 1. Did the 06:00 Mac Desk Editor email arrive? It's the first run after the W0 cutover. Check that the paper ledger `lastSuccessfulAt` is today and that no "paper ledger stale" alert appears.
@@ -241,3 +241,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude (late): W0 landed (Codex). Fixed a regression from it: a failed dawn refresh now still sends the email but skips all paper steps (ee9f97c). Wrote docs/DESK_ROSTER_AND_RUNBOOK.md (roster, preregs, the operator's week, failure playbook). Next-session list added above.
 
 - 2026-09-30 Codex W2 complete: restored Git SSH access using the existing Mac Keychain identity and a GitHub-specific persistent SSH configuration. Verified authentication without a loaded agent and a real branch push. Hosted Inferno CI passed on the integrated branch (run 36669527241), then on main at bf73e00 (run 36669637845: https://github.com/mikkaerror/diablotrading/actions/runs/36669637845). Main contains the tested W0/W2/W1/W4 implementation and integrated Claude work. W1 and W4 future evidence targets remain pending; no ticket decisions, risk settings or live/broker flags changed during this access repair.
+- 2026-09-30 AM Claude: first post-cutover dawn ran clean (ledger written 07:05, Mac paper cycle ok, Desk Editor from the Mac at 06:05). Found: (1) two Desk Editor emails 13s apart + delegate ran twice — overlapping dawn invocations; fixed with a mailer file lock. (2) Pipeline note "canonical paper cycle: Canonical sources changed during publication; retry snapshot" — likely the same overlap (Codex W0 to confirm). (3) Leak: the delegate judges the approval-queue item (ACN straddle, $12,520 → reject) and never sees the cap-fit ledger variant (ACN call debit spread, $330) that is blocked only by "approval missing". Here the family rule would reject it anyway, but the delegate should evaluate approval-only-blocked ledger variants with the same rules (Claude, shared paper lane). (4) The funnel still proposes $12k–$23k long straddles (VRT, ACN): W1 not yet effective at dawn. (5) CRDO call: chain captured but leg spreads >25% at the pre-market tape; retries daily.
