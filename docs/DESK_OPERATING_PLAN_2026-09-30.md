@@ -52,6 +52,8 @@ any risk constant.
 | Research views (TWR, vol edge, capex flow + sizing, pick scorecard, short-premium shadow) | Claude | working |
 | Cowork watch tasks (verdict, hygiene/boundary audit, sprint scorecard, basket, Schwab reminder, candidate brief) | Cowork desktop | working |
 | Capex tape analyst | scheduled 2026-11-02 | scheduled |
+| Earnings analyst (thesis-card grade the morning after each report) | cloud scheduled tasks: GNRC/TEL 10/29, MPWR 10/30, IREN 11/06, HIVE/TE 11/13, CLSK/CLFD 11/25, CRDO 12/01 | scheduled (email only) |
+| Earnings-date checker (confirm/moved dates, next 3 weeks) | cloud scheduled task, Sundays 16:47 MT | scheduled (email only) |
 | Second opinion (ChatGPT) | no API key | vacant (decision D2) |
 | **Ledger owner** (one writer for tickets, approvals, fills) | Codex | **open — W0, unblocked (D5 = Mac)** |
 | **Funnel fixer** (propose what can pass, sized to fit) | Codex | **W1 implementation tested; five dawn sessions + boundary audit pending** |
@@ -208,3 +210,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: W3 built — inferno_paper_order_card.py (enter/close/expired cards with limit, don't-chase price and the exact inferno_record_fill.py command); Desk Editor leads with "KEY THESE IN PAPERMONEY" and headlines "N paper orders to key"; mailer runs it daily. Desk Editor now alerts when the paper ledger hasn't been written in 48h (currently 22 days — the W0 symptom).
 - 2026-09-30 Claude: W6 built — inferno_live_book_officer.py. Binding tier now (never add under water §5.4, -20% rule, operator holds never sold by the desk); "if signed" tier from research/conviction_plan_draft.json (survival test 7%, 200-day rule, thesis checks after each earnings, deposit routing) shown but not enforced until data/inferno_conviction_plan_ack.json is active. Desk Editor gets a LIVE BOOK block; mailer runs it daily. Next thesis check: IREN 2026-11-06.
 - 2026-09-30 Claude: W7 built — Earnings Runner Campaign pre-registered (0df51c2) and collecting; W4 capture priorities extended for it.
+- 2026-09-30 Claude: Schwab login countdown in the Desk Editor (5fc5d77). Hired the earnings analyst (6 one-shot thesis checks) and a weekly earnings-date checker; both email only. Codex: a desk ingest of confirmed dates/timing (FMP calendar) would let the runner campaign use them directly — optional, after W0.
