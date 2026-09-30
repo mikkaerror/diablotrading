@@ -657,7 +657,7 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             lines.append(f"Next thesis check: {book['nextThesisCheck']['symbol']} on {book['nextThesisCheck']['on']}.")
         r = book.get("depositRouting")
         if r:
-            prefix = "" if book["planStatus"] == "signed" else "If you sign the Conviction Plan, "
+            prefix = "Plan: " if book["planStatus"] == "signed" else "If you sign the Conviction Plan, "
             lines.append(f"{prefix}the {book['nextDeposit']} deposit goes ${r['core']:.0f} {r['coreVehicle']} / "
                          f"${r['conviction']:.0f} {r['convictionName']}.")
         lines.append("")

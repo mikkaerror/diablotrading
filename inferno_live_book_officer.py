@@ -175,7 +175,7 @@ def officer_text(p: dict[str, Any]) -> str:
     lines = [f"Live-book officer - report only{tag}", ""]
     if b["nlv"]:
         lines.append(f"Account ${b['nlv']:,.2f} | cash {(b['cashWeight'] or 0) * 100:.0f}% | operator holds "
-                     f"{b['holdsWeight'] * 100:.0f}%" + (f" (draft target <= {b['holdsTarget'] * 100:.0f}%)" if b.get("holdsTarget") else ""))
+                     f"{b['holdsWeight'] * 100:.0f}%" + (f" ({'plan' if p['planStatus'] == 'signed' else 'draft'} target <= {b['holdsTarget'] * 100:.0f}%)" if b.get("holdsTarget") else ""))
     lines.append("")
     for h in p["holdings"]:
         pl = "" if h["plPercent"] is None else f" {h['plPercent']:+.1f}%"
@@ -183,11 +183,13 @@ def officer_text(p: dict[str, Any]) -> str:
         ma = "" if not h["movingAverage"] else f" | {h['movingAverage']['pctVs200']:+.0f}% vs 200-day"
         lines.append(f"{h['symbol']}{pl}{wt} | trend {h['trend'] or 'n/a'}{ma} | earnings {h['nextEarnings'] or '?'}")
         lines.extend(f"  binding: {x}" for x in h["binding"])
-        lines.extend(f"  if signed: {x}" for x in h["ifSigned"])
+        label = "plan rule" if p["planStatus"] == "signed" else "if signed"
+        lines.extend(f"  {label}: {x}" for x in h["ifSigned"])
     r = p.get("depositRouting")
     if r:
         lines.append("")
-        lines.append(f"If signed, the {b['nextDeposit']} deposit of ${r['amount']}: ${r['core']:.0f} {r['coreVehicle']}, "
+        lead = "Plan" if p["planStatus"] == "signed" else "If signed"
+        lines.append(f"{lead}: the {b['nextDeposit']} deposit of ${r['amount']}: ${r['core']:.0f} {r['coreVehicle']}, "
                      f"${r['conviction']:.0f} {r['convictionName'] or 'top Capex Flow BUY'}"
                      + (f" [{r['convictionTranche']}]" if r.get("convictionTranche") and r["convictionTranche"] != "full" else "")
                      + f" ({r['reason']}); nothing to the holds.")

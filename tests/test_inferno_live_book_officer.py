@@ -69,6 +69,15 @@ class LiveBookOfficerTests(unittest.TestCase):
         self.assertIn("NOT signed", text)
         self.assertIn("nothing to the holds", text)
 
+    def test_signed_ack_turns_draft_into_plan_rules(self):
+        _w(self.data, "inferno_conviction_plan_ack.json", {"active": True})
+        p = lb.build(self.data, self.research)
+        self.assertEqual(p["planStatus"], "signed")
+        text = lb.officer_text(p)
+        self.assertIn("plan rule: survival test", text)
+        self.assertIn("Plan: the 2026-10-09 deposit", text)
+        self.assertNotIn("NOT signed", text)
+
     def test_no_routing_when_cash_at_reserve(self):
         _w(self.data, "inferno_live_account_sync.json", {"netLiquidatingValue": 1000.0, "totalCash": 100.0})
         self.assertIsNone(lb.build(self.data, self.research)["depositRouting"])

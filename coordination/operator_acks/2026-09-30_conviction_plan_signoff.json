@@ -1,0 +1,15 @@
+{
+  "active": true,
+  "signedAt": "2026-09-30",
+  "operator": "Mikka",
+  "recordedBy": "claude (operator answered in chat; mirrored in the Conviction Plan doc)",
+  "doc": "https://claude.ai/code/artifact/6ef9230d-3913-4c5a-8720-4b85e2309417",
+  "signed": ["sleeveTargets", "singleNameMaxAtCost", "depositRouting", "holdsNoNewMoneyThesisChecks", "optionsPaperOnlyUntil10k"],
+  "open": ["cashPaymentPlan", "coreVehicleRetirementAccounts"],
+  "reviewCadence": "Sunday nights (scheduled review appends to the doc)",
+  "revoke": "set active to false, or tell Claude",
+  "scope": "Reporting and flagging only. The desk never buys, sells, trims or stages for these rules.",
+  "liveTradingAllowed": false,
+  "brokerSubmitAllowed": false,
+  "authorityChanged": false
+}

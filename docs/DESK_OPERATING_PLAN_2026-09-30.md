@@ -185,7 +185,7 @@ never stages. Blocked until Mikka answers D1.
 
 ## 6. Decisions for Mikka
 
-- **D1** Conviction Plan sign-off (live-book rules for the −20% names).
+- **D1** Conviction Plan sign-off — **SIGNED 2026-09-30** (sleeves, 7% limit, deposit routing, holds no-new-money + thesis checks, options paper-only to ~$10k). Open: cash-payment plan, retirement-account core vehicle. Reviewed Sunday nights.
 - **D2** Second opinion: fund an OpenAI key (cents/day) or retire it.
 - **D3** Commit to keying ~3 paper orders a week once W3 cards exist
   (≈ 5 minutes each). This is what actually moves 1/30.
@@ -213,3 +213,4 @@ never stages. Blocked until Mikka answers D1.
 - 2026-09-30 Claude: Schwab login countdown in the Desk Editor (5fc5d77). Hired the earnings analyst (6 one-shot thesis checks) and a weekly earnings-date checker; both email only. Codex: a desk ingest of confirmed dates/timing (FMP calendar) would let the runner campaign use them directly — optional, after W0.
 
 - 2026-09-30 Codex W0: froze idle Mac writers and cloud dawn/strike schedulers (auditor left active); captured hashes and cloud object generations under outputs/ledger-cutover-2026-09-30. Read-only crosswalk: Mac 105, cloud 496; 88 Mac-only, 7 refresh duplicates, 10 conflicts, 479 cloud-only. Mac ledger retained byte-for-byte; all cloud rows quarantined in archive, no imported outcomes. Added canonical host guards, serialized local mutation entrypoints, immutable hash-verified cloud snapshots, generation-checked publication, cloud read-only staging/approval/email behavior, and D6 budget provenance. Isolated approve -> stage -> record entry/exit -> lineage-qualified test passes on one host; 2,326-test suite green. Deployment verification follows before schedulers resume.
+- 2026-09-30 Mikka signed D1 in chat; ack data/inferno_conviction_plan_ack.json (copy in coordination/operator_acks/). Live-book officer now labels those lines "plan rule" and the email routes the Oct 9 deposit. Sunday 19:38 MT plan review scheduled (appends a weekly section to the Conviction Plan doc and emails a summary).
