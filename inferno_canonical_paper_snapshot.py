@@ -55,7 +55,8 @@ def publish(bucket_name):
     manifest, contents = snapshot()
     base = 'gs://' + bucket_name + '/'
     def run(*args):
-        return subprocess.run(['gcloud', 'storage', *args], capture_output=True, text=True, timeout=120)
+        binary = str(Path.home()/'.local/bin/gcloud') if (Path.home()/'.local/bin/gcloud').exists() else 'gcloud'
+        return subprocess.run([binary, 'storage', *args], capture_output=True, text=True, timeout=120)
     prior = run('objects', 'describe', base+POINTER, '--format=value(generation)')
     if prior.returncode and not ('404' in prior.stderr or 'not found' in prior.stderr.lower()):
         raise RuntimeError('Cannot read canonical pointer generation: '+prior.stderr)
