@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 """Email-reply approval ingestor for the Inferno approval desk.
 
 This adapter lets the operator approve or deny names by replying to a brief
@@ -225,8 +227,11 @@ def save_report(report: dict[str, Any]) -> None:
     atomic_write_text(APPROVAL_INBOX_TEXT_FILE, approval_inbox_text(report))
 
 
+@paper_writer
 def poll_approval_inbox(*, mark_seen: bool = True) -> dict[str, Any]:
     """Poll the inbox for approve/deny replies and apply them safely."""
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("approval inbox")
     load_env_file(SMTP_ENV_FILE)
     ensure_dirs()
     settings = imap_settings()

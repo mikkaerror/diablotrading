@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 """Record operator-supplied paperMoney fill facts without CSV surgery.
 
 This is a narrow paper-evidence convenience command. It can only update one
@@ -160,6 +162,7 @@ def _updated_row(
     return updated, "closed"
 
 
+@paper_writer
 def record_fill(
     target: str,
     *,
@@ -168,6 +171,8 @@ def record_fill(
     contracts: int | None = None,
 ) -> dict[str, Any]:
     """Record one actual operator fill, ingest it, and refresh scored evidence."""
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("operator fill write")
     if (entry_price is None) == (exit_price is None):
         raise RecordFillError("provide exactly one of --entry or --exit")
     if exit_price is not None and contracts is not None:

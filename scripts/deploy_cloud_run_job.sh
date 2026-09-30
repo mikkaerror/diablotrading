@@ -107,6 +107,8 @@ payload = {
     "PROJECT_ID": os.environ["PROJECT_ID"],
     "TZ": os.environ["TIME_ZONE"],
     "INFERNO_EMAIL_MODE": os.environ.get("INFERNO_EMAIL_MODE", "full"),
+    "INFERNO_DESK_HOST_ROLE": "cloud-research",
+    **__import__("inferno_ledger_ownership").approved_budget_environment(),
     "SMTP_HOST": os.environ["SMTP_HOST"],
     "SMTP_PORT": os.environ["SMTP_PORT"],
     "SMTP_FROM": os.environ["SMTP_FROM"],
@@ -350,7 +352,7 @@ gcloud run jobs deploy "$JOB_NAME" \
   --env-vars-file "$ENV_FILE" \
   "${JOB_SECRET_FLAGS[@]}" \
   --command python \
-  --args "morning_inferno_pipeline.py,--cloud-native"
+  --args "morning_inferno_pipeline.py,--cloud-native,--skip-email"
 
 echo "Deploying Cloud Run strike-selection job..."
 gcloud run jobs deploy "$STRIKE_JOB_NAME" \

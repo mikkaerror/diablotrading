@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 import argparse
 import hashlib
 import json
@@ -158,7 +160,10 @@ def load_queue() -> dict:
     return ensure_queue_tokens(json.loads(APPROVAL_QUEUE_FILE.read_text(encoding="utf-8")))
 
 
+@paper_writer
 def save_queue(queue: dict) -> None:
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("approval queue write")
     atomic_write_json(APPROVAL_QUEUE_FILE, ensure_queue_tokens(queue))
 
 
@@ -299,6 +304,7 @@ def find_item(queue: dict, identifier: str) -> dict[str, Any] | None:
     return None
 
 
+@paper_writer
 def update_item(queue: dict, identifier: str, status: str) -> int:
     target = _normalize_identifier(identifier)
     updated = False

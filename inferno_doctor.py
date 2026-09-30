@@ -2375,6 +2375,13 @@ def main() -> int:
     if not performance_ok:
         warnings += 1
 
+    owner_state = load_json_file(DATA_DIR / "inferno_ledger_ownership.json") or {}
+    owner_ok = owner_state.get("status") == "active" and owner_state.get("owner") == "mac"
+    lines.append(summarize_status("Canonical paper owner", owner_ok,
+        f"owner={owner_state.get('owner')} | status={owner_state.get('status')} | archive={owner_state.get('archive')}"))
+    if not owner_ok:
+        warnings += 1
+
     midday_ok, midday_detail = schwab_midday_capture_status(load_json_file(DATA_DIR / "inferno_schwab_midday_capture.json") or {})
     lines.append(summarize_status("Midday chain capture", midday_ok, midday_detail))
     if not midday_ok:

@@ -29,7 +29,8 @@ def follow_up_commands(argv: list[str], environ: dict[str, str] | None = None) -
     here = Path(__file__).resolve().parent
     # The second opinion runs inside the mailer, after its once-a-day check,
     # so a paid API is never called on every 10-minute safety tick.
-    return [[sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"]]
+    return [[sys.executable, str(here / "inferno_mac_paper_cycle.py"), "--phase", "pre-delegate"],
+            [sys.executable, str(here / "inferno_desk_editor_mailer.py"), "run"]]
 
 
 def run_bounded(command: list[str], *, timeout_seconds: float) -> int:
@@ -80,7 +81,7 @@ def main() -> int:
     })
     if code == 124:
         print(f"Dawn refresh exceeded {timeout:g}s; job stopped and lock released.", file=sys.stderr)
-    for command in follow_up_commands(sys.argv[1:]):
+    for command in (follow_up_commands(sys.argv[1:]) if code == 0 else []):
         if Path(command[1]).exists():
             try:
                 run_bounded(command, timeout_seconds=FOLLOW_UP_TIMEOUT_SECONDS)

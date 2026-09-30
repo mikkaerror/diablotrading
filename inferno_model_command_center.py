@@ -156,6 +156,7 @@ CONTROL_SURFACE_COMMANDS: tuple[dict[str, str], ...] = (
 )
 
 
+LEDGER_OWNERSHIP_FILE = DATA_DIR / "inferno_ledger_ownership.json"
 SCHWAB_MIDDAY_CAPTURE_FILE = DATA_DIR / "inferno_schwab_midday_capture.json"
 PAPER_FUNNEL_FILE = DATA_DIR / "inferno_paper_funnel.json"
 
@@ -646,6 +647,8 @@ REPORTING_MAP: tuple[dict[str, str], ...] = (
         "artifact": "reports/morning_brief_latest.txt",
         "owner": "automation",
     },
+    {"lane": "paper-owner", "question": "Which host owns paper decisions and fills?",
+     "artifact": "data/inferno_ledger_ownership.json", "owner": "codex"},
     {"lane": "schwab-midday", "question": "Did the second earnings-window chain capture succeed?",
      "artifact": "reports/schwab_midday_capture_latest.txt", "owner": "codex"},
     {"lane": "paper-funnel", "question": "Where do weekly paper proposals stop, and how many earn credit?",
@@ -1193,6 +1196,7 @@ def build_command_center() -> dict[str, Any]:
 
     system_status = {
         "decisionArchive": summarize_artifact(DECISION_ARCHIVE_FILE, keys=("stage", "verdict", "generatedAt", "counts", "integrity", "missingSources", "sourceErrors")),
+        "paperLedgerOwnership": summarize_artifact(LEDGER_OWNERSHIP_FILE, keys=("status", "owner", "canonicalRoot", "ackSha256", "archive", "paperBudget")),
         "schwabMiddayCapture": summarize_artifact(SCHWAB_MIDDAY_CAPTURE_FILE, keys=("status", "generatedAt", "marketDate", "missingEarningsChains", "nonRegularEarningsChains", "v2LastRun", "error")),
         "paperFunnel": summarize_artifact(PAPER_FUNNEL_FILE, keys=("generatedAt", "weeks", "promotionTruth", "dawnAcceptance")),
         "researchAudit": summarize_artifact(RESEARCH_AUDIT_FILE, keys=("stage", "verdict", "generatedAt", "gapCount", "metrics", "sourceMissing")),

@@ -554,7 +554,8 @@ def build_tos_sandbox_session() -> dict[str, Any]:
                 watchlist.append(ticket)
 
     write_fill_log_template()
-    fill_log_sync = seed_fill_log_from_stageable(stageable, local_now().date().isoformat())
+    from inferno_ledger_ownership import is_cloud
+    fill_log_sync = {"status": "canonical-mac-read-only"} if is_cloud() else seed_fill_log_from_stageable(stageable, local_now().date().isoformat())
     return {
         "generatedAt": local_now().isoformat(),
         "environment": "thinkorswim-paperMoney",

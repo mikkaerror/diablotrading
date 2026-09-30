@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 import argparse
 import base64
 from contextlib import contextmanager
@@ -2357,6 +2359,10 @@ def build_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
 def write_approval_queue(payload: dict[str, Any]) -> dict[str, Any]:
     from inferno_approval_queue import reuse_pending_tokens
 
+    from inferno_ledger_ownership import is_cloud, require_paper_writer
+    if is_cloud():
+        return load_json_file(APPROVAL_QUEUE_FILE) or {"items": [], "readOnly": True, "owner": "mac"}
+    require_paper_writer("morning approval refresh")
     queue = reuse_pending_tokens(build_approval_queue(payload), load_json_file(APPROVAL_QUEUE_FILE) or {})
     atomic_write_json(APPROVAL_QUEUE_FILE, queue)
     return queue
@@ -2370,6 +2376,8 @@ def deliver_morning_email(payload: dict[str, Any], *, skip_email: bool = False) 
     """Delivery outcome only; callers always save the complete reports first."""
     from inferno_email_policy import suppress_routine_email
 
+    from inferno_ledger_ownership import is_cloud
+    skip_email = skip_email or is_cloud()
     suppressed = suppress_routine_email("morning", payload)
     outcome = {
         "emailSent": False, "emailError": None,
@@ -2712,6 +2720,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+from inferno_ledger_ownership import cloud_research_entrypoint
+
+
+@cloud_research_entrypoint
 def main() -> int:
     load_env_file(ROOT / ".env.smtp")
     args = parse_args()
@@ -2756,6 +2768,9 @@ def main() -> int:
             cloud_state_restore = restore_cloud_artifacts()
         except Exception as exc:  # noqa: BLE001
             cloud_state_restore = {"ok": False, "errors": [str(exc)]}
+        if cloud_state_restore.get("ok") is False:
+            print("Canonical paper restore failed; no approval writes or delivery.", file=sys.stderr)
+            return 1
 
     try:
         with acquire_run_lock():

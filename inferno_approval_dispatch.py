@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inferno_ledger_ownership import paper_writer
+
 """One-word approval prompt dispatcher for the Inferno desk.
 
 This module sends one compact email per pending approval candidate so the
@@ -181,8 +183,11 @@ def send_operator_email(subject: str, text: str, html: str) -> None:
         smtp.send_message(message)
 
 
+@paper_writer
 def dispatch_pending_approval_prompts(*, force: bool = False) -> dict[str, Any]:
     """Serialize dispatchers sharing this state file; never bypass the daily cap."""
+    from inferno_ledger_ownership import require_paper_writer
+    require_paper_writer("approval dispatch")
     lock = APPROVAL_DISPATCH_STATE_FILE.with_suffix(".lock")
     lock.parent.mkdir(parents=True, exist_ok=True)
     with lock.open("a") as handle:

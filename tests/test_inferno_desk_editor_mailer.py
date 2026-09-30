@@ -101,7 +101,7 @@ class MailerTests(unittest.TestCase):
 class DawnFollowUpTests(unittest.TestCase):
     def test_follow_ups_run_by_default(self):
         names = [Path(cmd[1]).name for cmd in dawn.follow_up_commands(["--automation"], {})]
-        self.assertEqual(names, ["inferno_desk_editor_mailer.py"])
+        self.assertEqual(names, ["inferno_mac_paper_cycle.py", "inferno_desk_editor_mailer.py"])
 
     def test_skip_email_and_cloud_and_env_disable(self):
         self.assertEqual(dawn.follow_up_commands(["--skip-email"], {}), [])
