@@ -488,10 +488,13 @@ def long_term_section(reports_dir: Path, limit: int = LONG_TERM_LIMIT) -> list[d
 def headline(payload: dict[str, Any]) -> str:
     count = len(payload["decisions"])
     keyable = len((payload.get("orderCards") or {}).get("actionable") or [])
+    deposit_today = bool((payload.get("depositCard") or {}).get("show"))
     losers = [h for h in payload["positions"]["live"] if h["lossRule"]]
     parts = [f"{count} decision{'s' if count != 1 else ''} today" if count else "No decisions today"]
     if keyable:
         parts.insert(0, f"{keyable} paper order{'s' if keyable != 1 else ''} to key")
+    if deposit_today:
+        parts.insert(0, "deposit day: your buys are ready")
     if payload.get("delegated"):
         approved = sum(1 for row in payload["delegated"] if row["status"] == "approved")
         made = len(payload["delegated"])
@@ -528,6 +531,7 @@ def build_desk_editor(
         "positions": positions_section(data_dir),
         "liveBook": live_book_section(data_dir),
         "earnings": earnings_section(data_dir),
+        "depositCard": _load(data_dir / "inferno_deposit_card.json") or None,
         "evidence": evidence_section(data_dir),
         "capexFlow": capex_flow_section(data_dir),
         "alerts": alerts_section(data_dir, now),
@@ -588,6 +592,12 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
             else:
                 lines.append(f"- CLOSE {c['ticker']} {_pretty(c['strategy'])}: {c['exitRule']}")
             lines.append(f"  then: {c['recordCommand']}")
+        lines.append("")
+
+    dep = payload.get("depositCard") or {}
+    if dep.get("show"):
+        from inferno_deposit_card import card_text
+        lines.extend(card_text(dep).rstrip().splitlines())
         lines.append("")
 
     if payload.get("delegated"):
@@ -658,8 +668,9 @@ def desk_editor_text(payload: dict[str, Any]) -> str:
         r = book.get("depositRouting")
         if r:
             prefix = "Plan: " if book["planStatus"] == "signed" else "If you sign the Conviction Plan, "
+            tranche = "" if r.get("convictionTranche") in (None, "full") else " (1/3 now, rest on a pullback)"
             lines.append(f"{prefix}the {book['nextDeposit']} deposit goes ${r['core']:.0f} {r['coreVehicle']} / "
-                         f"${r['conviction']:.0f} {r['convictionName']}.")
+                         f"${r['conviction']:.0f} {r['convictionName']}{tranche}.")
         lines.append("")
 
     evidence = payload["evidence"]

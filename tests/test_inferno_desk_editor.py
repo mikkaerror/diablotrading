@@ -193,6 +193,13 @@ class DeskEditorTests(unittest.TestCase):
         _write(secrets, "schwab_token.json", {"refresh_token_issued_at": "2026-09-27T07:20:00+00:00"})
         self.assertFalse(any("Schwab login" in a for a in alerts_section(self.data, NOW)))
 
+    def test_deposit_card_leads_on_deposit_day(self):
+        _write(self.data, "inferno_deposit_card.json", {"show": True, "depositDate": "2026-10-09",
+               "lines": [{"symbol": "SMH", "dollars": 137.5, "role": "core"}], "earmark": None})
+        payload = build_desk_editor(self.data, self.reports, NOW)
+        self.assertTrue(payload["headline"].startswith("deposit day: your buys are ready"))
+        self.assertIn("Buy $137.50 of SMH (core)", desk_editor_text(payload))
+
     def test_alerts_use_latest_write_time(self):
         alerts = self.payload["alerts"]
         self.assertTrue(any(a.startswith("action pulse: stale") for a in alerts))

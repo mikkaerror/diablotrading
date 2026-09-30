@@ -18,6 +18,7 @@ Safety perimeter (CLAUDE.md §8): research-only, live flags off, the operator ke
 | Short-premium collector | `inferno_short_premium_shadow.py` (prereg v2) | inside the mailer | iron-fly shadow records |
 | Earnings Runner Campaign | `inferno_earnings_runner.py` (arms A/B/C) | inside the mailer | shadow records + scoreboard |
 | Live-book risk officer | `inferno_live_book_officer.py` (signed plan rules) | inside the mailer | LIVE BOOK block |
+| Deposit clerk | `inferno_deposit_card.py` | inside the mailer; shows the day before → 3 days after each deposit | "DEPOSIT DAY" card (dollar-based fractional buys you key) |
 | Desk Editor | `inferno_desk_editor_mailer.py` | ~06:10 weekdays | the one morning email |
 | Email watchdog | cloud task (Gmail only) | 07:20 weekdays | email only if the Desk Editor didn't arrive |
 | Action pulse (legacy) | Mac launchd | ~07:05 and 13:30 | to be folded into the Desk Editor (W5) |
@@ -51,7 +52,7 @@ Changing a rule after data exists needs a new version registered before its own 
 - **Weekdays, ~2 min:** read the morning email. If it shows "KEY THESE IN PAPERMONEY", key the card (limit, don't chase), then run the record command it prints.
 - **Paper target:** ~3 keyed paper orders a week, which clears 30 qualified outcomes by about mid-December.
 - **Earnings calls:** `cd ~/Documents/"New project" && python3 inferno_earnings_runner.py call TICKER up|down "why"`
-- **Deposit days (every 14 days; next 10/09):** follow the "Plan: the deposit goes …" line (SMH + the named Capex Flow pick, a 1/3 tranche if extended). You buy it; the desk never does.
+- **Deposit days (every 14 days; next 10/09):** the email leads with a DEPOSIT DAY card: dollar amounts for SMH and the named Capex Flow pick (a 1/3 tranche if extended, the rest earmarked in cash). Place the dollar-based fractional orders after the first 30 minutes of trading, then run `python3 inferno_deposit_card.py done "what you bought"`. You buy; the desk never does.
 - **Sunday, ~10 min:** re-sign into Schwab (`python3 inferno_schwab_oauth.py restart`), read the Sunday review, and answer any open decision.
 
 ## 4. When something breaks
@@ -68,9 +69,8 @@ Changing a rule after data exists needs a new version registered before its own 
 ## 5. Still open
 
 Roles to fill (see the plan's "Next session" section):
-1. **Deposit clerk:** a deposit-day order card for the real-money SMH/pick buys.
-2. **Monthly close:** first-Sunday-of-month returns vs SPY and SMH, per sleeve and per campaign arm.
-3. **Second opinion (D2):** fund an OpenAI key or retire it.
+1. **Monthly close:** first-Sunday-of-month returns vs SPY and SMH, per sleeve and per campaign arm.
+2. **Second opinion (D2):** fund an OpenAI key or retire it.
 
 Processes to add:
 - **Prereg integrity:** a weekly hash check that frozen rules didn't change.

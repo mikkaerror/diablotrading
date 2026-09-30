@@ -52,6 +52,7 @@ PIPELINE_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("pick scorecard", ["inferno_pick_scorecard.py", "run"]),
     ("short-premium shadow", ["inferno_short_premium_shadow.py", "run"]),
     ("live-book officer", ["inferno_live_book_officer.py", "run"]),
+    ("deposit card", ["inferno_deposit_card.py", "run"]),
     ("earnings runner", ["inferno_earnings_runner.py", "run"]),
 )
 

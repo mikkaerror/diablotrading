@@ -116,6 +116,18 @@ def _conviction_pick(flow: dict[str, Any]) -> dict[str, Any]:
     return {"convictionName": None, "convictionTranche": None}
 
 
+def next_deposit_date(deposit: dict[str, Any], today: date) -> str | None:
+    """Roll the anchor date forward by the cadence so it never goes stale."""
+    try:
+        anchor = date.fromisoformat(str(deposit.get("nextExpected"))[:10])
+    except ValueError:
+        return None
+    every = int(deposit.get("everyDays") or 0)
+    while every > 0 and anchor < today:
+        anchor += timedelta(days=every)
+    return anchor.isoformat()
+
+
 def build(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DIR, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     review = _load(data_dir / "inferno_live_position_review.json")
@@ -144,7 +156,7 @@ def build(data_dir: Path = DATA_DIR, research_dir: Path = RESEARCH_DIR, today: d
     book = {
         "nlv": nlv, "cashWeight": cash_weight, "holdsWeight": round(holds_weight, 4),
         "holdsTarget": targets.get("operatorHolds"), "reserveTarget": targets.get("reserve"),
-        "nextDeposit": deposit.get("nextExpected"),
+        "nextDeposit": next_deposit_date(deposit, today),
     }
     routing = None
     if deposit.get("amount") and cash_weight is not None and targets.get("reserve") is not None:
